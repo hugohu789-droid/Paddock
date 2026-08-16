@@ -106,9 +106,23 @@ void BudgetLedger::record_internal_transfer(Budget budget, std::string_view proc
                                             double amount) {
   require_non_negative(process, amount);
   BudgetState& budget_state = state(budget);
-  ProcessEntry& entry = entry_for(budget_state, process);
-  entry.inflow += amount;
-  entry.outflow += amount;
+  entry_for(budget_state, process).internal += amount;
+}
+
+void BudgetLedger::add_scaled(const BudgetLedger& other, double factor) {
+  for (const Budget budget : {Budget::DryMatter, Budget::Water, Budget::Nitrogen}) {
+    for (const ProcessEntry& entry : other.entries(budget)) {
+      if (entry.inflow > 0.0) {
+        record_inflow(budget, entry.process, entry.inflow * factor);
+      }
+      if (entry.outflow > 0.0) {
+        record_outflow(budget, entry.process, entry.outflow * factor);
+      }
+      if (entry.internal > 0.0) {
+        record_internal_transfer(budget, entry.process, entry.internal * factor);
+      }
+    }
+  }
 }
 
 double BudgetLedger::opening_stock(Budget budget) const {

@@ -78,8 +78,12 @@ TEST(BudgetLedgerTest, InternalTransfersLeaveTheTotalUnchanged) {
   EXPECT_DOUBLE_EQ(ledger.expected_closing_stock(Budget::DryMatter), 1000.0);
   ASSERT_EQ(ledger.entries(Budget::DryMatter).size(), 1U);
   EXPECT_EQ(ledger.entries(Budget::DryMatter).front().process, "grazing");
-  EXPECT_DOUBLE_EQ(ledger.entries(Budget::DryMatter).front().inflow, 40.0);
-  EXPECT_DOUBLE_EQ(ledger.entries(Budget::DryMatter).front().outflow, 40.0);
+  // Counted as internal, not as a matching pair of boundary flows: an entry
+  // that cannot be told apart from real inflow and outflow cannot be replayed
+  // into another ledger.
+  EXPECT_DOUBLE_EQ(ledger.entries(Budget::DryMatter).front().internal, 40.0);
+  EXPECT_DOUBLE_EQ(ledger.entries(Budget::DryMatter).front().inflow, 0.0);
+  EXPECT_DOUBLE_EQ(ledger.entries(Budget::DryMatter).front().outflow, 0.0);
 }
 
 TEST(BudgetLedgerTest, EntriesAccumulatePerProcessInReportingOrder) {

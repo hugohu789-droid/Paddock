@@ -6,6 +6,7 @@ add_library(
   src/BudgetLedger.cpp
   src/Distributions.cpp
   src/Entity.cpp
+  src/FarmletGrid.cpp
   src/Geometry.cpp
   src/Pasture.cpp
   src/SimulationClock.cpp

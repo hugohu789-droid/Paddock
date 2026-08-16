@@ -46,10 +46,16 @@ class KahanSum {
 
 /// One process's contribution to one budget, kept for diagnostics: when a
 /// budget fails to close, the offending process should be obvious.
+///
+/// Internal transfers are counted separately from the flows that cross the
+/// system boundary. Folding them into `inflow` and `outflow` would make the
+/// entry unreplayable, and replaying entries is how a per-cell ledger merges
+/// into a whole-farm one.
 struct ProcessEntry {
   std::string process;
   double inflow = 0.0;
   double outflow = 0.0;
+  double internal = 0.0;
 };
 
 /// Tracks what entered and left each budget over a run.
@@ -86,6 +92,19 @@ class BudgetLedger {
 
   /// Entries in the order processes first reported to this budget.
   [[nodiscard]] const std::vector<ProcessEntry>& entries(Budget budget) const;
+
+  /// Adds another ledger's flows, every amount multiplied by `factor`.
+  ///
+  /// This is how a spatially explicit run accounts for itself: each cell
+  /// reports to a scratch ledger, and the day's scratch is folded into the
+  /// farm's ledger once, scaled by one over the number of cells, so the farm
+  /// ledger holds per-hectare means. Entries merge in the other ledger's own
+  /// order, which is fixed, so the result does not depend on traversal - the
+  /// same property that would let partitions be merged if this ever ran in
+  /// parallel.
+  ///
+  /// Opening stocks are not touched: they belong to the ledger that holds them.
+  void add_scaled(const BudgetLedger& other, double factor);
 
   /// Human-readable breakdown, used in conservation failure messages.
   [[nodiscard]] std::string report(Budget budget, double observed_closing_stock) const;

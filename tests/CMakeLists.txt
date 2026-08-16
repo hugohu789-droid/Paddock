@@ -9,6 +9,7 @@ add_executable(
   unit/BudgetLedgerTest.cpp
   unit/DistributionsTest.cpp
   unit/EntityTest.cpp
+  unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
   unit/PastureTest.cpp
   unit/RasterTest.cpp
