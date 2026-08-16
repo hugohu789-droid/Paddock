@@ -65,9 +65,10 @@ TEST(RasterTest, CellLookupRoundTripsThroughCoordinates) {
 
   for (std::size_t row = 0; row < kRows; row += 7) {
     for (std::size_t col = 0; col < kCols; col += 11) {
-      const std::optional<CellIndex> found = pasture.cell_at(pasture.cell_centre(col, row));
-      ASSERT_TRUE(found.has_value());
-      EXPECT_EQ(found.value(), (CellIndex{col, row}));
+      // Compared as optionals: a miss and a wrong cell are different failures,
+      // and neither needs the value unwrapped to be reported.
+      EXPECT_EQ(pasture.cell_at(pasture.cell_centre(col, row)),
+                std::make_optional(CellIndex{col, row}));
     }
   }
 }

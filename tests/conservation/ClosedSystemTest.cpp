@@ -88,7 +88,7 @@ void step_internal_transfers(Farm& farm, Budget budget) {
   const std::vector<EntityId>& pools = farm.pools[static_cast<std::size_t>(budget)];
   for (std::size_t source = 0; source < pools.size(); ++source) {
     std::uniform_real_distribution<double> fraction(0.0, 0.05);
-    auto& engine = farm.engines[farm.engine_index(budget, source)];
+    auto& engine = farm.engines[Farm::engine_index(budget, source)];
     Pool& from = *farm.world.get<Pool>(pools[source]);
     const double moved = from.amount * fraction(engine);
     Pool& to = *farm.world.get<Pool>(pools[(source + 1) % pools.size()]);
@@ -102,7 +102,7 @@ void step_internal_transfers(Farm& farm, Budget budget) {
 /// to the ledger. An unreported flow is exactly the bug this gate exists for.
 void step_boundary_flows(Farm& farm, Budget budget, bool report_the_outflow) {
   const std::vector<EntityId>& pools = farm.pools[static_cast<std::size_t>(budget)];
-  auto& engine = farm.engines[farm.engine_index(budget, 0)];
+  auto& engine = farm.engines[Farm::engine_index(budget, 0)];
   std::uniform_real_distribution<double> flow(0.0, 5.0);
 
   const double inflow = flow(engine);
