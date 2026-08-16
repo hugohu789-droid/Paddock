@@ -161,7 +161,7 @@ std::vector<std::string> tick_labels(double low, double high, int labels) {
   std::vector<std::string> printed;
   for (int i = 0; i < labels; ++i) {
     const double value =
-        low + (high - low) * static_cast<double>(i) / static_cast<double>(labels - 1);
+        low + ((high - low) * static_cast<double>(i) / static_cast<double>(labels - 1));
     printed.push_back(printed_with(format, value));
   }
   return printed;
