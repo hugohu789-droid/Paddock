@@ -22,8 +22,10 @@ scripts/check-line-endings.sh
 build_dir=build/default
 if [ -f "${build_dir}/CMakeCache.txt" ]; then
   echo "pre-commit: building and running the fast test subset"
-  cmake --build "${build_dir}" --target paddock_unit_tests >/dev/null
-  ctest --test-dir "${build_dir}" -L fast --output-on-failure
+  cmake --build "${build_dir}" >/dev/null
+  # The preset carries the label filter and the parallelism, so the hook runs
+  # exactly what `ctest --preset fast` runs anywhere else.
+  ctest --preset fast
 else
   echo "pre-commit: no ${build_dir} yet, skipping the fast test subset"
   echo "            (configure it with: cmake --preset default)"

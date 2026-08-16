@@ -24,6 +24,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 option(PADDOCK_BUILD_TESTS "Build the gtest suites" ON)
 option(PADDOCK_BUILD_APP "Build the app/ entry point" ON)
+option(PADDOCK_BUILD_CONFIG "Build config/ (TOML loading; fetches toml++ if absent)" ON)
 option(PADDOCK_BUILD_GIS "Build gis/ (requires GDAL, PROJ, GEOS)" OFF)
 option(PADDOCK_BUILD_VIZ "Build viz/ (requires VTK)" OFF)
 option(PADDOCK_WITH_AI "Build the optional ai/ module (requires libcurl)" OFF)
@@ -35,6 +36,10 @@ set(PADDOCK_SANITIZE
 include(PaddockCompileOptions)
 
 add_subdirectory(core)
+
+if(PADDOCK_BUILD_CONFIG)
+  add_subdirectory(config)
+endif()
 
 if(PADDOCK_BUILD_GIS)
   add_subdirectory(gis)
@@ -58,5 +63,6 @@ if(PADDOCK_BUILD_TESTS)
 endif()
 
 message(STATUS "Paddock ${PROJECT_VERSION}")
-message(STATUS "  tests: ${PADDOCK_BUILD_TESTS}  app: ${PADDOCK_BUILD_APP}  gis: ${PADDOCK_BUILD_GIS}  viz: ${PADDOCK_BUILD_VIZ}  ai: ${PADDOCK_WITH_AI}")
+message(STATUS "  tests: ${PADDOCK_BUILD_TESTS}  app: ${PADDOCK_BUILD_APP}  config: ${PADDOCK_BUILD_CONFIG}")
+message(STATUS "  gis: ${PADDOCK_BUILD_GIS}  viz: ${PADDOCK_BUILD_VIZ}  ai: ${PADDOCK_WITH_AI}")
 message(STATUS "  sanitizers: '${PADDOCK_SANITIZE}'")

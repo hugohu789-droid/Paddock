@@ -33,6 +33,21 @@ target_include_directories(paddock_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 # CMake splits the list and only the first label survives into CTest.
 gtest_discover_tests(paddock_unit_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
 
+# Statistical shape suites: many draws checked against the distribution they
+# come from. Labelled "statistical" and deliberately outside the "fast" subset -
+# CI runs them on every pull request, but the pre-commit hook must stay quick
+# enough that nobody starts bypassing it.
+add_executable(paddock_statistical_tests statistical/DistributionShapeTest.cpp
+                                         statistical/WeatherShapeTest.cpp)
+
+target_link_libraries(paddock_statistical_tests PRIVATE Paddock::core GTest::gtest_main
+                                                        Paddock::project_options)
+
+target_include_directories(paddock_statistical_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+gtest_discover_tests(paddock_statistical_tests PROPERTIES LABELS "unit\;statistical"
+                     DISCOVERY_TIMEOUT 120)
+
 # Conservation suite: closed system, 365 simulated days, budgets closing to
 # 1e-9. Never skipped, never weakened, never marked flaky.
 add_executable(paddock_conservation_tests conservation/ClosedSystemTest.cpp
@@ -52,4 +67,19 @@ gtest_discover_tests(paddock_conservation_tests PROPERTIES LABELS "conservation"
 if(PADDOCK_BUILD_APP)
   add_test(NAME app_reports_its_version COMMAND paddock --version)
   set_tests_properties(app_reports_its_version PROPERTIES LABELS "unit;fast")
+endif()
+
+# config/ has its own suite because it links a dependency core does not have.
+# The data files committed under data/ are loaded by it, so a definition that
+# stops parsing fails the build rather than the first run that needs it.
+if(PADDOCK_BUILD_CONFIG)
+  add_executable(paddock_config_tests config/ConfigTest.cpp config/DataFilesTest.cpp)
+
+  target_link_libraries(paddock_config_tests PRIVATE Paddock::config GTest::gtest_main
+                                                     Paddock::project_options)
+
+  target_compile_definitions(paddock_config_tests
+                             PRIVATE PADDOCK_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
+
+  gtest_discover_tests(paddock_config_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
 endif()

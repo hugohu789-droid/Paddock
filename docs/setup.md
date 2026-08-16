@@ -14,9 +14,10 @@ If a build works in one of them it works in all three, and it works in CI.
 | clang-format / clang-tidy | 19 | Only for the gates; CI pins 19 |
 | vcpkg | optional | Not needed for `core/` or the tests |
 
-`core/` has no external dependencies, so a machine with a compiler and CMake can
-build and run the entire scientific test suite. gtest comes from vcpkg when a
-vcpkg toolchain is in play and is fetched at a pinned commit otherwise.
+`core/` has no external dependencies at all. gtest and toml++ (used by
+`config/`) come from vcpkg when a manifest install is in play and are fetched at
+pinned commits otherwise, so a clone plus a compiler plus network access is a
+complete environment.
 
 ## Command line
 
@@ -29,8 +30,10 @@ cmake --build --preset default
 ctest --preset default
 ```
 
-`ctest --preset fast` runs the pre-commit subset only. The whole suite takes a
-few seconds; there is no reason to run less than all of it locally.
+`ctest --preset fast` runs the pre-commit subset: everything labelled `fast`,
+which is every test except the statistical shape suites. The presets run tests
+in parallel, so the whole suite takes a couple of seconds and there is no reason
+to run less than all of it locally.
 
 On **Windows**, run those commands from a *Developer Command Prompt for VS 2022*
 (or a shell where `vcvars64.bat` has been sourced) so that Ninja can find
@@ -94,7 +97,7 @@ because they come from the generated compile database.
 | Gate | When | Command |
 |---|---|---|
 | T0 | on save | Format-on-save and clangd diagnostics in both editors |
-| T1 | pre-commit | `.githooks/pre-commit` — format, line endings, `ctest -L fast` |
+| T1 | pre-commit | `.githooks/pre-commit` — format, line endings, `ctest --preset fast` |
 | T2 | every PR | `.github/workflows/ci.yml` |
 
 Run any gate by hand:

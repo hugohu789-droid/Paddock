@@ -1,0 +1,29 @@
+# An example soil definition.
+#
+# The water-holding measurements below are PLACEHOLDER values: they are the
+# right shape for a moderately deep Canterbury silt loam, but they have not been
+# taken from S-map. Do not quote a result computed with this file.
+#
+# PLACEHOLDER - verify against Manaaki Whenua S-map (docs/verify.md, item 2)
+
+[soil]
+name = "templeton_silt_loam_example"
+
+[water]
+# FAO-56 Eq. 82 computes total available water from these three:
+# 1000 (0.38 - 0.18) x 0.6 m = 120 mm.
+field_capacity_fraction = 0.38   # PLACEHOLDER - verify against S-map
+wilting_point_fraction = 0.18    # PLACEHOLDER - verify against S-map
+rooting_depth_m = 0.6            # PLACEHOLDER - verify against S-map
+
+# Fraction of available water the pasture can use before it feels stress.
+# FAO-56 Table 22 gives 0.60 for rotated and extensive grazing pasture.
+depletion_fraction = 0.6
+
+# FAO-56 Table 12 gives 0.85 to 1.05 mid-season for rotated grazing pasture;
+# 0.95 is the midpoint of that range.
+crop_coefficient = 0.95
+
+# Share of rainfall that runs off before it can infiltrate. Site-specific:
+# depends on slope, soil surface and rainfall intensity.
+runoff_fraction = 0.05  # PLACEHOLDER - no source yet

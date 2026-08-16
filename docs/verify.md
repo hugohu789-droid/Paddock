@@ -30,6 +30,11 @@ The two FAO-56 worked examples for extraterrestrial radiation and daylight hours
 asserted directly in `tests/unit/SolarTest.cpp`, so the implementation is checked
 against the source rather than against itself.
 
+The example definitions under `data/` (`weather/`, `soils/`, `pastures/`) are
+**PLACEHOLDER throughout** and marked as such in the files themselves. They
+exist so the format has worked examples and so a schema change fails a test;
+they are not a description of any real site, soil or sward.
+
 ## Open items
 
 | # | Item | Needed by | Source to check | Status |
