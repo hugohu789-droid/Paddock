@@ -1,0 +1,22 @@
+# core/ is pure C++17 + stdlib. No find_package, no link libraries, ever.
+# scripts/check-dependency-direction.sh fails CI if that changes.
+
+add_library(
+  paddock_core STATIC
+  src/BudgetLedger.cpp
+  src/Entity.cpp
+  src/Geometry.cpp
+  src/SimulationClock.cpp
+  src/Rng.cpp
+  src/Version.cpp)
+
+add_library(Paddock::core ALIAS paddock_core)
+
+target_include_directories(
+  paddock_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+
+target_compile_features(paddock_core PUBLIC cxx_std_17)
+
+target_link_libraries(paddock_core PRIVATE Paddock::project_options)
+
+set_target_properties(paddock_core PROPERTIES EXPORT_NAME core)
