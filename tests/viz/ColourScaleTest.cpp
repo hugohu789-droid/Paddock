@@ -132,6 +132,28 @@ TEST(ColourScaleTest, RampsAreNamedForTheLegend) {
   EXPECT_EQ(ramp_name(Ramp::PastureGreen), "pasture green");
 }
 
+/// One label, printed the way vtkScalarBarActor prints it: through the C
+/// formatting it is handed at run time.
+///
+/// -Wformat-nonliteral is off for exactly this call. The warning exists to
+/// catch a format string that came from somewhere untrusted; here the format
+/// is the return value of the function under test, and running it through
+/// snprintf is the whole point - a format that snprintf cannot use is the
+/// failure this file is meant to catch.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+std::string printed_with(const std::string& format, double value) {
+  std::array<char, 64> buffer{};
+  const int written = std::snprintf(buffer.data(), buffer.size(), format.c_str(), value);
+  EXPECT_GT(written, 0) << "snprintf rejected the format " << format;
+  return {buffer.data()};
+}
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
 /// The labels a legend would actually print, so a test can assert on the text
 /// rather than on the format string that produced it.
 std::vector<std::string> tick_labels(double low, double high, int labels) {
@@ -140,9 +162,7 @@ std::vector<std::string> tick_labels(double low, double high, int labels) {
   for (int i = 0; i < labels; ++i) {
     const double value =
         low + (high - low) * static_cast<double>(i) / static_cast<double>(labels - 1);
-    std::array<char, 64> buffer{};
-    std::snprintf(buffer.data(), buffer.size(), format.c_str(), value);
-    printed.emplace_back(buffer.data());
+    printed.push_back(printed_with(format, value));
   }
   return printed;
 }
@@ -177,10 +197,9 @@ TEST(ColourScaleTest, ADegenerateRangeStillGivesAUsableFormat) {
   // A field that has not varied yet, and a range handed over backwards. Neither
   // has a step to read decimal places off, and neither may produce a format
   // that snprintf cannot use.
-  for (const std::string format : {tick_label_format(5.0, 5.0, 5), tick_label_format(9.0, 1.0, 5),
-                                   tick_label_format(0.0, 1.0, 1)}) {
-    std::array<char, 64> buffer{};
-    EXPECT_GT(std::snprintf(buffer.data(), buffer.size(), format.c_str(), 5.0), 0);
+  for (const std::string& format : {tick_label_format(5.0, 5.0, 5), tick_label_format(9.0, 1.0, 5),
+                                    tick_label_format(0.0, 1.0, 1)}) {
+    EXPECT_FALSE(printed_with(format, 5.0).empty());
   }
 }
 
