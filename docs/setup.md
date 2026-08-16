@@ -92,6 +92,32 @@ because they come from the generated compile database.
    command to your clang-format 19 binary, choose *Use file .clang-format
    defined by project*, and enable **Format on file save**.
 
+## The map view
+
+The GUI is off by default. Building it needs Qt6 and a VTK **built against
+Qt6**:
+
+```bash
+cmake --preset gui -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x/gcc_64;/path/to/vtk"
+cmake --build --preset gui
+./build/gui/bin/paddock-gui data/scenarios/canterbury-baseline
+```
+
+Two things worth knowing before you spend an afternoon on them:
+
+- **Distribution packages of VTK's Qt integration are Qt5 until Ubuntu 26.04.**
+  On 24.04 or Debian trixie, `libvtk9-qt-dev` links `qtbase5-dev` and cannot be
+  used from a Qt6 application. Ubuntu 26.04 ships VTK 9.5.2 against
+  `qt6-base-dev`; anywhere older, build VTK yourself or use vcpkg.
+- **On MSVC, the build type has to match the VTK you link.** The `gui` preset is
+  RelWithDebInfo because a Debug build (`/MDd`) linking a Release VTK (`/MD`)
+  mixes C runtimes and dies inside the first widget's constructor with a stack
+  check failure and no message. For a Debug GUI build, point
+  `CMAKE_PREFIX_PATH` at a Debug VTK.
+
+`paddock-gui <bundle> --smoke` renders one frame and exits, which is what CI
+runs under `xvfb-run`.
+
 ## The gates
 
 | Gate | When | Command |
@@ -99,6 +125,7 @@ because they come from the generated compile database.
 | T0 | on save | Format-on-save and clangd diagnostics in both editors |
 | T1 | pre-commit | `.githooks/pre-commit` — format, line endings, `ctest --preset fast` |
 | T2 | every PR | `.github/workflows/ci.yml` |
+| T3 | every PR | Validation against measured growth curves, plot kept as an artifact |
 
 Run any gate by hand:
 

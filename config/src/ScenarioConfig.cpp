@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <cstddef>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -71,9 +73,9 @@ BundleInput read_input(const toml::table& root, std::string_view section,
 ScenarioBundle read(const std::string& directory, bool enforce) {
   const std::string manifest_path = join(directory, kManifestName);
   const toml::table root = detail::parse_file(manifest_path);
-  detail::reject_unknown_keys(root,
-                              {"scenario", "run", "weather", "soil", "sward", "initial_state"},
-                              manifest_path, "the manifest");
+  detail::reject_unknown_keys(
+      root, {"scenario", "run", "weather", "soil", "sward", "initial_state", "grid"}, manifest_path,
+      "the manifest");
 
   const toml::table& scenario = detail::require_table(root, "scenario", manifest_path);
   detail::reject_unknown_keys(scenario, {"name", "description", "engine_version", "master_seed"},
@@ -156,6 +158,36 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                      "unknown weather kind '" + kind + "'. Known kinds are: synthetic, snapshot");
   }
 
+  if (detail::has(root, "grid")) {
+    const toml::table& grid = detail::require_table(root, "grid", manifest_path);
+    detail::reject_unknown_keys(grid,
+                                {"cols", "rows", "cell_size_m", "available_water_west_mm",
+                                 "available_water_east_mm", "origin_easting", "origin_northing"},
+                                manifest_path, "[grid]");
+    GridSpec spec;
+    spec.cols = static_cast<std::size_t>(detail::require_double(grid, "cols", manifest_path));
+    spec.rows = static_cast<std::size_t>(detail::require_double(grid, "rows", manifest_path));
+    spec.cell_size_m = detail::require_double(grid, "cell_size_m", manifest_path);
+    spec.available_water_west_mm =
+        detail::require_double(grid, "available_water_west_mm", manifest_path);
+    spec.available_water_east_mm =
+        detail::require_double(grid, "available_water_east_mm", manifest_path);
+    spec.origin_easting = detail::optional_double(grid, "origin_easting", 1570000.0, manifest_path);
+    spec.origin_northing =
+        detail::optional_double(grid, "origin_northing", 5180000.0, manifest_path);
+
+    if (spec.cols == 0 || spec.rows == 0) {
+      detail::throw_in(grid, manifest_path, "'cols' and 'rows' must both be at least one");
+    }
+    if (spec.cell_size_m <= 0.0) {
+      detail::throw_in(grid, manifest_path, "'cell_size_m' must be positive");
+    }
+    if (spec.available_water_west_mm <= 0.0 || spec.available_water_east_mm <= 0.0) {
+      detail::throw_in(grid, manifest_path, "available water must be positive at both edges");
+    }
+    bundle.grid = spec;
+  }
+
   bundle.inputs = {weather_input, soil_input, sward_input};
 
   if (enforce) {
@@ -195,6 +227,36 @@ std::vector<BundleInput> ScenarioBundle::changed_inputs() const {
 
 core::Farmlet ScenarioBundle::make_farmlet() const {
   return {soil, sward, initial_state, latitude_degrees};
+}
+
+core::Raster<core::SoilWaterParameters> ScenarioBundle::make_soil_raster() const {
+  if (!grid.has_value()) {
+    throw std::runtime_error("scenario '" + name + "' has no [grid] section, so it has no map");
+  }
+  const GridSpec& spec = *grid;
+
+  core::GeoTransform transform;
+  transform.origin_easting = spec.origin_easting;
+  transform.origin_northing = spec.origin_northing;
+  transform.cell_size = spec.cell_size_m;
+
+  core::Raster<core::SoilWaterParameters> soils(spec.cols, spec.rows, transform, soil);
+  const double span = spec.cols > 1 ? static_cast<double>(spec.cols - 1) : 1.0;
+  for (std::size_t row = 0; row < spec.rows; ++row) {
+    for (std::size_t col = 0; col < spec.cols; ++col) {
+      core::SoilWaterParameters cell = soil;
+      const double weight = static_cast<double>(col) / span;
+      cell.total_available_water_mm =
+          spec.available_water_west_mm +
+          (weight * (spec.available_water_east_mm - spec.available_water_west_mm));
+      soils(col, row) = cell;
+    }
+  }
+  return soils;
+}
+
+core::FarmletGrid ScenarioBundle::make_grid() const {
+  return {make_soil_raster(), sward, initial_state, latitude_degrees};
 }
 
 ScenarioBundle load_scenario(const std::string& bundle_directory) {

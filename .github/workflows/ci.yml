@@ -9,9 +9,10 @@ name: T2 and T3
 #   * Linux Debug with ASan and UBSan
 #   * T3: validation against measured DairyNZ growth curves, with the
 #     model-versus-measurement plot kept as an artifact
+#   * the Qt6 + VTK map view, built and rendered headlessly on Ubuntu 26.04
 #
-# The full-GUI matrix (Qt6 + VTK through vcpkg) joins this workflow in M3, when
-# app/ and viz/ contain something to build. See docs/adr/0006-ci-scope.md.
+# The three-platform GUI *packaging* matrix joins this workflow in M3 with the
+# 3D view. See docs/adr/0006-ci-scope.md and docs/adr/0010-2d-map-view-with-vtk.md.
 
 on:
   push:
@@ -176,3 +177,32 @@ jobs:
           name: validation-seasonal-growth
           path: build/ci-core/validation/
           if-no-files-found: error
+
+  gui:
+    name: Map view (Qt6 + VTK)
+    # Ubuntu 26.04 is the first release whose VTK Qt packages are built against
+    # Qt6 rather than Qt5; on 24.04 this job would have to build VTK from
+    # source. The image is currently a preview one - if that becomes a problem,
+    # the fallback is `container: ubuntu:26.04` on a stable runner, which pins
+    # the same packages. See docs/adr/0010-2d-map-view-with-vtk.md.
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6, VTK and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri
+
+      - name: Configure and build
+        run: |
+          cmake --preset ci-gui
+          cmake --build --preset ci-gui
+
+      # Rendering needs a GL context even for a 2D image, so the smoke test runs
+      # under a virtual display. It steps the whole scenario, builds every day's
+      # rasters and renders one frame; a blank or broken pipeline fails here
+      # rather than in front of someone.
+      - name: Render the map headlessly
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-baseline --smoke

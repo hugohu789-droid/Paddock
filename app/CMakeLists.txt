@@ -14,3 +14,31 @@ endif()
 target_link_libraries(paddock PRIVATE Paddock::core Paddock::project_options)
 
 set_target_properties(paddock PROPERTIES OUTPUT_NAME paddock)
+
+# paddock-gui: the 2D map view (ADR 0010). Built only when PADDOCK_BUILD_GUI is
+# on, so a headless machine never links Qt or VTK.
+if(PADDOCK_BUILD_GUI)
+  find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  find_package(
+    VTK REQUIRED
+    COMPONENTS CommonCore
+               CommonDataModel
+               ImagingCore
+               IOImage
+               InteractionStyle
+               RenderingAnnotation
+               RenderingCore
+               RenderingOpenGL2
+               GUISupportQt)
+
+  add_executable(paddock-gui src/gui/main.cpp src/gui/MapWindow.cpp src/gui/MapWindow.hpp)
+
+  set_target_properties(paddock-gui PROPERTIES AUTOMOC ON)
+
+  target_link_libraries(paddock-gui PRIVATE Paddock::config Paddock::viz_vtk Qt6::Widgets
+                                            ${VTK_LIBRARIES} Paddock::project_options)
+
+  # VTK's factories are registered by generated code; without this the render
+  # window has no OpenGL implementation and the map is a blank rectangle.
+  vtk_module_autoinit(TARGETS paddock-gui MODULES ${VTK_LIBRARIES})
+endif()

@@ -40,3 +40,18 @@ soil_water_mm = 90.0
 grass_kg_dm_per_ha = 1800.0
 legume_kg_dm_per_ha = 400.0
 soil_mineral_nitrogen_kg_per_ha = 60.0
+
+# Optional: turns the scenario from one hectare into a map.
+#
+# 48 x 32 cells at 25 m is 96 hectares, near enough a small Canterbury block.
+# The available-water gradient is a DEMONSTRATION, not a survey: it rises from a
+# shallow western edge to a deeper eastern one so the map has something to show.
+# Real soils arrive with Manaaki Whenua S-map in M3 and replace this section.
+[grid]
+cols = 48
+rows = 32
+cell_size_m = 25.0
+available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
+available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
+origin_easting = 1570000.0
+origin_northing = 5180000.0

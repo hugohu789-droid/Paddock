@@ -1,10 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include <paddock/core/FarmletGrid.hpp>
 #include <paddock/core/Pasture.hpp>
+#include <paddock/core/Raster.hpp>
 #include <paddock/core/Simulation.hpp>
 #include <paddock/core/SoilWater.hpp>
 #include <paddock/core/Weather.hpp>
@@ -18,6 +21,24 @@ struct BundleInput {
   std::string actual_sha256;
 
   [[nodiscard]] bool matches() const noexcept { return recorded_sha256 == actual_sha256; }
+};
+
+/// An optional grid, turning a scenario from one hectare into a map.
+///
+/// The soil gradient is a demonstration: available water rising from the
+/// western edge of the raster to the eastern one, which is enough to show a
+/// shallow corner drying out first. Real soils arrive with S-map in M3, and
+/// this section is what they will replace.
+struct GridSpec {
+  std::size_t cols = 0;
+  std::size_t rows = 0;
+  double cell_size_m = 0.0;
+  double available_water_west_mm = 0.0;
+  double available_water_east_mm = 0.0;
+
+  /// Where the raster's north-west corner sits, NZTM2000 metres.
+  double origin_easting = 0.0;
+  double origin_northing = 0.0;
 };
 
 /// A scenario bundle: everything needed to reproduce a run, in one directory.
@@ -81,6 +102,9 @@ struct ScenarioBundle {
   /// Ready to run: a synthetic generator or a snapshot replay, already built.
   std::shared_ptr<core::WeatherSource> weather;
 
+  /// Present when the manifest has a [grid] section.
+  std::optional<GridSpec> grid;
+
   std::vector<BundleInput> inputs;
 
   /// True when every input still hashes to what the manifest recorded.
@@ -90,6 +114,13 @@ struct ScenarioBundle {
   [[nodiscard]] std::vector<BundleInput> changed_inputs() const;
 
   [[nodiscard]] core::Farmlet make_farmlet() const;
+
+  /// The soil raster the grid describes, with the bundle's soil parameters
+  /// varied across it. Throws when the bundle has no [grid] section.
+  [[nodiscard]] core::Raster<core::SoilWaterParameters> make_soil_raster() const;
+
+  /// A grid of farmlets ready to step. Throws when there is no [grid] section.
+  [[nodiscard]] core::FarmletGrid make_grid() const;
 };
 
 /// Loads and validates a bundle directory.

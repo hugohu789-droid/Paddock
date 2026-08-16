@@ -43,6 +43,23 @@
       }
     },
     {
+      "name": "gui",
+      "inherits": "release",
+      "displayName": "The Qt6 + VTK map view",
+      "description": "RelWithDebInfo, because a Debug build needs a Debug VTK: mixing MSVC debug and release runtimes across the VTK boundary crashes on the first widget. See docs/setup.md.",
+      "cacheVariables": {
+        "PADDOCK_BUILD_GUI": "ON"
+      }
+    },
+    {
+      "name": "ci-gui",
+      "inherits": "ci-core",
+      "displayName": "CI: Qt6 + VTK map view (Ubuntu 26.04)",
+      "cacheVariables": {
+        "PADDOCK_BUILD_GUI": "ON"
+      }
+    },
+    {
       "name": "ci-asan",
       "inherits": "base",
       "displayName": "CI: Debug with ASan and UBSan (Linux)",
@@ -77,6 +94,14 @@
     {
       "name": "ci-asan",
       "configurePreset": "ci-asan"
+    },
+    {
+      "name": "gui",
+      "configurePreset": "gui"
+    },
+    {
+      "name": "ci-gui",
+      "configurePreset": "ci-gui"
     },
     {
       "name": "ci-tidy",
