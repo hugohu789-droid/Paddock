@@ -7,6 +7,7 @@ include(GoogleTest)
 add_executable(
   paddock_unit_tests
   unit/BudgetLedgerTest.cpp
+  unit/DistributionsTest.cpp
   unit/EntityTest.cpp
   unit/GeometryTest.cpp
   unit/RasterTest.cpp

@@ -4,6 +4,7 @@
 add_library(
   paddock_core STATIC
   src/BudgetLedger.cpp
+  src/Distributions.cpp
   src/Entity.cpp
   src/Geometry.cpp
   src/SimulationClock.cpp

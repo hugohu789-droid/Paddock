@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <paddock/core/Components.hpp>
+#include <paddock/core/Distributions.hpp>
 #include <paddock/core/Entity.hpp>
 #include <paddock/core/Rng.hpp>
 #include <paddock/core/SimulationClock.hpp>
@@ -52,8 +53,7 @@ std::vector<double> run_herd(std::uint64_t master_seed, const std::vector<std::s
   SimulationClock clock(Date{2023, 7, 1});
   for (int day = 0; day < kSimulatedDays; ++day) {
     for (const std::size_t index : order) {
-      std::uniform_real_distribution<double> gain(-0.2, 0.6);
-      world.get<Liveweight>(herd[index])->liveweight_kg += gain(engines[index]);
+      world.get<Liveweight>(herd[index])->liveweight_kg += uniform(engines[index], -0.2, 0.6);
     }
     clock.advance();
   }

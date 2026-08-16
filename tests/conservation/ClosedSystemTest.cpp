@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <paddock/core/BudgetLedger.hpp>
+#include <paddock/core/Distributions.hpp>
 #include <paddock/core/Entity.hpp>
 #include <paddock/core/Rng.hpp>
 #include <paddock/core/SimulationClock.hpp>
@@ -87,10 +88,9 @@ struct Farm {
 void step_internal_transfers(Farm& farm, Budget budget) {
   const std::vector<EntityId>& pools = farm.pools[static_cast<std::size_t>(budget)];
   for (std::size_t source = 0; source < pools.size(); ++source) {
-    std::uniform_real_distribution<double> fraction(0.0, 0.05);
     auto& engine = farm.engines[Farm::engine_index(budget, source)];
     Pool& from = *farm.world.get<Pool>(pools[source]);
-    const double moved = from.amount * fraction(engine);
+    const double moved = from.amount * uniform(engine, 0.0, 0.05);
     Pool& to = *farm.world.get<Pool>(pools[(source + 1) % pools.size()]);
     from.amount -= moved;
     to.amount += moved;
@@ -103,13 +103,12 @@ void step_internal_transfers(Farm& farm, Budget budget) {
 void step_boundary_flows(Farm& farm, Budget budget, bool report_the_outflow) {
   const std::vector<EntityId>& pools = farm.pools[static_cast<std::size_t>(budget)];
   auto& engine = farm.engines[Farm::engine_index(budget, 0)];
-  std::uniform_real_distribution<double> flow(0.0, 5.0);
 
-  const double inflow = flow(engine);
+  const double inflow = uniform(engine, 0.0, 5.0);
   farm.world.get<Pool>(pools.front())->amount += inflow;
   farm.ledger.record_inflow(budget, "boundary_inflow", inflow);
 
-  const double outflow = flow(engine);
+  const double outflow = uniform(engine, 0.0, 5.0);
   farm.world.get<Pool>(pools.back())->amount -= outflow;
   if (report_the_outflow) {
     farm.ledger.record_outflow(budget, "boundary_outflow", outflow);

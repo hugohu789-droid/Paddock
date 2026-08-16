@@ -28,6 +28,6 @@ they are parameters.
 
 | # | Caveat | Milestone |
 |---|---|---|
-| E1 | `std::uniform_real_distribution` and friends are implementation-defined: the same seed reproduces bit-for-bit on one platform and standard library, not across them. Core will need its own distribution transforms before cross-platform golden baselines mean anything. See [ADR 0005](adr/0005-deterministic-rng.md). | M2 |
+| ~~E1~~ | **Closed in M2.** `std::` distributions are implementation-defined, so the same seed gave different numbers on different standard libraries. Core now implements its own — see [ADR 0007](adr/0007-own-distributions.md). Uniform deviates are bit-identical across platforms; normal, exponential and gamma agree to within four units in the last place, limited by libm's rounding of `log`, `sqrt` and `pow`. Golden vectors are asserted on all three CI platforms. | M2 |
 | E2 | The conservation suite currently exercises the ledger, not agronomy. Every process added in M2 must declare which budget lines it touches and report its flows, or the gate silently proves less than it appears to. | M2 |
 | E3 | Coordinate transforms have no round-trip test yet because `gis/` has no PROJ dependency yet. The 1 mm control-point requirement lands with the first transform. | M3 |
