@@ -37,8 +37,8 @@ std::string PastureSpeciesParameters::validation_error() const {
   if (radiation_use_efficiency_g_per_mj <= 0.0) {
     return "radiation_use_efficiency_g_per_mj must be positive" + where;
   }
-  if (!(base_temperature_c < optimum_temperature_c &&
-        optimum_temperature_c < maximum_temperature_c)) {
+  if (base_temperature_c >= optimum_temperature_c ||
+      optimum_temperature_c >= maximum_temperature_c) {
     return "cardinal temperatures must satisfy base < optimum < maximum" + where;
   }
   if (senescence_rate_per_day < 0.0 || senescence_rate_per_day >= 1.0) {
@@ -57,13 +57,13 @@ std::string PastureSpeciesParameters::validation_error() const {
 }
 
 std::string SwardParameters::validation_error() const {
-  const std::string grass_error = grass.validation_error();
-  if (!grass_error.empty()) {
-    return grass_error;
+  std::string species_error = grass.validation_error();
+  if (!species_error.empty()) {
+    return species_error;
   }
-  const std::string legume_error = legume.validation_error();
-  if (!legume_error.empty()) {
-    return legume_error;
+  species_error = legume.validation_error();
+  if (!species_error.empty()) {
+    return species_error;
   }
   if (par_fraction <= 0.0 || par_fraction > 1.0) {
     return "par_fraction must be between 0 and 1";
@@ -184,7 +184,7 @@ PastureGrowth PastureSward::step(const DailyWeather& weather, double water_stres
   const double legume_uptake = growth.legume_growth_kg_dm * soil_demand_per_kg;
   const double fixation_surplus = growth.legume_growth_kg_dm * surplus_per_kg;
 
-  double available_nitrogen = soil_mineral_nitrogen_kg_ - legume_uptake + fixation_surplus;
+  const double available_nitrogen = soil_mineral_nitrogen_kg_ - legume_uptake + fixation_surplus;
 
   // The grass grows on what the soil can actually supply.
   const double grass_demand = grass_potential * parameters_.grass.nitrogen_content_fraction;

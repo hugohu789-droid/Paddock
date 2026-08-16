@@ -26,7 +26,7 @@ DailyWeather growing_day(double radiation_mj, double min_c, double max_c) {
 
 PastureSward test_sward(double grass_kg = 1800.0, double legume_kg = 400.0,
                         double soil_nitrogen_kg = 60.0) {
-  return PastureSward(test_sward_parameters(), grass_kg, legume_kg, soil_nitrogen_kg);
+  return {test_sward_parameters(), grass_kg, legume_kg, soil_nitrogen_kg};
 }
 
 TEST(TemperatureResponseTest, IsZeroOutsideTheCardinalTemperaturesAndOneAtTheOptimum) {
