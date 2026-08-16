@@ -90,6 +90,20 @@ std::string ramp_name(Ramp ramp) {
   return "unknown";
 }
 
+std::string tick_label_format(double low, double high, int labels) {
+  const double step = (high - low) / static_cast<double>(std::max(labels - 1, 1));
+  // A degenerate or reversed range has no step to read places off. Two places
+  // is the least misleading fallback: it neither hides a fraction nor implies
+  // precision that a single repeated label would not have anyway.
+  if (!(step > 0.0)) {
+    return "%.2f";
+  }
+  // One decimal place finer than the step. Six is the point past which a label
+  // is wider than any legend that has to hold five of them.
+  const int places = std::clamp(static_cast<int>(std::ceil(-std::log10(step))) + 1, 0, 6);
+  return "%." + std::to_string(places) + "f";
+}
+
 ColourScale::ColourScale(Ramp ramp, double minimum, double maximum)
     : ramp_(ramp), minimum_(minimum), maximum_(maximum) {
   if (!(maximum_ > minimum_)) {

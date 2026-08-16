@@ -4,6 +4,7 @@
 #include <vtkImageActor.h>
 #include <vtkImageData.h>
 #include <vtkImageMapToColors.h>
+#include <vtkLegendScaleActor.h>
 #include <vtkLookupTable.h>
 #include <vtkNew.h>
 #include <vtkRenderer.h>
@@ -46,6 +47,10 @@ class MapScene {
   vtkNew<vtkImageMapToColors> colours_;
   vtkNew<vtkImageActor> actor_;
   vtkNew<vtkScalarBarActor> legend_;
+  /// Coordinate labels around the edges and a distance scale. Without them the
+  /// map is a coloured rectangle: a reader cannot tell where it is, how big it
+  /// is, or which way is north.
+  vtkNew<vtkLegendScaleActor> axes_;
   vtkNew<vtkRenderer> renderer_;
   bool has_field_ = false;
 };

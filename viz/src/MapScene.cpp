@@ -1,6 +1,9 @@
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
+#include <vtkAxisActor2D.h>
 #include <vtkCamera.h>
 #include <vtkTextProperty.h>
 
@@ -16,6 +19,9 @@ constexpr int kLookupEntries = 256;
 
 constexpr double kColourMaximum = 255.0;
 
+/// Labels on the colour bar.
+constexpr int kLegendLabels = 5;
+
 }  // namespace
 
 MapScene::MapScene() {
@@ -23,17 +29,54 @@ MapScene::MapScene() {
   renderer_->AddActor(actor_);
 
   legend_->SetLookupTable(lookup_);
-  legend_->SetNumberOfLabels(5);
+  legend_->SetNumberOfLabels(kLegendLabels);
   legend_->SetWidth(0.09);
   legend_->SetHeight(0.55);
   legend_->SetPosition(0.88, 0.2);
-  legend_->GetLabelTextProperty()->SetColor(1.0, 1.0, 1.0);
-  legend_->GetLabelTextProperty()->SetShadow(0);
-  legend_->GetTitleTextProperty()->SetColor(1.0, 1.0, 1.0);
-  legend_->GetTitleTextProperty()->SetShadow(0);
+  // Left to itself, vtkScalarBarActor scales label text to fill the space each
+  // label is allotted, so a short label is drawn in a huge font: "0" and "1"
+  // came out taller than the bar was wide. A fixed size keeps the legend
+  // legible whether the numbers are one character or six.
+  legend_->UnconstrainedFontSizeOn();
+  for (vtkTextProperty* text : {legend_->GetLabelTextProperty(), legend_->GetTitleTextProperty()}) {
+    text->SetColor(1.0, 1.0, 1.0);
+    text->SetShadow(0);
+    text->SetItalic(0);
+    text->SetFontSize(14);
+  }
   // AddViewProp rather than AddActor2D: the latter is deprecated in VTK 9.5,
   // and the deprecation fires at the call site, so -isystem does not hide it.
   renderer_->AddViewProp(legend_);
+
+  // Distances across the farm, not absolute coordinates.
+  //
+  // NZTM2000 eastings and northings are seven digits, and labelled absolutely
+  // they are unreadable at any font size that fits: the first attempt printed
+  // 1.57e+06 five times, and the second printed seven digits that the window
+  // edge cut in half. On a farm 1.2 km across, what a reader needs from an axis
+  // is how far it is from one side to the other; the exact corner coordinates
+  // are in the window title, where they are read once.
+  axes_->TopAxisVisibilityOff();
+  axes_->RightAxisVisibilityOff();
+  axes_->SetLabelModeToDistance();
+  axes_->GetLeftAxis()->SetTitle("metres north-south");
+  axes_->GetBottomAxis()->SetTitle("metres east-west");
+  for (vtkAxisActor2D* axis : {axes_->GetLeftAxis(), axes_->GetBottomAxis()}) {
+    axis->SetLabelFormat("%.0f");
+    axis->SetNumberOfLabels(3);
+    axis->SetFontFactor(0.8);
+    for (vtkTextProperty* text : {axis->GetLabelTextProperty(), axis->GetTitleTextProperty()}) {
+      text->SetItalic(0);
+      text->SetShadow(0);
+    }
+  }
+  // The left axis title reads up the side of the map, as it does on every
+  // printed map and plot. Horizontally it is both unconventional and wide
+  // enough that the window edge cuts the first characters off.
+  axes_->GetLeftAxis()->GetTitleTextProperty()->SetOrientation(90);
+  axes_->SetLeftBorderOffset(100);
+  axes_->SetBottomBorderOffset(90);
+  renderer_->AddViewProp(axes_);
 
   colours_->SetLookupTable(lookup_);
   colours_->SetOutputFormatToRGB();
@@ -86,6 +129,8 @@ void MapScene::show(const core::Raster<double>& raster, const ColourScale& scale
 
   legend_->SetTitle(title.c_str());
   legend_->SetLookupTable(lookup_);
+  const std::string format = tick_label_format(scale.minimum(), scale.maximum(), kLegendLabels);
+  legend_->SetLabelFormat(format.c_str());
 
   has_field_ = true;
 }

@@ -35,6 +35,17 @@ enum class Ramp : std::uint8_t {
 
 [[nodiscard]] std::string ramp_name(Ramp ramp);
 
+/// A printf format for `labels` evenly spaced tick labels across [low, high],
+/// with enough decimal places that consecutive labels differ.
+///
+/// One fixed format cannot serve every field in this model. Pasture cover runs
+/// to thousands of kg DM/ha, where decimal places are noise; legume fraction
+/// runs from 0.13 to 0.18, where "%.0f" prints the same digit five times and
+/// the legend carries no information at all. The number of places is taken from
+/// the step between labels - one place finer than the step - so a legend is
+/// never a column of identical numbers.
+[[nodiscard]] std::string tick_label_format(double low, double high, int labels);
+
 /// Maps a value to a colour.
 ///
 /// This is deliberately free of Qt and VTK. Which value gets which colour, what

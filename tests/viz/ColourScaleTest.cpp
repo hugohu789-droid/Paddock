@@ -6,7 +6,11 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
+#include <cstdio>
+#include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -126,6 +130,58 @@ TEST(ColourScaleTest, AUniformRasterGetsAUsableRange) {
 TEST(ColourScaleTest, RampsAreNamedForTheLegend) {
   EXPECT_EQ(ramp_name(Ramp::Viridis), "viridis");
   EXPECT_EQ(ramp_name(Ramp::PastureGreen), "pasture green");
+}
+
+/// The labels a legend would actually print, so a test can assert on the text
+/// rather than on the format string that produced it.
+std::vector<std::string> tick_labels(double low, double high, int labels) {
+  const std::string format = tick_label_format(low, high, labels);
+  std::vector<std::string> printed;
+  for (int i = 0; i < labels; ++i) {
+    const double value =
+        low + (high - low) * static_cast<double>(i) / static_cast<double>(labels - 1);
+    std::array<char, 64> buffer{};
+    std::snprintf(buffer.data(), buffer.size(), format.c_str(), value);
+    printed.emplace_back(buffer.data());
+  }
+  return printed;
+}
+
+TEST(ColourScaleTest, LegendLabelsAreDistinctAcrossEveryFieldsRange) {
+  // The ranges the four map fields actually take over a Canterbury year. The
+  // regression this guards: a single fixed "%.0f" printed legume fraction as
+  // five copies of the same digit, and a legend whose labels are all equal is
+  // worse than no legend, because it looks like data.
+  const std::vector<std::pair<double, double>> ranges = {
+      {1900.0, 4560.0},   // pasture cover, kg DM/ha
+      {21.4, 138.9},      // soil water, mm
+      {0.0, 1.0},         // water stress, on its natural scale
+      {0.1336, 0.1813}};  // legume fraction, over a run
+  for (const std::pair<double, double>& range : ranges) {
+    const std::vector<std::string> printed = tick_labels(range.first, range.second, 5);
+    const std::set<std::string> distinct(printed.begin(), printed.end());
+    EXPECT_EQ(distinct.size(), printed.size())
+        << "range " << range.first << " to " << range.second << " printed a repeated label";
+  }
+}
+
+TEST(ColourScaleTest, LabelPrecisionFollowsTheMagnitudeOfTheRange) {
+  // Thousands of kg DM/ha do not need a decimal point; a range five hundredths
+  // wide is nothing but decimal point.
+  EXPECT_EQ(tick_label_format(1900.0, 4560.0, 5), "%.0f");
+  EXPECT_EQ(tick_label_format(0.0, 1.0, 5), "%.2f");
+  EXPECT_EQ(tick_label_format(0.1336, 0.1813, 5), "%.3f");
+}
+
+TEST(ColourScaleTest, ADegenerateRangeStillGivesAUsableFormat) {
+  // A field that has not varied yet, and a range handed over backwards. Neither
+  // has a step to read decimal places off, and neither may produce a format
+  // that snprintf cannot use.
+  for (const std::string format : {tick_label_format(5.0, 5.0, 5), tick_label_format(9.0, 1.0, 5),
+                                   tick_label_format(0.0, 1.0, 1)}) {
+    std::array<char, 64> buffer{};
+    EXPECT_GT(std::snprintf(buffer.data(), buffer.size(), format.c_str(), 5.0), 0);
+  }
 }
 
 }  // namespace
