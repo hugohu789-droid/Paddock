@@ -34,6 +34,15 @@ set(PADDOCK_SANITIZE
     ""
     CACHE STRING "Semicolon-separated sanitizers, e.g. address;undefined")
 
+if(PADDOCK_BUILD_GUI)
+  # Distribution builds of VTK are compiled with MPI, and their CMake package
+  # resolves the imported target MPI::MPI_C. find_package(MPI) only provides
+  # that when the C language is enabled, so a CXX-only project fails to
+  # configure against Ubuntu's VTK with "MPI component 'C' was requested, but
+  # language C is not enabled". Nothing here is written in C.
+  enable_language(C)
+endif()
+
 include(PaddockCompileOptions)
 
 add_subdirectory(core)
