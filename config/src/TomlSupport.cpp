@@ -145,8 +145,10 @@ void reject_unknown_keys(const toml::table& table, std::initializer_list<std::st
       }
       known.append(candidate);
     }
-    throw_at(value, path,
-             "unknown key " + quoted(name) + " in " + context + ". Known keys are: " + known);
+    std::string message = "unknown key ";
+    message.append(quoted(name)).append(" in ").append(context);
+    message.append(". Known keys are: ").append(known);
+    throw_at(value, path, message);
   }
 }
 
