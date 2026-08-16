@@ -56,7 +56,7 @@ class BundleCopy {
     const std::filesystem::path target = directory_ / file;
     std::string text;
     {
-      std::ifstream input(target, std::ios::binary);
+      const std::ifstream input(target, std::ios::binary);
       std::ostringstream buffer;
       buffer << input.rdbuf();
       text = buffer.str();

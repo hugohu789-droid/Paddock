@@ -6,7 +6,7 @@ namespace paddock::core {
 
 Farmlet::Farmlet(SoilWaterParameters soil, SwardParameters sward,
                  const FarmletInitialState& initial, double latitude_degrees)
-    : soil_(std::move(soil), initial.soil_water_mm),
+    : soil_(soil, initial.soil_water_mm),
       sward_(std::move(sward), initial.grass_kg_dm_per_ha, initial.legume_kg_dm_per_ha,
              initial.soil_mineral_nitrogen_kg_per_ha),
       latitude_degrees_(latitude_degrees) {}
