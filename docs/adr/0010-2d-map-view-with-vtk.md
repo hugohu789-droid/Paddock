@@ -70,6 +70,15 @@ runs on Ubuntu 26.04 where Qt6 and VTK 9.5 install from the distribution.
   but it means a GUI test failure can be a graphics-stack failure rather than a
   code failure, and the job's output has to be read with that in mind.
 
+## Left undone
+
+A `--screenshot` option was written so CI could keep a rendered map as an
+artifact next to the T3 plot, and removed again: both `vtkWindowToImageFilter`
+and `QOpenGLWidget::grabFramebuffer` hang without a running event loop, and
+neither is part of what M2 asks for. The smoke test renders and exits, which is
+what the gate needs. Getting an image out of a headless run is worth revisiting
+when M3's 3D view makes a picture worth more than a pass or fail.
+
 ## What changed this decision
 
 The first draft of this ADR chose Qt-only rendering, on the evidence that every

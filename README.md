@@ -3,16 +3,16 @@
 A spatially explicit pastoral farm simulator — terrain, weather, pasture growth,
 livestock and pests coupled on real NZ geospatial data. C++17 core, Qt/VTK 2D+3D.
 
-> **Status: M2 in progress — weather, soil water and pasture.** A year of
+> **Status: M2 complete — weather, soil water and pasture.** A year of
 > weather drives a soil water bucket and a ryegrass/white clover sward, all
 > three budgets close to 1e-9, a scenario bundle reproduces a run bit for bit,
 > and the T3 gate compares the modelled season with DairyNZ's measured averages
 > on every pull request. The seasonal shape correlates 0.97 with the measured
 > unfertilised site; the magnitude is 11% low, and the growth parameters are
 > still placeholders. See [docs/verify.md](docs/verify.md) before quoting any
-> number this produces.
-> M1's foundation is described in
-> [docs/devlog/m1-skeleton-and-automation.md](docs/devlog/m1-skeleton-and-automation.md).
+> number this produces. The devlogs describe each milestone:
+> [M1](docs/devlog/m1-skeleton-and-automation.md),
+> [M2](docs/devlog/m2-weather-water-pasture.md).
 
 ## Run a year
 
@@ -39,6 +39,20 @@ A bundle is one directory: the manifest, the weather, soil and sward
 definitions, the master seed, and the SHA-256 of every input. Change one of
 those files and the run is refused rather than quietly producing different
 numbers. `--csv <file>` writes the daily series.
+
+## Watch a year
+
+With Qt6 and a VTK built against Qt6 (see [docs/setup.md](docs/setup.md)):
+
+```bash
+cmake --preset gui && cmake --build --preset gui
+./build/gui/bin/paddock-gui data/scenarios/canterbury-baseline
+```
+
+Pasture cover, soil water, water stress or legume fraction across the farm, with
+a colour scale fixed over the whole run and a timeline you can play. The soil
+gradient in the example bundle is a demonstration until real soils arrive from
+S-map in M3.
 
 ## What it is
 
