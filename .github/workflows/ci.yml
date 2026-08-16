@@ -1,12 +1,14 @@
-name: T2
+name: T2 and T3
 
-# T2 runs on every pull request and on main. It is the gate that must be green
-# before a milestone is called done:
+# T2 and T3 run on every pull request and on main. Together they are the gate
+# that must be green before a milestone is called done:
 #   * three-platform build and full core test suite
 #   * conservation assertions and deterministic replay
 #   * clang-format, line endings, dependency direction
 #   * clang-tidy
 #   * Linux Debug with ASan and UBSan
+#   * T3: validation against measured DairyNZ growth curves, with the
+#     model-versus-measurement plot kept as an artifact
 #
 # The full-GUI matrix (Qt6 + VTK through vcpkg) joins this workflow in M3, when
 # app/ and viz/ contain something to build. See docs/adr/0006-ci-scope.md.
@@ -141,4 +143,36 @@ jobs:
       - name: clang-tidy
         run: |
           run-clang-tidy-${LLVM_VERSION} -p build/ci-tidy -quiet -j "$(nproc)" \
-            '^.*/(core|app|gis|viz|ai|tests)/.*\.cpp$'
+            '^.*/(core|config|app|gis|viz|ai|tests)/.*\.cpp$'
+
+  validation:
+    name: T3 validation against measured data
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure and build
+        run: |
+          cmake --preset ci-core
+          cmake --build --preset ci-core
+
+      # Tolerance bands against DairyNZ's published seasonal growth averages.
+      - name: Validation suite
+        run: ctest --preset ci-core -L validation
+
+      # The plot is the point: a reviewer can see the gap between model and
+      # measurement without running anything.
+      - name: Comparison plot
+        run: |
+          python3 -m pip install --quiet --break-system-packages matplotlib
+          python3 scripts/plot-validation.py build/ci-core/validation/seasonal-growth.csv \
+            --out build/ci-core/validation/seasonal-growth.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-seasonal-growth
+          path: build/ci-core/validation/
+          if-no-files-found: error

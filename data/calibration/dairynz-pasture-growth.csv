@@ -1,0 +1,35 @@
+# Measured average pasture growth rates, kg DM/ha/day, by calendar month.
+#
+# Source: DairyNZ, "South Island - Average pasture growth data (kg DM/ha/day)",
+# 2020 (v1).
+# https://www.dairynz.co.nz/media/oxdi5vou/average-pasture-growth-data-south-island-2020-v1.pdf
+#
+# DairyNZ's own caveat, reproduced because it governs how these numbers may be
+# used: "Data is based on averages and may include nitrogen fertiliser. The data
+# should be viewed simply as a guide as it is not often based on more than
+# several year's data."
+#
+# Two of the sheet's sites are carried here, chosen for what they can validate:
+#
+#   lincoln_p21_low_n  Lincoln University research farm, P21 Low N trial,
+#                      2012-2015, 154 kg N/ha applied, calibrated rising plate
+#                      meter data. Canterbury, about 43.6 S. The closest site on
+#                      the sheet to the conditions Paddock's example scenario
+#                      describes.
+#   woodlands_zero_n   AgResearch Woodlands, Southland, 2007-2012, 0 kg N/ha,
+#                      cage cut data. The only site on the sheet with no
+#                      nitrogen fertiliser at all, and therefore the only one
+#                      whose nitrogen supply resembles a model with clover
+#                      fixation and nothing else.
+#
+# THE MODEL IS NOT FERTILISED. Paddock's nitrogen income is clover fixation
+# alone - about 46 kg N/ha in the example scenario. Every Canterbury site on the
+# sheet received 154 to 330 kg N/ha. A model that matched lincoln_p21_low_n in
+# magnitude would be wrong; what it should match is the shape of the season.
+# See docs/verify.md (E7) for what remains to be calibrated.
+#
+# annual_t_dm_ha is the sheet's own annual total, not a sum of these columns.
+
+site,latitude_degrees,nitrogen_applied_kg_per_ha,jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec,annual_t_dm_ha
+lincoln_p21_low_n,-43.6,154,60,68,66,43,23,4,19,26,41,68,62,72,16.3
+woodlands_zero_n,-46.4,0,45,49,45,34,14,7,4,9,21,42,64,51,11.0

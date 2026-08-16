@@ -4,10 +4,13 @@ A spatially explicit pastoral farm simulator — terrain, weather, pasture growt
 livestock and pests coupled on real NZ geospatial data. C++17 core, Qt/VTK 2D+3D.
 
 > **Status: M2 in progress — weather, soil water and pasture.** A year of
-> weather now drives a soil water bucket and a ryegrass/white clover sward, all
-> three budgets close to 1e-9, and a scenario bundle reproduces a run bit for
-> bit. The growth parameters are still placeholders: see
-> [docs/verify.md](docs/verify.md) before quoting any number this produces.
+> weather drives a soil water bucket and a ryegrass/white clover sward, all
+> three budgets close to 1e-9, a scenario bundle reproduces a run bit for bit,
+> and the T3 gate compares the modelled season with DairyNZ's measured averages
+> on every pull request. The seasonal shape correlates 0.97 with the measured
+> unfertilised site; the magnitude is 11% low, and the growth parameters are
+> still placeholders. See [docs/verify.md](docs/verify.md) before quoting any
+> number this produces.
 > M1's foundation is described in
 > [docs/devlog/m1-skeleton-and-automation.md](docs/devlog/m1-skeleton-and-automation.md).
 
@@ -20,15 +23,17 @@ cmake --preset default && cmake --build --preset default
 
 ```
 canterbury_baseline (engine 0.1.0, seed 20240701)
-  2023-01-01 to 2023-12-31, 365 days
+  2023-07-01 to 2024-06-30, 366 days
   weather   synthetic:canterbury_plains_example (1b4174317ab0)
-  rainfall  815.0 mm
-  et        638.7 mm
-  drainage  205.7 mm
-  growth    10567.8 kg DM/ha
-  fixed N   46.2 kg N/ha
-  closing   4015.6 kg DM/ha cover, 19.7 mm soil water, 14% legume
+  rainfall  720.8 mm
+  et        580.2 mm
+  drainage  92.7 mm
+  growth    9605.9 kg DM/ha
+  fixed N   37.2 kg N/ha
+  closing   2283.9 kg DM/ha cover, 101.9 mm soil water, 14% legume
 ```
+
+The run is a New Zealand farm year, 1 July to 30 June.
 
 A bundle is one directory: the manifest, the weather, soil and sward
 definitions, the master seed, and the SHA-256 of every input. Change one of

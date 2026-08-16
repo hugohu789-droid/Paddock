@@ -87,3 +87,29 @@ if(PADDOCK_BUILD_CONFIG)
 
   gtest_discover_tests(paddock_config_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
 endif()
+
+# T3: validation against measured data.
+#
+# Labelled "validation" and outside the fast subset. It compares the example
+# scenario's seasonal growth with DairyNZ's published averages and writes the
+# comparison series; CI turns that into a plot and keeps it as an artifact, so
+# the gap between model and measurement is visible on every pull request.
+if(PADDOCK_BUILD_CONFIG)
+  set(PADDOCK_VALIDATION_OUTPUT_DIR "${CMAKE_BINARY_DIR}/validation")
+  file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
+
+  add_executable(paddock_validation_tests validation/SeasonalGrowthTest.cpp)
+
+  target_link_libraries(paddock_validation_tests PRIVATE Paddock::config GTest::gtest_main
+                                                         Paddock::project_options)
+
+  target_include_directories(paddock_validation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+  target_compile_definitions(
+    paddock_validation_tests
+    PRIVATE PADDOCK_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+            PADDOCK_VALIDATION_OUTPUT_DIR="${PADDOCK_VALIDATION_OUTPUT_DIR}")
+
+  gtest_discover_tests(paddock_validation_tests PROPERTIES LABELS "validation"
+                       DISCOVERY_TIMEOUT 120)
+endif()

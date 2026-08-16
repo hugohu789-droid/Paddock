@@ -92,8 +92,8 @@ TEST(ScenarioBundleTest, TheShippedBundleLoadsWithItsHashesIntact) {
 
   EXPECT_EQ(bundle.name, "canterbury_baseline");
   EXPECT_EQ(bundle.master_seed, 20240701U);
-  EXPECT_EQ(bundle.range.first, (core::Date{2023, 1, 1}));
-  EXPECT_EQ(bundle.range.last, (core::Date{2023, 12, 31}));
+  EXPECT_EQ(bundle.range.first, (core::Date{2023, 7, 1}));
+  EXPECT_EQ(bundle.range.last, (core::Date{2024, 6, 30}));
   EXPECT_DOUBLE_EQ(bundle.latitude_degrees, -43.5);
   EXPECT_EQ(bundle.inputs.size(), 3U);
   EXPECT_TRUE(bundle.inputs_unchanged());
@@ -109,7 +109,8 @@ TEST(ScenarioBundleTest, TheBundleRunsAndItsBudgetsClose) {
 
   const core::RunResult result = core::run(farmlet, *bundle.weather, bundle.range);
 
-  EXPECT_EQ(result.daily.size(), 365U);
+  // 2024 is a leap year, so the farm year is 366 days long.
+  EXPECT_EQ(result.daily.size(), 366U);
   EXPECT_TRUE(result.budgets_close(farmlet));
   EXPECT_GT(result.summary.total_growth_kg_dm, 0.0);
   EXPECT_GT(result.summary.total_rainfall_mm, 0.0);

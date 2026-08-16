@@ -14,8 +14,12 @@ engine_version = "0.1.0"
 master_seed = 20240701
 
 [run]
-start_date = "2023-01-01"
-end_date = "2023-12-31"
+# The New Zealand farm year, 1 July to 30 June. Starting in midwinter puts the
+# guessed initial soil water and pasture cover at the quietest point of the
+# season, where they matter least; a run that starts in January spends its first
+# month growing on whatever water it was handed.
+start_date = "2023-07-01"
+end_date = "2024-06-30"
 latitude_degrees = -43.5
 
 [weather]
