@@ -61,18 +61,10 @@ bool BoundingBox::contains(Point2D point) const noexcept {
 }
 
 void BoundingBox::expand_to_include(Point2D point) noexcept {
-  if (point.easting < min_easting) {
-    min_easting = point.easting;
-  }
-  if (point.northing < min_northing) {
-    min_northing = point.northing;
-  }
-  if (point.easting > max_easting) {
-    max_easting = point.easting;
-  }
-  if (point.northing > max_northing) {
-    max_northing = point.northing;
-  }
+  min_easting = std::min(point.easting, min_easting);
+  min_northing = std::min(point.northing, min_northing);
+  max_easting = std::max(point.easting, max_easting);
+  max_northing = std::max(point.northing, max_northing);
 }
 
 Polygon::Polygon(std::vector<Point2D> vertices) : vertices_(std::move(vertices)) {
@@ -164,9 +156,10 @@ bool Polygon::contains(Point2D point) const noexcept {
     if (!straddles) {
       continue;
     }
-    const double crossing_easting = current.easting + ((point.northing - current.northing) /
-                                                       (next.northing - current.northing)) *
-                                                          (next.easting - current.easting);
+    const double along_edge =
+        (point.northing - current.northing) / (next.northing - current.northing);
+    const double crossing_easting =
+        current.easting + (along_edge * (next.easting - current.easting));
     if (point.easting < crossing_easting) {
       inside = !inside;
     }

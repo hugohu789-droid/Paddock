@@ -18,6 +18,9 @@ add_executable(
 target_link_libraries(paddock_unit_tests PRIVATE Paddock::core GTest::gtest_main
                                                  Paddock::project_options)
 
+# So that suites can include "support/..." helpers by a stable path.
+target_include_directories(paddock_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 # The escaped semicolon keeps both labels on every discovered test: without it
 # CMake splits the list and only the first label survives into CTest.
 gtest_discover_tests(paddock_unit_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
@@ -28,6 +31,8 @@ add_executable(paddock_conservation_tests conservation/ClosedSystemTest.cpp)
 
 target_link_libraries(paddock_conservation_tests PRIVATE Paddock::core GTest::gtest_main
                                                          Paddock::project_options)
+
+target_include_directories(paddock_conservation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 gtest_discover_tests(paddock_conservation_tests PROPERTIES LABELS "conservation"
                      DISCOVERY_TIMEOUT 120)

@@ -10,7 +10,7 @@ namespace paddock::core {
 
 /// One stream per subsystem. Values are fixed and must never be renumbered:
 /// they are part of the reproducibility contract of every scenario bundle.
-enum class Subsystem : std::uint64_t {
+enum class Subsystem : std::uint8_t {
   Weather = 1,
   SoilWater = 2,
   PastureGrowth = 3,

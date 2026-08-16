@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstring>
 #include <numeric>
 #include <random>
 #include <vector>
@@ -17,8 +16,12 @@
 #include <paddock/core/Rng.hpp>
 #include <paddock/core/SimulationClock.hpp>
 
+#include "support/BitPattern.hpp"
+
 namespace paddock::core {
 namespace {
+
+using test_support::bit_patterns;
 
 constexpr std::size_t kHerdSize = 40;
 constexpr int kSimulatedDays = 90;
@@ -69,24 +72,19 @@ std::vector<std::size_t> ascending_order() {
   return order;
 }
 
-/// Bit-level equality, not near-equality: "same seed, same bits" is the claim.
-bool bit_identical(const std::vector<double>& lhs, const std::vector<double>& rhs) {
-  return lhs.size() == rhs.size() &&
-         std::memcmp(lhs.data(), rhs.data(), lhs.size() * sizeof(double)) == 0;
-}
-
+// Bit-level equality, not near-equality: "same seed, same bits" is the claim.
 TEST(DeterminismTest, SameSeedGivesBitIdenticalResults) {
   const std::vector<double> first = run_herd(20240701, ascending_order());
   const std::vector<double> second = run_herd(20240701, ascending_order());
 
-  EXPECT_TRUE(bit_identical(first, second));
+  EXPECT_EQ(bit_patterns(first), bit_patterns(second));
 }
 
 TEST(DeterminismTest, DifferentSeedsGiveDifferentResults) {
   const std::vector<double> first = run_herd(20240701, ascending_order());
   const std::vector<double> second = run_herd(20240702, ascending_order());
 
-  EXPECT_FALSE(bit_identical(first, second));
+  EXPECT_NE(bit_patterns(first), bit_patterns(second));
 }
 
 // The guard against a future parallel or reordered traversal: draws are keyed
@@ -100,8 +98,8 @@ TEST(DeterminismTest, TraversalOrderCannotChangeResults) {
 
   const std::vector<double> in_order = run_herd(20240701, ascending_order());
 
-  EXPECT_TRUE(bit_identical(in_order, run_herd(20240701, shuffled)));
-  EXPECT_TRUE(bit_identical(in_order, run_herd(20240701, reversed)));
+  EXPECT_EQ(bit_patterns(in_order), bit_patterns(run_herd(20240701, shuffled)));
+  EXPECT_EQ(bit_patterns(in_order), bit_patterns(run_herd(20240701, reversed)));
 }
 
 TEST(DeterminismTest, ComponentIterationIsSortedByIdNotByCreationOrder) {

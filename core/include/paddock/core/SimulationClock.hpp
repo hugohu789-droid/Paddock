@@ -34,7 +34,7 @@ struct Date {
 [[nodiscard]] bool operator<(const Date& lhs, const Date& rhs) noexcept;
 
 /// Southern Hemisphere seasons: summer is December to February.
-enum class Season { Summer, Autumn, Winter, Spring };
+enum class Season : std::uint8_t { Summer, Autumn, Winter, Spring };
 
 [[nodiscard]] Season season_of(const Date& date) noexcept;
 [[nodiscard]] std::string_view season_name(Season season) noexcept;

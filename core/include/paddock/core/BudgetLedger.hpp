@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,7 +14,7 @@ namespace paddock::core {
 /// Units are fixed per budget and stated here once: dry matter in kg DM, water
 /// in mm of depth over the modelled area, nitrogen in kg N. Every new process
 /// declares which of these lines it touches.
-enum class Budget { DryMatter, Water, Nitrogen };
+enum class Budget : std::uint8_t { DryMatter, Water, Nitrogen };
 
 inline constexpr std::size_t kBudgetCount = 3;
 

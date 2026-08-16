@@ -26,7 +26,7 @@ GeoTransform test_transform() {
 }
 
 Raster<double> test_raster(double fill = 0.0) {
-  return Raster<double>(kCols, kRows, test_transform(), fill);
+  return {kCols, kRows, test_transform(), fill};
 }
 
 TEST(RasterTest, ShapeAndAreaFollowTheTransform) {
@@ -67,7 +67,7 @@ TEST(RasterTest, CellLookupRoundTripsThroughCoordinates) {
     for (std::size_t col = 0; col < kCols; col += 11) {
       const std::optional<CellIndex> found = pasture.cell_at(pasture.cell_centre(col, row));
       ASSERT_TRUE(found.has_value());
-      EXPECT_EQ(*found, (CellIndex{col, row}));
+      EXPECT_EQ(found.value(), (CellIndex{col, row}));
     }
   }
 }

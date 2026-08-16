@@ -44,7 +44,7 @@ std::string_view subsystem_name(Subsystem subsystem) noexcept {
 
 std::uint64_t derive_seed(std::uint64_t master_seed, Subsystem subsystem,
                           std::uint64_t key) noexcept {
-  const std::uint64_t subsystem_bits = static_cast<std::uint64_t>(subsystem);
+  const auto subsystem_bits = static_cast<std::uint64_t>(subsystem);
   return splitmix64(splitmix64(master_seed ^ splitmix64(subsystem_bits)) ^ splitmix64(key));
 }
 

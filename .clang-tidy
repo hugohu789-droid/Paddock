@@ -42,6 +42,10 @@ CheckOptions:
     value: CamelCase
   - key: readability-identifier-naming.TypeAliasCase
     value: CamelCase
+  # Container-conformant member type names are a standard-library convention,
+  # not a style violation: generic code looks for exactly these spellings.
+  - key: readability-identifier-naming.TypeAliasIgnoredRegexp
+    value: '^(value_type|size_type|difference_type|reference|const_reference|pointer|const_pointer|iterator|const_iterator)$'
   - key: readability-identifier-naming.TypedefCase
     value: CamelCase
   - key: readability-identifier-naming.TemplateParameterCase

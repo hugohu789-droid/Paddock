@@ -12,7 +12,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstring>
 #include <random>
 #include <string>
 #include <vector>
@@ -22,8 +21,12 @@
 #include <paddock/core/Rng.hpp>
 #include <paddock/core/SimulationClock.hpp>
 
+#include "support/BitPattern.hpp"
+
 namespace paddock::core {
 namespace {
+
+using test_support::bit_patterns;
 
 constexpr int kDaysInYear = 365;
 constexpr std::uint64_t kMasterSeed = 20240701;
@@ -75,7 +78,7 @@ struct Farm {
     return sum.value();
   }
 
-  [[nodiscard]] std::size_t engine_index(Budget budget, std::size_t pool) const {
+  [[nodiscard]] static std::size_t engine_index(Budget budget, std::size_t pool) {
     return (static_cast<std::size_t>(budget) * 3) + pool;
   }
 };
@@ -193,8 +196,8 @@ TEST(ConservationTest, AYearOfAccountingIsReproducibleBitForBit) {
   const std::array<double, kBudgetCount> second = run_year(kMasterSeed);
   const std::array<double, kBudgetCount> other_seed = run_year(kMasterSeed + 1);
 
-  EXPECT_EQ(std::memcmp(first.data(), second.data(), sizeof(first)), 0);
-  EXPECT_NE(std::memcmp(first.data(), other_seed.data(), sizeof(first)), 0);
+  EXPECT_EQ(bit_patterns(first), bit_patterns(second));
+  EXPECT_NE(bit_patterns(first), bit_patterns(other_seed));
 }
 
 }  // namespace

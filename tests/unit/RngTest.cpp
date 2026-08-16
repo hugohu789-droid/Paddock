@@ -58,12 +58,15 @@ TEST(RngStreamsTest, StreamsAreIndependentCopies) {
   auto first = streams.stream_for(Subsystem::Pest, EntityId{42});
   auto second = streams.stream_for(Subsystem::Pest, EntityId{42});
 
+  constexpr int kDraws = 5;
   std::vector<std::uint64_t> from_first;
-  for (int draw = 0; draw < 5; ++draw) {
+  from_first.reserve(kDraws);
+  for (int draw = 0; draw < kDraws; ++draw) {
     from_first.push_back(first());
   }
   std::vector<std::uint64_t> from_second;
-  for (int draw = 0; draw < 5; ++draw) {
+  from_second.reserve(kDraws);
+  for (int draw = 0; draw < kDraws; ++draw) {
     from_second.push_back(second());
   }
 
