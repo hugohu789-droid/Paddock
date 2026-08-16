@@ -1,0 +1,19 @@
+# Normalise every text file to LF in the repository. Working trees may use
+# native endings; the index never does. Enforced by scripts/check-line-endings.sh.
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Geospatial and archive payloads are binary. Bulk datasets are never committed
+# (see docs/setup.md); these rules exist for small fixtures only.
+*.tif  binary
+*.tiff binary
+*.gpkg binary
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary
+*.zip  binary
+*.pdf  binary

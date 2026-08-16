@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# T1 gate — must stay under ten seconds.
+#   1. format check on staged C++ files
+#   2. line-ending and case-sensitivity check
+#   3. the fast unit subset, when a build directory already exists
+#
+# Install with scripts/install-hooks.sh. Bypass with --no-verify only when you
+# are committing to a scratch branch you intend to rewrite.
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "${repo_root}"
+
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACMR -- '*.cpp' '*.hpp' '*.h' '*.cc')
+
+if [ "${#staged[@]}" -gt 0 ]; then
+  scripts/check-format.sh "${staged[@]}"
+fi
+
+scripts/check-line-endings.sh
+
+build_dir=build/default
+if [ -f "${build_dir}/CMakeCache.txt" ]; then
+  echo "pre-commit: building and running the fast test subset"
+  cmake --build "${build_dir}" --target paddock_unit_tests >/dev/null
+  ctest --test-dir "${build_dir}" -L fast --output-on-failure
+else
+  echo "pre-commit: no ${build_dir} yet, skipping the fast test subset"
+  echo "            (configure it with: cmake --preset default)"
+fi

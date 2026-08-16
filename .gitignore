@@ -1,0 +1,30 @@
+# Build output
+build/
+out/
+install/
+compile_commands.json
+.cache/
+
+# Machine-local build configuration (vcpkg root, compiler paths).
+# CMakePresets.json is committed; CMakeUserPresets.json never is.
+CMakeUserPresets.json
+
+# Editors
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+CMakeLists.txt.user*
+*.pro.user*
+.idea/
+.DS_Store
+
+# vcpkg manifest-mode working directories
+vcpkg_installed/
+
+# Data snapshots: fetch scripts and content hashes are committed, payloads are not.
+data/snapshots/
+
+# Secrets. Never committed; the ai/ module reads its key from the environment.
+.env
+*.key

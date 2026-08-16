@@ -1,0 +1,8 @@
+---
+# Tests inherit the repository configuration and relax only the checks that
+# fire on gtest's macro expansions rather than on anything a human wrote.
+InheritParentConfig: true
+Checks: >
+  -cppcoreguidelines-special-member-functions,
+  -misc-use-anonymous-namespace,
+  -readability-function-size
