@@ -10,6 +10,7 @@ add_library(
   paddock_config STATIC
   src/ConfigError.cpp
   src/PastureConfig.cpp
+  src/ScenarioConfig.cpp
   src/SoilConfig.cpp
   src/TomlSupport.cpp
   src/WeatherConfig.cpp)

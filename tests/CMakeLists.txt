@@ -15,6 +15,7 @@ add_executable(
   unit/RngTest.cpp
   unit/Sha256Test.cpp
   unit/SimulationClockTest.cpp
+  unit/SimulationTest.cpp
   unit/SnapshotWeatherTest.cpp
   unit/SoilWaterTest.cpp
   unit/SolarTest.cpp
@@ -73,13 +74,16 @@ endif()
 # The data files committed under data/ are loaded by it, so a definition that
 # stops parsing fails the build rather than the first run that needs it.
 if(PADDOCK_BUILD_CONFIG)
-  add_executable(paddock_config_tests config/ConfigTest.cpp config/DataFilesTest.cpp)
+  add_executable(paddock_config_tests config/ConfigTest.cpp config/DataFilesTest.cpp
+                                      config/ScenarioTest.cpp)
 
   target_link_libraries(paddock_config_tests PRIVATE Paddock::config GTest::gtest_main
                                                      Paddock::project_options)
 
   target_compile_definitions(paddock_config_tests
                              PRIVATE PADDOCK_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
+
+  target_include_directories(paddock_config_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
   gtest_discover_tests(paddock_config_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
 endif()

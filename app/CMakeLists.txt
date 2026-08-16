@@ -6,6 +6,11 @@
 
 add_executable(paddock src/main.cpp)
 
+if(PADDOCK_BUILD_CONFIG)
+  target_link_libraries(paddock PRIVATE Paddock::config)
+  target_compile_definitions(paddock PRIVATE PADDOCK_WITH_CONFIG)
+endif()
+
 target_link_libraries(paddock PRIVATE Paddock::core Paddock::project_options)
 
 set_target_properties(paddock PROPERTIES OUTPUT_NAME paddock)

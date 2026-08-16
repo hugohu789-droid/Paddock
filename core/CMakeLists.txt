@@ -13,6 +13,7 @@ add_library(
   src/Solar.cpp
   src/Rng.cpp
   src/Sha256.cpp
+  src/Simulation.cpp
   src/SnapshotWeather.cpp
   src/SyntheticWeather.cpp
   src/Version.cpp

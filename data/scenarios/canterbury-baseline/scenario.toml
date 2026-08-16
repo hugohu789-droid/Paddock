@@ -1,0 +1,38 @@
+# A scenario bundle: everything needed to reproduce one run, in one directory.
+#
+# Every input file's SHA-256 is recorded here and checked on load. A bundle
+# whose inputs have changed underneath it is not the bundle that produced the
+# result, and `paddock scenario run` says so rather than running anyway.
+#
+# The inputs are all PLACEHOLDER definitions (see docs/verify.md), so this
+# bundle demonstrates reproducibility, not Canterbury.
+
+[scenario]
+name = "canterbury_baseline"
+description = "One year of synthetic weather on one hectare of ryegrass and white clover."
+engine_version = "0.1.0"
+master_seed = 20240701
+
+[run]
+start_date = "2023-01-01"
+end_date = "2023-12-31"
+latitude_degrees = -43.5
+
+[weather]
+kind = "synthetic"
+path = "weather.toml"
+sha256 = "b59bc98a348677638770e004a1050a9f55f1fd93b5b2346fa4079151588dcb33"
+
+[soil]
+path = "soil.toml"
+sha256 = "acbbef5a457d8d5a60d016e1fda5706fbb31fd8613c5112b20412d561bfd94ca"
+
+[sward]
+path = "sward.toml"
+sha256 = "6c7adf252d376044dcd4f26f7867f871cc61ad655bd9208cbe7f51ca96001ede"
+
+[initial_state]
+soil_water_mm = 90.0
+grass_kg_dm_per_ha = 1800.0
+legume_kg_dm_per_ha = 400.0
+soil_mineral_nitrogen_kg_per_ha = 60.0
