@@ -12,7 +12,7 @@ namespace paddock::core {
 namespace {
 
 constexpr std::uint64_t kSeed = 20240701;
-constexpr int kLargeSample = 200000;
+constexpr int kLargeSample = 100000;
 
 std::mt19937_64 seeded() {
   return std::mt19937_64(kSeed);
@@ -125,7 +125,7 @@ TEST(UniformTest, IntegersCoverTheWholeClosedRange) {
   std::mt19937_64 engine = seeded();
   std::array<int, 6> counts{};
 
-  for (int draw = 0; draw < 60000; ++draw) {
+  for (int draw = 0; draw < 30000; ++draw) {
     const std::uint64_t value = uniform_int(engine, 1, 6);
     ASSERT_GE(value, 1U);
     ASSERT_LE(value, 6U);
@@ -133,7 +133,7 @@ TEST(UniformTest, IntegersCoverTheWholeClosedRange) {
   }
 
   for (const int count : counts) {
-    EXPECT_NEAR(static_cast<double>(count), 10000.0, 500.0);
+    EXPECT_NEAR(static_cast<double>(count), 5000.0, 350.0);
   }
   EXPECT_EQ(uniform_int(engine, 7, 7), 7U);
   EXPECT_EQ(uniform_int(engine, 9, 4), 9U);

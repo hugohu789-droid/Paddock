@@ -45,7 +45,7 @@ struct Reproduction {
   int offspring_count = 0;
 };
 
-/// Ownership. Wild populations carry no Owned component — which is exactly how
+/// Ownership. Wild populations carry no Owned component - which is exactly how
 /// one deer species can be both farmed stock and a pest in the same run.
 struct Owned {
   std::uint64_t owner_id = 0;

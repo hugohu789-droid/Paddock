@@ -69,7 +69,7 @@ class Raster {
     return transform_.cell_size * transform_.cell_size;
   }
 
-  /// Total covered area in hectares — the unit every pastoral figure is quoted in.
+  /// Total covered area in hectares - the unit every pastoral figure is quoted in.
   [[nodiscard]] double area_hectares() const noexcept {
     return (cell_area() * static_cast<double>(size())) / kSquareMetresPerHectare;
   }

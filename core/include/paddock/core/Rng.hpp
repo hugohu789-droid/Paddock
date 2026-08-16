@@ -25,7 +25,7 @@ enum class Subsystem : std::uint8_t {
 
 /// Mixes a master seed, a subsystem and a key into a stream seed.
 ///
-/// The key is an entity ID or another stable identifier — never a loop counter.
+/// The key is an entity ID or another stable identifier - never a loop counter.
 /// Keying by identity is what lets a future parallel or reordered traversal
 /// produce bit-identical results.
 [[nodiscard]] std::uint64_t derive_seed(std::uint64_t master_seed, Subsystem subsystem,

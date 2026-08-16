@@ -39,7 +39,7 @@ enum class Season : std::uint8_t { Summer, Autumn, Winter, Spring };
 [[nodiscard]] Season season_of(const Date& date) noexcept;
 [[nodiscard]] std::string_view season_name(Season season) noexcept;
 
-/// Daily simulation time. Stepping is by whole days — the pastoral processes
+/// Daily simulation time. Stepping is by whole days - the pastoral processes
 /// this engine models (growth, intake, drainage) are all daily.
 class SimulationClock {
  public:

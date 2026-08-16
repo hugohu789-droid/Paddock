@@ -14,7 +14,7 @@
 
 namespace paddock::core {
 
-/// Stable identifier for a simulated thing — an animal, a paddock, a worker.
+/// Stable identifier for a simulated thing - an animal, a paddock, a worker.
 ///
 /// Identifiers are never reused within a run, and every random draw is keyed by
 /// this value rather than by a container position, so no future change to

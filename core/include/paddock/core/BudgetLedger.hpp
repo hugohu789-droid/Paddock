@@ -66,7 +66,7 @@ class BudgetLedger {
   void record_inflow(Budget budget, std::string_view process, double amount);
   void record_outflow(Budget budget, std::string_view process, double amount);
 
-  /// A move between two pools inside the system — grazed pasture becoming
+  /// A move between two pools inside the system - grazed pasture becoming
   /// animal intake, say. It changes no total, and is recorded for diagnostics
   /// only, so that a closed budget still shows where matter went.
   void record_internal_transfer(Budget budget, std::string_view process, double amount);

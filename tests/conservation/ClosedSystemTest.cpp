@@ -32,7 +32,7 @@ using test_support::bit_patterns;
 constexpr int kDaysInYear = 365;
 constexpr std::uint64_t kMasterSeed = 20240701;
 
-/// A quantity of one budget held somewhere in the farm — pasture cover, soil
+/// A quantity of one budget held somewhere in the farm - pasture cover, soil
 /// water, animal body reserves. Test-local by design: the store is generic, so
 /// a component type does not have to live in core to be usable.
 struct Pool {

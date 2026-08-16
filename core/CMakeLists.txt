@@ -9,7 +9,11 @@ add_library(
   src/Geometry.cpp
   src/SimulationClock.cpp
   src/Rng.cpp
-  src/Version.cpp)
+  src/Sha256.cpp
+  src/SnapshotWeather.cpp
+  src/SyntheticWeather.cpp
+  src/Version.cpp
+  src/Weather.cpp)
 
 add_library(Paddock::core ALIAS paddock_core)
 

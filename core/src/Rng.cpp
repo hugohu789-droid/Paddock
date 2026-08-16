@@ -9,7 +9,7 @@ namespace paddock::core {
 namespace {
 
 /// splitmix64 (Vigna, public domain). Used purely as a mixing function so that
-/// nearby seeds — master seed 1 and 2, entity 7 and 8 — produce unrelated
+/// nearby seeds - master seed 1 and 2, entity 7 and 8 - produce unrelated
 /// streams. Deterministic on every platform: unsigned arithmetic only.
 constexpr std::uint64_t splitmix64(std::uint64_t state) noexcept {
   std::uint64_t result = state + 0x9E3779B97F4A7C15ULL;

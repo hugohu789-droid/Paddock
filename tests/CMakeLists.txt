@@ -12,8 +12,12 @@ add_executable(
   unit/GeometryTest.cpp
   unit/RasterTest.cpp
   unit/RngTest.cpp
+  unit/Sha256Test.cpp
   unit/SimulationClockTest.cpp
+  unit/SnapshotWeatherTest.cpp
+  unit/SyntheticWeatherTest.cpp
   unit/VersionTest.cpp
+  unit/WeatherTest.cpp
   property/DeterminismTest.cpp)
 
 target_link_libraries(paddock_unit_tests PRIVATE Paddock::core GTest::gtest_main
