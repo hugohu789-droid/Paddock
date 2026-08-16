@@ -59,7 +59,7 @@ toml::table parse_text(std::string_view text, const std::string& path) {
 }
 
 toml::table parse_file(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
+  const std::ifstream file(path, std::ios::binary);
   if (!file) {
     // Line 1 rather than 0: the message still reads as a location, and nothing
     // downstream has to special-case a file that was never opened.
@@ -140,7 +140,10 @@ void reject_unknown_keys(const toml::table& table, std::initializer_list<std::st
     }
     std::string known;
     for (const std::string_view candidate : allowed) {
-      known += (known.empty() ? "" : ", ") + std::string(candidate);
+      if (!known.empty()) {
+        known += ", ";
+      }
+      known.append(candidate);
     }
     throw_at(value, path,
              "unknown key " + quoted(name) + " in " + context + ". Known keys are: " + known);

@@ -31,7 +31,7 @@ std::string join(const std::string& directory, const std::string& relative) {
 
 std::string read_file(const std::string& path, const toml::table& table,
                       const std::string& manifest_path) {
-  std::ifstream file(path, std::ios::binary);
+  const std::ifstream file(path, std::ios::binary);
   if (!file) {
     detail::throw_in(table, manifest_path, "cannot open bundle input '" + path + "'");
   }
@@ -194,7 +194,7 @@ std::vector<BundleInput> ScenarioBundle::changed_inputs() const {
 }
 
 core::Farmlet ScenarioBundle::make_farmlet() const {
-  return core::Farmlet(soil, sward, initial_state, latitude_degrees);
+  return {soil, sward, initial_state, latitude_degrees};
 }
 
 ScenarioBundle load_scenario(const std::string& bundle_directory) {
