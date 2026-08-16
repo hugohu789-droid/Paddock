@@ -114,3 +114,14 @@ if(PADDOCK_BUILD_CONFIG)
   gtest_discover_tests(paddock_validation_tests PROPERTIES LABELS "validation"
                        DISCOVERY_TIMEOUT 120)
 endif()
+
+# The colour mapping, tested without a display: which value gets which colour is
+# the part of a map view that can be measurably wrong.
+if(PADDOCK_BUILD_VIZ)
+  add_executable(paddock_viz_tests viz/ColourScaleTest.cpp)
+
+  target_link_libraries(paddock_viz_tests PRIVATE Paddock::viz GTest::gtest_main
+                                                  Paddock::project_options)
+
+  gtest_discover_tests(paddock_viz_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
+endif()
