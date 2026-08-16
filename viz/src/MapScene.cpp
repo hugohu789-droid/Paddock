@@ -31,7 +31,9 @@ MapScene::MapScene() {
   legend_->GetLabelTextProperty()->SetShadow(0);
   legend_->GetTitleTextProperty()->SetColor(1.0, 1.0, 1.0);
   legend_->GetTitleTextProperty()->SetShadow(0);
-  renderer_->AddActor2D(legend_);
+  // AddViewProp rather than AddActor2D: the latter is deprecated in VTK 9.5,
+  // and the deprecation fires at the call site, so -isystem does not hide it.
+  renderer_->AddViewProp(legend_);
 
   colours_->SetLookupTable(lookup_);
   colours_->SetOutputFormatToRGB();
