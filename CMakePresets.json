@@ -1,0 +1,161 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_MANIFEST_FEATURES": "tests"
+      }
+    },
+    {
+      "name": "default",
+      "inherits": "base",
+      "displayName": "Default (Debug, core + tests)",
+      "description": "Everyday development preset. Used by the CLI, VS Code and Qt Creator alike.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "ci-core",
+      "inherits": "base",
+      "displayName": "CI: core-only, three platforms",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "PADDOCK_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "ci-asan",
+      "inherits": "base",
+      "displayName": "CI: Debug with ASan and UBSan (Linux)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PADDOCK_SANITIZE": "address;undefined"
+      }
+    },
+    {
+      "name": "ci-tidy",
+      "inherits": "base",
+      "displayName": "CI: compile database for clang-tidy",
+      "description": "Compiler comes from CC/CXX so the toolchain major matches clang-tidy's.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "ci-core",
+      "configurePreset": "ci-core"
+    },
+    {
+      "name": "ci-asan",
+      "configurePreset": "ci-asan"
+    },
+    {
+      "name": "ci-tidy",
+      "configurePreset": "ci-tidy"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test-base",
+      "hidden": true,
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": false
+      }
+    },
+    {
+      "name": "default",
+      "inherits": "test-base",
+      "configurePreset": "default"
+    },
+    {
+      "name": "fast",
+      "inherits": "test-base",
+      "configurePreset": "default",
+      "displayName": "Pre-commit subset (< 10 s)",
+      "filter": {
+        "include": {
+          "label": "fast"
+        }
+      }
+    },
+    {
+      "name": "ci-core",
+      "inherits": "test-base",
+      "configurePreset": "ci-core"
+    },
+    {
+      "name": "ci-asan",
+      "inherits": "test-base",
+      "configurePreset": "ci-asan"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "default",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "default"
+        },
+        {
+          "type": "build",
+          "name": "default"
+        },
+        {
+          "type": "test",
+          "name": "default"
+        }
+      ]
+    },
+    {
+      "name": "ci-core",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "ci-core"
+        },
+        {
+          "type": "build",
+          "name": "ci-core"
+        },
+        {
+          "type": "test",
+          "name": "ci-core"
+        }
+      ]
+    }
+  ]
+}

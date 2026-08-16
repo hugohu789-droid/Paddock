@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "paddock",
+  "version": "0.1.0",
+  "description": "Spatially explicit pastoral farm simulator for New Zealand conditions",
+  "homepage": "https://github.com/hugohu789-droid/Paddock",
+  "builtin-baseline": "94a541197763a4f449a1b91478df48c0584a6256",
+  "dependencies": [],
+  "features": {
+    "tests": {
+      "description": "gtest suites and google-benchmark performance baselines",
+      "dependencies": [
+        "gtest",
+        "benchmark"
+      ]
+    },
+    "config": {
+      "description": "TOML configuration parsing and logging outside core",
+      "dependencies": [
+        "tomlplusplus",
+        "spdlog"
+      ]
+    },
+    "gis": {
+      "description": "Geospatial input/output: DEM, cadastre, waterways (M3)",
+      "dependencies": [
+        "gdal",
+        "proj",
+        "geos"
+      ]
+    },
+    "gui": {
+      "description": "Qt6 desktop application and VTK 2D/3D visualisation (M2-M3)",
+      "dependencies": [
+        {
+          "name": "qtbase",
+          "default-features": false,
+          "features": [
+            "gui",
+            "widgets"
+          ]
+        },
+        "vtk"
+      ]
+    },
+    "ai": {
+      "description": "Optional LLM features; excluded from the default CI build (M6)",
+      "dependencies": [
+        "curl",
+        "nlohmann-json"
+      ]
+    }
+  }
+}
