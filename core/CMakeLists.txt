@@ -7,6 +7,7 @@ add_library(
   src/Distributions.cpp
   src/Entity.cpp
   src/Geometry.cpp
+  src/Pasture.cpp
   src/SimulationClock.cpp
   src/SoilWater.cpp
   src/Solar.cpp

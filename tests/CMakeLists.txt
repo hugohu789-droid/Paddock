@@ -10,6 +10,7 @@ add_executable(
   unit/DistributionsTest.cpp
   unit/EntityTest.cpp
   unit/GeometryTest.cpp
+  unit/PastureTest.cpp
   unit/RasterTest.cpp
   unit/RngTest.cpp
   unit/Sha256Test.cpp
@@ -35,6 +36,7 @@ gtest_discover_tests(paddock_unit_tests PROPERTIES LABELS "unit\;fast" DISCOVERY
 # Conservation suite: closed system, 365 simulated days, budgets closing to
 # 1e-9. Never skipped, never weakened, never marked flaky.
 add_executable(paddock_conservation_tests conservation/ClosedSystemTest.cpp
+                                          conservation/PastureBalanceTest.cpp
                                           conservation/WaterBalanceTest.cpp)
 
 target_link_libraries(paddock_conservation_tests PRIVATE Paddock::core GTest::gtest_main

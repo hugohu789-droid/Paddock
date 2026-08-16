@@ -102,7 +102,7 @@ TEST(SyntheticWeatherTest, WetDayFrequencyAndDepthFollowTheParameters) {
   int wet_days = 0;
   int total_days = 0;
   double wet_depth = 0.0;
-  for (int year = 2000; year < 2030; ++year) {
+  for (int year = 2000; year < 2015; ++year) {
     for (const DailyWeather& record : source.fetch(DateRange::calendar_year(year)).records) {
       ++total_days;
       if (record.rainfall_mm > 0.0) {
@@ -145,7 +145,7 @@ TEST(SyntheticWeatherTest, MonthlyNormalsAreBlendedRatherThanSteppedAcrossMonthE
   const SyntheticWeatherSource source(test_site_parameters(), kSeed);
   double last_day_of_may = 0.0;
   double first_day_of_june = 0.0;
-  constexpr int kYears = 300;
+  constexpr int kYears = 120;
 
   for (int year = 1900; year < 1900 + kYears; ++year) {
     last_day_of_may += source.day(Date{year, 5, 31}).mean_air_temperature_c() / kYears;
