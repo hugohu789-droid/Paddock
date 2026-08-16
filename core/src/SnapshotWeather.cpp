@@ -184,7 +184,7 @@ SnapshotWeatherSource::SnapshotWeatherSource(std::vector<DailyWeather> records,
       options_(std::move(options)) {}
 
 SnapshotWeatherSource::SnapshotWeatherSource(Options options) : options_(std::move(options)) {
-  std::ifstream file(options_.path, std::ios::binary);
+  const std::ifstream file(options_.path, std::ios::binary);
   if (!file) {
     load_error_ = "cannot open weather snapshot '" + options_.path +
                   "'. Create it with scripts/cliflo-snapshot.py, or point the scenario at a "
@@ -217,7 +217,7 @@ SnapshotWeatherSource SnapshotWeatherSource::from_text(const std::string& csv_te
   const std::string hash = Sha256::hex_of(csv_text);
   const std::string path = options.path;
   try {
-    return SnapshotWeatherSource(parse_snapshot(csv_text, path), hash, std::move(options));
+    return {parse_snapshot(csv_text, path), hash, std::move(options)};
   } catch (const SnapshotParseError& error) {
     SnapshotWeatherSource source({}, hash, std::move(options));
     source.load_error_ = error.what();

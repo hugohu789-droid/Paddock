@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -189,18 +190,15 @@ DailyWeather SyntheticWeatherSource::day(const Date& date) const {
   const double clear_sky =
       blended(blend, before.mean_solar_radiation_mj, after.mean_solar_radiation_mj);
   const double cloud_factor = wet ? parameters_.wet_day_radiation_fraction : 1.0;
-  weather.solar_radiation_mj_per_m2 = clear_sky * cloud_factor * (1.0 + radiation_noise);
-  if (weather.solar_radiation_mj_per_m2 < 0.0) {
-    weather.solar_radiation_mj_per_m2 = 0.0;
-  }
+  // Heavy cloud and a wide scatter can drive the draw below zero; a negative
+  // radiation would put energy into the evapotranspiration term.
+  weather.solar_radiation_mj_per_m2 =
+      std::max(0.0, clear_sky * cloud_factor * (1.0 + radiation_noise));
 
   const double wind_noise = normal(engine, 0.0, parameters_.wind_variation_fraction);
   weather.wind_speed_m_per_s =
-      blended(blend, before.mean_wind_speed_m_per_s, after.mean_wind_speed_m_per_s) *
-      (1.0 + wind_noise);
-  if (weather.wind_speed_m_per_s < 0.0) {
-    weather.wind_speed_m_per_s = 0.0;
-  }
+      std::max(0.0, blended(blend, before.mean_wind_speed_m_per_s, after.mean_wind_speed_m_per_s) *
+                        (1.0 + wind_noise));
 
   return weather;
 }
