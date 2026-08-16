@@ -12,7 +12,6 @@ namespace paddock::core {
 namespace {
 
 constexpr std::uint64_t kSeed = 20240701;
-constexpr int kLargeSample = 50000;
 
 std::mt19937_64 seeded() {
   return std::mt19937_64(kSeed);
