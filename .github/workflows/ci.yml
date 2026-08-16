@@ -1,0 +1,144 @@
+name: T2
+
+# T2 runs on every pull request and on main. It is the gate that must be green
+# before a milestone is called done:
+#   * three-platform build and full core test suite
+#   * conservation assertions and deterministic replay
+#   * clang-format, line endings, dependency direction
+#   * clang-tidy
+#   * Linux Debug with ASan and UBSan
+#
+# The full-GUI matrix (Qt6 + VTK through vcpkg) joins this workflow in M3, when
+# app/ and viz/ contain something to build. See docs/adr/0006-ci-scope.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LLVM_VERSION: "19"
+
+jobs:
+  hygiene:
+    name: Format, line endings, dependency direction
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format ${{ env.LLVM_VERSION }}
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y clang-format-${LLVM_VERSION}
+
+      - name: clang-format
+        run: CLANG_FORMAT=clang-format-${LLVM_VERSION} scripts/check-format.sh
+
+      - name: Line endings and case sensitivity
+        run: scripts/check-line-endings.sh
+
+      - name: Dependency direction and core determinism rules
+        run: scripts/check-dependency-direction.sh
+
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (gcc)
+            os: ubuntu-24.04
+          - name: macOS (apple clang)
+            os: macos-14
+          - name: Windows (msvc)
+            os: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: where ninja || choco install ninja -y --no-progress
+
+      - name: Configure, build and test
+        if: runner.os != 'Windows'
+        run: |
+          cmake --preset ci-core
+          cmake --build --preset ci-core
+          ctest --preset ci-core
+
+      # The same presets on Windows, from a Developer Command Prompt so that
+      # Ninja can find cl.exe. No editor or CI job keeps its own build settings.
+      - name: Configure, build and test
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set VSPATH=%%i
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          cmake --preset ci-core || exit /b 1
+          cmake --build --preset ci-core || exit /b 1
+          ctest --preset ci-core || exit /b 1
+
+  sanitizers:
+    name: Linux Debug (ASan + UBSan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure, build and test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: |
+          cmake --preset ci-asan
+          cmake --build --preset ci-asan
+          ctest --preset ci-asan
+
+  tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang ${{ env.LLVM_VERSION }} and Ninja
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
+
+      - name: Generate the compile database
+        env:
+          CC: clang-19
+          CXX: clang++-19
+        run: cmake --preset ci-tidy
+
+      # The same .clang-tidy the editors read through clangd, so a developer
+      # sees this job's findings before they push.
+      - name: clang-tidy
+        run: |
+          run-clang-tidy-${LLVM_VERSION} -p build/ci-tidy -quiet -j "$(nproc)" \
+            '^.*/(core|app|gis|viz|ai|tests)/.*\.cpp$'
