@@ -8,6 +8,8 @@ add_library(
   src/Entity.cpp
   src/Geometry.cpp
   src/SimulationClock.cpp
+  src/SoilWater.cpp
+  src/Solar.cpp
   src/Rng.cpp
   src/Sha256.cpp
   src/SnapshotWeather.cpp

@@ -11,53 +11,15 @@
 #include <paddock/core/SyntheticWeather.hpp>
 
 #include "support/BitPattern.hpp"
+#include "support/TestWeather.hpp"
 
 namespace paddock::core {
 namespace {
 
 using test_support::bit_patterns;
+using test_support::test_site_parameters;
 
 constexpr std::uint64_t kSeed = 20240701;
-
-// A test fixture, not a calibration. The numbers below are chosen to make the
-// assertions legible - a warm month, a cold month, a fixed wet-day probability -
-// and carry no claim about any real site. Site parameters live in TOML under
-// data/ and cite NIWA climate normals; see docs/verify.md.
-SyntheticWeatherParameters test_parameters() {
-  SyntheticWeatherParameters parameters;
-  parameters.site_name = "test_site";
-  parameters.licence = "test fixture";
-  parameters.latitude_degrees = -43.5;  // Southern Hemisphere: January is summer
-  parameters.daily_temperature_sd_c = 2.0;
-  parameters.radiation_variation_fraction = 0.1;
-  parameters.wet_day_radiation_fraction = 0.5;
-  parameters.wind_variation_fraction = 0.2;
-
-  for (std::size_t month = 0; month < 12; ++month) {
-    MonthlyClimate& climate = parameters.months[month];
-    // Warm around January and December, cold around June and July: the shape
-    // of a Southern Hemisphere year, not the detail of any real one.
-    const bool summer = month <= 1 || month == 11;
-    const bool winter = month >= 5 && month <= 7;
-    climate.mean_daily_max_c = 16.0;
-    climate.mean_daily_min_c = 6.0;
-    climate.mean_solar_radiation_mj = 14.0;
-    if (summer) {
-      climate.mean_daily_max_c = 22.0;
-      climate.mean_daily_min_c = 12.0;
-      climate.mean_solar_radiation_mj = 24.0;
-    } else if (winter) {
-      climate.mean_daily_max_c = 10.0;
-      climate.mean_daily_min_c = 1.0;
-      climate.mean_solar_radiation_mj = 6.0;
-    }
-    climate.wet_day_probability = 0.25;
-    climate.mean_wet_day_rainfall_mm = 8.0;
-    climate.rainfall_shape = 0.8;
-    climate.mean_wind_speed_m_per_s = 3.0;
-  }
-  return parameters;
-}
 
 std::vector<double> rainfall_of(const WeatherSeries& series) {
   std::vector<double> rainfall;
@@ -69,7 +31,7 @@ std::vector<double> rainfall_of(const WeatherSeries& series) {
 }
 
 TEST(SyntheticWeatherTest, AYearIsWellFormedAndCarriesProvenance) {
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
 
   const WeatherSeries year = source.fetch(DateRange::calendar_year(2023));
 
@@ -83,9 +45,9 @@ TEST(SyntheticWeatherTest, AYearIsWellFormedAndCarriesProvenance) {
 }
 
 TEST(SyntheticWeatherTest, TheSameSeedGivesTheSameYear) {
-  const SyntheticWeatherSource first(test_parameters(), kSeed);
-  const SyntheticWeatherSource second(test_parameters(), kSeed);
-  const SyntheticWeatherSource other(test_parameters(), kSeed + 1);
+  const SyntheticWeatherSource first(test_site_parameters(), kSeed);
+  const SyntheticWeatherSource second(test_site_parameters(), kSeed);
+  const SyntheticWeatherSource other(test_site_parameters(), kSeed + 1);
 
   const std::vector<double> from_first = rainfall_of(first.fetch(DateRange::calendar_year(2023)));
 
@@ -99,7 +61,7 @@ TEST(SyntheticWeatherTest, TheSameSeedGivesTheSameYear) {
 // that starts in March sees exactly the March a full-year run would have seen,
 // because each day is keyed by its date and not by its position in a loop.
 TEST(SyntheticWeatherTest, ASubrangeMatchesTheSameDaysOfTheWholeYear) {
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
 
   const WeatherSeries year = source.fetch(DateRange::calendar_year(2023));
   const WeatherSeries march = source.fetch(DateRange{Date{2023, 3, 1}, Date{2023, 3, 31}});
@@ -117,7 +79,7 @@ TEST(SyntheticWeatherTest, ASubrangeMatchesTheSameDaysOfTheWholeYear) {
 }
 
 TEST(SyntheticWeatherTest, SeasonsRunTheSouthernWayRound) {
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
 
   const WeatherSeries january = source.fetch(DateRange{Date{2023, 1, 1}, Date{2023, 1, 31}});
   const WeatherSeries july = source.fetch(DateRange{Date{2023, 7, 1}, Date{2023, 7, 31}});
@@ -135,7 +97,7 @@ TEST(SyntheticWeatherTest, SeasonsRunTheSouthernWayRound) {
 }
 
 TEST(SyntheticWeatherTest, WetDayFrequencyAndDepthFollowTheParameters) {
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
 
   int wet_days = 0;
   int total_days = 0;
@@ -156,7 +118,7 @@ TEST(SyntheticWeatherTest, WetDayFrequencyAndDepthFollowTheParameters) {
 }
 
 TEST(SyntheticWeatherTest, WetDaysAreCloudier) {
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
   double wet_radiation = 0.0;
   double dry_radiation = 0.0;
   int wet_days = 0;
@@ -180,7 +142,7 @@ TEST(SyntheticWeatherTest, WetDaysAreCloudier) {
 TEST(SyntheticWeatherTest, MonthlyNormalsAreBlendedRatherThanSteppedAcrossMonthEnds) {
   // Averaged over many years the noise cancels, so a step at a month boundary
   // would show up as a jump between consecutive days.
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
   double last_day_of_may = 0.0;
   double first_day_of_june = 0.0;
   constexpr int kYears = 300;
@@ -197,7 +159,7 @@ TEST(SyntheticWeatherTest, MonthlyNormalsAreBlendedRatherThanSteppedAcrossMonthE
 }
 
 TEST(SyntheticWeatherTest, DescribeAndTestConnectionReportTheSite) {
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
 
   EXPECT_EQ(source.describe().name, "synthetic:test_site");
   EXPECT_TRUE(source.test_connection().ok);
@@ -205,7 +167,7 @@ TEST(SyntheticWeatherTest, DescribeAndTestConnectionReportTheSite) {
 }
 
 TEST(SyntheticWeatherTest, InvalidParametersAreReportedNotSimulated) {
-  SyntheticWeatherParameters broken = test_parameters();
+  SyntheticWeatherParameters broken = test_site_parameters();
   broken.months[3].wet_day_probability = 1.5;
   const SyntheticWeatherSource source(broken, kSeed);
 
@@ -218,7 +180,7 @@ TEST(SyntheticWeatherTest, InvalidParametersAreReportedNotSimulated) {
 }
 
 TEST(SyntheticWeatherTest, AnInvertedRangeIsAnError) {
-  const SyntheticWeatherSource source(test_parameters(), kSeed);
+  const SyntheticWeatherSource source(test_site_parameters(), kSeed);
 
   EXPECT_THROW(static_cast<void>(source.fetch(DateRange{Date{2023, 3, 1}, Date{2023, 1, 1}})),
                std::invalid_argument);
@@ -227,11 +189,11 @@ TEST(SyntheticWeatherTest, AnInvertedRangeIsAnError) {
 // The fingerprint is what a scenario bundle pins: two runs with the same seed
 // but different climate normals must not look identical in the provenance.
 TEST(SyntheticWeatherTest, TheFingerprintTracksTheParameters) {
-  const SyntheticWeatherParameters parameters = test_parameters();
+  const SyntheticWeatherParameters parameters = test_site_parameters();
   SyntheticWeatherParameters changed = parameters;
   changed.months[0].mean_daily_max_c += 0.5;
 
-  EXPECT_EQ(parameters.fingerprint(), test_parameters().fingerprint());
+  EXPECT_EQ(parameters.fingerprint(), test_site_parameters().fingerprint());
   EXPECT_NE(parameters.fingerprint(), changed.fingerprint());
   EXPECT_EQ(parameters.fingerprint().size(), 64U);
 }
