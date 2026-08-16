@@ -13,7 +13,7 @@ namespace paddock::viz {
 namespace {
 
 struct Stop {
-  double position;
+  double position = 0.0;
   Rgb colour;
 };
 
