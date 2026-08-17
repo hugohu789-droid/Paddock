@@ -29,7 +29,7 @@ if(PROJ_VERSION VERSION_LESS 6.0)
                       "(proj.db and the modern API). See docs/adr/0011-gdal-and-proj.md.")
 endif()
 
-add_library(paddock_gis STATIC src/Module.cpp src/Environment.cpp)
+add_library(paddock_gis STATIC src/Module.cpp src/Environment.cpp src/Projection.cpp)
 add_library(Paddock::gis ALIAS paddock_gis)
 
 target_include_directories(

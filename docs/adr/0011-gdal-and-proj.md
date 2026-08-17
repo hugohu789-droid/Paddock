@@ -105,6 +105,14 @@ what the default feature set builds is drivers nothing here will open.
 - Three package sources to keep working instead of one. The `gis` job exists to
   make that a build failure rather than a surprise, and it reports the version
   each platform actually installed before it configures.
+- **The asymmetry is measured, and it is large.** First green run of the `gis`
+  job: Linux 1m14s, macOS 2m54s, **Windows 1h3m47s**. The Windows hour is vcpkg
+  compiling GDAL and its dependency fan-out from source, and it is the entire
+  reason Linux and macOS take distribution packages instead. The vcpkg binary
+  archives are cached on a key derived from `vcpkg.json`, so that hour is paid
+  once per dependency change rather than once per run — but it is paid again in
+  full whenever the manifest changes, which is worth knowing before adding a
+  dependency casually.
 - `proj.db` is the file this decision really buys, and Windows does not get it
   for free. PROJ links and runs without finding its database and fails every
   transform at the point of use. On Linux and macOS the package puts the file

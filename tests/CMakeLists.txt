@@ -130,7 +130,7 @@ endif()
 # rather than "fast" because the suite only exists when the geospatial stack is
 # built, and a developer without it should not see failures.
 if(PADDOCK_BUILD_GIS)
-  add_executable(paddock_gis_tests gis/EnvironmentTest.cpp)
+  add_executable(paddock_gis_tests gis/EnvironmentTest.cpp gis/ProjectionTest.cpp)
 
   target_link_libraries(paddock_gis_tests PRIVATE Paddock::gis GTest::gtest_main
                                                   Paddock::project_options)
