@@ -9,6 +9,8 @@ name: T2 and T3
 #   * Linux Debug with ASan and UBSan
 #   * T3: validation against measured DairyNZ growth curves, with the
 #     model-versus-measurement plot kept as an artifact
+#   * the geospatial stack on three platforms: system GDAL and PROJ on Linux
+#     and macOS, vcpkg on Windows (docs/adr/0011-gdal-and-proj.md)
 #   * the Qt6 + VTK map view, built and rendered headlessly on Ubuntu 26.04
 #
 # The three-platform GUI *packaging* matrix joins this workflow in M3 with the
@@ -177,6 +179,74 @@ jobs:
           name: validation-seasonal-growth
           path: build/ci-core/validation/
           if-no-files-found: error
+
+  gis:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # Linux and macOS take GDAL and PROJ from the system package manager;
+    # Windows takes them from vcpkg. Distribution packages carry PROJ's proj.db
+    # with them, which is the file the suite checks for - building PROJ from
+    # source on three platforms to get the same database would cost tens of
+    # minutes a run for nothing. See docs/adr/0011-gdal-and-proj.md.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GIS Linux (apt, GDAL 3.8)
+            os: ubuntu-24.04
+          - name: GIS macOS (brew)
+            os: macos-14
+          - name: GIS Windows (vcpkg)
+            os: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GDAL, PROJ and Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgdal-dev libproj-dev
+
+      - name: Install GDAL, PROJ and Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja gdal proj
+
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: where ninja || choco install ninja -y --no-progress
+
+      # GDAL from source is the expensive part of this job on Windows, and it
+      # is identical from run to run. The binary cache turns it into a download
+      # on every run after the first.
+      - name: Cache the vcpkg binaries (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: vcpkg-gdal-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-gdal-${{ runner.os }}-
+
+      - name: Report the versions actually installed
+        shell: bash
+        run: |
+          gdal-config --version 2>/dev/null || echo "gdal-config not on PATH (Windows: vcpkg)"
+          proj 2>&1 | head -1 || true
+
+      - name: Configure, build and test
+        if: runner.os != 'Windows'
+        run: |
+          cmake --preset ci-gis
+          cmake --build --preset ci-gis
+          ctest --preset ci-gis -L gis --output-on-failure
+
+      - name: Configure, build and test
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set VSPATH=%%i
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          cmake --preset ci-gis -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake || exit /b 1
+          cmake --build --preset ci-gis || exit /b 1
+          ctest --preset ci-gis -L gis --output-on-failure || exit /b 1
 
   gui:
     name: Map view (Qt6 + VTK)

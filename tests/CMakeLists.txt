@@ -125,3 +125,15 @@ if(PADDOCK_BUILD_VIZ)
 
   gtest_discover_tests(paddock_viz_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
 endif()
+
+# Whether this machine's GDAL and PROJ can do NZTM at all. Labelled "gis"
+# rather than "fast" because the suite only exists when the geospatial stack is
+# built, and a developer without it should not see failures.
+if(PADDOCK_BUILD_GIS)
+  add_executable(paddock_gis_tests gis/EnvironmentTest.cpp)
+
+  target_link_libraries(paddock_gis_tests PRIVATE Paddock::gis GTest::gtest_main
+                                                  Paddock::project_options)
+
+  gtest_discover_tests(paddock_gis_tests PROPERTIES LABELS "unit\;gis" DISCOVERY_TIMEOUT 120)
+endif()

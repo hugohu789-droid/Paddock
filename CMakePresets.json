@@ -60,6 +60,25 @@
       }
     },
     {
+      "name": "gis",
+      "inherits": "default",
+      "displayName": "Local: core + gis (GDAL, PROJ)",
+      "description": "Adds the geospatial stack. Linux and macOS take GDAL and PROJ from the system package manager; Windows takes them from vcpkg, which is why this preset asks for the manifest feature rather than assuming they are on the machine already.",
+      "cacheVariables": {
+        "PADDOCK_BUILD_GIS": "ON",
+        "VCPKG_MANIFEST_FEATURES": "tests;gis"
+      }
+    },
+    {
+      "name": "ci-gis",
+      "inherits": "ci-core",
+      "displayName": "CI: core + gis, three platforms",
+      "cacheVariables": {
+        "PADDOCK_BUILD_GIS": "ON",
+        "VCPKG_MANIFEST_FEATURES": "tests;gis"
+      }
+    },
+    {
       "name": "ci-asan",
       "inherits": "base",
       "displayName": "CI: Debug with ASan and UBSan (Linux)",
@@ -106,6 +125,10 @@
     {
       "name": "ci-tidy",
       "configurePreset": "ci-tidy"
+    },
+    {
+      "name": "ci-gis",
+      "configurePreset": "ci-gis"
     }
   ],
   "testPresets": [
@@ -146,6 +169,11 @@
       "name": "ci-asan",
       "inherits": "test-base",
       "configurePreset": "ci-asan"
+    },
+    {
+      "name": "ci-gis",
+      "inherits": "test-base",
+      "configurePreset": "ci-gis"
     }
   ],
   "workflowPresets": [

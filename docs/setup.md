@@ -118,6 +118,45 @@ Two things worth knowing before you spend an afternoon on them:
 `paddock-gui <bundle> --smoke` renders one frame and exits, which is what CI
 runs under `xvfb-run`.
 
+## The geospatial stack
+
+`gis/` is off by default too. Nothing in the pasture, weather or livestock work
+needs it, and `cmake --preset default` has to keep succeeding on a machine that
+has never heard of GDAL.
+
+```bash
+sudo apt-get install libgdal-dev libproj-dev   # Linux
+brew install gdal proj                         # macOS
+cmake --preset gis
+cmake --build --preset gis
+ctest --preset ci-gis -L gis
+```
+
+On Windows the same preset takes GDAL and PROJ from vcpkg instead, so it needs
+the toolchain file:
+
+```bash
+cmake --preset gis -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake
+```
+
+Three things worth knowing before you spend an afternoon on them:
+
+- **GDAL 3.0 and PROJ 6.0 are floors, and configuration fails below them.**
+  Ubuntu 24.04 ships GDAL 3.8.4, Ubuntu 26.04 ships 3.12.2; anything older than
+  a 2019 distribution will not configure. That is deliberate — see
+  [ADR 0011](adr/0011-gdal-and-proj.md).
+- **`proj.db` is the file that goes missing.** PROJ 6 keeps its coordinate
+  operation tables in a SQLite database found through a search path. A PROJ
+  that cannot find it still links and still runs, and fails every transform at
+  the point of use. `ctest -L gis` checks that EPSG:2193 resolves and prints
+  the search path when it does not. If it fails, `PROJ_DATA` is the environment
+  variable to point at the directory holding `proj.db`.
+- **EPSG:2193 declares its axes as (northing, easting).** GDAL 3 honours the
+  authority's order, so it hands coordinates back the opposite way round from
+  the (easting, northing) most New Zealand data is written in, unless the
+  traditional order is requested. This produces a farm in the wrong place
+  rather than an error.
+
 ## The gates
 
 | Gate | When | Command |
