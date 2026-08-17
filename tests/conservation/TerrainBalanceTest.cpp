@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstdint>
 #include <string>
 
@@ -67,7 +68,7 @@ FarmletGrid make_grid() {
   const Raster<double> shape = SyntheticElevationSource().fetch(farm_area(), 25.0);
   const Raster<SoilWaterParameters> soils(shape.cols(), shape.rows(), shape.transform(),
                                           test_soil_parameters());
-  return FarmletGrid(soils, test_sward_parameters(), initial_state(), kCanterburyLatitude);
+  return {soils, test_sward_parameters(), initial_state(), kCanterburyLatitude};
 }
 
 /// Steps a year and returns the mean pasture cover it ends on.
@@ -123,12 +124,12 @@ TEST(TerrainBalanceTest, BudgetsCloseOnSlopingGround) {
     double rise_north;
   };
 
-  const Case cases[] = {
+  const std::array<Case, 4> cases = {{
       {"facing north", 0.0, -0.36},
       {"facing south", 0.0, 0.36},
       {"facing east", -0.36, 0.0},
       {"steep, facing north-west", 0.5, -0.5},
-  };
+  }};
 
   for (const Case& scenario : cases) {
     FarmletGrid grid = make_grid();
