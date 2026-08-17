@@ -40,6 +40,27 @@ I have read the CLA Document and I hereby sign the CLA
 The gate records the signature outside this repository, so signatures never
 enter the source history.
 
+## The gate's own shelf life
+
+`.github/workflows/cla.yml` uses
+[`contributor-assistant/github-action`](https://github.com/contributor-assistant/github-action),
+pinned to v2.6.1. Two facts worth writing down rather than rediscovering:
+
+- **The action is archived.** Its last push was 2026-03-23 and it accepts no
+  further changes. It works, and its job is small enough that it is likely to
+  keep working — but when a GitHub Actions runtime change eventually breaks it,
+  nobody will fix it. The exits are the hosted service at cla-assistant.io, or
+  replacing it with a short workflow of our own; the signature file format is
+  plain JSON, so signatures already collected are not trapped.
+- **`cla-assistant/github-action` is the old name.** GitHub still redirects it,
+  which is why the first version of the workflow appeared to work.
+
+Signatures are stored in the separate private repository
+`Paddock-cla-signatures`, so they stay out of this project's history. That is
+what makes `PERSONAL_ACCESS_TOKEN` necessary — the built-in `GITHUB_TOKEN` is
+scoped to the repository the workflow runs in. The secret must therefore be set
+**on `Paddock`**, not on the signatures repository.
+
 ## Open points to settle with counsel
 
 - Whether a copyright **assignment** or a broad **licence** is the right

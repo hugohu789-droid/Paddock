@@ -34,14 +34,21 @@ jobs:
        startsWith(github.event.comment.body, 'I have read the CLA Document and I hereby sign the CLA')) ||
       github.event_name == 'pull_request_target'
     steps:
+      # contributor-assistant/github-action is the canonical name; the
+      # cla-assistant/github-action this first referenced is a rename that
+      # GitHub still redirects. The repository is ARCHIVED as of 2026-03-23 and
+      # takes no further changes - see docs/cla.md for what that means and what
+      # the exits are. Pinned to the last release rather than to a moving tag,
+      # because an unmaintained action will not be fixed if a tag moves under
+      # us.
       - name: CLA assistant
-        uses: cla-assistant/github-action@v2.3.0
+        uses: contributor-assistant/github-action@v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # A personal access token is required to write the signature file.
-          # The default GITHUB_TOKEN cannot commit to another repository, and
-          # storing signatures outside this repository is what keeps them out
-          # of the source history. Set this secret before enabling the gate.
+          # Required only because the signatures live in a separate repository:
+          # the default GITHUB_TOKEN is scoped to this one. The secret must be
+          # set on THIS repository - Actions cannot read a secret stored on the
+          # signatures repository, which is where it first went.
           PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_SIGNATURES_TOKEN }}
         with:
           path-to-signatures: signatures/version1/cla.json
