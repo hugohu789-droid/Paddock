@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // T3: the model against measured data.
 //
 // The example scenario is run for twenty farm years and its mean monthly growth

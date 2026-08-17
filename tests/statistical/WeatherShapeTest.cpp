@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // The generator's statistical shape: wet-day frequency, rainfall depth, and the
 // blending of monthly normals across a month boundary. Averaging noise away
 // takes many simulated years, so these sit outside the pre-commit subset with

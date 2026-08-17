@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // The water budget, now that there is a real process to account for.
 //
 // A year of weather goes into a soil water bucket; rainfall, runoff,
