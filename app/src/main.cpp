@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
+#include <cctype>
 #include <exception>
 #include <fstream>
 #include <iomanip>
@@ -12,6 +13,11 @@
 #include <vector>
 
 #include <paddock/core/SnapshotWeather.hpp>
+
+#ifdef PADDOCK_WITH_GIS
+#include <paddock/gis/GeoPackageParcels.hpp>
+#include <paddock/gis/GeoTiffElevation.hpp>
+#endif
 #include <paddock/core/Version.hpp>
 #include <paddock/core/Weather.hpp>
 
@@ -27,7 +33,9 @@ void print_usage(std::ostream& out) {
       << "Usage:\n"
       << "  paddock --version                    Print the engine version\n"
       << "  paddock --help                       Print this message\n"
-      << "  paddock source test <snapshot.csv>   Check a weather snapshot\n"
+      << "  paddock source test <file>           Check a data source:\n"
+      << "                                       .csv weather, .tif elevation,\n"
+      << "                                       .gpkg paddock boundaries\n"
 #ifdef PADDOCK_WITH_CONFIG
       << "  paddock scenario run <bundle> [--csv <file>]\n"
       << "                                       Run a scenario bundle\n"
@@ -35,18 +43,21 @@ void print_usage(std::ostream& out) {
       << "\nWeather snapshots are produced by scripts/cliflo-snapshot.py.\n";
 }
 
-/// `paddock source test <path>` - the CLI face of the DataSource port. It has
-/// to answer the only question that matters before a run: can this source
-/// deliver data, and if not, what should I do about it?
-int test_source(const std::string& path) {
-  paddock::core::SnapshotWeatherSource::Options options;
-  options.path = path;
-  options.dataset = path;
-  const paddock::core::SnapshotWeatherSource source(options);
+/// Lower-cased extension of `path`, including the dot, or an empty string.
+std::string extension_of(const std::string& path) {
+  const std::size_t dot = path.find_last_of('.');
+  if (dot == std::string::npos) {
+    return {};
+  }
+  std::string extension = path.substr(dot);
+  for (char& character : extension) {
+    character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+  }
+  return extension;
+}
 
-  const paddock::core::SourceDescription description = source.describe();
-  const paddock::core::ConnectionStatus status = source.test_connection();
-
+int report(const paddock::core::SourceDescription& description,
+           const paddock::core::ConnectionStatus& status) {
   std::ostream& out = status.ok ? std::cout : std::cerr;
   out << description.name << '\n'
       << "  licence   " << description.licence << '\n'
@@ -55,6 +66,42 @@ int test_source(const std::string& path) {
       << "  status    " << (status.ok ? "ok" : "unavailable") << '\n'
       << "            " << status.message << '\n';
   return status.ok ? 0 : 1;
+}
+
+/// `paddock source test <path>` - the CLI face of the DataSource port. It has
+/// to answer the only question that matters before a run: can this source
+/// deliver data, and if not, what should I do about it?
+///
+/// Which kind of source is decided by the file extension. That is a small lie
+/// of convenience - a GeoTIFF is a GeoTIFF whatever it is called - but the
+/// alternative is a --type flag everyone has to remember, and a misnamed file
+/// still fails with GDAL's own message about the format it actually found.
+int test_source(const std::string& path) {
+  const std::string extension = extension_of(path);
+
+#ifdef PADDOCK_WITH_GIS
+  if (extension == ".tif" || extension == ".tiff") {
+    const paddock::gis::GeoTiffElevationSource elevation(path);
+    return report(elevation.describe(), elevation.test_connection());
+  }
+  if (extension == ".gpkg") {
+    const paddock::gis::GeoPackageParcelSource parcels(path);
+    return report(parcels.describe(), parcels.test_connection());
+  }
+#else
+  if (extension == ".tif" || extension == ".tiff" || extension == ".gpkg") {
+    std::cerr << "This build has no geospatial support, so " << path << " cannot be checked.\n"
+              << "Configure with -DPADDOCK_BUILD_GIS=ON; it needs GDAL and PROJ, and\n"
+              << "docs/setup.md says how to get them.\n";
+    return 1;
+  }
+#endif
+
+  paddock::core::SnapshotWeatherSource::Options options;
+  options.path = path;
+  options.dataset = path;
+  const paddock::core::SnapshotWeatherSource weather(options);
+  return report(weather.describe(), weather.test_connection());
 }
 
 #ifdef PADDOCK_WITH_CONFIG
