@@ -183,11 +183,11 @@ jobs:
   gis:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    # Linux and macOS take GDAL and PROJ from the system package manager;
-    # Windows takes them from vcpkg. Distribution packages carry PROJ's proj.db
-    # with them, which is the file the suite checks for - building PROJ from
-    # source on three platforms to get the same database would cost tens of
-    # minutes a run for nothing. See docs/adr/0011-gdal-and-proj.md.
+    # Linux and macOS take GDAL and PROJ from the system package manager, which
+    # also ships PROJ's proj.db where PROJ already looks for it. Windows takes
+    # them from vcpkg and lives in the gis-windows job below, run on request
+    # rather than on every pull request - the measurement that decided that is
+    # recorded there. See docs/adr/0011-gdal-and-proj.md.
     strategy:
       fail-fast: false
       matrix:
@@ -196,8 +196,6 @@ jobs:
             os: ubuntu-24.04
           - name: GIS macOS (brew)
             os: macos-14
-          - name: GIS Windows (vcpkg)
-            os: windows-2022
     steps:
       - uses: actions/checkout@v4
 
@@ -209,8 +207,41 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja gdal proj
 
-      - name: Install Ninja (Windows)
-        if: runner.os == 'Windows'
+      - name: Report the versions actually installed
+        run: |
+          gdal-config --version
+          proj 2>&1 | head -1 || true
+
+      - name: Configure, build and test
+        run: |
+          cmake --preset ci-gis
+          cmake --build --preset ci-gis
+          ctest --preset ci-gis -L gis --output-on-failure
+
+  # Windows geospatial builds run on request, not on every pull request.
+  #
+  # Measured, not guessed: on the first green run the same suite took 1m14s on
+  # Linux, 2m54s on macOS and 1h3m47s on Windows. The hour is vcpkg compiling
+  # GDAL and its dependency fan-out from source. The binary cache removes it
+  # only when a cache exists in a scope the run can read, and Actions caches are
+  # scoped per branch - so a new feature branch pays the hour again. One job was
+  # costing more than the other ten put together.
+  #
+  # What stands in for it is a local build: gis/ is verified on Windows on a
+  # developer machine with vcpkg before merging, and docs/setup.md gives the
+  # command. That is weaker than a gate, and it is written down as weaker rather
+  # than quietly dropped. Run this job from the Actions tab whenever gis/ changes
+  # in a way MSVC might see differently from GCC and Clang. The three-platform
+  # GUI packaging matrix that ADR 0006 defers to M3 brings Windows back on a
+  # cadence of its own.
+  gis-windows:
+    name: GIS Windows (vcpkg, on request)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
         shell: cmd
         run: where ninja || choco install ninja -y --no-progress
 
@@ -221,8 +252,7 @@ jobs:
       # expat 2.8.3 against a baseline database that stops at 2.8.2 fails with
       # "no version database entry". The tree has to be moved to the pin, not
       # just told about it.
-      - name: Check the vcpkg tree out at the pinned baseline (Windows)
-        if: runner.os == 'Windows'
+      - name: Check the vcpkg tree out at the pinned baseline
         shell: bash
         run: |
           baseline=$(python -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
@@ -240,8 +270,7 @@ jobs:
       # seventy-five minutes of correctly built packages and the next attempt
       # paid for them again. Saving on always() means a run only ever pays that
       # cost once, whatever the tests then say.
-      - name: Restore the vcpkg binary cache (Windows)
-        if: runner.os == 'Windows'
+      - name: Restore the vcpkg binary cache
         id: vcpkg-cache
         uses: actions/cache/restore@v4
         with:
@@ -249,21 +278,7 @@ jobs:
           key: vcpkg-gdal-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-gdal-${{ runner.os }}-
 
-      - name: Report the versions actually installed
-        shell: bash
-        run: |
-          gdal-config --version 2>/dev/null || echo "gdal-config not on PATH (Windows: vcpkg)"
-          proj 2>&1 | head -1 || true
-
       - name: Configure, build and test
-        if: runner.os != 'Windows'
-        run: |
-          cmake --preset ci-gis
-          cmake --build --preset ci-gis
-          ctest --preset ci-gis -L gis --output-on-failure
-
-      - name: Configure, build and test
-        if: runner.os == 'Windows'
         shell: cmd
         # PROJ_DATA is PROJ's own documented mechanism for finding proj.db, and
         # on Windows it has to be used. A vcpkg PROJ searches
@@ -282,8 +297,8 @@ jobs:
           echo PROJ_DATA=%PROJ_DATA%
           ctest --preset ci-gis -L gis --output-on-failure || exit /b 1
 
-      - name: Save the vcpkg binary cache (Windows)
-        if: runner.os == 'Windows' && always()
+      - name: Save the vcpkg binary cache
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: ~/AppData/Local/vcpkg/archives

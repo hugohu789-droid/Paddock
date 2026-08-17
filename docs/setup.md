@@ -132,12 +132,24 @@ cmake --build --preset gis
 ctest --preset ci-gis -L gis
 ```
 
-On Windows the same preset takes GDAL and PROJ from vcpkg instead, so it needs
-the toolchain file:
+On Windows the same preset takes GDAL and PROJ from vcpkg, so it needs the
+toolchain file. Installing them once with `vcpkg install gdal proj geos` and
+then configuring against that install is far quicker than a manifest install,
+which rebuilds into the build directory:
 
 ```bash
-cmake --preset gis -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake
+cmake --preset gis -DVCPKG_MANIFEST_MODE=OFF -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake --build build/gis
+ctest --test-dir build/gis -L gis
 ```
+
+**This is the Windows gate for `gis/`.** The `gis` CI job runs Linux and macOS
+only: on GitHub's runners the Windows build of GDAL from vcpkg source took
+1h3m47s against Linux's 1m14s, and Actions caches are scoped per branch, so a
+new branch pays it again. Windows geospatial coverage therefore comes from
+running the three commands above before merging anything that touches `gis/`.
+There is a `GIS Windows (vcpkg, on request)` job in the Actions tab for when
+that is not enough. See [ADR 0011](adr/0011-gdal-and-proj.md).
 
 Three things worth knowing before you spend an afternoon on them:
 

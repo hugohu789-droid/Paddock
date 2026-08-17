@@ -34,9 +34,9 @@ takes them from vcpkg.**
   **PRIVATE**. A PUBLIC link would put GDAL's include directories on every
   consumer of `Paddock::gis`, and "GDAL types stop at this boundary" would hold
   only by convention. PRIVATE makes it hold by link error.
-- The `gis` job builds and tests on all three platforms. On Windows the vcpkg
-  binary archives are cached, because building GDAL from source is the
-  expensive part and it is identical from run to run.
+- The `gis` job builds and tests on **Linux and macOS on every pull request**.
+  Windows is a separate on-request job; see the consequence below for the
+  measurement that moved it there.
 - `PADDOCK_BUILD_GIS` stays **OFF** by default, as it has been since M1. A
   developer working on pasture or livestock does not need a geospatial stack
   installed, and `cmake --preset default` must keep succeeding on a clean
@@ -105,14 +105,28 @@ what the default feature set builds is drivers nothing here will open.
 - Three package sources to keep working instead of one. The `gis` job exists to
   make that a build failure rather than a surprise, and it reports the version
   each platform actually installed before it configures.
-- **The asymmetry is measured, and it is large.** First green run of the `gis`
-  job: Linux 1m14s, macOS 2m54s, **Windows 1h3m47s**. The Windows hour is vcpkg
-  compiling GDAL and its dependency fan-out from source, and it is the entire
-  reason Linux and macOS take distribution packages instead. The vcpkg binary
-  archives are cached on a key derived from `vcpkg.json`, so that hour is paid
-  once per dependency change rather than once per run — but it is paid again in
-  full whenever the manifest changes, which is worth knowing before adding a
-  dependency casually.
+- **The asymmetry is measured, and it is large enough to change the decision.**
+  First green run of the `gis` job: Linux 1m14s, macOS 2m54s, **Windows
+  1h3m47s**. The Windows hour is vcpkg compiling GDAL and its dependency
+  fan-out from source, and it is the entire reason Linux and macOS take
+  distribution packages instead.
+
+  The binary cache was supposed to make that a one-off. It does not, reliably:
+  GitHub Actions caches are **scoped per branch**, and a run can read only its
+  own branch's caches and the base branch's. A cache built on a feature branch
+  dies with the branch, so the next feature branch pays the hour again. Measured
+  both ways in one afternoon — 1h3m47s on a branch with no readable cache, 2m19s
+  on a branch stacked directly on one that had built it.
+
+  **So the Windows geospatial job no longer runs on every pull request.** It is
+  a separate `gis-windows` job triggered by `workflow_dispatch`, and Windows
+  coverage for `gis/` comes from a developer build before merge, documented in
+  `docs/setup.md`. This is a real reduction in automated coverage and is
+  recorded as one: an MSVC-only break in `gis/` will now be found by a person
+  rather than by a gate. It is bounded — the Windows *core* build still runs on
+  every pull request, and the three-platform GUI packaging matrix that
+  [ADR 0006](0006-ci-scope.md) defers to M3 brings Windows geospatial builds
+  back on a cadence of their own.
 - `proj.db` is the file this decision really buys, and Windows does not get it
   for free. PROJ links and runs without finding its database and fails every
   transform at the point of use. On Linux and macOS the package puts the file
