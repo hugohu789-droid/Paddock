@@ -4,11 +4,13 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <vector>
 
 #include <paddock/core/BudgetLedger.hpp>
 #include <paddock/core/Raster.hpp>
 #include <paddock/core/Simulation.hpp>
+#include <paddock/core/SlopeRadiation.hpp>
 
 namespace paddock::core {
 
@@ -30,6 +32,21 @@ class FarmletGrid {
   /// where it is even before `gis/` exists to tell it.
   FarmletGrid(const Raster<SoilWaterParameters>& soils, const SwardParameters& sward,
               const FarmletInitialState& initial, double latitude_degrees);
+
+  /// Gives every cell the radiation of its own slope instead of level ground's.
+  ///
+  /// Optional, and absent by default: a farm modelled as flat is still a valid
+  /// farm, and every scenario written before terrain existed keeps its results
+  /// unchanged. Once set, each cell's evapotranspiration and intercepted light
+  /// are scaled by what its slope and aspect actually receive.
+  ///
+  /// `ground` must match the grid's shape. Building the table costs about
+  /// 0.7 s for 1536 cells - see SlopeRadiationTable - and is done once here
+  /// rather than per day.
+  void set_terrain(const Topography& ground);
+
+  /// Whether terrain has been supplied. Without it every cell is level ground.
+  [[nodiscard]] bool has_terrain() const noexcept { return radiation_ != nullptr; }
 
   /// Steps every cell, row-major.
   ///
@@ -72,10 +89,17 @@ class FarmletGrid {
   template <typename Fn>
   [[nodiscard]] Raster<double> snapshot(Fn&& value_of) const;
 
+  /// One where no terrain has been supplied, so that a grid without it steps
+  /// exactly as it did before terrain existed.
+  [[nodiscard]] double radiation_ratio(std::size_t col, std::size_t row, int day_of_year) const;
+
   std::size_t cols_ = 0;
   std::size_t rows_ = 0;
   GeoTransform transform_{};
   std::vector<Farmlet> cells_;
+  double latitude_degrees_ = 0.0;
+  /// Null until set_terrain: every cell is level ground.
+  std::unique_ptr<SlopeRadiationTable> radiation_;
   /// Reused every day so that a year of stepping does not allocate a ledger a
   /// day. Cleared at the start of each step.
   BudgetLedger scratch_;

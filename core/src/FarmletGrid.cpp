@@ -12,6 +12,7 @@ namespace paddock::core {
 FarmletGrid::FarmletGrid(const Raster<SoilWaterParameters>& soils, const SwardParameters& sward,
                          const FarmletInitialState& initial, double latitude_degrees)
     : cols_(soils.cols()), rows_(soils.rows()), transform_(soils.transform()) {
+  latitude_degrees_ = latitude_degrees;
   if (soils.empty()) {
     throw std::invalid_argument("FarmletGrid: the soil raster has no cells");
   }
@@ -38,17 +39,35 @@ void FarmletGrid::set_opening_stocks(BudgetLedger& ledger) const {
   ledger.set_opening_stock(Budget::Nitrogen, mean_total_nitrogen_kg());
 }
 
+void FarmletGrid::set_terrain(const Topography& ground) {
+  if (ground.slope_degrees.cols() != cols_ || ground.slope_degrees.rows() != rows_) {
+    throw std::invalid_argument(
+        "FarmletGrid::set_terrain: the terrain must have the same shape as the grid");
+  }
+  radiation_ = std::make_unique<SlopeRadiationTable>(ground, latitude_degrees_);
+}
+
+double FarmletGrid::radiation_ratio(std::size_t col, std::size_t row, int day_of_year) const {
+  return radiation_ == nullptr ? 1.0 : radiation_->ratio(col, row, day_of_year);
+}
+
 void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger) {
+  const int day = weather.date.day_of_year();
+
   if (ledger == nullptr) {
-    for (Farmlet& farmlet : cells_) {
-      farmlet.step(weather);
+    for (std::size_t row = 0; row < rows_; ++row) {
+      for (std::size_t col = 0; col < cols_; ++col) {
+        cells_[(row * cols_) + col].step(weather, radiation_ratio(col, row, day));
+      }
     }
     return;
   }
 
   scratch_.reset();
-  for (Farmlet& farmlet : cells_) {
-    farmlet.step(weather, &scratch_);
+  for (std::size_t row = 0; row < rows_; ++row) {
+    for (std::size_t col = 0; col < cols_; ++col) {
+      cells_[(row * cols_) + col].step(weather, radiation_ratio(col, row, day), &scratch_);
+    }
   }
   ledger->add_scaled(scratch_, 1.0 / static_cast<double>(cells_.size()));
 }

@@ -40,10 +40,12 @@ double hargreaves_reference_et_mm(double min_air_temperature_c, double max_air_t
   return std::max(0.0, estimate);
 }
 
-double reference_et_mm(const DailyWeather& weather, double latitude_degrees) noexcept {
+double reference_et_mm(const DailyWeather& weather, double latitude_degrees,
+                       double radiation_ratio) noexcept {
   return hargreaves_reference_et_mm(
       weather.min_air_temperature_c, weather.max_air_temperature_c,
-      extraterrestrial_radiation_mj(latitude_degrees, weather.date.day_of_year()));
+      radiation_ratio *
+          extraterrestrial_radiation_mj(latitude_degrees, weather.date.day_of_year()));
 }
 
 double water_stress_coefficient(double depletion_mm, double total_available_water_mm,
@@ -109,13 +111,13 @@ double SoilWaterBucket::stress_coefficient() const noexcept {
 }
 
 SoilWaterFluxes SoilWaterBucket::step(const DailyWeather& weather, double latitude_degrees,
-                                      BudgetLedger* ledger) {
+                                      double radiation_ratio, BudgetLedger* ledger) {
   SoilWaterFluxes fluxes;
   fluxes.rainfall_mm = std::max(0.0, weather.rainfall_mm);
   fluxes.runoff_mm = fluxes.rainfall_mm * parameters_.runoff_fraction;
   fluxes.infiltration_mm = fluxes.rainfall_mm - fluxes.runoff_mm;
 
-  fluxes.reference_et_mm = reference_et_mm(weather, latitude_degrees);
+  fluxes.reference_et_mm = reference_et_mm(weather, latitude_degrees, radiation_ratio);
   const double crop_et = parameters_.crop_coefficient * fluxes.reference_et_mm;
 
   // Stress is judged on the profile as it stood this morning, and the depletion

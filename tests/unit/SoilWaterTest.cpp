@@ -187,7 +187,7 @@ TEST(SoilWaterBucketTest, EveryFlowIsReportedToTheWaterBudget) {
   SoilWaterBucket bucket(test_parameters(), 100.0);
   ledger.set_opening_stock(Budget::Water, bucket.water_mm());
 
-  bucket.step(day_of(7, 1, 40.0, 3.0, 9.0), kCanterburyLatitude, &ledger);
+  bucket.step(day_of(7, 1, 40.0, 3.0, 9.0), kCanterburyLatitude, 1.0, &ledger);
 
   EXPECT_TRUE(ledger.closes(Budget::Water, bucket.water_mm()))
       << ledger.report(Budget::Water, bucket.water_mm());

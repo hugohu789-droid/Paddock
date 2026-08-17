@@ -55,7 +55,14 @@ class Farmlet {
   /// That stress is FAO-56's: computed from the depletion the *previous* day
   /// left behind (Eq. 84), so today's rain lifts tomorrow's growth rather than
   /// today's. A farm that was dry this morning was dry all day.
-  DailyRecord step(const DailyWeather& weather, BudgetLedger* ledger = nullptr);
+  /// `radiation_ratio` is how much radiation this cell's ground receives
+  /// relative to level ground - one on the flat, more on a sunny slope, less on
+  /// a shaded one. It enters in both the places radiation matters: the
+  /// evapotranspiration that dries the soil, and the light the sward
+  /// intercepts. Aspect is not a growth coefficient here; it is radiation, and
+  /// the seasonal reversal Ballantrae measured is left to emerge from the two.
+  DailyRecord step(const DailyWeather& weather, double radiation_ratio = 1.0,
+                   BudgetLedger* ledger = nullptr);
 
   [[nodiscard]] const SoilWaterBucket& soil() const noexcept { return soil_; }
 
