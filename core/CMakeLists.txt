@@ -4,6 +4,7 @@
 add_library(
   paddock_core STATIC
   src/BudgetLedger.cpp
+  src/DataSource.cpp
   src/Distributions.cpp
   src/Entity.cpp
   src/FarmletGrid.cpp
@@ -16,6 +17,7 @@ add_library(
   src/Sha256.cpp
   src/Simulation.cpp
   src/SnapshotWeather.cpp
+  src/SyntheticTerrain.cpp
   src/SyntheticWeather.cpp
   src/Version.cpp
   src/Weather.cpp)
