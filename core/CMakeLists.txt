@@ -11,6 +11,7 @@ add_library(
   src/Geometry.cpp
   src/Pasture.cpp
   src/SimulationClock.cpp
+  src/SlopeRadiation.cpp
   src/SoilWater.cpp
   src/Solar.cpp
   src/Rng.cpp

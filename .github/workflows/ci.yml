@@ -5,7 +5,7 @@ name: T2 and T3
 #   * three-platform build and full core test suite
 #   * conservation assertions and deterministic replay
 #   * clang-format, line endings, dependency direction
-#   * clang-tidy
+#   * clang-tidy, on what a pull request changed and on the whole tree at merge
 #   * Linux Debug with ASan and UBSan
 #   * T3: validation against measured DairyNZ growth curves, with the
 #     model-versus-measurement plot kept as an artifact
@@ -124,7 +124,11 @@ jobs:
     name: clang-tidy
     runs-on: ubuntu-24.04
     steps:
+      # Full history, because working out what a pull request changed needs the
+      # base branch to compare against.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install clang ${{ env.LLVM_VERSION }} and Ninja
         run: |
@@ -141,12 +145,60 @@ jobs:
           CXX: clang++-19
         run: cmake --preset ci-tidy
 
+      # Decide what to lint before linting it.
+      #
+      # A full pass is 75 translation units and takes 5m42s - more than the
+      # other ten jobs together, and almost all of it re-checking files the
+      # change never touched. A pull request usually moves two or three.
+      #
+      # The catch is that a header change can break a translation unit that did
+      # not change, so the saving only applies when nothing with fan-out moved.
+      # A touched .hpp, .clang-tidy or CMakeLists.txt means the whole tree, and
+      # so does every push to main - so main is always fully linted, and a
+      # narrow pull-request pass can never be the last word.
+      - name: Work out what to lint
+        id: scope
+        run: |
+          full='^.*/(core|config|app|gis|viz|ai|tests)/.*\.cpp$'
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "reason=every file: this is not a pull request" >> "$GITHUB_OUTPUT"
+            echo "pattern=${full}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-only "${base}...HEAD")
+          echo "changed files:"
+          echo "${changed}" | sed 's/^/  /'
+
+          if echo "${changed}" | grep -qE '(\.hpp|\.h)$|^\.clang-tidy$|CMakeLists\.txt$'; then
+            echo "reason=every file: a header, .clang-tidy or CMakeLists.txt changed" >> "$GITHUB_OUTPUT"
+            echo "pattern=${full}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          sources=$(echo "${changed}" | grep -E '^(core|config|app|gis|viz|ai|tests)/.*\.cpp$' || true)
+          if [ -z "${sources}" ]; then
+            echo "reason=nothing to lint: no source file changed" >> "$GITHUB_OUTPUT"
+            echo "pattern=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          pattern=$(echo "${sources}" | sed 's/[.]/[.]/g' | paste -sd'|' -)
+          echo "reason=only what this pull request changed" >> "$GITHUB_OUTPUT"
+          echo "pattern=^.*/(${pattern})$" >> "$GITHUB_OUTPUT"
+
       # The same .clang-tidy the editors read through clangd, so a developer
       # sees this job's findings before they push.
       - name: clang-tidy
         run: |
+          echo "scope: ${{ steps.scope.outputs.reason }}"
+          if [ -z '${{ steps.scope.outputs.pattern }}' ]; then
+            exit 0
+          fi
           run-clang-tidy-${LLVM_VERSION} -p build/ci-tidy -quiet -j "$(nproc)" \
-            '^.*/(core|config|app|gis|viz|ai|tests)/.*\.cpp$'
+            '${{ steps.scope.outputs.pattern }}'
 
   validation:
     name: T3 validation against measured data
