@@ -11,6 +11,15 @@ if(PADDOCK_BUILD_CONFIG)
   target_compile_definitions(paddock PRIVATE PADDOCK_WITH_CONFIG)
 endif()
 
+# `paddock source test` can check a DEM or a parcel file as well as a weather
+# snapshot, but only in a build that has the geospatial stack. Without it the
+# command still works on weather, and says why the others are unavailable
+# rather than pretending the file is unreadable.
+if(PADDOCK_BUILD_GIS)
+  target_link_libraries(paddock PRIVATE Paddock::gis)
+  target_compile_definitions(paddock PRIVATE PADDOCK_WITH_GIS)
+endif()
+
 target_link_libraries(paddock PRIVATE Paddock::core Paddock::project_options)
 
 set_target_properties(paddock PROPERTIES OUTPUT_NAME paddock)
