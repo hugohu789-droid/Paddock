@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
@@ -78,14 +79,14 @@ TEST(TopographyTest, AspectIsTheDirectionTheGroundFallsTowards) {
     double expected_aspect;
   };
 
-  constexpr Case cases[] = {
+  constexpr std::array<Case, 4> kCases = {{
       {"falls north", 0.0, -0.1, 0.0},
       {"falls east", -0.1, 0.0, 90.0},
       {"falls south", 0.0, 0.1, 180.0},
       {"falls west", 0.1, 0.0, 270.0},
-  };
+  }};
 
-  for (const Case& scenario : cases) {
+  for (const Case& scenario : kCases) {
     const Topography ground = topography_of(plane(scenario.rise_east, scenario.rise_north));
     for_each_interior_cell(ground.aspect_degrees, [&](std::size_t col, std::size_t row) {
       const double aspect = ground.aspect_degrees(col, row);
