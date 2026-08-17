@@ -136,5 +136,16 @@ if(PADDOCK_BUILD_GIS)
   target_link_libraries(paddock_gis_tests PRIVATE Paddock::gis GTest::gtest_main
                                                   Paddock::project_options)
 
-  gtest_discover_tests(paddock_gis_tests PROPERTIES LABELS "unit\;gis" DISCOVERY_TIMEOUT 120)
+  # PROJ_DATA comes from where gis/CMakeLists.txt found proj.db. Without it the
+  # suite passes on a distribution-packaged PROJ and fails on a vcpkg one, for a
+  # reason that has nothing to do with this project's code - and a suite whose
+  # result depends on remembering to export a variable is a suite people learn
+  # to ignore.
+  if(PADDOCK_PROJ_DATA_DIR)
+    gtest_discover_tests(
+      paddock_gis_tests PROPERTIES LABELS "unit\;gis" ENVIRONMENT
+                                   "PROJ_DATA=${PADDOCK_PROJ_DATA_DIR}" DISCOVERY_TIMEOUT 120)
+  else()
+    gtest_discover_tests(paddock_gis_tests PROPERTIES LABELS "unit\;gis" DISCOVERY_TIMEOUT 120)
+  endif()
 endif()
