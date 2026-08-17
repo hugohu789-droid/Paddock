@@ -4,6 +4,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 /// What the geospatial stack actually is on the machine this build is running
 /// on, as opposed to what the build system was told at configure time.
@@ -50,5 +51,19 @@ struct LibraryVersions {
 /// The directory PROJ is searching for its database, for an error message that
 /// tells someone what to fix.
 [[nodiscard]] std::string projection_database_search_path();
+
+/// Whether this GDAL was built with the driver named, for example "GTiff" or
+/// "GPKG".
+///
+/// GDAL's drivers are a build-time choice, and a build without one still links
+/// and still runs: the failure arrives when a file is opened, as a null dataset
+/// and a message about an unrecognised format. `CLAUDE.md` fixes the formats
+/// this project uses - GeoTIFF for rasters, GeoPackage for vectors, never
+/// shapefile - so whether they are present is a property of the machine worth
+/// asserting once rather than discovering per file.
+[[nodiscard]] bool gdal_driver_available(const std::string& name);
+
+/// The drivers this project cannot work without, in the order they are checked.
+[[nodiscard]] std::vector<std::string> required_gdal_drivers();
 
 }  // namespace paddock::gis
