@@ -52,7 +52,7 @@ TEST(SolarSlopeTest, LevelGroundReproducesTheFaoEquation) {
 TEST(SolarSlopeTest, TheIntegrationIsFineEnoughToBeStable) {
   // A steep slope is the hardest case: the integrand switches on and off partway
   // through the day, so a coarse grid would show it.
-  for (int day : {kMidsummer, kMidwinter, kEquinoxSpring}) {
+  for (const int day : {kMidsummer, kMidwinter, kEquinoxSpring}) {
     const double steep_north =
         extraterrestrial_radiation_on_slope_mj(kCanterburyLatitude, day, 30.0, 0.0);
     const double steep_south =
@@ -87,7 +87,7 @@ TEST(SolarSlopeTest, LevelGroundAcceptsAnUnknownAspect) {
 // sign wrong reverses every hillside on the farm while leaving every total
 // plausible, so this is the assertion that catches it.
 TEST(SolarSlopeTest, InNewZealandTheSunnySideFacesNorth) {
-  for (int day : {kMidsummer, kMidwinter, kEquinoxSpring, kEquinoxAutumn}) {
+  for (const int day : {kMidsummer, kMidwinter, kEquinoxSpring, kEquinoxAutumn}) {
     const double north = slope_radiation_ratio(kCanterburyLatitude, day, 20.0, 0.0);
     const double south = slope_radiation_ratio(kCanterburyLatitude, day, 20.0, 180.0);
 
@@ -105,7 +105,7 @@ TEST(SolarSlopeTest, InNewZealandTheSunnySideFacesNorth) {
 // away from a north-facing slope. An implementation that could not produce a
 // sunny-side ratio below one would be hiding this.
 TEST(SolarSlopeTest, InHighSummerEveryTiltLosesToLevelGround) {
-  for (double aspect : {0.0, 90.0, 180.0, 270.0}) {
+  for (const double aspect : {0.0, 90.0, 180.0, 270.0}) {
     const double ratio = slope_radiation_ratio(kCanterburyLatitude, kMidsummer, 20.0, aspect);
     EXPECT_LT(ratio, 1.0) << "aspect " << aspect << " gave " << ratio;
     EXPECT_GT(ratio, 0.9) << "aspect " << aspect << " gave " << ratio;
@@ -144,8 +144,8 @@ TEST(SolarSlopeTest, NorthOfTheEquatorTheSunnySideFacesSouth) {
 // components of the surface normal leaves the north-south checks above passing
 // and breaks this one.
 TEST(SolarSlopeTest, EastAndWestFacingSlopesReceiveTheSameDailyTotal) {
-  for (int day : {kMidsummer, kMidwinter, kEquinoxSpring}) {
-    for (double slope : {5.0, 15.0, 30.0}) {
+  for (const int day : {kMidsummer, kMidwinter, kEquinoxSpring}) {
+    for (const double slope : {5.0, 15.0, 30.0}) {
       const double east =
           extraterrestrial_radiation_on_slope_mj(kCanterburyLatitude, day, slope, 90.0);
       const double west =
@@ -162,7 +162,12 @@ TEST(SolarSlopeTest, AnnualRadiationPeaksAtASlopeNearTheLatitude) {
   double best_slope = 0.0;
   double best_total = -1.0;
 
-  for (double slope = 0.0; slope <= 70.0; slope += 1.0) {
+  // Counted in whole degrees rather than stepped by adding 1.0 to a double:
+  // a floating-point loop counter accumulates its own rounding, and the
+  // security.FloatLoopCounter check exists because that eventually skips or
+  // repeats a step.
+  for (int slope_degrees = 0; slope_degrees <= 70; ++slope_degrees) {
+    const double slope = slope_degrees;
     double total = 0.0;
     for (int day = 1; day <= 365; ++day) {
       // Facing north: towards the equator from Canterbury.
