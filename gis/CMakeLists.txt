@@ -64,6 +64,8 @@ endif()
 add_library(
   paddock_gis STATIC
   src/Environment.cpp
+  src/GeoPackageParcels.cpp
+  src/GeoPackageWriter.cpp
   src/GeoTiffElevation.cpp
   src/GeoTiffWriter.cpp
   src/Module.cpp
