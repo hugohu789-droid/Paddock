@@ -58,6 +58,7 @@ gtest_discover_tests(paddock_statistical_tests PROPERTIES LABELS "unit\;statisti
 # 1e-9. Never skipped, never weakened, never marked flaky.
 add_executable(paddock_conservation_tests conservation/ClosedSystemTest.cpp
                                           conservation/PastureBalanceTest.cpp
+                                          conservation/TerrainBalanceTest.cpp
                                           conservation/WaterBalanceTest.cpp)
 
 target_link_libraries(paddock_conservation_tests PRIVATE Paddock::core GTest::gtest_main

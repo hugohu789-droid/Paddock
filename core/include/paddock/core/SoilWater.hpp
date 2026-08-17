@@ -25,7 +25,16 @@ namespace paddock::core {
 
 /// Reference evapotranspiration for one day at one latitude, computing
 /// extraterrestrial radiation from the date (FAO-56 Eq. 21).
-[[nodiscard]] double reference_et_mm(const DailyWeather& weather, double latitude_degrees) noexcept;
+/// `radiation_ratio` scales the extraterrestrial radiation the estimate is
+/// built on, so that a slope evaporates at its own rate rather than at level
+/// ground's. One is level ground; SlopeRadiationTable supplies the rest.
+///
+/// This is the first of the two places aspect enters the model. The sunny side
+/// of a hill gets more radiation, so more evapotranspiration, so a drier soil -
+/// which is the mechanism behind the summer deficits Ballantrae measures on its
+/// north- and west-facing slopes.
+[[nodiscard]] double reference_et_mm(const DailyWeather& weather, double latitude_degrees,
+                                     double radiation_ratio = 1.0) noexcept;
 
 /// Water stress coefficient (FAO-56 Eq. 84).
 ///
@@ -93,7 +102,7 @@ class SoilWaterBucket {
   /// rainfall as an inflow, runoff, evapotranspiration and drainage as
   /// outflows, all on the water line.
   SoilWaterFluxes step(const DailyWeather& weather, double latitude_degrees,
-                       BudgetLedger* ledger = nullptr);
+                       double radiation_ratio = 1.0, BudgetLedger* ledger = nullptr);
 
   /// Water held above wilting point, mm. This is the closing stock the
   /// conservation tests compare the ledger against.

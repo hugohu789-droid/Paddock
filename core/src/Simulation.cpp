@@ -20,9 +20,17 @@ void Farmlet::set_opening_stocks(BudgetLedger& ledger) const {
   ledger.set_opening_stock(Budget::Nitrogen, sward_.total_nitrogen_kg());
 }
 
-DailyRecord Farmlet::step(const DailyWeather& weather, BudgetLedger* ledger) {
-  const SoilWaterFluxes water = soil_.step(weather, latitude_degrees_, ledger);
-  const PastureGrowth growth = sward_.step(weather, water.stress_coefficient, ledger);
+DailyRecord Farmlet::step(const DailyWeather& weather, double radiation_ratio,
+                          BudgetLedger* ledger) {
+  const SoilWaterFluxes water = soil_.step(weather, latitude_degrees_, radiation_ratio, ledger);
+
+  // The second place radiation enters: the light the sward intercepts. Scaling
+  // the measured horizontal figure onto this cell's slope is the transfer Allen
+  // et al. (2006) describe, and it is done here rather than inside the sward so
+  // that PastureSward keeps knowing nothing about terrain.
+  DailyWeather on_this_slope = weather;
+  on_this_slope.solar_radiation_mj_per_m2 *= radiation_ratio;
+  const PastureGrowth growth = sward_.step(on_this_slope, water.stress_coefficient, ledger);
 
   DailyRecord record;
   record.date = weather.date;
@@ -53,7 +61,9 @@ RunResult run(Farmlet& farmlet, const WeatherSource& weather, const DateRange& r
   farmlet.set_opening_stocks(result.ledger);
 
   for (const DailyWeather& day : series.records) {
-    const DailyRecord record = farmlet.step(day, &result.ledger);
+    // A single farmlet has no terrain: run() models one representative
+    // hectare, and slope belongs to a grid of them. Level ground, explicitly.
+    const DailyRecord record = farmlet.step(day, 1.0, &result.ledger);
 
     result.summary.total_rainfall_mm += record.rainfall_mm;
     result.summary.total_evapotranspiration_mm += record.evapotranspiration_mm;

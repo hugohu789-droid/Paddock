@@ -56,7 +56,7 @@ struct Farmlet {
   void run_year(std::uint64_t seed, int year) {
     const SyntheticWeatherSource weather(test_site_parameters(), seed);
     for (const DailyWeather& day : weather.fetch(DateRange::calendar_year(year)).records) {
-      const SoilWaterFluxes water = soil.step(day, kLatitude, &ledger);
+      const SoilWaterFluxes water = soil.step(day, kLatitude, 1.0, &ledger);
       total_growth_kg += sward.step(day, water.stress_coefficient, &ledger).total_growth_kg_dm();
     }
   }

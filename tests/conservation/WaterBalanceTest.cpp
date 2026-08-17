@@ -56,7 +56,7 @@ TEST(WaterConservationTest, AYearOfSoilWaterBalances) {
   const WeatherSeries year = test_year(2023);
   ASSERT_EQ(year.size(), 365U);
   for (const DailyWeather& weather : year.records) {
-    bucket.step(weather, kLatitude, &ledger);
+    bucket.step(weather, kLatitude, 1.0, &ledger);
   }
 
   EXPECT_TRUE(ledger.closes(Budget::Water, bucket.water_mm()))
@@ -74,7 +74,7 @@ TEST(WaterConservationTest, EveryIndividualDayBalances) {
   for (const DailyWeather& weather : test_year(2023).records) {
     BudgetLedger daily;
     daily.set_opening_stock(Budget::Water, bucket.water_mm());
-    bucket.step(weather, kLatitude, &daily);
+    bucket.step(weather, kLatitude, 1.0, &daily);
     ASSERT_TRUE(daily.closes(Budget::Water, bucket.water_mm()))
         << weather.date.to_iso_string() << '\n'
         << daily.report(Budget::Water, bucket.water_mm());
