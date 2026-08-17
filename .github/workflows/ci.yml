@@ -214,18 +214,23 @@ jobs:
         shell: cmd
         run: where ninja || choco install ninja -y --no-progress
 
-      # The runner image ships its own vcpkg checkout, pinned to whenever the
-      # image was built. vcpkg.json pins a baseline commit newer than that, so
-      # the checkout has to be told to fetch it - otherwise vcpkg reports the
-      # baseline as a commit that does not contain versions/baseline.json, which
-      # is git's way of saying it has never heard of the commit at all.
-      - name: Fetch the pinned vcpkg baseline (Windows)
+      # The runner image ships its own vcpkg checkout at whatever commit the
+      # image was built from, and vcpkg.json pins a different one. Fetching the
+      # pinned commit is not enough: vcpkg resolves versions from the baseline's
+      # database but builds the ports in the working tree, so a tree carrying
+      # expat 2.8.3 against a baseline database that stops at 2.8.2 fails with
+      # "no version database entry". The tree has to be moved to the pin, not
+      # just told about it.
+      - name: Check the vcpkg tree out at the pinned baseline (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           baseline=$(python -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
           echo "vcpkg baseline pinned in vcpkg.json: ${baseline}"
           git -C "${VCPKG_INSTALLATION_ROOT}" fetch --depth=1 origin "${baseline}"
+          git -C "${VCPKG_INSTALLATION_ROOT}" checkout --force FETCH_HEAD
+          "${VCPKG_INSTALLATION_ROOT}/bootstrap-vcpkg.bat"
+          git -C "${VCPKG_INSTALLATION_ROOT}" log -1 --format="vcpkg now at %H (%ci)"
 
       # GDAL from source is the expensive part of this job on Windows, and it
       # is identical from run to run. The binary cache turns it into a download
