@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -98,6 +99,10 @@ TEST(SolarSlopeTest, InNewZealandTheSunnySideFacesNorth) {
 // The counter-intuitive one, and the reason the test above does not simply
 // assert that a north-facing slope beats level ground.
 //
+// The lower bound of 0.9 is a regression pin taken from this implementation.
+// The upper bound of 1.0 is not: that a tilt cannot beat level ground when the
+// sun passes near overhead follows from the geometry.
+//
 // In midsummer at 43.6 S every 20 degree slope receives less than level ground,
 // whichever way it faces - north 0.96, east 0.97, south 0.94. The sun passes
 // close to overhead, so any tilt costs; and the day is long enough that it rises
@@ -112,12 +117,55 @@ TEST(SolarSlopeTest, InHighSummerEveryTiltLosesToLevelGround) {
   }
 }
 
-// Winter is where the difference lives, and it is large: at 43.6 S a 20 degree
-// northerly slope receives about twice what level ground does, and a southerly
-// one about a sixteenth - a factor of thirty between two sides of the same hill.
-// This is the geometry behind the seasonal reversal Ballantrae measured in
-// pasture production, and the reason aspect is modelled through radiation rather
-// than applied as an annual coefficient.
+// The classical check, and the only one here that tests the geometry against
+// something outside this project.
+//
+// At an equinox the sun's declination is nearly zero, and a slope tilted by
+// beta towards the equator then receives what level ground at latitude
+// (phi + beta) receives - the "equivalent latitude" result of solar geometry. It
+// follows from the geometry alone, so it holds whatever this implementation
+// does, and a sign error in either the surface normal or the sun direction
+// breaks it. Verified here at four latitude and slope combinations on both
+// equinoxes, where it holds to about 1e-6 MJ.
+TEST(SolarSlopeTest, ASlopeTowardsTheEquatorMatchesItsEquivalentLatitude) {
+  struct Case {
+    double latitude;
+    double slope;
+  };
+
+  constexpr std::array<Case, 4> kCases = {{
+      {-43.6, 10.0},  // Canterbury
+      {-43.6, 20.0},
+      {-37.8, 15.0},  // Waikato
+      {-46.6, 25.0},  // Southland
+  }};
+
+  for (const int day : {kEquinoxAutumn, kEquinoxSpring}) {
+    for (const Case& scenario : kCases) {
+      // Towards the equator from the southern hemisphere is north, bearing 0.
+      const double on_slope =
+          extraterrestrial_radiation_on_slope_mj(scenario.latitude, day, scenario.slope, 0.0);
+      const double at_equivalent_latitude =
+          extraterrestrial_radiation_on_slope_mj(scenario.latitude + scenario.slope, day, 0.0, 0.0);
+
+      ASSERT_NEAR(on_slope, at_equivalent_latitude, 1e-3)
+          << "latitude " << scenario.latitude << ", slope " << scenario.slope << ", day " << day;
+    }
+  }
+}
+
+// A REGRESSION PIN, not a validation. These numbers came out of this
+// implementation; no published measurement was compared against. They are here
+// so that a change which alters the winter contrast between two sides of a hill
+// has to be deliberate, and they should not be read as evidence that the
+// contrast is right.
+//
+// What supports the contrast being right is the equinox identity above, which
+// is independent of this code, and the level-ground case matching FAO-56.
+//
+// The magnitude is worth recording either way: at 43.6 S a 20 degree northerly
+// slope receives about twice what level ground does in midwinter, a southerly
+// one about a sixteenth.
 TEST(SolarSlopeTest, MidwinterSeparatesTheTwoSidesOfAHillDramatically) {
   const double north = slope_radiation_ratio(kCanterburyLatitude, kMidwinter, 20.0, 0.0);
   const double south = slope_radiation_ratio(kCanterburyLatitude, kMidwinter, 20.0, 180.0);

@@ -103,6 +103,10 @@ TEST(PaddockMaskTest, TheAreaErrorFallsAsTheGridGetsFiner) {
   EXPECT_GT(coarse, 0.0) << "a cut boundary should cost something";
   EXPECT_LT(fine, coarse) << "coarse " << coarse << ", fine " << fine;
   EXPECT_LT(finer, fine) << "fine " << fine << ", finer " << finer;
+  // The ordering above is the property being tested and follows from the rule.
+  // This last bound is a regression pin from this implementation: it says the
+  // error is small in absolute terms, not that a tenth of a hectare is the
+  // right threshold for anything in particular.
   EXPECT_LT(finer, 0.1) << "at 5 m cells the triangle should be within a tenth of a hectare";
 }
 

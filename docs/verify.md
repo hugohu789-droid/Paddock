@@ -35,6 +35,62 @@ The example definitions under `data/` (`weather/`, `soils/`, `pastures/`) are
 **PLACEHOLDER throughout** and marked as such in the files themselves. They
 exist so the format has worked examples and so a schema change fails a test;
 they are not a description of any real site, soil or sward.
+| Slope and aspect from a DEM | Horn's 3×3 finite difference | [Horn (1981), Proc. IEEE 69(1):14–47](https://doi.org/10.1109/PROC.1981.11918); the default in `gdaldem` and ArcGIS | `core/Topography.cpp` |
+| Radiation on a slope | Numerical integration of the surface-normal / sun dot product | Method of [Allen, Trezza & Tasumi (2006), Ag & Forest Met 139:55–73](https://doi.org/10.1016/j.agrformet.2006.05.012), integrated numerically rather than analytically | `core/Solar.cpp` |
+| Gross energy of feed | 18.4 MJ kg⁻¹ DM | CSIRO (2007), quoted as Eq. 2 in the [OVERSEER ME review](https://www.overseer.org.nz) | not yet used |
+| Energy density qm | dietME / GE | CSIRO (2007), OVERSEER review Eq. 2 | not yet used |
+| Efficiency of ME for maintenance km | 0.35 qm + 0.503 (milk diets); 0.85 otherwise | CSIRO (2007), OVERSEER review Eq. 5–6. Note CSIRO's other published form, km = 0.02 (MJ ME/kg DM) + 0.5, is what Frater et al. quote | not yet used |
+| Efficiency of ME for gain kgf | 0.035 × dietME × flegume × ftime (temperate pasture); 0.042 × dietME + 0.006 (tropical) | CSIRO (2007), OVERSEER review Eq. 9 and 11 | not yet used |
+| Basal net energy | 0.28 × K × S × M × AgeFactor × lwt^0.75 MJ day⁻¹ | **Nicol & Brookes (2007), equation 1**, via OVERSEER review Eq. 13 | not yet used |
+| Species factor K | 1.0 sheep, 1.4 dairy and beef (CSIRO 2007). Nicol & Brookes use 1.3 for beef | OVERSEER review, §4.1 — the two sources disagree and the disagreement is recorded rather than resolved | not yet used |
+| Age factor | exp(−0.03 A), A in years | Frater, Howarth & McEwen, [J. NZ Grasslands](https://www.nzgajournal.org.nz/index.php/JoNZG/article/download/477/105/2053), Table 2. OVERSEER uses exp(−0.00008 a) with a in days | not yet used |
+| Grazing activity allowance | Maintenance ME + 15% | Frater et al., stated as the "crude adjustment" used when comparing models | not yet used |
+
+### Livestock energy, still incomplete (task #23)
+
+The maintenance side is sourced above. Two things are **not**, and the model
+must not pretend otherwise:
+
+- **The net energy content of liveweight gain.** It can be reverse-engineered
+  from the worked example below - 9.72 MJ ME/day total, of which maintenance
+  plus grazing accounts for about 5.5, leaving roughly 42 MJ ME per kg of gain -
+  but that is fitting a curve to one point, not citing a source. It needs
+  Nicol & Brookes (2007), NZ Society of Animal Production Occasional
+  Publication No. 14, pp. 151-172, which is not freely available online.
+- **The sex factor S and the milk factor M** of equation 13. The OVERSEER review
+  critiques them without restating them.
+
+**Validation target, for when those arrive.** Frater et al. Table 1 gives, for a
+weaned lamb of 28 kg gaining 100 g/day at 100 days old on a 10.5 MJ ME/kg DM
+diet, with grazing costed at maintenance + 15%:
+
+| Model | MJ ME/day | Intake (kg DM/day) |
+|---|---|---|
+| Nicol & Brookes (2007) | 9.72 | 0.93 |
+| CSIRO (2007) | 9.71 | 0.92 |
+| OVERSEER | 8.77 | 0.83 |
+
+Reproducing 9.72 is the test to write once the gain equation is in hand.
+
+## What each numeric assertion in the tests actually rests on
+
+Not every number in a test is evidence of the same kind, and treating them alike
+is how a project convinces itself it has validated something it has only pinned.
+The suites here fall into three kinds, and the comments say which:
+
+- **Validation** - compared against a value published by someone else. The
+  NZTM control points come from LINZ's own conversion service; the false easting
+  of 1 600 000 m is LINZ's definition; the level-ground radiation case is FAO-56
+  Eq. 21.
+- **Verification** - checked against arithmetic a reader can repeat. Slope and
+  aspect on a tilted plane are closed-form; a 200 m by 200 m block at 10 m cells
+  is 400 cells; the equinox equivalent-latitude identity follows from solar
+  geometry and holds whatever this code does.
+- **Regression pins** - numbers that came out of this implementation, kept so
+  that a change has to be deliberate. They are labelled as pins in the tests
+  that use them, and they are **not** evidence that the value is right. The
+  midwinter slope ratios of about 2.00 and 0.06, the 0.9 floor on a midsummer
+  tilt, and the 0.1 ha bound on rasterisation error are all of this kind.
 
 ## Open items
 
