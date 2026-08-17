@@ -19,6 +19,7 @@ add_library(
   src/SnapshotWeather.cpp
   src/SyntheticTerrain.cpp
   src/SyntheticWeather.cpp
+  src/Topography.cpp
   src/Version.cpp
   src/Weather.cpp)
 

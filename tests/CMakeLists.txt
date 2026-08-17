@@ -22,6 +22,7 @@ add_executable(
   unit/SolarTest.cpp
   unit/SyntheticTerrainTest.cpp
   unit/SyntheticWeatherTest.cpp
+  unit/TopographyTest.cpp
   unit/VersionTest.cpp
   unit/WeatherTest.cpp
   property/DeterminismTest.cpp)
