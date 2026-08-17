@@ -106,5 +106,45 @@ TEST(BoundingBoxTest, AnEmptyBoxContainsNothing) {
   EXPECT_FALSE(box.contains({kEasting, kNorthing}));
 }
 
+// Moving a polygon does not change its area, and the arithmetic has to agree.
+//
+// The shoelace formula applied to absolute coordinates loses its precision to
+// cancellation: the area is what remains after subtracting two products of the
+// coordinates, so the further the ring sits from the origin, the more of the
+// result is noise. On NZTM2000 that cost a farm's worth of paddocks 23 cm2,
+// which only a macOS run caught - Apple Silicon's fused multiply-add rounds the
+// products differently, and the x86 builds had been getting away with it.
+//
+// A single NZTM rectangle is therefore not a usable regression guard: on x86
+// the old code returned exactly the right answer for one of them, tolerance or
+// no tolerance. The third case below is, because at a billion metres the
+// products reach 1e18, where a double's last bit is worth about 128 - so the
+// naive formula cannot return 25 000 on any conforming implementation. It is
+// not a coordinate New Zealand uses; it is the magnitude at which the property
+// being asserted - that area does not depend on position - stops holding by
+// luck and has to hold by construction.
+TEST(PolygonTest, AreaDoesNotDependOnDistanceFromTheProjectionOrigin) {
+  constexpr double kWidth = 200.0;
+  constexpr double kHeight = 125.0;
+
+  const Polygon at_origin = Polygon::rectangle(Point2D{0.0, 0.0}, kWidth, kHeight);
+  const Polygon on_a_canterbury_farm =
+      Polygon::rectangle(Point2D{1570000.0, 5179000.0}, kWidth, kHeight);
+
+  // Bit-identical, not merely close. Measuring from the first vertex makes the
+  // two computations the same arithmetic on the same offsets - 1570000.0 + 200.0
+  // - 1570000.0 is exact in binary floating point - so anything less than
+  // equality means the absolute coordinates are still in the sum somewhere. A
+  // tolerance was tried first and had no teeth: on x86 the old code was already
+  // within a nanometre squared for one rectangle, and only showed itself after
+  // a hundred of them were added up on a machine that rounds differently.
+  EXPECT_DOUBLE_EQ(at_origin.area(), kWidth * kHeight);
+  EXPECT_DOUBLE_EQ(on_a_canterbury_farm.area(), kWidth * kHeight);
+  EXPECT_DOUBLE_EQ(on_a_canterbury_farm.area(), at_origin.area());
+
+  const Polygon far_away = Polygon::rectangle(Point2D{1.0e9, 1.0e9}, kWidth, kHeight);
+  EXPECT_DOUBLE_EQ(far_away.area(), kWidth * kHeight);
+}
+
 }  // namespace
 }  // namespace paddock::core
