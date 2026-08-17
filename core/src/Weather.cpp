@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <string>
-#include <utility>
 
 #include <paddock/core/Weather.hpp>
 
@@ -58,14 +57,6 @@ double WeatherSeries::total_rainfall_mm() const noexcept {
     total += record.rainfall_mm;
   }
   return total;
-}
-
-ConnectionStatus ConnectionStatus::available(std::string detail) {
-  return ConnectionStatus{true, std::move(detail)};
-}
-
-ConnectionStatus ConnectionStatus::unavailable(std::string actionable_error) {
-  return ConnectionStatus{false, std::move(actionable_error)};
 }
 
 }  // namespace paddock::core

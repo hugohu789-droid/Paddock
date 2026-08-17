@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include <paddock/core/DataSource.hpp>
 #include <paddock/core/SimulationClock.hpp>
 
 namespace paddock::core {
@@ -64,25 +65,6 @@ struct WeatherSeries {
   [[nodiscard]] bool is_well_formed() const noexcept;
 
   [[nodiscard]] double total_rainfall_mm() const noexcept;
-};
-
-/// What a data source is, in the terms a user needs before trusting it.
-struct SourceDescription {
-  std::string name;
-  std::string licence;
-  std::string coverage;  ///< Spatial and temporal extent, in plain words
-  std::string cadence;   ///< How often new data appears
-};
-
-/// The result of `test_connection`: either usable, or an error a user can act
-/// on. "Failed" is never an acceptable message on its own - say what is missing
-/// and what to do about it.
-struct ConnectionStatus {
-  bool ok = false;
-  std::string message;
-
-  [[nodiscard]] static ConnectionStatus available(std::string detail);
-  [[nodiscard]] static ConnectionStatus unavailable(std::string actionable_error);
 };
 
 /// The common port every weather source implements.
