@@ -146,11 +146,26 @@ Three things worth knowing before you spend an afternoon on them:
   a 2019 distribution will not configure. That is deliberate — see
   [ADR 0011](adr/0011-gdal-and-proj.md).
 - **`proj.db` is the file that goes missing.** PROJ 6 keeps its coordinate
-  operation tables in a SQLite database found through a search path. A PROJ
-  that cannot find it still links and still runs, and fails every transform at
-  the point of use. `ctest -L gis` checks that EPSG:2193 resolves and prints
-  the search path when it does not. If it fails, `PROJ_DATA` is the environment
-  variable to point at the directory holding `proj.db`.
+  operation tables in a SQLite database found through a search path baked in
+  when PROJ was built. A PROJ that cannot find it still links and still runs,
+  and fails every transform at the point of use.
+
+  A vcpkg PROJ on Windows does this out of the box: `proj.db` is installed at
+  `<vcpkg>/installed/x64-windows/share/proj/proj.db`, and the library looks in
+  `%LOCALAPPDATA%\proj`, which does not exist. The symptom is six red tests and
+  a message naming the search path:
+
+  ```
+  PROJ cannot resolve EPSG:2193. Its database search path is
+  "C:\Users\you\AppData\Local/proj"; proj.db is missing from it, or PROJ_DATA
+  points elsewhere.
+  ```
+
+  Configuring `gis` locates `proj.db` and prints where (`-- gis: proj.db at
+  ...`), and the test suite sets `PROJ_DATA` from it, so `ctest -L gis` works
+  without anyone exporting anything. Running the application by hand is not
+  covered by that: export `PROJ_DATA` yourself, pointing at the directory
+  holding `proj.db`.
 - **EPSG:2193 declares its axes as (northing, easting).** GDAL 3 honours the
   authority's order, so it hands coordinates back the opposite way round from
   the (easting, northing) most New Zealand data is written in, unless the
