@@ -11,6 +11,7 @@ add_executable(
   unit/EntityTest.cpp
   unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
+  unit/PaddockMaskTest.cpp
   unit/PastureTest.cpp
   unit/RasterTest.cpp
   unit/RngTest.cpp
