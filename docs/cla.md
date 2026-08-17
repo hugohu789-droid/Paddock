@@ -54,12 +54,36 @@ pinned to v2.6.1. Two facts worth writing down rather than rediscovering:
   plain JSON, so signatures already collected are not trapped.
 - **`cla-assistant/github-action` is the old name.** GitHub still redirects it,
   which is why the first version of the workflow appeared to work.
+- **It is falling off the runtime.** `v2.3.0` declares `using: node16` and
+  `v2.6.1` declares `using: node20`; both are deprecated, and GitHub currently
+  forces them onto Node 24 while printing a warning. Pinning v2.6.1 buys the
+  newer of the two, but an archived action will never declare Node 24, so the
+  day GitHub stops forcing is the day this gate stops working. That is the
+  deadline to have replaced it by, and it is not a surprise.
+
+## Setting the gate up again from scratch
 
 Signatures are stored in the separate private repository
-`Paddock-cla-signatures`, so they stay out of this project's history. That is
-what makes `PERSONAL_ACCESS_TOKEN` necessary — the built-in `GITHUB_TOKEN` is
-scoped to the repository the workflow runs in. The secret must therefore be set
-**on `Paddock`**, not on the signatures repository.
+`Paddock-cla-signatures`, so they stay out of this project's history. Three
+things have to be true before the gate can pass, and each of them failed once
+on the way in — each with a message that pointed somewhere else:
+
+1. **`CLA_SIGNATURES_TOKEN` is set on `Paddock`, not on the signatures
+   repository.** Actions reads secrets from the repository the workflow runs
+   in. A token stored beside the signatures is invisible to it, and the symptom
+   is `PERSONAL_ACCESS_TOKEN:` logging as empty. A fine-grained token with
+   *Contents: Read and write* on the signatures repository is enough; the
+   README's "repo scope" describes the older classic token, which would grant
+   far more.
+2. **The signatures repository has at least one commit.** A repository created
+   and never written to has no branches at all, whatever its configured default
+   branch says, and the API answers `This repository is empty`.
+3. **`signatures/version1/cla.json` exists, containing `{"signedContributors":
+   []}`.** The action does not create it when the store is a remote repository.
+   Until it exists the run fails with
+   `Could not retrieve repository contents. Status: 404` — indistinguishable at
+   a glance from a token that cannot see a private repository, which is what it
+   looks like first.
 
 ## Open points to settle with counsel
 
