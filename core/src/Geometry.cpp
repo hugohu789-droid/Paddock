@@ -91,11 +91,33 @@ double Polygon::signed_area() const noexcept {
   if (vertices_.size() < 3) {
     return 0.0;
   }
+
+  // The shoelace formula, measured from the first vertex rather than from the
+  // false origin of the projection.
+  //
+  // Applied to absolute NZTM2000 coordinates it loses most of its precision to
+  // cancellation: eastings near 1.6e6 and northings near 5.2e6 give products
+  // near 8e12, and a 2.5 ha paddock is the 2.5e4 left after subtracting two of
+  // them. The last bits of an 8e12 double are worth about 2e-4, so each edge
+  // contributes that much noise to a number four hundred million times
+  // smaller. Summed over a farm's worth of paddocks it reached 23 cm2, which is
+  // what a macOS run caught - Apple Silicon's fused multiply-add rounds the
+  // products differently, so the x86 builds had been getting away with it.
+  //
+  // Subtracting the first vertex makes every coordinate a local offset, tens or
+  // hundreds of metres rather than millions, and the cancellation disappears.
+  // The result is unchanged in exact arithmetic: translating a polygon does not
+  // change its area.
+  const Point2D origin = vertices_.front();
   double twice_area = 0.0;
   for (std::size_t i = 0; i < vertices_.size(); ++i) {
     const Point2D& current = vertices_[i];
     const Point2D& next = vertices_[(i + 1) % vertices_.size()];
-    twice_area += (current.easting * next.northing) - (next.easting * current.northing);
+    const double current_east = current.easting - origin.easting;
+    const double current_north = current.northing - origin.northing;
+    const double next_east = next.easting - origin.easting;
+    const double next_north = next.northing - origin.northing;
+    twice_area += (current_east * next_north) - (next_east * current_north);
   }
   return twice_area / 2.0;
 }
