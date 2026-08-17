@@ -35,13 +35,20 @@ struct ControlPoint {
 };
 
 /// Reference values from LINZ's own coordinate conversion service, the same
-/// engine behind the Concord converter, retrieved 2026-08-17:
+/// engine behind the Concord converter, retrieved 2026-08-17. POST to
 ///
-///   curl -X POST 'https://www.geodesy.linz.govt.nz/api/conversions/v1/convert-to\
-///     ?crs=LINZ:NZTM&coordinateOrder=north/east' \
-///     -H 'Content-Type: application/json' \
-///     -d '{"crs":"LINZ:NZGD2000","coordinateOrder":["east","north","up"],
-///          "coordinates":[[173.0,-41.0,0.0]]}'
+///   https://www.geodesy.linz.govt.nz/api/conversions/v1/convert-to
+///       ?crs=LINZ:NZTM&coordinateOrder=north/east
+///
+/// with Content-Type application/json and the body
+///
+///   {"crs": "LINZ:NZGD2000",
+///    "coordinateOrder": ["east", "north", "up"],
+///    "coordinates": [[173.0, -41.0, 0.0]]}
+///
+/// (no line-continuation backslashes in this comment: a backslash at the end of
+/// a comment line splices the next line into it, and GCC rejects the result
+/// under -Werror=comment.)
 ///
 /// The service returns northing first, because that is the axis order
 /// EPSG:2193 declares; the columns below are transposed into the order this
