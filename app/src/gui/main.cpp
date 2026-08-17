@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // paddock-gui: the 2D map view.
 //
 // A separate executable from the `paddock` command line tool, so that a

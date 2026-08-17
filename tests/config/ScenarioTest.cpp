@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // Scenario bundles, and the promise they make: the same bundle reproduces the
 // same run, and a bundle whose inputs have moved says so instead of running.
 

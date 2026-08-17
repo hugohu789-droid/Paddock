@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // The definitions committed under data/ have to keep loading.
 //
 // A configuration format is only an interface if the files that ship with the

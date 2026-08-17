@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // The conservation gate. A closed synthetic farm run for 365 simulated days
 // must balance dry matter, water and nitrogen to within 1e-9.
 //

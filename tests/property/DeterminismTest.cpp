@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // Determinism is a property of the whole engine, not of one type: the same seed
 // must produce bit-identical output, and no traversal order may be able to
 // change a result. Both are asserted here against the RNG and entity machinery

@@ -271,6 +271,8 @@ CI build.
 - Every model parameter cites its source in the data file or is explicitly
   marked PLACEHOLDER and listed in `docs/verify.md`.
 - Never commit secrets, API keys, or bulk downloaded datasets.
+- Every new source file must include the GPL-3.0 SPDX license header. Do not
+  accept external code without verifying CLA compliance.
 - When unsure between simple and clever, choose simple and note the
   alternative in an ADR.
 

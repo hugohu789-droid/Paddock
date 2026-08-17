@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // Statistical shape tests: many draws, checked against the distribution they
 // are supposed to come from.
 //

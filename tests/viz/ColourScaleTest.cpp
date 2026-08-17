@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
 // The part of the map view that can be quantitatively wrong.
 //
 // Rendering needs a graphics driver; deciding which value gets which colour does
