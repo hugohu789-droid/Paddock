@@ -78,17 +78,44 @@ that was luck rather than agreement. Both floors are therefore checked with an
 explicit `VERSION_LESS` comparison after an unversioned `find_package`, which
 says what it means regardless of each package's compatibility policy.
 
+### What it costs, measured
+
+The first run of the `gis` job on a cold cache:
+
+| Platform | Time | Source |
+|---|---|---|
+| Linux (ubuntu-24.04) | **1m15s** | `apt install libgdal-dev libproj-dev` |
+| macOS (macos-14) | **3m24s** | `brew install gdal proj` |
+| Windows (windows-2022) | **75m16s** | vcpkg, building GDAL and its dependency fan-out from source |
+
+That ratio is the decision in one line. Paying seventy-five minutes on Linux
+and macOS as well, to obtain the same GDAL the distribution already packages,
+would have been the cost of "vcpkg everywhere". The Windows figure is a
+cold-cache figure; the binary cache turns later runs into a download, and the
+cache is written even when the job fails, because the first attempt threw away
+seventy-five minutes of correctly built packages by not doing so.
+
+If that cold-cache cost ever becomes a problem — a dependency bump invalidates
+the cache — the lever is the vcpkg `gdal` port's default features. `CLAUDE.md`
+commits this project to GeoTIFF rasters and GeoPackage vectors only, so most of
+what the default feature set builds is drivers nothing here will open.
+
 ## Consequences
 
 - Three package sources to keep working instead of one. The `gis` job exists to
   make that a build failure rather than a surprise, and it reports the version
   each platform actually installed before it configures.
-- `proj.db` is the file this decision really buys. PROJ links and runs without
-  it and fails every transform at the point of use — the most common way a
-  working geospatial build stops working on another machine. Distribution
-  packages and vcpkg both ship it; a hand-built PROJ often does not end up with
-  it on the search path. `paddock_gis_tests` asserts EPSG:2193 resolves, and
-  prints the search path when it does not.
+- `proj.db` is the file this decision really buys, and Windows does not get it
+  for free. PROJ links and runs without finding its database and fails every
+  transform at the point of use. On Linux and macOS the package puts the file
+  where that platform's PROJ already looks. On Windows, vcpkg's PROJ searches
+  `%LOCALAPPDATA%\proj` and installs the database under
+  `vcpkg_installed\x64-windows\share\proj`, so it finds nothing —
+  `GisEnvironmentTest.ProjCanResolveNztm2000` failed on the first run of this
+  job and reported the empty search path, which is what the test exists for.
+  CI sets `PROJ_DATA`, PROJ's own documented mechanism. **A packaged Windows
+  build will have to ship `proj.db` and point at it too**; that belongs with
+  T5 packaging and is tracked separately.
 - A developer on a distribution older than Ubuntu 24.04 may have GDAL 2, which
   this build rejects at configure time rather than at run time. `docs/setup.md`
   says so.

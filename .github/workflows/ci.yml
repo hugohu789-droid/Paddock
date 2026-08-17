@@ -232,12 +232,18 @@ jobs:
           "${VCPKG_INSTALLATION_ROOT}/bootstrap-vcpkg.bat"
           git -C "${VCPKG_INSTALLATION_ROOT}" log -1 --format="vcpkg now at %H (%ci)"
 
-      # GDAL from source is the expensive part of this job on Windows, and it
-      # is identical from run to run. The binary cache turns it into a download
-      # on every run after the first.
-      - name: Cache the vcpkg binaries (Windows)
+      # GDAL from source is the expensive part of this job on Windows: measured
+      # at 75 minutes on a cold cache, and identical from run to run.
+      #
+      # Restore and save are separate steps on purpose. actions/cache writes
+      # nothing when the job fails, so the first failed run threw away
+      # seventy-five minutes of correctly built packages and the next attempt
+      # paid for them again. Saving on always() means a run only ever pays that
+      # cost once, whatever the tests then say.
+      - name: Restore the vcpkg binary cache (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@v4
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/AppData/Local/vcpkg/archives
           key: vcpkg-gdal-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
@@ -259,12 +265,29 @@ jobs:
       - name: Configure, build and test
         if: runner.os == 'Windows'
         shell: cmd
+        # PROJ_DATA is PROJ's own documented mechanism for finding proj.db, and
+        # on Windows it has to be used. A vcpkg PROJ searches
+        # %LOCALAPPDATA%\proj by default and installs its database under
+        # vcpkg_installed\x64-windows\share\proj, so out of the box it finds
+        # nothing and every transform fails - which is exactly what
+        # GisEnvironmentTest.ProjCanResolveNztm2000 reported on the first run of
+        # this job. Linux and macOS packages put proj.db where their PROJ
+        # already looks, so they need none of this.
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set VSPATH=%%i
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
           cmake --preset ci-gis -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake || exit /b 1
           cmake --build --preset ci-gis || exit /b 1
+          set PROJ_DATA=%CD%\build\ci-gis\vcpkg_installed\x64-windows\share\proj
+          echo PROJ_DATA=%PROJ_DATA%
           ctest --preset ci-gis -L gis --output-on-failure || exit /b 1
+
+      - name: Save the vcpkg binary cache (Windows)
+        if: runner.os == 'Windows' && always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
   gui:
     name: Map view (Qt6 + VTK)
