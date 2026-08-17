@@ -61,7 +61,13 @@ else()
   message(STATUS "  gis: proj.db not found near ${PROJ_DIR}; PROJ's own search path will be used")
 endif()
 
-add_library(paddock_gis STATIC src/Module.cpp src/Environment.cpp src/Projection.cpp)
+add_library(
+  paddock_gis STATIC
+  src/Environment.cpp
+  src/GeoTiffElevation.cpp
+  src/GeoTiffWriter.cpp
+  src/Module.cpp
+  src/Projection.cpp)
 add_library(Paddock::gis ALIAS paddock_gis)
 
 target_include_directories(

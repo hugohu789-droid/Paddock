@@ -5,6 +5,7 @@
 #include <gdal_version.h>
 #include <proj.h>
 #include <string>
+#include <vector>
 
 #include <paddock/gis/Environment.hpp>
 
@@ -44,6 +45,20 @@ bool nztm_definition_available() {
   }
   proj_destroy(nztm);
   return true;
+}
+
+bool gdal_driver_available(const std::string& name) {
+  // Registration is idempotent and cheap after the first call, so doing it here
+  // means a caller cannot forget it and get a false negative.
+  GDALAllRegister();
+  return GDALGetDriverByName(name.c_str()) != nullptr;
+}
+
+std::vector<std::string> required_gdal_drivers() {
+  // GeoTIFF for rasters and GeoPackage for vectors, as CLAUDE.md specifies.
+  // Shapefile is deliberately absent: it is excluded by the same line, and
+  // asserting a driver this project must not use would be worse than useless.
+  return {"GTiff", "GPKG"};
 }
 
 std::string projection_database_search_path() {

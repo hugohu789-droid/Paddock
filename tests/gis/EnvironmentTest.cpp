@@ -59,5 +59,24 @@ TEST(GisEnvironmentTest, ProjCanResolveNztm2000) {
       << "\"; proj.db is missing from it, or PROJ_DATA points elsewhere.";
 }
 
+// GDAL's driver set is a build-time choice, and a build missing one still links
+// and runs: the failure arrives when a file is opened, as a null dataset and a
+// complaint about an unrecognised format. CLAUDE.md fixes the formats - GeoTIFF
+// for rasters, GeoPackage for vectors - so this asserts them once here rather
+// than leaving each reader to discover it.
+TEST(GisEnvironmentTest, TheFormatsThisProjectUsesAreCompiledIn) {
+  for (const std::string& driver : required_gdal_drivers()) {
+    EXPECT_TRUE(gdal_driver_available(driver))
+        << "GDAL was built without the " << driver
+        << " driver; every read of that format will fail at the point of use";
+  }
+}
+
+// The negative control for the check above: a name GDAL has never had must come
+// back false, or the probe is answering yes to everything.
+TEST(GisEnvironmentTest, ADriverThatDoesNotExistIsReportedMissing) {
+  EXPECT_FALSE(gdal_driver_available("NotARealGdalDriver"));
+}
+
 }  // namespace
 }  // namespace paddock::gis
