@@ -54,4 +54,49 @@ inline constexpr double kEvaporationMmPerMj = 0.408;
 /// Daylight hours (FAO-56 Eq. 34).
 [[nodiscard]] double daylight_hours(double latitude_degrees, int day_of_year) noexcept;
 
+/// Extraterrestrial radiation on a tilted surface, MJ per square metre per day.
+///
+/// FAO-56 stops at the horizontal case; the slope case is the subject of Allen,
+/// Trezza and Tasumi (2006), "Analytical integrated functions for daily solar
+/// radiation on slopes", Agricultural and Forest Meteorology 139:55-73 - the
+/// same lead author, which is why it is the natural companion to the equations
+/// above.
+///
+/// That paper integrates analytically, handling the awkward cases where a steep
+/// slope facing away from the sun has more than one sunrise. This does the same
+/// integral numerically instead, which is slower and much harder to get subtly
+/// wrong: the geometry is a dot product between the surface normal and the sun
+/// direction, both written out in Solar.cpp, with no case analysis to omit.
+///
+/// `aspect_degrees` is the compass bearing the ground faces, matching
+/// Topography::aspect_degrees: 0 north, 90 east. It is ignored when
+/// `slope_degrees` is zero, and **NaN is accepted there** - flat ground has no
+/// aspect, and requiring a caller to substitute a fake one is how a fake one
+/// ends up in the model.
+///
+/// Why this matters in New Zealand: on the sunny side of a hill the extra
+/// radiation raises evapotranspiration, which is why Ballantrae's north- and
+/// west-facing slopes run into seasonal water deficits despite over 1000 mm of
+/// rain, and why measured production there is lower in summer and higher in
+/// winter than on the shaded side. That reversal is a consequence to be
+/// reproduced, not a coefficient to be applied.
+[[nodiscard]] double extraterrestrial_radiation_on_slope_mj(double latitude_degrees,
+                                                            int day_of_year, double slope_degrees,
+                                                            double aspect_degrees) noexcept;
+
+/// How much radiation a slope receives relative to level ground on the same day
+/// at the same latitude, for transferring a measured horizontal figure onto a
+/// slope.
+///
+/// One where the slope is level. Larger than one on the sunny side of a hill,
+/// smaller on the shaded side. Zero when the slope is steep enough to be in
+/// shadow all day, which is a real answer and not an error.
+///
+/// This is the ratio Allen et al. (2006) build their transfer on. Applying it
+/// to a measured value assumes the sky is as clear on the slope as it was over
+/// the instrument, which is the assumption every method of this kind makes and
+/// the reason docs/verify.md carries it as a caveat.
+[[nodiscard]] double slope_radiation_ratio(double latitude_degrees, int day_of_year,
+                                           double slope_degrees, double aspect_degrees) noexcept;
+
 }  // namespace paddock::core

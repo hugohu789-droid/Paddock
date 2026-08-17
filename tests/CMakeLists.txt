@@ -19,6 +19,7 @@ add_executable(
   unit/SimulationTest.cpp
   unit/SnapshotWeatherTest.cpp
   unit/SoilWaterTest.cpp
+  unit/SolarSlopeTest.cpp
   unit/SolarTest.cpp
   unit/SyntheticTerrainTest.cpp
   unit/SyntheticWeatherTest.cpp
