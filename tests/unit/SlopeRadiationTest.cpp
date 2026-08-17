@@ -93,7 +93,7 @@ TEST(SlopeRadiationTest, LevelGroundIsExactlyOneAllYear) {
   for (std::size_t row = 0; row < table.rows(); ++row) {
     for (std::size_t col = 0; col < table.cols(); ++col) {
       ASSERT_TRUE(std::isnan(ground.aspect_degrees(col, row)));
-      for (int day : {1, 100, 200, 300, 366}) {
+      for (const int day : {1, 100, 200, 300, 366}) {
         ASSERT_DOUBLE_EQ(table.ratio(col, row, day), 1.0);
       }
     }
