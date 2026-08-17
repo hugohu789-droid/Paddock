@@ -29,7 +29,39 @@ if(PROJ_VERSION VERSION_LESS 6.0)
                       "(proj.db and the modern API). See docs/adr/0011-gdal-and-proj.md.")
 endif()
 
-add_library(paddock_gis STATIC src/Module.cpp src/Environment.cpp)
+# Where proj.db actually is, which is not always where PROJ will look for it.
+#
+# PROJ 6 finds its coordinate operation database through a search path baked in
+# when it was built. A package manager that builds in one directory and installs
+# into another leaves a PROJ that links, runs, and cannot resolve a single CRS,
+# pointing at a directory that never existed on this machine. vcpkg on Windows
+# does exactly that: proj.db sits in installed/x64-windows/share/proj while the
+# library looks in %LOCALAPPDATA%\proj.
+#
+# Finding the file at configure time lets the test suite set PROJ_DATA for
+# itself, instead of every developer having to know to set it. Note what this
+# does not do: the packaged application gets no such help, and making sure a
+# shipped Paddock finds proj.db is a separate problem - task #28 - that a unit
+# test was never going to answer.
+find_file(
+  PADDOCK_PROJ_DB
+  NAMES proj.db
+  HINTS "${PROJ_DIR}" "${PROJ_DIR}/.." "${PROJ_DIR}/../.." "${PROJ_DIR}/../../.."
+        "${PROJ_DIR}/../../../.."
+  PATH_SUFFIXES "" proj share/proj
+  DOC "PROJ's coordinate operation database")
+
+if(PADDOCK_PROJ_DB)
+  get_filename_component(_paddock_proj_data_dir "${PADDOCK_PROJ_DB}" DIRECTORY)
+  set(PADDOCK_PROJ_DATA_DIR
+      "${_paddock_proj_data_dir}"
+      CACHE INTERNAL "Directory holding proj.db, for the test environment")
+  message(STATUS "  gis: proj.db at ${PADDOCK_PROJ_DB}")
+else()
+  message(STATUS "  gis: proj.db not found near ${PROJ_DIR}; PROJ's own search path will be used")
+endif()
+
+add_library(paddock_gis STATIC src/Module.cpp src/Environment.cpp src/Projection.cpp)
 add_library(Paddock::gis ALIAS paddock_gis)
 
 target_include_directories(

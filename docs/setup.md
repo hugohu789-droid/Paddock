@@ -132,12 +132,24 @@ cmake --build --preset gis
 ctest --preset ci-gis -L gis
 ```
 
-On Windows the same preset takes GDAL and PROJ from vcpkg instead, so it needs
-the toolchain file:
+On Windows the same preset takes GDAL and PROJ from vcpkg, so it needs the
+toolchain file. Installing them once with `vcpkg install gdal proj geos` and
+then configuring against that install is far quicker than a manifest install,
+which rebuilds into the build directory:
 
 ```bash
-cmake --preset gis -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake
+cmake --preset gis -DVCPKG_MANIFEST_MODE=OFF -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake --build build/gis
+ctest --test-dir build/gis -L gis
 ```
+
+**This is the Windows gate for `gis/`.** The `gis` CI job runs Linux and macOS
+only: on GitHub's runners the Windows build of GDAL from vcpkg source took
+1h3m47s against Linux's 1m14s, and Actions caches are scoped per branch, so a
+new branch pays it again. Windows geospatial coverage therefore comes from
+running the three commands above before merging anything that touches `gis/`.
+There is a `GIS Windows (vcpkg, on request)` job in the Actions tab for when
+that is not enough. See [ADR 0011](adr/0011-gdal-and-proj.md).
 
 Three things worth knowing before you spend an afternoon on them:
 
@@ -146,11 +158,26 @@ Three things worth knowing before you spend an afternoon on them:
   a 2019 distribution will not configure. That is deliberate — see
   [ADR 0011](adr/0011-gdal-and-proj.md).
 - **`proj.db` is the file that goes missing.** PROJ 6 keeps its coordinate
-  operation tables in a SQLite database found through a search path. A PROJ
-  that cannot find it still links and still runs, and fails every transform at
-  the point of use. `ctest -L gis` checks that EPSG:2193 resolves and prints
-  the search path when it does not. If it fails, `PROJ_DATA` is the environment
-  variable to point at the directory holding `proj.db`.
+  operation tables in a SQLite database found through a search path baked in
+  when PROJ was built. A PROJ that cannot find it still links and still runs,
+  and fails every transform at the point of use.
+
+  A vcpkg PROJ on Windows does this out of the box: `proj.db` is installed at
+  `<vcpkg>/installed/x64-windows/share/proj/proj.db`, and the library looks in
+  `%LOCALAPPDATA%\proj`, which does not exist. The symptom is six red tests and
+  a message naming the search path:
+
+  ```
+  PROJ cannot resolve EPSG:2193. Its database search path is
+  "C:\Users\you\AppData\Local/proj"; proj.db is missing from it, or PROJ_DATA
+  points elsewhere.
+  ```
+
+  Configuring `gis` locates `proj.db` and prints where (`-- gis: proj.db at
+  ...`), and the test suite sets `PROJ_DATA` from it, so `ctest -L gis` works
+  without anyone exporting anything. Running the application by hand is not
+  covered by that: export `PROJ_DATA` yourself, pointing at the directory
+  holding `proj.db`.
 - **EPSG:2193 declares its axes as (northing, easting).** GDAL 3 honours the
   authority's order, so it hands coordinates back the opposite way round from
   the (easting, northing) most New Zealand data is written in, unless the
