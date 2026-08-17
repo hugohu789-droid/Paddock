@@ -9,8 +9,25 @@
 # (northing, easting), so a GDAL 3 build hands back coordinates in the opposite
 # order from the (easting, northing) a New Zealand reader expects unless the
 # traditional order is asked for explicitly. See docs/adr/0011.
-find_package(GDAL 3.0 REQUIRED)
-find_package(PROJ 6.0 REQUIRED)
+#
+# The floors are checked by hand rather than passed to find_package, because a
+# version argument there does not mean "at least this". Each package decides for
+# itself: PROJ's config declares SameMajorVersion compatibility, so
+# find_package(PROJ 6.0) is read as "major version must be 6" and a machine with
+# PROJ 9.8 is rejected for being too new. That is how this first landed, and
+# both Linux and macOS refused to configure against a perfectly good PROJ.
+find_package(GDAL REQUIRED)
+find_package(PROJ REQUIRED)
+
+if(GDAL_VERSION VERSION_LESS 3.0)
+  message(FATAL_ERROR "GDAL ${GDAL_VERSION} found; 3.0 or newer is required "
+                      "(axis order and PROJ 6 support). See docs/adr/0011-gdal-and-proj.md.")
+endif()
+
+if(PROJ_VERSION VERSION_LESS 6.0)
+  message(FATAL_ERROR "PROJ ${PROJ_VERSION} found; 6.0 or newer is required "
+                      "(proj.db and the modern API). See docs/adr/0011-gdal-and-proj.md.")
+endif()
 
 add_library(paddock_gis STATIC src/Module.cpp src/Environment.cpp)
 add_library(Paddock::gis ALIAS paddock_gis)

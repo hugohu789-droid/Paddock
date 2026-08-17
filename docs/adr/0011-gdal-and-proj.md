@@ -58,6 +58,26 @@ Sea, or worse, a farm that appears plausibly placed because both numbers are
 seven digits. Task #17 pins this down with round-trip tests at published
 control points; this ADR records why the floor exists.
 
+### A version floor is not a `find_package` version argument
+
+The first implementation wrote `find_package(PROJ 6.0 REQUIRED)`, meaning "at
+least 6.0". Both Linux and macOS then refused to configure against PROJ 9.8:
+
+```
+Could not find a configuration file for package "PROJ" that is compatible
+with requested version "6.0".
+    /opt/homebrew/lib/cmake/proj/proj-config.cmake, version: 9.8.1
+      The version found is not compatible with the version requested.
+```
+
+A version passed to `find_package` means whatever the package's own
+`*-config-version.cmake` decides it means. PROJ declares `SameMajorVersion`, so
+the request was read as "major version must be exactly 6". GDAL happened to
+accept 3.13 against a request for 3.0 — but only because both are major 3, so
+that was luck rather than agreement. Both floors are therefore checked with an
+explicit `VERSION_LESS` comparison after an unversioned `find_package`, which
+says what it means regardless of each package's compatibility policy.
+
 ## Consequences
 
 - Three package sources to keep working instead of one. The `gis` job exists to
