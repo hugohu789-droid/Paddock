@@ -1,0 +1,48 @@
+# ME requirements for maintenance and liveweight gain of mature ewes
+# (MJ ME/ewe/day).
+#
+# Source: Beef + Lamb New Zealand, "A guide to feed planning for sheep farmers",
+# Appendix 1.2. https://beeflambnz.com/sites/default/files/2026-06/Guide-to-feed-planning-for-sheep-farmers.pdf
+# Read 2026-08-18.
+#
+# **Model family: Nicol and Brookes (2007).** The guide states it outright:
+# "Source 1.2-1.6: A.M. Nicol and I.M. Brookes (2007) Pasture and Supplements
+# for Grazing Animals."
+#
+# This is the table the implemented equations should be judged against, and they
+# agree: 7.71 MJ/day modelled for a 50 kg ewe against 8.0 published, 3.6% apart.
+# The other Beef + Lamb table - Geenty and Rattray (1987), in
+# blnz_geenty_rattray_1987_ewe_me.csv - runs 2 MJ higher at every shared weight
+# and belongs to a different framework. Neither is a correction of the other.
+#
+# The guide's own worked example uses this table and the same wording as the
+# Geenty and Rattray one, with a different answer: "the daily ME requirement to
+# maintain weight for a 50 kg ewe grazing mixed length leafy pasture with an ME
+# content of 10.8 would be 8 MJME/d". The other publication says 10.
+#
+# Note from the source: "For hard hill country add 1.0 MJ ME/ewe/day."
+liveweight_kg,liveweight_gain_g_per_day,me_mj_per_day,model_family,status,source_id
+45,0,7.0,nicol_brookes_2007,direct,blnz_feed_planning
+50,0,8.0,nicol_brookes_2007,direct,blnz_feed_planning
+55,0,9.0,nicol_brookes_2007,direct,blnz_feed_planning
+60,0,10.0,nicol_brookes_2007,direct,blnz_feed_planning
+65,0,10.5,nicol_brookes_2007,direct,blnz_feed_planning
+70,0,11.0,nicol_brookes_2007,direct,blnz_feed_planning
+45,50,10.0,nicol_brookes_2007,direct,blnz_feed_planning
+50,50,11.0,nicol_brookes_2007,direct,blnz_feed_planning
+55,50,12.0,nicol_brookes_2007,direct,blnz_feed_planning
+60,50,13.0,nicol_brookes_2007,direct,blnz_feed_planning
+65,50,13.5,nicol_brookes_2007,direct,blnz_feed_planning
+70,50,14.0,nicol_brookes_2007,direct,blnz_feed_planning
+45,100,12.5,nicol_brookes_2007,direct,blnz_feed_planning
+50,100,13.5,nicol_brookes_2007,direct,blnz_feed_planning
+55,100,14.5,nicol_brookes_2007,direct,blnz_feed_planning
+60,100,15.5,nicol_brookes_2007,direct,blnz_feed_planning
+65,100,16.0,nicol_brookes_2007,direct,blnz_feed_planning
+70,100,16.5,nicol_brookes_2007,direct,blnz_feed_planning
+45,150,15.5,nicol_brookes_2007,direct,blnz_feed_planning
+50,150,16.5,nicol_brookes_2007,direct,blnz_feed_planning
+55,150,17.5,nicol_brookes_2007,direct,blnz_feed_planning
+60,150,18.5,nicol_brookes_2007,direct,blnz_feed_planning
+65,150,19.0,nicol_brookes_2007,direct,blnz_feed_planning
+70,150,19.5,nicol_brookes_2007,direct,blnz_feed_planning

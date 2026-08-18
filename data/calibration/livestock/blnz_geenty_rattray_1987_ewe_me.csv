@@ -1,0 +1,35 @@
+# ME requirements for maintenance and liveweight gain in mature ewes (MJ ME/d).
+#
+# Source: Beef + Lamb New Zealand, "Making every mating count", Appendix 3.1.
+# https://beeflambnz.com/sites/default/files/2026-06/Making-every-mating-count.pdf
+# Read 2026-08-18; SHA-256 in sources.toml.
+#
+# **Model family: Geenty and Rattray (1987).** The same publication's Table 2.2
+# attributes its maintenance figures to them, and Table 4.2 says so outright.
+#
+# This is not the only Beef + Lamb NZ sheep maintenance table, and the other one
+# is 2 MJ lower at every weight it shares. See
+# blnz_nicol_brookes_2007_ewe_me.csv, and docs/verify.md on why the difference
+# between them is a difference between frameworks rather than a gap in the
+# model.
+liveweight_kg,liveweight_gain_g_per_day,me_mj_per_day,model_family,status,source_id
+40,0,8.5,geenty_rattray_1987,direct,blnz_mating
+45,0,9.0,geenty_rattray_1987,direct,blnz_mating
+50,0,10.0,geenty_rattray_1987,direct,blnz_mating
+55,0,11.0,geenty_rattray_1987,direct,blnz_mating
+60,0,11.5,geenty_rattray_1987,direct,blnz_mating
+40,50,11.0,geenty_rattray_1987,direct,blnz_mating
+45,50,12.0,geenty_rattray_1987,direct,blnz_mating
+50,50,13.0,geenty_rattray_1987,direct,blnz_mating
+55,50,14.0,geenty_rattray_1987,direct,blnz_mating
+60,50,14.5,geenty_rattray_1987,direct,blnz_mating
+40,100,13.5,geenty_rattray_1987,direct,blnz_mating
+45,100,15.0,geenty_rattray_1987,direct,blnz_mating
+50,100,16.5,geenty_rattray_1987,direct,blnz_mating
+55,100,17.0,geenty_rattray_1987,direct,blnz_mating
+60,100,18.0,geenty_rattray_1987,direct,blnz_mating
+40,150,16.0,geenty_rattray_1987,direct,blnz_mating
+45,150,18.0,geenty_rattray_1987,direct,blnz_mating
+50,150,20.0,geenty_rattray_1987,direct,blnz_mating
+55,150,20.5,geenty_rattray_1987,direct,blnz_mating
+60,150,22.0,geenty_rattray_1987,direct,blnz_mating

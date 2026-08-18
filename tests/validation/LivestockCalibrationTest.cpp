@@ -124,78 +124,151 @@ TEST(LivestockCalibrationTest, TheAgeFactorIsWhatSeparatesTheModelFromDairyNz) {
                    << " with it; DairyNZ publish 59";
 }
 
-// NOT a validation. The model does not reproduce Beef + Lamb NZ's sheep
-// maintenance and this test records by how much, so that the distance is a
-// measured quantity rather than something a reader has to rediscover.
+// The model against Beef + Lamb NZ's Nicol and Brookes sheep maintenance table,
+// which is the right comparator and was not the one used at first.
 //
-// The gap is flat across the range, which is what says the two are measuring
-// different things rather than one being noisy. Activity has been ruled out:
-// every term the OVERSEER manual has closes about a twentieth of it. The cause
-// is open item 12.
+// This project spent a while recording a 26% hole in its own sheep maintenance
+// against B+LNZ. It was comparing against the wrong table. Beef + Lamb publish
+// two, from two frameworks, in two documents, with the same worked example
+// worded identically and answered differently:
 //
-// The bounds below are wide enough that this passes while the cause is unknown,
-// and tight enough that finding the cause - and closing the gap - will fail it,
-// which is the point.
-TEST(LivestockCalibrationTest, TheModelSitsWellBelowBeefAndLambSheepMaintenance) {
-  const test::CalibrationTable table(table_path("blnz_mature_ewe_me.csv"));
+//   A guide to feed planning for sheep farmers, Appendix 1.2
+//     Nicol and Brookes (2007) - 50 kg ewe at maintenance = 8 MJ ME/day
+//   Making every mating count, Appendix 3.1 and Table 2.2
+//     Geenty and Rattray (1987)  - 50 kg ewe = 10 MJ ME/day
+//
+// The equations here descend from Nicol and Brookes by way of the OVERSEER
+// manual, so the first is the one they should be judged against. The 26% goes
+// away - but the agreement is not clean, and the shape of what is left is more
+// interesting than either number.
+//
+// The model is 1.9% below at 45 kg and 14.8% below at 60 kg. It is not an
+// offset: across 45 to 70 kg the published table rises by a factor of 1.571
+// while metabolic weight rises by 1.393, so the table is steeper in liveweight
+// than W^0.75 is. Something other than a level difference separates them, and
+// the exponent is the obvious suspect.
+TEST(LivestockCalibrationTest, TheModelRunsBelowNicolAndBrookesAndDivergesWithWeight) {
+  const test::CalibrationTable table(table_path("blnz_nicol_brookes_2007_ewe_me.csv"));
 
   int compared = 0;
-  double lowest_shortfall = 1.0;
-  double highest_shortfall = 0.0;
-
+  double worst = 0.0;
+  double lightest = 0.0;
+  double heaviest = 0.0;
   for (std::size_t row = 0; row < table.size(); ++row) {
     if (table.number(row, "liveweight_gain_g_per_day") != 0.0) {
-      continue;  // the maintenance row only
+      continue;
     }
     const double liveweight = table.number(row, "liveweight_kg");
     const double published = table.number(row, "me_mj_per_day");
 
-    // 10.8 MJ ME/kg DM is the pasture the source's own worked example uses.
+    // 10.8 MJ ME/kg DM is the pasture the guide's own worked example uses.
     const double modelled = maintenance_me(liveweight, 1.0, 10.8);
-    const double shortfall = (published - modelled) / published;
-
-    EXPECT_GT(shortfall, 0.0) << liveweight << " kg: the model is no longer below B+LNZ";
-    lowest_shortfall = std::min(lowest_shortfall, shortfall);
-    highest_shortfall = std::max(highest_shortfall, shortfall);
+    const double relative = std::abs(modelled - published) / published;
+    worst = std::max(worst, relative);
     ++compared;
+
+    EXPECT_LT(relative, 0.16) << liveweight << " kg: Nicol and Brookes " << published << ", model "
+                              << modelled;
+    if (liveweight == 45.0) {
+      lightest = relative;
+    }
+    if (liveweight == 60.0) {
+      heaviest = relative;
+    }
   }
 
-  ASSERT_EQ(compared, 5) << "Appendix 3.1 has five maintenance points";
+  ASSERT_EQ(compared, 6) << "Appendix 1.2 has six maintenance points";
 
-  // Flat, not scattered: under 5 points of spread across a 26% gap.
-  EXPECT_LT(highest_shortfall - lowest_shortfall, 0.05)
-      << "the gap has stopped being flat, which would change what it means";
+  // The divergence is the finding, so it is asserted rather than left in a
+  // comment. If a change ever makes these two agree evenly, this fails and
+  // somebody has to say why.
+  EXPECT_LT(lightest, 0.04) << "close at the light end";
+  EXPECT_GT(heaviest, 0.10) << "and much further apart at 60 kg";
 
-  EXPECT_GT(lowest_shortfall, 0.20) << "the gap has narrowed; if that is real, update open item 12";
-  EXPECT_LT(highest_shortfall, 0.32) << "the gap has widened";
+  // The published table climbs faster with liveweight than metabolic weight
+  // does, which is what says the difference is structural.
+  EXPECT_NEAR(11.0 / 7.0, 1.571, 0.001);
+  EXPECT_NEAR(std::pow(70.0 / 45.0, 0.75), 1.393, 0.001);
 
-  GTEST_LOG_(INFO) << "model below B+LNZ Appendix 3.1 by " << (100.0 * lowest_shortfall) << " to "
-                   << (100.0 * highest_shortfall) << "% across 40-60 kg";
+  GTEST_LOG_(INFO) << "below Nicol and Brookes by " << (100.0 * lightest) << "% at 45 kg and "
+                   << (100.0 * heaviest) << "% at 60 kg; worst " << (100.0 * worst) << "%";
 }
 
-// The B+LNZ pregnancy table is non-monotonic at two weeks before term. It is
-// preserved exactly, and this test exists so that a well-meaning tidy-up of the
-// data file fails rather than passes.
-TEST(LivestockCalibrationTest, ThePublishedPregnancyOddityIsPreserved) {
+// The two Beef + Lamb frameworks disagree with each other, and the model cannot
+// match both. This records the shape of that disagreement so neither table can
+// quietly be treated as a correction of the other.
+//
+// The remaining question is what the Geenty and Rattray practical grazing
+// allowance is made of - it is a requirement for grazing adult sheep and may
+// carry activity or margin the mechanistic model accounts for elsewhere or not
+// at all. That needs the 1987 chapter, which has not been read. Open item 12.
+TEST(LivestockCalibrationTest, TheTwoBeefAndLambFrameworksDisagreeWithEachOther) {
+  const test::CalibrationTable nicol(table_path("blnz_nicol_brookes_2007_ewe_me.csv"));
+  const test::CalibrationTable geenty(table_path("blnz_geenty_rattray_1987_ewe_me.csv"));
+
+  // Both carry 50, 55 and 60 kg at maintenance.
+  for (const double weight : {50.0, 55.0, 60.0}) {
+    double from_nicol = 0.0;
+    double from_geenty = 0.0;
+    for (std::size_t row = 0; row < nicol.size(); ++row) {
+      if (nicol.number(row, "liveweight_kg") == weight &&
+          nicol.number(row, "liveweight_gain_g_per_day") == 0.0) {
+        from_nicol = nicol.number(row, "me_mj_per_day");
+      }
+    }
+    for (std::size_t row = 0; row < geenty.size(); ++row) {
+      if (geenty.number(row, "liveweight_kg") == weight &&
+          geenty.number(row, "liveweight_gain_g_per_day") == 0.0) {
+        from_geenty = geenty.number(row, "me_mj_per_day");
+      }
+    }
+
+    ASSERT_GT(from_nicol, 0.0) << weight << " kg missing from the Nicol and Brookes table";
+    ASSERT_GT(from_geenty, 0.0) << weight << " kg missing from the Geenty and Rattray table";
+    EXPECT_GT(from_geenty, from_nicol)
+        << weight << " kg: Geenty and Rattray " << from_geenty << ", Nicol and Brookes "
+        << from_nicol << " - the ordering between the two frameworks has changed";
+  }
+}
+
+// The pregnancy table is monotonic, and this test exists because a version of
+// it here was not.
+//
+// The same table appears twice in Making every mating count, and one of the two
+// text extractions dropped a digit: 3.8 at two weeks before term came out as
+// 0.8. That was recorded as an oddity of the source and defended with a test.
+// It was an error of ours, and the test now checks the opposite thing.
+TEST(LivestockCalibrationTest, ThePregnancyTableRisesTowardsTerm) {
   const test::CalibrationTable table(table_path("blnz_ewe_pregnancy_me.csv"));
 
-  double at_four_weeks = 0.0;
-  double at_two_weeks = 0.0;
-  for (std::size_t row = 0; row < table.size(); ++row) {
-    const double weeks = table.number(row, "weeks_before_term");
-    if (weeks == 4.0) {
-      at_four_weeks = table.number(row, "additional_me_mj_per_day");
+  for (const double litter : {1.0, 2.0}) {
+    double previous_weeks = 1e9;
+    double previous_energy = -1.0;
+    int seen = 0;
+    for (std::size_t row = 0; row < table.size(); ++row) {
+      if (table.number(row, "foetus_count") != litter) {
+        continue;
+      }
+      const double weeks = table.number(row, "weeks_before_term");
+      const double energy = table.number(row, "additional_me_mj_per_day");
+      ASSERT_LT(weeks, previous_weeks) << "rows should run from 12 weeks down to term";
+      EXPECT_GT(energy, previous_energy)
+          << "litter " << litter << ", " << weeks
+          << " weeks before term: energy fell as term approached, which is how the "
+             "transcription error looked";
+      previous_weeks = weeks;
+      previous_energy = energy;
+      ++seen;
     }
-    if (weeks == 2.0) {
-      at_two_weeks = table.number(row, "additional_me_mj_per_day");
-    }
+    EXPECT_EQ(seen, 6) << "six stages for litter size " << litter;
   }
 
-  EXPECT_DOUBLE_EQ(at_four_weeks, 2.6);
-  EXPECT_DOUBLE_EQ(at_two_weeks, 0.8);
-  EXPECT_LT(at_two_weeks, at_four_weeks)
-      << "the published table is non-monotonic here and must stay that way until an "
-         "erratum or a stronger source says otherwise";
+  // The value that was wrong, asserted by name.
+  for (std::size_t row = 0; row < table.size(); ++row) {
+    if (table.number(row, "foetus_count") == 1.0 && table.number(row, "weeks_before_term") == 2.0) {
+      EXPECT_DOUBLE_EQ(table.number(row, "additional_me_mj_per_day"), 3.8);
+    }
+  }
 }
 
 }  // namespace

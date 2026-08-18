@@ -1,0 +1,23 @@
+# Maintenance feed requirements of grazing adult sheep, kg of dry matter per day.
+#
+# Source: Beef + Lamb New Zealand, "Making every mating count", Table 2.2,
+# "Adapted from Geenty and Rattray, 1987". Read 2026-08-18.
+#
+# The source states dry matter intake, not energy. The megajoule column here is
+# intake times the diet ME the source names for each feed quality, so it is
+# derived rather than published - which matters, because the 10 MJ/day figure
+# for a 50 kg ewe that this project compared itself against for a while comes
+# from this multiplication rather than from a table of energy requirements.
+liveweight_kg,feed_quality,diet_me_mj_per_kg_dm,dm_intake_kg_per_day,derived_me_mj_per_day,intake_status,derived_status,model_family,source_id
+50,poor,8,1.31,10.48,direct,derived,geenty_rattray_1987,blnz_mating
+50,average,10,1.00,10.00,direct,derived,geenty_rattray_1987,blnz_mating
+50,good,12,0.79,9.48,direct,derived,geenty_rattray_1987,blnz_mating
+60,poor,8,1.50,12.00,direct,derived,geenty_rattray_1987,blnz_mating
+60,average,10,1.15,11.50,direct,derived,geenty_rattray_1987,blnz_mating
+60,good,12,0.92,11.04,direct,derived,geenty_rattray_1987,blnz_mating
+70,poor,8,1.69,13.52,direct,derived,geenty_rattray_1987,blnz_mating
+70,average,10,1.30,13.00,direct,derived,geenty_rattray_1987,blnz_mating
+70,good,12,1.00,12.00,direct,derived,geenty_rattray_1987,blnz_mating
+80,poor,8,1.90,15.20,direct,derived,geenty_rattray_1987,blnz_mating
+80,average,10,1.46,14.60,direct,derived,geenty_rattray_1987,blnz_mating
+80,good,12,1.12,13.44,direct,derived,geenty_rattray_1987,blnz_mating

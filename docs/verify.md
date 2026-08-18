@@ -375,49 +375,60 @@ published range:
 This is the cattle validation this file had been missing, and it is stronger
 than the Simpson sheep check because it spans a range rather than a point.
 
-**But only with the age factor set to one.** Applying TMC Eq. 17 to a six-year-
-old cow (0.839) puts the model 17% below DairyNZ at 500 kg. Either DairyNZ apply
-no age discount to a mature cow, or Eq. 17 is being applied more widely here
-than it should be. Not resolved; recorded as open item 11.
+**But only with the age factor set to one**, and that question is now answered:
+the age term does apply to adult cattle. The OVERSEER ME review works an example
+for a 500 kg animal at four years using it —
+`MEm = ((0.36 W^0.75)/km) * exp(-0.00008 A)` — and discusses its effect for
+animals of six years and more. So the 17% between the model and DairyNZ at
+500 kg is a difference between a mechanistic framework and a practical table,
+not evidence that the age term belongs only to growing stock.
 
-**Sheep is a different story, and the difference is systematic.** Beef + Lamb
-NZ's *Making every mating count*, Appendix 3.1, gives mature ewe maintenance.
-The model sits 26% below it at every weight — a flat offset, not scatter:
+**The floor is a different matter, and the two OVERSEER documents contradict
+each other about it.** The technical manual states "Agefactor had a minimum
+value of 0.84 (Freer et al., 2006)". The review asks why "the lower bound on
+AgeFactor was not used as in the Freer et al. (2010) expression", notes that
+CSIRO (2007) and Nicol and Brookes (2007) place no lower bound, and says the
+omission "may allow ME requirements to drop too low for animals older than 6
+years".
 
-| Ewe | B+LNZ | This model | Difference |
+This implementation has the floor, which matches what the manual documents and
+what the review argues for. It should not be described as what the reviewed
+OVERSEER code does, because the review says that code lacks it. Open item 11 is
+now about which variant to carry, not about whether the term applies.
+
+**Sheep: the earlier 26% was a comparison against the wrong table.**
+
+Beef + Lamb NZ publish two sheep maintenance tables, from two frameworks, in two
+documents, and carry the same worked example in the same words with different
+answers:
+
+| Publication | Framework | 50 kg ewe at maintenance |
+|---|---|---|
+| A guide to feed planning for sheep farmers, Appendix 1.2 | Nicol and Brookes (2007) | 8.0 MJ ME/day |
+| Making every mating count, Appendix 3.1 and Table 2.2 | Geenty and Rattray (1987) | 10.0 MJ ME/day |
+
+The equations here descend from Nicol and Brookes by way of the OVERSEER manual,
+so the first is the comparator. Against it the model is 1.9% low at 45 kg, not
+26%.
+
+**But the agreement is not clean, and what is left is more interesting than
+either number.** The deviation grows with weight:
+
+| Ewe | Nicol and Brookes | This model | Difference |
 |---|---|---|---|
-| 40 kg | 8.5 | 6.3 | −26.0% |
-| 50 kg | 10.0 | 7.4 | −25.7% |
-| 60 kg | 11.5 | 8.5 | −25.9% |
+| 45 kg | 7.0 | 6.87 | −1.9% |
+| 50 kg | 8.0 | 7.43 | −7.1% |
+| 60 kg | 10.0 | 8.52 | −14.8% |
+| 70 kg | 11.0 | 9.56 | −13.0% |
 
-The model agrees with Simpson (1978b) here, so it is not the model that has
-moved. B+LNZ's 10.0 for a 50 kg ewe is 0.53 MJ ME per kg lwt^0.75, close to the
-figure Simpson gives for *cattle*.
+Across 45 to 70 kg the published table rises by a factor of 1.571 while metabolic
+weight rises by 1.393. **The table is steeper in liveweight than W^0.75 is**, so
+what separates them is structural rather than a level. That is open item 12 now,
+and it is a sharper question than the one it replaces.
 
-**The first explanation offered here was that these are hill country feeding
-tables and include activity. That was checked and it is wrong.** Adding every
-activity term the manual has - chewing, movement and walking a kilometre a day -
-comes to 0.20 MJ of net energy on a 50 kg ewe, which closes about a twentieth of
-the gap:
-
-| Term | MJ NE |
-|---|---|
-| Basal (TMC Eq. 13) | 5.265 |
-| Chewing (Eq. 18) | 0.019 |
-| Movement (Eq. 21) | 0.047 |
-| Walking 1 km (Eq. 24) | 0.130 |
-| **Total as ME** | **7.71 against B+LNZ's 10.00** |
-
-Working backwards instead, B+LNZ's figure implies a net maintenance of 0.377 MJ
-per kg lwt^0.75 against the manual's 0.280 - a ratio of 1.35 that activity does
-not account for. **The cause is not identified.** It could be a margin built into
-extension material, an assumption about breeding rather than dry ewes, or a
-different base constant; nothing here distinguishes them, and open item 12 stays
-open with the arithmetic attached rather than a story.
-
-The liveweight-change constants disagree in both directions and by more:
-B+LNZ give 65 MJ ME per kg gained and 17 MJ released per kg lost, against 50 and
-26 from the implemented equations.
+The Geenty and Rattray table stays, as a separate framework rather than an
+error. What its practical grazing allowance is made of needs the 1987 chapter,
+which has not been read.
 
 **One attribution in the brief was wrong, and it mattered.** The OVERSEER ME
 review was cited for K = 1.4 for beef cattle. The review does quote OVERSEER's
@@ -498,8 +509,9 @@ work and which do not.
 
 | 10 | Grazing selectivity: how strongly stock prefer clover over grass, and how that differs between set stocking and rotation | M3, task #24 | NZ grazing behaviour literature | open - the direction is stated by Smith and Dawson (1976), the magnitude is not |
 
-| 11 | Whether the age factor applies to a mature cow | M3 | DairyNZ maintenance table against TMC Eq. 17 | open - the model matches DairyNZ with AgeFactor = 1 and is 17% low with it applied |
-| 12 | What the 26% between B+LNZ sheep feeding tables and physiological maintenance is made of | M3 | B+LNZ Appendix 3.1; a source that states what its tables include | open - a flat offset across the range. **Activity has been ruled out**: every term the manual has closes only a twentieth of it |
+| 11 | Which age-factor variant to carry: with the 0.84 floor the manual documents, or without it as the reviewed OVERSEER code apparently runs | M3 | TMC Eq. 17 against the ME review's section 4.1.5 | narrowed - **applicability to adult cattle is settled**; the manual and its own review disagree about the floor |
+| 12 | Why Nicol and Brookes' ewe maintenance rises faster with liveweight than W^0.75 does | M3 | Nicol and Brookes (2007), *Pasture and supplements for grazing animals* | narrowed - the model is 1.9% low at 45 kg and 14.8% at 60 kg, so the difference is in the exponent rather than the level |
+| 13 | What the Geenty and Rattray (1987) practical grazing allowance is made of | M3 | Geenty & Rattray, "The energy requirements of grazing sheep and cattle", NZSAP Occasional Publication No. 10, pp. 39-53 | open - it runs about 2 MJ/day above Nicol and Brookes at every shared ewe weight, and nothing read so far says what that covers |
 
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.

@@ -1,17 +1,31 @@
-# ME required during pregnancy by ewes, in addition to maternal requirements, for a lamb birth weight of 4 kg (MJ ME/d).
+# Extra energy required by pregnant ewes, in addition to maintenance, for a
+# 4.0 kg lamb birth weight (MJ ME/day).
 #
-# Source: Beef + Lamb New Zealand, "Making every mating count", Appendix 3.5.
-# https://beeflambnz.com/sites/default/files/2026-06/Making-every-mating-count.pdf
-# Read 2026-08-18; SHA-256 in sources.toml.
+# Source: Beef + Lamb New Zealand, "Making every mating count", Table 4.2,
+# "From: Geenty and Rattray, 1987". Read 2026-08-18.
 #
-# The published table is non-monotonic: 2 weeks before term reads 0.8, lower than
-# the 2.6 at 4 weeks. It is preserved exactly. Correcting a source because it
-# looks wrong is how a transcription error becomes a finding.
-weeks_before_term,foetus_count,lamb_birthweight_reference_kg,additional_me_mj_per_day,status,source_id
-12,1,4,0.4,direct,blnz_mating
-8,1,4,1.1,direct,blnz_mating
-6,1,4,1.7,direct,blnz_mating
-4,1,4,2.6,direct,blnz_mating
-2,1,4,0.8,direct,blnz_mating
-0,1,4,5.3,direct,blnz_mating
-# Source note: add 75% of these values for each additional foetus carried.
+# **This table was previously recorded here with 0.8 at two weeks before term,
+# and a test defended that as a source oddity. It was neither.** The same table
+# appears twice in the document, and the two text extractions differ:
+#
+#   body Table 4.2  0.4 1.1 1.7 2.6 3.8 5.3
+#   Appendix 3.5    0.4 1.1 1.7 2.6 0.8 5.3
+#
+# The appendix extraction lost a digit. 3.8 is the published value, the series
+# is monotonic, and the note claiming otherwise has been deleted. A transcription
+# error of our own making had been written up as a finding about the source.
+weeks_before_term,foetus_count,lamb_birthweight_reference_kg,additional_me_mj_per_day,model_family,status,source_id
+12,1,4,0.4,geenty_rattray_1987,direct,blnz_mating
+8,1,4,1.1,geenty_rattray_1987,direct,blnz_mating
+6,1,4,1.7,geenty_rattray_1987,direct,blnz_mating
+4,1,4,2.6,geenty_rattray_1987,direct,blnz_mating
+2,1,4,3.8,geenty_rattray_1987,direct,blnz_mating
+0,1,4,5.3,geenty_rattray_1987,direct,blnz_mating
+12,2,4,0.7,geenty_rattray_1987,direct,blnz_mating
+8,2,4,1.9,geenty_rattray_1987,direct,blnz_mating
+6,2,4,3.0,geenty_rattray_1987,direct,blnz_mating
+4,2,4,4.6,geenty_rattray_1987,direct,blnz_mating
+2,2,4,6.7,geenty_rattray_1987,direct,blnz_mating
+0,2,4,9.3,geenty_rattray_1987,direct,blnz_mating
+# Source note: "For larger litters, add a further 75% of the single lamb value
+# for each extra lamb."

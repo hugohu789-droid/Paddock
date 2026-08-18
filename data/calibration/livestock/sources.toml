@@ -85,10 +85,39 @@ Verified point by point. Two things the brief omitted are in the source and are
 recorded here: the lamb pasture requirement row of Appendix 3.4, and note (2),
 "For triplets or quads add 1.0, 2.0 and 4.0 MJ ME/d for weeks 3, 6 and 9".
 
-These are feeding tables, not physiological maintenance. The implemented
-equations sit 26% below Appendix 3.1 across the whole 40-60 kg range, a flat
-offset rather than scatter - see docs/verify.md before treating the two as the
-same quantity.
+Its sheep tables follow Geenty and Rattray (1987), which Table 2.2 and Table 4.2
+both say outright. That is a different framework from the Nicol and Brookes
+tables in blnz_feed_planning, and the two differ by about 2 MJ/day at every
+shared ewe weight. Neither corrects the other.
+
+One correction to what was recorded here earlier: the pregnancy value at two
+weeks before term is 3.8, not 0.8. The table appears twice in this document and
+the appendix extraction lost a digit; the body table has it right, and the
+series is monotonic after all.
+"""
+
+[source.blnz_feed_planning]
+organisation = "Beef + Lamb New Zealand"
+title = "A guide to feed planning for sheep farmers"
+url = "https://beeflambnz.com/sites/default/files/2026-06/Guide-to-feed-planning-for-sheep-farmers.pdf"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+model_family = "Nicol and Brookes (2007)"
+sha256 = "21cd4ac1b2c4020d70ee95e432000887688501497b163ef92dab074587f580ce"
+notes = """
+The second Beef + Lamb sheep feeding guide, and the one that resolved what
+looked like a 26% hole in this project's maintenance model.
+
+Verified. Its Appendix 1.2 gives 8.0 MJ ME/day for a 50 kg ewe at maintenance
+and states "Source 1.2-1.6: A.M. Nicol and I.M. Brookes (2007) Pasture and
+Supplements for Grazing Animals". The implemented equations give 7.71 - 3.6%
+apart, not 26%.
+
+The two publications carry the same worked example in the same words with
+different answers: "the daily ME requirement to maintain weight for a 50 kg ewe
+grazing mixed length leafy pasture with an ME content of 10.8 would be 8 MJME/d"
+here, and 10 in Making every mating count. Two frameworks, one publisher.
 """
 
 [source.blnz_heifer_mating]
