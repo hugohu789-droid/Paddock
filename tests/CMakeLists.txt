@@ -114,6 +114,7 @@ if(PADDOCK_BUILD_CONFIG)
 
   add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp
+                                          validation/ManagedFarmTest.cpp
                                           validation/LivestockCalibrationTest.cpp
                                           validation/SeasonalGrowthTest.cpp)
 

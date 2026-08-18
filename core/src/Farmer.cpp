@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
+#include <algorithm>
 #include <cstddef>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -10,6 +12,152 @@
 namespace paddock::core {
 
 Farmer::Farmer(GrazingCalendar calendar) : calendar_(std::move(calendar)) {}
+
+std::string to_string(FeedPurchase::Reason reason) {
+  switch (reason) {
+    case FeedPurchase::Reason::PaddockShort:
+      return "the paddock could not meet demand";
+    case FeedPurchase::Reason::ProtectingCover:
+      return "cover was at the floor";
+  }
+  return "unknown";
+}
+
+std::string ManagementPolicy::validation_error() const {
+  if (minimum_cover_kg_dm_per_ha <= 0.0) {
+    return "the cover floor must be positive";
+  }
+  if (rotation_cover_threshold_kg_dm_per_ha < minimum_cover_kg_dm_per_ha) {
+    return "the cover at which rotation becomes affordable cannot be below the floor the "
+           "farmer is protecting";
+  }
+  if (supplement_me_mj_per_kg_dm <= 0.0) {
+    return "bought feed with no energy in it would need an infinite amount of it";
+  }
+  if (maximum_graze_days <= 0 || minimum_spell_days <= maximum_graze_days) {
+    return "the rotation parameters do not describe a rotation";
+  }
+  return {};
+}
+
+void Farmer::set_policy(ManagementPolicy policy) {
+  const std::string error = policy.validation_error();
+  if (!error.empty()) {
+    throw std::invalid_argument("Farmer::set_policy: " + error);
+  }
+  policy_ = policy;
+}
+
+GrazingSystem Farmer::system_for(const Farm& farm) const {
+  // Rotation concentrates stock onto one paddock, so it needs a farm carrying
+  // enough to make that paddock worth standing on. When the farm is short, a
+  // farmer spreads out instead - which is set stocking, and is why the source
+  // names it for lambing, when demand is at its highest.
+  double total = 0.0;
+  for (std::size_t paddock = 0; paddock < farm.paddocks().size(); ++paddock) {
+    total += farm.paddock_cover_kg_dm_per_ha(paddock);
+  }
+  const double mean =
+      farm.paddocks().empty() ? 0.0 : total / static_cast<double>(farm.paddocks().size());
+
+  return mean >= policy_.rotation_cover_threshold_kg_dm_per_ha ? GrazingSystem::Rotational
+                                                               : GrazingSystem::SetStocking;
+}
+
+Farmer::Day Farmer::manage(Farm& farm, const Date& date, const DietQuality& diet,
+                           const std::vector<bool>& went_short,
+                           std::vector<double>& supplement_kg_dm) {
+  Day day;
+  day.chosen_system = system_for(farm);
+
+  // Put the stock where the chosen system wants them. Under set stocking that
+  // is the whole farm; under rotation it is one paddock each, moved on the
+  // graze length or early if they ran out.
+  if (day.chosen_system == GrazingSystem::SetStocking) {
+    for (std::size_t index = 0; index < farm.mobs().size(); ++index) {
+      farm.spread_mob(index);
+    }
+    day.system = GrazingSystem::SetStocking;
+  } else {
+    GrazingRule rule;
+    rule.system = GrazingSystem::Rotational;
+    rule.maximum_graze_days = policy_.maximum_graze_days;
+    rule.minimum_spell_days = policy_.minimum_spell_days;
+
+    const GrazingCalendar one_day(
+        std::vector<GrazingPeriod>{GrazingPeriod{"chosen", DateRange{date, date}, rule}});
+    Farmer follower(one_day);
+    day = follower.decide(farm, date, went_short);
+    day.chosen_system = GrazingSystem::Rotational;
+  }
+
+  // Then work out what the pasture cannot supply, and buy it.
+  supplement_kg_dm.assign(farm.mobs().size(), 0.0);
+  if (!policy_.may_buy_feed) {
+    return day;
+  }
+
+  double farm_cover = 0.0;
+  for (std::size_t paddock = 0; paddock < farm.paddocks().size(); ++paddock) {
+    farm_cover += farm.paddock_cover_kg_dm_per_ha(paddock);
+  }
+  farm_cover =
+      farm.paddocks().empty() ? 0.0 : farm_cover / static_cast<double>(farm.paddocks().size());
+  const bool at_the_floor = farm_cover <= policy_.minimum_cover_kg_dm_per_ha;
+
+  for (std::size_t index = 0; index < farm.mobs().size(); ++index) {
+    const FarmMob& farm_mob = farm.mobs()[index];
+
+    // What the mob wants, at the gain the farmer is aiming for. Stock are sold
+    // by the kilogram, so this is a target rather than survival.
+    AnimalState wanted = farm_mob.mob.state;
+    wanted.liveweight_change_kg_per_day = std::max(0.0, policy_.target_liveweight_gain_kg_per_day);
+
+    GrazingConditions ground;
+    ground.pasture_mass_t_dm_per_ha = farm_cover / 1000.0;
+
+    const EnergyRequirement need =
+        daily_energy_requirement(farm_mob.mob.animal, wanted, diet, ground);
+    const double demand_kg_dm = need.intake_kg_dm * static_cast<double>(farm_mob.mob.head);
+
+    // What the ground the mob is standing on can give it without taking the
+    // farm below the floor the farmer is protecting.
+    double available_kg_dm = 0.0;
+    for (const std::size_t paddock : farm_mob.paddocks) {
+      available_kg_dm += farm.paddock_offer_kg_dm(paddock);
+    }
+
+    // At the floor the farmer stops asking the pasture for anything and feeds
+    // the mob entirely. Because bought feed substitutes for grazing rather than
+    // adding to it, buying the whole demand is what takes the grazing pressure
+    // off - which is the point of doing it.
+    if (at_the_floor) {
+      available_kg_dm = 0.0;
+    }
+
+    const double shortfall_kg_dm = demand_kg_dm - available_kg_dm;
+    if (shortfall_kg_dm <= 0.0) {
+      continue;
+    }
+
+    // Bought feed carries less energy than pasture, so it takes more of it.
+    const double as_supplement_kg_dm = shortfall_kg_dm * diet.metabolisable_energy_mj_per_kg_dm /
+                                       policy_.supplement_me_mj_per_kg_dm;
+
+    supplement_kg_dm[index] = as_supplement_kg_dm;
+
+    FeedPurchase purchase;
+    purchase.date = date;
+    purchase.mob = index;
+    purchase.mob_name = farm_mob.mob.name;
+    purchase.kg_dm = as_supplement_kg_dm;
+    purchase.reason =
+        at_the_floor ? FeedPurchase::Reason::ProtectingCover : FeedPurchase::Reason::PaddockShort;
+    day.purchases.push_back(std::move(purchase));
+  }
+
+  return day;
+}
 
 Farmer::Day Farmer::decide(Farm& farm, const Date& date) {
   return decide(farm, date, {});

@@ -36,6 +36,74 @@ double RunSummary::highest_cover_kg_dm_per_ha() const {
   return *std::max_element(cover_kg_dm_per_ha.begin(), cover_kg_dm_per_ha.end());
 }
 
+double RunSummary::bought_feed_kg_dm() const {
+  double total = 0.0;
+  for (const core::FeedPurchase& purchase : purchases) {
+    total += purchase.kg_dm;
+  }
+  return total;
+}
+
+int RunSummary::days_feed_was_bought() const {
+  int days = 0;
+  core::Date previous{};
+  for (const core::FeedPurchase& purchase : purchases) {
+    if (!(purchase.date == previous)) {
+      ++days;
+      previous = purchase.date;
+    }
+  }
+  return days;
+}
+
+RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
+                                const core::DietQuality& diet, std::string label) {
+  core::Farm farm = bundle.make_farm();
+
+  // The calendar is not used by a managing farmer; one is needed to construct
+  // it, so it gets a harmless one.
+  core::Farmer farmer(whole_run_calendar(bundle.range, core::GrazingSystem::SetStocking, 0, 0));
+  farmer.set_policy(policy);
+
+  RunSummary summary;
+  summary.label = std::move(label);
+  farm.set_opening_stocks(summary.ledger);
+
+  const core::WeatherSeries weather = bundle.weather->fetch(bundle.range);
+  std::vector<bool> went_short(farm.mobs().size(), false);
+  std::vector<double> supplement;
+
+  for (const core::DailyWeather& day : weather.records) {
+    const core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
+
+    summary.moves += static_cast<int>(decisions.moves.size());
+    summary.short_spells += decisions.short_spells;
+    summary.grazings_extended += decisions.grazings_extended;
+    summary.system_each_day.push_back(decisions.chosen_system);
+    summary.purchases.insert(summary.purchases.end(), decisions.purchases.begin(),
+                             decisions.purchases.end());
+
+    const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger);
+    if (farm_day.any_mob_short) {
+      ++summary.days_short;
+    }
+    for (std::size_t i = 0; i < farm_day.mobs.size() && i < went_short.size(); ++i) {
+      went_short[i] = farm_day.mobs[i].grazing.feed_limited;
+    }
+    summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
+
+    summary.dates.push_back(day.date);
+    summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
+    summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);
+    summary.paddock_of_first_mob.push_back(static_cast<int>(farm.mobs().front().paddocks.front()));
+  }
+
+  summary.closing_cover_kg_dm = farm.grid().mean_cover_kg_dm();
+  summary.closing_nitrogen_kg = farm.grid().mean_total_nitrogen_kg();
+  summary.closing_water_mm = farm.grid().mean_soil_water_mm();
+  return summary;
+}
+
 core::GrazingCalendar whole_run_calendar(const core::DateRange& run, core::GrazingSystem system,
                                          int maximum_graze_days, int minimum_spell_days) {
   core::GrazingRule rule;

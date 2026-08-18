@@ -9,6 +9,7 @@
 
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/core/BudgetLedger.hpp>
+#include <paddock/core/Farmer.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
 
 /// Running a scenario, and keeping enough of what happened to say something
@@ -40,6 +41,17 @@ struct RunSummary {
   int moves = 0;
   int short_spells = 0;
   int grazings_extended = 0;
+
+  /// Every purchase the farmer made, with its date and its reason. Kept as a
+  /// list rather than a total because "when did this farm need feed" and "how
+  /// much did it need" are different questions and a report answers both.
+  std::vector<core::FeedPurchase> purchases;
+
+  /// Which system the farmer was running each day, when they were choosing.
+  std::vector<core::GrazingSystem> system_each_day;
+
+  [[nodiscard]] double bought_feed_kg_dm() const;
+  [[nodiscard]] int days_feed_was_bought() const;
 
   core::BudgetLedger ledger;
   double closing_cover_kg_dm = 0.0;
@@ -80,6 +92,15 @@ struct RunSummary {
 /// Runs the bundle under its own calendar.
 [[nodiscard]] RunSummary run_scenario(const ScenarioBundle& bundle, const core::DietQuality& diet,
                                       std::string label);
+
+/// Runs a bundle under a farmer who decides rather than follows.
+///
+/// The farmer picks the system from the state of the farm, moves stock, and
+/// buys feed when the pasture cannot both carry the stock and stay above the
+/// cover it is being held to. What they bought and when is in the summary.
+[[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
+                                              const core::ManagementPolicy& policy,
+                                              const core::DietQuality& diet, std::string label);
 
 /// A calendar that runs one system for the whole of `run`, for comparing a
 /// system against another rather than against a mixed year.
