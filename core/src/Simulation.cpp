@@ -14,6 +14,10 @@ Farmlet::Farmlet(SoilWaterParameters soil, SwardParameters sward,
              initial.soil_mineral_nitrogen_kg_per_ha),
       latitude_degrees_(latitude_degrees) {}
 
+PastureSward::Defoliation Farmlet::graze(double requested_kg_dm_per_ha) {
+  return sward_.remove_green_dry_matter(requested_kg_dm_per_ha);
+}
+
 void Farmlet::set_opening_stocks(BudgetLedger& ledger) const {
   ledger.set_opening_stock(Budget::Water, soil_.water_mm());
   ledger.set_opening_stock(Budget::DryMatter, sward_.cover_kg_dm());

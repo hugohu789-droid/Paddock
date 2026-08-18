@@ -72,6 +72,14 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger) {
   ledger->add_scaled(scratch_, 1.0 / static_cast<double>(cells_.size()));
 }
 
+PastureSward::Defoliation FarmletGrid::graze_cell(std::size_t col, std::size_t row,
+                                                  double requested_kg_dm_per_ha) {
+  if (col >= cols_ || row >= rows_) {
+    throw std::out_of_range("FarmletGrid::graze_cell: cell is outside the grid");
+  }
+  return cells_[(row * cols_) + col].graze(requested_kg_dm_per_ha);
+}
+
 template <typename Fn>
 Raster<double> FarmletGrid::snapshot(Fn&& value_of) const {
   Raster<double> raster(cols_, rows_, transform_);
