@@ -22,6 +22,11 @@ CMakeLists.txt.user*
 # vcpkg manifest-mode working directories
 vcpkg_installed/
 
+# Python bytecode. The scripts in scripts/ are run in place, so their caches
+# land next to the sources.
+__pycache__/
+*.pyc
+
 # Data snapshots: fetch scripts and content hashes are committed, payloads are not.
 data/snapshots/
 
