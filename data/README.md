@@ -6,7 +6,7 @@ files and nothing else.
 
 | Directory | Holds |
 |---|---|
-| `species/` | Animal and pest definitions: intake, liveweight, reproduction, habitat |
+| `species/` | Animal class definitions: the energy parameters an animal is driven by |
 | `pastures/` | Pasture species and mixes: ryegrass, white clover, their coupling |
 | `diseases/` | Disease and pest process definitions: triggers, thresholds, effects |
 | `calibration/` | Measured reference series as CSV, with source citations, used by the validation tests |
@@ -32,6 +32,20 @@ repository carrying gigabytes of raster.
 
 M1 adds no parameters: the kernel holds types, not numbers. The directories are
 here so that M2 has nowhere else to put them.
+
+## Adding an animal class
+
+`data/species/` is read by scanning it, on the same terms as `farms/`: a species
+is a file, `name` must be unique, and no code changes. A definition supplies the
+energy parameters directly, so a ewe and a dairy cow differ only in numbers.
+
+Two fields are worth knowing about. `reference_weight_verified` has no default
+and must be typed: defaulting it to true would launder a guess into a published
+figure, and defaulting it to false would let a real citation go unrecorded.
+Every definition shipped today sets it false, because standard reference weight
+by breed sits in a source not yet retrieved. And `cattle-dry-cow.toml` is named
+for the dry cow it actually models — lactation is not implemented, so there is
+no milking class to define yet.
 
 ## Adding a farm
 

@@ -13,6 +13,7 @@ add_library(
   src/PastureConfig.cpp
   src/ScenarioConfig.cpp
   src/SoilConfig.cpp
+  src/SpeciesConfig.cpp
   src/TomlSupport.cpp
   src/WeatherConfig.cpp)
 add_library(Paddock::config ALIAS paddock_config)

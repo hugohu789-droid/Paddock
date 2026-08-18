@@ -1,0 +1,37 @@
+# A DRY dairy cow - and the word is load-bearing.
+#
+# Lactation (TMC Eq. 33-35) is not implemented, so this model has no way to
+# represent a cow in milk. A cow defined here eats roughly what an animal at
+# maintenance eats and about half what a milking one would. Naming the file for
+# what it actually models is the difference between a limitation and a wrong
+# answer nobody noticed. See docs/verify.md.
+
+[species]
+name = "cattle_dairy_dry"
+display_name = "Dry dairy cow"
+description = "A non-lactating dairy cow. Lactation is not modelled; this is not a milking cow."
+
+[energy]
+# K, TMC Eq. 13. The two primary sources DISAGREE here and this file picks one:
+# CSIRO (2007) gives 1.4 for dairy cattle, which is what the OVERSEER manual
+# follows; Nicol and Brookes (2007) give 1.5. The difference is about 7% of
+# maintenance. Recorded rather than resolved - see docs/verify.md.
+species_factor = 1.4
+
+# S, TMC Eq. 14: females.
+sex_factor = 1.0
+
+# PLACEHOLDER - verify against a published mature weight for the breed. 500 kg
+# is a plausible Friesian-cross mature weight and nothing more.
+standard_reference_weight_kg = 500.0
+reference_weight_verified = false
+
+# SpGraze, TMC Eq. 20: 0.0025 for dairy and beef. This one is the manual's.
+grazing_coefficient = 0.0025
+
+# k1, TMC Eq. 44: 16.5 for large lean cattle breeds.
+gain_energy_ceiling_mj_per_kg = 16.5
+
+[typical]
+liveweight_kg = 480.0
+age_days = 1500.0

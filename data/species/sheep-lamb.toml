@@ -1,0 +1,35 @@
+# A weaned lamb.
+#
+# This class is the one the model can be checked against: Frater, Howarth and
+# McEwen give a worked lamb of 28 kg gaining 100 g/day at 100 days old on a
+# 10.5 MJ ME/kg DM diet, needing 9.72 MJ ME/day by Nicol and Brookes (2007).
+# tests/unit/AnimalEnergyTest.cpp reproduces it. See docs/verify.md.
+
+[species]
+name = "sheep_lamb_weaned"
+display_name = "Weaned lamb"
+description = "A growing lamb after weaning; the class with a published worked example behind it."
+
+[energy]
+# K, TMC Eq. 13. 1.0 for sheep in both primary sources.
+species_factor = 1.0
+
+# S, TMC Eq. 14. 1.075 for a mixed-sex mob, which is what a weaned lamb crop
+# is before the wether lambs are drafted off.
+sex_factor = 1.075
+
+# PLACEHOLDER, as for the ewe. Frater et al. do not state the reference weight
+# their worked example assumes, and the answer moves with it: 9.807 MJ/day at
+# 60 kg and 9.560 at 65, bracketing their published 9.72.
+standard_reference_weight_kg = 65.0
+reference_weight_verified = false
+
+# SpGraze, TMC Eq. 20; see the note in sheep-ewe.toml.
+grazing_coefficient = 0.0025
+
+# k1, TMC Eq. 44.
+gain_energy_ceiling_mj_per_kg = 20.3
+
+[typical]
+liveweight_kg = 28.0
+age_days = 100.0

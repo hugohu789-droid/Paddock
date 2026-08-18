@@ -1,0 +1,38 @@
+# A mature breeding ewe.
+#
+# Sheep are the one class where the two primary sources agree on the species
+# factor, so this file has no choice to record. What it does have is an
+# unverified standard reference weight - see the note below and open item in
+# docs/verify.md.
+
+[species]
+name = "sheep_ewe"
+display_name = "Breeding ewe"
+description = "A mature ewe at maintenance; the major grazing mob on a breeding property."
+
+[energy]
+# K, TMC Eq. 13. CSIRO (2007) and Nicol and Brookes (2007) both give 1.0 for
+# sheep - the only species factor the two sources agree on.
+species_factor = 1.0
+
+# S, TMC Eq. 14: 1.0 for females and castrated males.
+sex_factor = 1.0
+
+# PLACEHOLDER - verify against a published mature weight for a New Zealand
+# breed. SRW drives the energy value of gain (TMC Eq. 45), so this number
+# changes how fast the model says an animal grows. 65 kg is a plausible mature
+# Romney ewe and nothing more than that.
+standard_reference_weight_kg = 65.0
+reference_weight_verified = false
+
+# SpGraze, TMC Eq. 20. The manual gives 0.0025 for dairy and beef and does not
+# state a sheep value in the chapter read; this uses the same figure, which is
+# an assumption rather than a citation.
+grazing_coefficient = 0.0025
+
+# k1, TMC Eq. 44: 16.5 for large lean cattle breeds, 20.3 otherwise.
+gain_energy_ceiling_mj_per_kg = 20.3
+
+[typical]
+liveweight_kg = 60.0
+age_days = 1200.0
