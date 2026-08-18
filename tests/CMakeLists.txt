@@ -6,6 +6,7 @@ include(GoogleTest)
 # this set and it must stay under ten seconds.
 add_executable(
   paddock_unit_tests
+  unit/AnimalEnergyTest.cpp
   unit/BudgetLedgerTest.cpp
   unit/DistributionsTest.cpp
   unit/EntityTest.cpp

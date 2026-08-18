@@ -185,6 +185,36 @@ test to write against the implementation rather than an open literature item.
 The three models differing by 10% on the same animal is itself the useful fact:
 it sets the accuracy this part of the model can honestly claim.
 
+### What is implemented, and what is not
+
+`core/AnimalEnergy.cpp` implements the maintenance chain (TMC Eq. 2, 5–6, 9,
+13, 14, 17), the grazing terms (Eq. 18, 20–24), liveweight change (Eq. 43–46,
+81) and the iterative solution of the chewing circularity (Eq. 52, 54–55).
+
+**Not implemented, and a farm model is incomplete without them:**
+
+| Missing | Equations | Consequence |
+|---|---|---|
+| Lactation | TMC Eq. 33–35 | There is no way to represent a cow in milk. A "dairy cow" in the model today is a dry cow, and eats roughly half what a milking one would |
+| Pregnancy | TMC Eq. 26–32 | No cost of carrying a calf or lamb, so late-gestation demand is absent |
+| Wool and velvet | Eq. 7, §4.8–4.9 | Sheep and deer are cheaper to keep than they are |
+| Pre-weaned animals | §5.2.4, Eq. 15–16 | The milk factor M is fixed at 1, which is only correct after weaning |
+| Cold, heat, wet and wind | §4.10 | No weather cost on the animal, only on the pasture |
+
+The seasonal temperate-pasture form of the efficiency of gain (Eq. 11, with
+`flegume` and `ftime`) is also not used. TMC states it and then says it "has not
+been implemented" in OVERSEER either; separately, the text of its `ftime` term
+did not survive PDF extraction unambiguously — it reads
+`ftime = 1 + 0.12 8 (lat * sin(0.0172 day)/40))`, with an unmatched bracket and
+a space inside what is probably 0.128. Eq. 9 is used instead, which is
+unambiguous and is what OVERSEER runs.
+
+One reading is this project's and not the manual's: TMC gives km for milk diets
+(Eq. 5) and for everything else (Eq. 6) but not for a diet that is part milk.
+`DietQuality::maintenance_efficiency` blends the two by the milk fraction. That
+is the obvious interpolation, and it is flagged here rather than presented as
+sourced.
+
 ### What is still not sourced
 
 - **Nicol & Brookes (2007)** itself — NZ Society of Animal Production Occasional

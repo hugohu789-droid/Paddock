@@ -3,6 +3,7 @@
 
 add_library(
   paddock_core STATIC
+  src/AnimalEnergy.cpp
   src/BudgetLedger.cpp
   src/DataSource.cpp
   src/Distributions.cpp
