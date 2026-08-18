@@ -178,6 +178,10 @@ void MapWindow::start_run() {
       }
     }
 
+    // The ground the run is over. Like the stock, it is a thing a farmer picks
+    // and not a thing the bundle hashes.
+    bundle.terrain = choices.terrain;
+
     clear_series();
     last_run_had_stock_ = !bundle.mobs.empty();
     if (last_run_had_stock_) {

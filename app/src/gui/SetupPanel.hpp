@@ -48,6 +48,11 @@ class SetupPanel : public QWidget {
     int head = 0;
     double liveweight_kg = 0.0;
     core::ManagementPolicy policy;
+
+    /// The ground to run over. Flat is what every bundle ships as and what
+    /// every baseline was recorded on; the others are invented surfaces, and
+    /// the panel says so rather than offering them as places.
+    config::TerrainSpec terrain;
   };
 
   /// Scans `data_directory` for scenario bundles and species definitions. A
@@ -100,6 +105,7 @@ class SetupPanel : public QWidget {
   [[nodiscard]] const config::SpeciesDefinition* selected_species() const;
 
   QComboBox* scenario_box_ = nullptr;
+  QComboBox* terrain_box_ = nullptr;
   QComboBox* species_box_ = nullptr;
   QSpinBox* head_box_ = nullptr;
   QDoubleSpinBox* liveweight_box_ = nullptr;

@@ -8,6 +8,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QGroupBox>
+#include <QStringList>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <exception>
@@ -41,6 +42,21 @@ QString number(double value, int decimals = 0) {
 SetupPanel::SetupPanel(std::string data_directory, QWidget* parent) : QWidget(parent) {
   scenario_box_ = new QComboBox(this);
   species_box_ = new QComboBox(this);
+
+  // Ground. Flat first, because it is what the bundles ship as and what their
+  // baselines were recorded on, and because the alternatives are formulae
+  // rather than places - the names say which way the invented hill faces, not
+  // where it is.
+  terrain_box_ = new QComboBox(this);
+  terrain_box_->addItem("Flat", 0);
+  terrain_box_->addItem("Slope facing north (invented)", 1);
+  terrain_box_->addItem("Slope facing south (invented)", 2);
+  terrain_box_->addItem("Rolling (invented)", 3);
+  terrain_box_->setToolTip(
+      "Every farm in this project ran flat until terrain was connected to the model, so the cost "
+      "of walking a slope and the radiation a slope receives never applied. The surfaces offered "
+      "here are formulae with known derivatives, not surveys: they show what slope does, not what "
+      "any particular hill does.");
 
   head_box_ = new QSpinBox(this);
   // One animal is a farm with one animal on it; nought is not a stocking rate,
@@ -90,6 +106,7 @@ SetupPanel::SetupPanel(std::string data_directory, QWidget* parent) : QWidget(pa
   auto* farm_group = new QGroupBox("Farm", this);
   auto* farm_form = new QFormLayout;
   farm_form->addRow("Scenario", scenario_box_);
+  farm_form->addRow("Ground", terrain_box_);
   farm_group->setLayout(farm_form);
 
   auto* stock_group = new QGroupBox("Stock", this);
@@ -134,6 +151,7 @@ SetupPanel::SetupPanel(std::string data_directory, QWidget* parent) : QWidget(pa
   connect(rotation_box_, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
   connect(species_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(scenario_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
+  connect(terrain_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   refresh_readiness();
 }
 
@@ -207,6 +225,33 @@ SetupPanel::Choices SetupPanel::choices() const {
   chosen.policy.minimum_spell_days = kDefaultMinimumSpellDays;
   chosen.policy.supplement_me_mj_per_kg_dm = kDefaultSupplementMe;
   chosen.policy.may_buy_feed = may_buy_box_->isChecked();
+
+  // Gradients as a rise per metre travelled. A tenth is a 10% grade, which is
+  // 5.7 degrees - rolling rather than steep, and about as much as a farm bike
+  // takes without thinking about it.
+  switch (terrain_box_->currentData().toInt()) {
+    case 1:
+      chosen.terrain.kind = config::TerrainSpec::Kind::Synthetic;
+      chosen.terrain.surface.gradient_east = 0.0;
+      chosen.terrain.surface.gradient_north = -0.10;
+      break;
+    case 2:
+      chosen.terrain.kind = config::TerrainSpec::Kind::Synthetic;
+      chosen.terrain.surface.gradient_east = 0.0;
+      chosen.terrain.surface.gradient_north = 0.10;
+      break;
+    case 3:
+      chosen.terrain.kind = config::TerrainSpec::Kind::Synthetic;
+      chosen.terrain.surface.gradient_east = -0.01;
+      chosen.terrain.surface.gradient_north = -0.02;
+      chosen.terrain.surface.undulation_amplitude_m = 8.0;
+      chosen.terrain.surface.undulation_wavelength_m = 400.0;
+      break;
+    case 0:
+    default:
+      chosen.terrain.kind = config::TerrainSpec::Kind::Flat;
+      break;
+  }
   return chosen;
 }
 
@@ -239,19 +284,27 @@ QString SetupPanel::problem() const {
 }
 
 QString SetupPanel::caveat() const {
-  const config::SpeciesDefinition* species = selected_species();
-  if (species == nullptr) {
-    return {};
+  // Both can apply at once, and one must not hide the other: unverified stock
+  // on invented ground is two separate reasons not to quote a number.
+  QStringList notes;
+
+  if (const config::SpeciesDefinition* species = selected_species(); species != nullptr) {
+    const config::Provenance weakest = species->weakest_status();
+    if (weakest != config::Provenance::Direct && weakest != config::Provenance::Derived) {
+      notes << QString(
+                   "%1 rests on at least one parameter marked '%2'. The run will be "
+                   "arithmetically sound and its absolute figures are not quotable.")
+                   .arg(QString::fromStdString(species->display_name),
+                        QString::fromStdString(config::to_string(weakest)));
+    }
   }
-  const config::Provenance weakest = species->weakest_status();
-  if (weakest == config::Provenance::Direct || weakest == config::Provenance::Derived) {
-    return {};
+
+  if (terrain_box_->currentData().toInt() != 0) {
+    notes << "The ground is an invented surface. What it shows is what slope does, not what any "
+             "particular hill does.";
   }
-  return QString(
-             "%1 rests on at least one parameter marked '%2'. The run will be arithmetically "
-             "sound and its absolute figures are not quotable.")
-      .arg(QString::fromStdString(species->display_name),
-           QString::fromStdString(config::to_string(weakest)));
+
+  return notes.join("\n\n");
 }
 
 void SetupPanel::refresh_readiness() {
@@ -275,6 +328,7 @@ void SetupPanel::set_running(bool running) {
   run_button_->setEnabled(!running && problem().isEmpty());
   run_button_->setText(running ? "Running..." : "Run");
   scenario_box_->setEnabled(!running);
+  terrain_box_->setEnabled(!running);
   species_box_->setEnabled(!running);
   head_box_->setEnabled(!running);
   liveweight_box_->setEnabled(!running);
