@@ -146,20 +146,38 @@ DailyWeather quiet_day(const Date& date) {
   return weather;
 }
 
-// Under set stocking the farmer does nothing, which is what the system is.
-TEST(FarmerTest, SetStockingMovesNobody) {
+// Set stocking gives the stock the run of the whole farm - it is not "leave the
+// mob where it stands".
+//
+// Smith and Dawson (1976) say of lambing that "the whole of the farm area
+// should be used for grazing". Modelling it as confinement to one paddock cost
+// a mob fifteen kilograms over seventy days in the year-long scenario, on a
+// farm whose other paddocks were carrying over 2000 kg DM/ha the whole time.
+// The animals were well fed and starved by a modelling mistake.
+TEST(FarmerTest, SetStockingGivesTheMobTheRunOfTheFarm) {
   const DateRange run{Date{2023, 7, 1}, Date{2024, 6, 30}};
   Farm farm = farm_with_paddocks(800.0, 600.0, 2.0);
   farm.add_mob(ewes(30), 0);
+
+  ASSERT_EQ(farm.mobs().front().paddocks.size(), 1U) << "it starts on one paddock";
 
   Farmer farmer(set_stocking_all_year(run));
 
   for (int day = 0; day < 30; ++day) {
     const Farmer::Day decisions = farmer.decide(farm, day_after(run.first, day));
-    EXPECT_TRUE(decisions.moves.empty()) << "on day " << day;
+    EXPECT_TRUE(decisions.moves.empty()) << "on day " << day << ": set stocking records no moves";
     EXPECT_EQ(decisions.system, GrazingSystem::SetStocking);
+    farm.step(quiet_day(day_after(run.first, day)), pasture_diet(), nullptr);
   }
-  EXPECT_EQ(farm.mobs().front().paddock, 0U) << "the mob never moved";
+
+  EXPECT_EQ(farm.mobs().front().paddocks.size(), farm.paddocks().size())
+      << "the mob should have every paddock, not the one it started on";
+
+  // And because every paddock is being grazed, none of them rests. That is the
+  // agronomic point of the system, and the reason the source says it grows less.
+  for (const int rest : farm.days_since_grazed()) {
+    EXPECT_EQ(rest, 0) << "a set stocked farm rests nothing";
+  }
 }
 
 // Rotation moves a mob once it has been somewhere its full graze length, and
@@ -176,7 +194,7 @@ TEST(FarmerTest, RotationMovesTheMobAfterItsGrazeLength) {
 
   // Three days of grazing, then it is due to move.
   int moves = 0;
-  std::size_t previous = farm.mobs().front().paddock;
+  std::size_t previous = farm.mobs().front().paddock();
   for (int day = 0; day < 12; ++day) {
     const Farmer::Day decisions = farmer.decide(farm, day_after(run.first, day));
     if (!decisions.moves.empty()) {

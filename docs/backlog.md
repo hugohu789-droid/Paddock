@@ -55,7 +55,7 @@ farm, run a full year, watch a stable grazing–regrowth loop*. In order.
 | ~~B3~~ | ~~**A farm that owns paddocks, swards and mobs**~~ | **Done.** `core/Farm` holds the grid, the mask, the paddocks and the mobs, and steps a day. **The ground stays per cell**: a paddock is a set of cells, not a unit of pasture, so a shallow corner still dries out on its own and the map view can show it | large |
 | ~~B4~~ | ~~**The farmer moves mobs**~~ | **Done.** Gap (1) is closed. `core/Farmer` reads the calendar and sends a mob to whichever free paddock has rested longest. **The shuffle emerges**: on a settled farm of 2 paddocks, 39 moves in 200 days had to break the spell rule; on one of 35, none did — and nothing in the code implements a shuffle | medium |
 | ~~B5~~ | ~~**Conservation across the whole farm**~~ | **Done with B3.** `FarmConservationTest` closes all three budgets to 1e-9 over 365 grazed days with two mobs, and has a negative control that fails when an offtake goes unrecorded | medium |
-| B6 | **A year-long scenario that demonstrates the loop** | The acceptance artefact: one bundle, one command, a stable grazing–regrowth cycle with cover and liveweight series out | small |
+| ~~B6~~ | ~~**A year-long scenario that demonstrates the loop**~~ | **Done.** `data/scenarios/canterbury-grazed` carries stock and a four-period grazing calendar; a year of it runs, closes all three budgets, and writes cover and liveweight series | small |
 
 One decision inside B3 is worth recording because everything downstream inherits
 it: **what a mob eats is spread over its paddock's cells in proportion to what
@@ -64,9 +64,27 @@ carry more feed. That is an assumption about where the feed is, not a claim
 about where animals walk — B16 would refine it — and it is the honest default
 because it follows from the pasture rather than from a guess about behaviour.
 
-Reaching B6 is the MVP. It does not need the 3D view, polygon editing, or real
-LINZ boundaries — all three are M3 items but none of them changes whether the
-simulation closes.
+**The MVP is reached.** A bundle now describes ground, paddocks, stock and how
+they are managed; a year of it runs; the budgets close; the loop settles. None
+of the 3D view, polygon editing or real LINZ boundaries was needed for that,
+which is why they were not on this list.
+
+Two modelling errors were caught by running the year rather than by any unit
+test, and both are recorded in `verify.md`:
+
+- **Demand was being taken from what a mob did yesterday** rather than from what
+  it wants. A mob that lost weight came back with a negative production term,
+  which reads as an energy credit and shrank its requirement — so it ate less,
+  lost more, and asked for less again. A year took a mob from 55 kg to two
+  grams on a farm whose cover never fell below 2000 kg DM/ha.
+- **Set stocking was modelled as "do not move"**, which on a subdivided farm
+  means confinement to one paddock. Smith and Dawson are explicit that over
+  lambing "the whole of the farm area should be used for grazing". The mob lost
+  fifteen kilograms in seventy days on two hectares while forty-seven other
+  paddocks grew.
+
+Neither would have shown up in a test of a single day or a single paddock. That
+is the argument for B6 being an acceptance artefact rather than a demonstration.
 
 ## After the MVP, in rough order
 

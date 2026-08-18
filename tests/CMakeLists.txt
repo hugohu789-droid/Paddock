@@ -112,7 +112,8 @@ if(PADDOCK_BUILD_CONFIG)
   set(PADDOCK_VALIDATION_OUTPUT_DIR "${CMAKE_BINARY_DIR}/validation")
   file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
 
-  add_executable(paddock_validation_tests validation/SeasonalGrowthTest.cpp)
+  add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
+                                          validation/SeasonalGrowthTest.cpp)
 
   target_link_libraries(paddock_validation_tests PRIVATE Paddock::config GTest::gtest_main
                                                          Paddock::project_options)

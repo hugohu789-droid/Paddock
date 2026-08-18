@@ -1,0 +1,115 @@
+# A grazed year: the first bundle in which anything eats.
+#
+# canterbury-baseline models pasture alone, which is what every bundle written
+# before livestock existed does. This one carries stock and says how they are
+# managed, so a run of it exercises the whole loop - pasture grows, a mob eats,
+# being underfed costs it weight, the farmer moves it, the paddock rests.
+#
+# The inputs are still PLACEHOLDER definitions (see docs/verify.md), so this
+# bundle demonstrates that the loop closes and is stable. It is not a
+# description of Canterbury, and no number out of it is a prediction.
+
+[scenario]
+name = "canterbury_grazed"
+description = "One year of synthetic weather on a subdivided block, with ewes on it."
+engine_version = "0.1.0"
+master_seed = 20240702
+
+[run]
+# The New Zealand farm year, 1 July to 30 June.
+start_date = "2023-07-01"
+end_date = "2024-06-30"
+latitude_degrees = -43.5
+
+[weather]
+kind = "synthetic"
+path = "weather.toml"
+sha256 = "b59bc98a348677638770e004a1050a9f55f1fd93b5b2346fa4079151588dcb33"
+
+[soil]
+path = "soil.toml"
+sha256 = "acbbef5a457d8d5a60d016e1fda5706fbb31fd8613c5112b20412d561bfd94ca"
+
+[sward]
+path = "sward.toml"
+sha256 = "6c7adf252d376044dcd4f26f7867f871cc61ad655bd9208cbe7f51ca96001ede"
+
+[initial_state]
+soil_water_mm = 90.0
+grass_kg_dm_per_ha = 2200.0
+legume_kg_dm_per_ha = 600.0
+soil_mineral_nitrogen_kg_per_ha = 60.0
+
+[grid]
+# 48 x 32 cells at 25 m is 96 hectares.
+cols = 48
+rows = 32
+cell_size_m = 25.0
+available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
+available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
+origin_easting = 1570000.0
+origin_northing = 5180000.0
+
+# Subdividing 96 ha into 2 ha paddocks gives about 48 of them, which is enough
+# to hold a 35 day spell on a three day graze. A block cut into four could not,
+# and the farmer would report the shuffle rather than the rotation - see
+# tests/unit/FarmerTest.cpp.
+paddock_hectares = 2.0
+
+# The stock. A species is referenced the way every other input is, by relative
+# path with its hash recorded, so the bundle stays reproducible without copying
+# data/species/ into it.
+[[mob]]
+name = "main mob"
+path = "../../species/sheep-ewe.toml"
+sha256 = "b9a866bfc965c02dade982e2ceea7d88fa3de10af1c54299716541f9c9c89a2b"
+head = 500
+paddock = 0
+# The species file describes a typical 60 kg ewe; this run starts with lighter
+# ones, which is a different farm and is meant to be.
+#
+# 500 ewes on 96 hectares is 5.2 a hectare, and the figure was chosen by running
+# the model rather than asserted: at 500 the mob holds its weight and never goes
+# short, and at 700 it starts losing condition and runs out of feed on four days.
+# That is a carrying capacity this model reports, not one taken from anywhere -
+# with placeholder pasture parameters underneath it, so it is a demonstration
+# that the loop settles, not advice about a real farm.
+liveweight_kg = 55.0
+age_days = 1500.0
+
+# How they are managed, through the year. The shape follows Smith and Dawson
+# (1976): set stocked over lambing, rotating the rest of the year, at 21 days
+# after weaning and 35 as the summer dries. See docs/verify.md.
+#
+# The same system appears more than once with different parameters, which is
+# the point of a calendar rather than a single setting.
+
+[[grazing_period]]
+name = "winter rotation"
+from = "2023-07-01"
+to = "2023-08-19"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 35
+
+[[grazing_period]]
+name = "lambing"
+from = "2023-08-20"
+to = "2023-10-28"
+system = "set_stocking"
+
+[[grazing_period]]
+name = "post-weaning rotation"
+from = "2023-10-29"
+to = "2023-11-30"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 21
+
+[[grazing_period]]
+name = "dry season rotation"
+from = "2023-12-01"
+to = "2024-06-30"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 35

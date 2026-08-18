@@ -44,12 +44,24 @@ namespace paddock::core {
 struct FarmMob {
   Mob mob;
 
-  /// Index into the farm's paddocks.
-  std::size_t paddock = 0;
+  /// The paddocks this mob has the run of - **one under rotation, all of them
+  /// under set stocking**.
+  ///
+  /// A list rather than an index, because set stocking is not "stay put". Smith
+  /// and Dawson (1976) are explicit that over lambing "the whole of the farm
+  /// area should be used for grazing", and a mob modelled as confined to the
+  /// one paddock it happened to be on would starve there while the rest of the
+  /// farm grew. It did, in the first run of the year-long scenario: 55 kg to
+  /// 40 kg over seventy days on two hectares, with cover above 2000 kg DM/ha
+  /// everywhere else.
+  std::vector<std::size_t> paddocks{0};
 
   /// Days this mob has been where it is. Zero on the day it arrives, and the
   /// number a graze-length rule is checked against.
   int days_on_paddock = 0;
+
+  /// Convenience for the common case of a mob on one paddock.
+  [[nodiscard]] std::size_t paddock() const { return paddocks.front(); }
 };
 
 /// What one day did to one mob.
@@ -86,12 +98,17 @@ class Farm {
   /// Puts a mob on a paddock, and returns its index.
   std::size_t add_mob(Mob mob, std::size_t paddock);
 
-  /// Moves a mob, and resets its count of days where it stands. This is all a
-  /// farmer agent needs from the farm; deciding *when* to move belongs to the
-  /// grazing calendar and to whatever reads it.
+  /// Moves a mob onto one paddock, and resets its count of days where it
+  /// stands. This is all a farmer agent needs from the farm; deciding *when* to
+  /// move belongs to the grazing calendar and to whatever reads it.
   void move_mob(std::size_t mob, std::size_t paddock);
 
-  /// Which mob is on a paddock, or kNobody. A paddock carries at most one mob
+  /// Gives a mob the run of the whole farm, which is what set stocking is.
+  /// Every paddock is then being grazed, so none of them rests - which is the
+  /// agronomic point of the system and the reason it grows less.
+  void spread_mob(std::size_t mob);
+
+  /// Which mob has a paddock, or kNobody. A paddock carries at most one mob
   /// here: two mobs sharing ground is a real practice, but it needs a rule for
   /// how they divide the feed, and inventing one would be inventing a result.
   static constexpr std::size_t kNobody = static_cast<std::size_t>(-1);
@@ -139,7 +156,8 @@ class Farm {
   /// scanning the grid every day.
   void index_cells_by_paddock();
 
-  [[nodiscard]] GrazingConditions conditions_on(std::size_t paddock, const Mob& mob) const;
+  [[nodiscard]] GrazingConditions conditions_on(const std::vector<std::size_t>& held,
+                                                const Mob& mob) const;
 
   FarmletGrid grid_;
   PaddockMask mask_;

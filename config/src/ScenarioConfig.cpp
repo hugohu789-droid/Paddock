@@ -12,9 +12,11 @@
 #include <paddock/config/PastureConfig.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/SoilConfig.hpp>
+#include <paddock/config/SpeciesConfig.hpp>
 #include <paddock/config/WeatherConfig.hpp>
 #include <paddock/core/Sha256.hpp>
 #include <paddock/core/SnapshotWeather.hpp>
+#include <paddock/core/SyntheticTerrain.hpp>
 #include <paddock/core/SyntheticWeather.hpp>
 #include <paddock/core/Version.hpp>
 
@@ -61,10 +63,8 @@ core::Date read_date(const toml::table& table, std::string_view key,
 }
 
 /// Reads a `[section]` that names a file and the hash it was built against.
-BundleInput read_input(const toml::table& root, std::string_view section,
-                       const std::string& directory, const std::string& manifest_path,
-                       std::string& contents) {
-  const toml::table& table = detail::require_table(root, section, manifest_path);
+BundleInput read_input_table(const toml::table& table, const std::string& directory,
+                             const std::string& manifest_path, std::string& contents) {
   BundleInput input;
   input.relative_path = detail::require_string(table, "path", manifest_path);
   input.recorded_sha256 = detail::optional_string(table, "sha256", "");
@@ -73,12 +73,52 @@ BundleInput read_input(const toml::table& root, std::string_view section,
   return input;
 }
 
+BundleInput read_input(const toml::table& root, std::string_view section,
+                       const std::string& directory, const std::string& manifest_path,
+                       std::string& contents) {
+  return read_input_table(detail::require_table(root, section, manifest_path), directory,
+                          manifest_path, contents);
+}
+
+core::GrazingSystem grazing_system_of(const std::string& name, const toml::table& table,
+                                      const std::string& path) {
+  if (name == "set_stocking") {
+    return core::GrazingSystem::SetStocking;
+  }
+  if (name == "rotational") {
+    return core::GrazingSystem::Rotational;
+  }
+  detail::throw_in(table, path,
+                   "unknown grazing system '" + name +
+                       "'. Known systems are: set_stocking, rotational. The shuffle is not one of "
+                       "them: it is what rotation becomes on a farm with too few paddocks, so it "
+                       "emerges rather than being chosen");
+}
+
+core::Date date_of(const toml::table& table, std::string_view key, const std::string& path) {
+  const std::string text = detail::require_string(table, key, path);
+  if (text.size() != 10 || text[4] != '-' || text[7] != '-') {
+    detail::throw_in(
+        table, path,
+        "'" + std::string(key) + "' must be an ISO date like 2023-07-01, found '" + text + "'");
+  }
+  core::Date date;
+  date.year = std::stoi(text.substr(0, 4));
+  date.month = std::stoi(text.substr(5, 2));
+  date.day = std::stoi(text.substr(8, 2));
+  if (!date.is_valid()) {
+    detail::throw_in(table, path, "'" + std::string(key) + "' is not a real date: " + text);
+  }
+  return date;
+}
+
 ScenarioBundle read(const std::string& directory, bool enforce) {
   const std::string manifest_path = join(directory, kManifestName);
   const toml::table root = detail::parse_file(manifest_path);
-  detail::reject_unknown_keys(
-      root, {"scenario", "run", "weather", "soil", "sward", "initial_state", "grid"}, manifest_path,
-      "the manifest");
+  detail::reject_unknown_keys(root,
+                              {"scenario", "run", "weather", "soil", "sward", "initial_state",
+                               "grid", "mob", "grazing_period"},
+                              manifest_path, "the manifest");
 
   const toml::table& scenario = detail::require_table(root, "scenario", manifest_path);
   detail::reject_unknown_keys(scenario, {"name", "description", "engine_version", "master_seed"},
@@ -163,10 +203,11 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
 
   if (detail::has(root, "grid")) {
     const toml::table& grid = detail::require_table(root, "grid", manifest_path);
-    detail::reject_unknown_keys(grid,
-                                {"cols", "rows", "cell_size_m", "available_water_west_mm",
-                                 "available_water_east_mm", "origin_easting", "origin_northing"},
-                                manifest_path, "[grid]");
+    detail::reject_unknown_keys(
+        grid,
+        {"cols", "rows", "cell_size_m", "available_water_west_mm", "available_water_east_mm",
+         "origin_easting", "origin_northing", "paddock_hectares"},
+        manifest_path, "[grid]");
     GridSpec spec;
     spec.cols = static_cast<std::size_t>(detail::require_double(grid, "cols", manifest_path));
     spec.rows = static_cast<std::size_t>(detail::require_double(grid, "rows", manifest_path));
@@ -188,10 +229,109 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
     if (spec.available_water_west_mm <= 0.0 || spec.available_water_east_mm <= 0.0) {
       detail::throw_in(grid, manifest_path, "available water must be positive at both edges");
     }
+    spec.paddock_hectares = detail::optional_double(grid, "paddock_hectares", 0.0, manifest_path);
     bundle.grid = spec;
   }
 
+  // The stock, if any. A species is referenced the way every other input is:
+  // by relative path with its hash recorded, so a bundle stays reproducible and
+  // can still share data/species/ rather than copying it.
+  std::vector<BundleInput> mob_inputs;
+  if (const toml::node* mobs_node = root.get("mob"); mobs_node != nullptr) {
+    const toml::array* mobs = mobs_node->as_array();
+    if (mobs == nullptr) {
+      detail::throw_at(*mobs_node, manifest_path, "[[mob]] must be a list of mobs");
+    }
+    for (const toml::node& element : *mobs) {
+      const toml::table* entry = element.as_table();
+      if (entry == nullptr) {
+        detail::throw_at(element, manifest_path, "each [[mob]] must be a table");
+      }
+      detail::reject_unknown_keys(
+          *entry, {"name", "path", "sha256", "head", "paddock", "liveweight_kg", "age_days"},
+          manifest_path, "[[mob]]");
+
+      MobSpec mob;
+      mob.name = detail::require_string(*entry, "name", manifest_path);
+      mob.head = static_cast<int>(detail::require_double(*entry, "head", manifest_path));
+      mob.paddock =
+          static_cast<std::size_t>(detail::require_double(*entry, "paddock", manifest_path));
+
+      std::string species_text;
+      const BundleInput species_input =
+          read_input_table(*entry, directory, manifest_path, species_text);
+      const SpeciesDefinition species =
+          parse_species(species_text, join(directory, species_input.relative_path));
+      mob.animal = species.energy;
+
+      // The species supplies a typical animal; the scenario may start with a
+      // different one, and usually does.
+      mob.liveweight_kg = detail::optional_double(*entry, "liveweight_kg",
+                                                  species.typical_liveweight_kg, manifest_path);
+      mob.age_days =
+          detail::optional_double(*entry, "age_days", species.typical_age_days, manifest_path);
+
+      if (mob.head <= 0) {
+        detail::throw_in(*entry, manifest_path, "mob '" + mob.name + "' needs at least one animal");
+      }
+      if (mob.liveweight_kg <= 0.0) {
+        detail::throw_in(*entry, manifest_path, "mob '" + mob.name + "' needs a positive weight");
+      }
+
+      mob_inputs.push_back(species_input);
+      bundle.mobs.push_back(std::move(mob));
+    }
+  }
+
+  // How they are managed. Required once there is stock: leaving it to a default
+  // would make the most consequential decision in a pastoral model the one
+  // nobody wrote down.
+  std::vector<core::GrazingPeriod> periods;
+  if (const toml::node* periods_node = root.get("grazing_period"); periods_node != nullptr) {
+    const toml::array* entries = periods_node->as_array();
+    if (entries == nullptr) {
+      detail::throw_at(*periods_node, manifest_path, "[[grazing_period]] must be a list");
+    }
+    for (const toml::node& element : *entries) {
+      const toml::table* entry = element.as_table();
+      if (entry == nullptr) {
+        detail::throw_at(element, manifest_path, "each [[grazing_period]] must be a table");
+      }
+      detail::reject_unknown_keys(
+          *entry, {"name", "from", "to", "system", "maximum_graze_days", "minimum_spell_days"},
+          manifest_path, "[[grazing_period]]");
+
+      core::GrazingPeriod period;
+      period.name = detail::require_string(*entry, "name", manifest_path);
+      period.dates.first = date_of(*entry, "from", manifest_path);
+      period.dates.last = date_of(*entry, "to", manifest_path);
+      period.rule.system = grazing_system_of(
+          detail::require_string(*entry, "system", manifest_path), *entry, manifest_path);
+      period.rule.maximum_graze_days = static_cast<int>(
+          detail::optional_double(*entry, "maximum_graze_days", 0.0, manifest_path));
+      period.rule.minimum_spell_days = static_cast<int>(
+          detail::optional_double(*entry, "minimum_spell_days", 0.0, manifest_path));
+      periods.push_back(std::move(period));
+    }
+  }
+
+  if (!bundle.mobs.empty() && periods.empty()) {
+    detail::throw_in(root, manifest_path,
+                     "this bundle carries stock but no [[grazing_period]]. How the stock are "
+                     "managed is the most consequential decision in a pastoral model and it has "
+                     "to be written down rather than defaulted");
+  }
+  if (!periods.empty()) {
+    bundle.grazing = core::GrazingCalendar(std::move(periods));
+    const std::string calendar_error = bundle.grazing.validation_error(bundle.range);
+    if (!calendar_error.empty()) {
+      detail::throw_in(root, manifest_path,
+                       "the grazing calendar does not cover the run: " + calendar_error);
+    }
+  }
+
   bundle.inputs = {weather_input, soil_input, sward_input};
+  bundle.inputs.insert(bundle.inputs.end(), mob_inputs.begin(), mob_inputs.end());
 
   if (enforce) {
     const std::vector<BundleInput> changed = bundle.changed_inputs();
@@ -260,6 +400,67 @@ core::Raster<core::SoilWaterParameters> ScenarioBundle::make_soil_raster() const
 
 core::FarmletGrid ScenarioBundle::make_grid() const {
   return {make_soil_raster(), sward, initial_state, latitude_degrees};
+}
+
+std::vector<core::Paddock> ScenarioBundle::make_paddocks() const {
+  if (!grid.has_value() || grid->paddock_hectares <= 0.0) {
+    return {};
+  }
+  const GridSpec& spec = *grid;
+
+  // The grid already says where the farm is and how big it is, so paddocks
+  // subdivide that rather than declaring an extent of their own. Two sources of
+  // truth for where a farm sits is one too many.
+  const double width_m = static_cast<double>(spec.cols) * spec.cell_size_m;
+  const double height_m = static_cast<double>(spec.rows) * spec.cell_size_m;
+
+  core::BoundingBox area = core::BoundingBox::empty();
+  area.expand_to_include(core::Point2D{spec.origin_easting, spec.origin_northing - height_m});
+  area.expand_to_include(core::Point2D{spec.origin_easting + width_m, spec.origin_northing});
+
+  return core::SyntheticParcelSource(spec.paddock_hectares).fetch(area);
+}
+
+core::Farm ScenarioBundle::make_farm() const {
+  if (!grid.has_value()) {
+    throw std::runtime_error("scenario '" + name + "' has no [grid] section, so it has no ground");
+  }
+  std::vector<core::Paddock> paddocks = make_paddocks();
+  if (paddocks.empty()) {
+    throw std::runtime_error("scenario '" + name +
+                             "' has no paddocks: set 'paddock_hectares' in [grid]");
+  }
+
+  const GridSpec& spec = *grid;
+  core::GeoTransform transform;
+  transform.origin_easting = spec.origin_easting;
+  transform.origin_northing = spec.origin_northing;
+  transform.cell_size = spec.cell_size_m;
+
+  // The mask needs the grid's shape and georeferencing, not its values.
+  const core::Raster<double> shape(spec.cols, spec.rows, transform, 0.0);
+  core::PaddockMask mask(shape, paddocks);
+
+  core::Farm farm(make_grid(), std::move(mask), std::move(paddocks));
+
+  for (const MobSpec& spec_mob : mobs) {
+    core::Mob mob;
+    mob.name = spec_mob.name;
+    mob.head = spec_mob.head;
+    mob.animal = spec_mob.animal;
+    mob.state.liveweight_kg = spec_mob.liveweight_kg;
+    mob.state.age_days = spec_mob.age_days;
+    mob.state.liveweight_change_kg_per_day = 0.0;
+    farm.add_mob(std::move(mob), spec_mob.paddock);
+  }
+  return farm;
+}
+
+core::Farmer ScenarioBundle::make_farmer() const {
+  if (grazing.empty()) {
+    throw std::runtime_error("scenario '" + name + "' has no grazing calendar");
+  }
+  return core::Farmer(grazing);
 }
 
 ScenarioBundle load_scenario(const std::string& bundle_directory) {
