@@ -97,7 +97,7 @@ resolved.
 |---|---|---|---|
 | Gross energy of feed | 18.4 MJ kg⁻¹ DM | CSIRO (2007), TMC Eq. 2 | not yet used |
 | Energy density qm | dietME / GE | CSIRO (2007), TMC Eq. 2 | not yet used |
-| Efficiency of ME for maintenance km | 0.35 qm + 0.503 (milk diets); 0.85 otherwise | CSIRO (2007), TMC Eq. 5–6. CSIRO's other published form, km = 0.02 (MJ ME/kg DM) + 0.5, is what Frater et al. quote | not yet used |
+| Efficiency of ME for maintenance km | **0.85 on milk diets; 0.35 qm + 0.503 otherwise** | CSIRO (2007), TMC Eq. 5 and 6. CSIRO's other published form, km = 0.02 (MJ ME/kg DM) + 0.5, is what Frater et al. quote | not yet used |
 | Efficiency of ME for gain kgf | 0.035 × dietME × flegume × ftime (temperate pasture); 0.042 × dietME + 0.006 (tropical) | CSIRO (2007), TMC Eq. 9 and 11 | not yet used |
 | Basal net energy | 0.28 × K × S × M × AgeFactor × lwt^0.75 MJ day⁻¹ | **Nicol & Brookes (2007), equation 1**, restated as TMC Eq. 13 | not yet used |
 | Species factor K | sheep 1.0, dairy 1.4, dairy replacements 1.4, beef 1.4, deer 1.7, dairy goats 1.25 | TMC Eq. 13, following CSIRO (2007). **Nicol & Brookes use 1.0 sheep, 1.3 beef, 1.5 dairy, 1.4 deer** — see below | not yet used |
@@ -113,9 +113,17 @@ recorded, not hard-coded.
 
 **An independent check on the 0.28.** TMC notes that Simpson (1978b) reported
 values for maintenance ME per kg lwt^0.75 of 0.40 for sheep and 0.55 for cattle.
-Net 0.28 divided by a km of about 0.7 gives 0.40 — Simpson's sheep figure, from
-a different author two decades earlier. That is a validation target rather than
-a regression pin, and it is worth asserting when the code exists.
+Take a pasture diet of 10.5 MJ ME/kg DM: qm = 10.5 / 18.4 = 0.571, so Eq. 6
+gives km = 0.35 × 0.571 + 0.503 = 0.703, and the net 0.28 becomes
+0.28 / 0.703 = **0.40 MJ ME/kg lwt^0.75** — Simpson's sheep figure, from a
+different author two decades earlier, with no free parameter in between. That
+is a validation target rather than a regression pin, and it is worth asserting
+when the code exists.
+
+The arithmetic also settles which way round Eq. 5 and 6 go: the 0.85 belongs to
+milk diets and the qm expression to everything else. Reading them the other way
+gives km = 0.85 on pasture and a maintenance requirement of 0.33, which matches
+nothing published.
 
 ### Grazing, and why it depends on the terrain
 
