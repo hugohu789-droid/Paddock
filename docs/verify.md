@@ -391,12 +391,29 @@ The model sits 26% below it at every weight — a flat offset, not scatter:
 | 60 kg | 11.5 | 8.5 | −25.9% |
 
 The model agrees with Simpson (1978b) here, so it is not the model that has
-moved. B+LNZ's 10.0 for a 50 kg ewe is 0.53 MJ ME per kg lwt^0.75, which is
-close to the figure Simpson gives for *cattle*. These are practical feeding
-tables for hill country and include walking and a margin; treating them as
-physiological maintenance would double-count activity. Recorded as open item 12,
-because the right response is to work out what the offset is made of rather than
-to scale one to the other.
+moved. B+LNZ's 10.0 for a 50 kg ewe is 0.53 MJ ME per kg lwt^0.75, close to the
+figure Simpson gives for *cattle*.
+
+**The first explanation offered here was that these are hill country feeding
+tables and include activity. That was checked and it is wrong.** Adding every
+activity term the manual has - chewing, movement and walking a kilometre a day -
+comes to 0.20 MJ of net energy on a 50 kg ewe, which closes about a twentieth of
+the gap:
+
+| Term | MJ NE |
+|---|---|
+| Basal (TMC Eq. 13) | 5.265 |
+| Chewing (Eq. 18) | 0.019 |
+| Movement (Eq. 21) | 0.047 |
+| Walking 1 km (Eq. 24) | 0.130 |
+| **Total as ME** | **7.71 against B+LNZ's 10.00** |
+
+Working backwards instead, B+LNZ's figure implies a net maintenance of 0.377 MJ
+per kg lwt^0.75 against the manual's 0.280 - a ratio of 1.35 that activity does
+not account for. **The cause is not identified.** It could be a margin built into
+extension material, an assumption about breeding rather than dry ewes, or a
+different base constant; nothing here distinguishes them, and open item 12 stays
+open with the arithmetic attached rather than a story.
 
 The liveweight-change constants disagree in both directions and by more:
 B+LNZ give 65 MJ ME per kg gained and 17 MJ released per kg lost, against 50 and
@@ -482,7 +499,7 @@ work and which do not.
 | 10 | Grazing selectivity: how strongly stock prefer clover over grass, and how that differs between set stocking and rotation | M3, task #24 | NZ grazing behaviour literature | open - the direction is stated by Smith and Dawson (1976), the magnitude is not |
 
 | 11 | Whether the age factor applies to a mature cow | M3 | DairyNZ maintenance table against TMC Eq. 17 | open - the model matches DairyNZ with AgeFactor = 1 and is 17% low with it applied |
-| 12 | What the 26% between B+LNZ sheep feeding tables and physiological maintenance is made of | M3 | B+LNZ Appendix 3.1, CSIRO (2007) activity terms | open - a flat offset across the range, so it is a difference in what is being measured rather than noise |
+| 12 | What the 26% between B+LNZ sheep feeding tables and physiological maintenance is made of | M3 | B+LNZ Appendix 3.1; a source that states what its tables include | open - a flat offset across the range. **Activity has been ruled out**: every term the manual has closes only a twentieth of it |
 
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.

@@ -1,0 +1,12 @@
+# Metabolisable energy for walking, by contour.
+#
+# Source: DairyNZ, "Lactating cow", read 2026-08-18.
+#
+# A New Zealand alternative to the OVERSEER movement equations (TMC Eq. 21-24),
+# and interesting for being classed by contour rather than by slope in degrees.
+# Not wired into the model: it would need a rule mapping a slope raster onto
+# three named classes, and that rule is not in this source.
+contour,me_mj_per_km,status,source_id
+flat,2.0,direct,dairynz_lactating_cow
+rolling,3.0,direct,dairynz_lactating_cow
+hilly_steep,6.0,direct,dairynz_lactating_cow

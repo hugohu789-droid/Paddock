@@ -1,0 +1,33 @@
+# ME requirements for maintenance and liveweight gain in mature ewes (MJ ME/d).
+#
+# Source: Beef + Lamb New Zealand, "Making every mating count", Appendix 3.1.
+# https://beeflambnz.com/sites/default/files/2026-06/Making-every-mating-count.pdf
+# Read 2026-08-18; SHA-256 in sources.toml.
+#
+# **These are feeding tables, not physiological maintenance.** The equations in
+# core/AnimalEnergy.cpp sit 26% below the maintenance row across the whole
+# range, and adding every activity term the OVERSEER manual has closes only a
+# twentieth of that gap. The cause is not identified - see docs/verify.md, open
+# item 12 - so this table is recorded as a target the model does not currently
+# meet rather than as one it should be scaled to.
+liveweight_kg,liveweight_gain_g_per_day,me_mj_per_day,status,source_id
+40,0,8.5,direct,blnz_mating
+45,0,9.0,direct,blnz_mating
+50,0,10.0,direct,blnz_mating
+55,0,11.0,direct,blnz_mating
+60,0,11.5,direct,blnz_mating
+40,50,11.0,direct,blnz_mating
+45,50,12.0,direct,blnz_mating
+50,50,13.0,direct,blnz_mating
+55,50,14.0,direct,blnz_mating
+60,50,14.5,direct,blnz_mating
+40,100,13.5,direct,blnz_mating
+45,100,15.0,direct,blnz_mating
+50,100,16.5,direct,blnz_mating
+55,100,17.0,direct,blnz_mating
+60,100,18.0,direct,blnz_mating
+40,150,16.0,direct,blnz_mating
+45,150,18.0,direct,blnz_mating
+50,150,20.0,direct,blnz_mating
+55,150,20.5,direct,blnz_mating
+60,150,22.0,direct,blnz_mating

@@ -1,0 +1,13 @@
+# Average mature liveweight by dairy breed, for 6-8 year old cows.
+#
+# Source: DairyNZ, "Liveweight targets",
+# https://www.dairynz.co.nz/animal/heifers/lw-targets/, read 2026-08-18.
+# The page attributes the figures to New Zealand Dairy Statistics (2024-25).
+#
+# The published ranges are direct. A midpoint is arithmetic on them and is
+# marked derived: it is a convenience, not a DairyNZ average, and the page notes
+# that groups of comparable breed can sit above the average.
+breed,reference_min_kg,reference_max_kg,derived_midpoint_kg,range_status,midpoint_status,source_id
+jersey,441,453,447,direct,derived,dairynz_liveweight_targets
+crossbred,522,533,527.5,direct,derived,dairynz_liveweight_targets
+friesian,567,580,573.5,direct,derived,dairynz_liveweight_targets

@@ -1,0 +1,18 @@
+# Maintenance metabolisable energy for a lactating cow, by liveweight.
+#
+# Source: DairyNZ, "Lactating cow", https://www.dairynz.co.nz/animal/nutrition/lactating-cow/
+# Read 2026-08-18. The page states these are calculated for pasture at
+# 11.0 MJ ME/kg DM.
+#
+# This table is a validation target, not a lookup the model uses: the equations
+# in core/AnimalEnergy.cpp reproduce it to within 2% across the whole range, and
+# replacing them with a table would lose the ability to answer for a weight or a
+# diet the table does not carry. See docs/verify.md.
+liveweight_kg,maintenance_me_mj_per_day,status,source_id
+300,40,direct,dairynz_lactating_cow
+350,45,direct,dairynz_lactating_cow
+400,50,direct,dairynz_lactating_cow
+450,54,direct,dairynz_lactating_cow
+500,59,direct,dairynz_lactating_cow
+550,63,direct,dairynz_lactating_cow
+600,68,direct,dairynz_lactating_cow
