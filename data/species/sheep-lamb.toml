@@ -11,24 +11,28 @@ display_name = "Weaned lamb"
 description = "A growing lamb after weaning; the class with a published worked example behind it."
 
 [energy]
-# K, TMC Eq. 13. 1.0 for sheep in both primary sources.
-species_factor = 1.0
+# K, TMC Eq. 13. CSIRO (2007) and Nicol and Brookes (2007) both give 1.0 for
+# sheep - the one species factor the two sources agree on, and the one the
+# OVERSEER ME review leaves alone in its Recommendation 6.
+species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
 
-# S, TMC Eq. 14. 1.075 for a mixed-sex mob, which is what a weaned lamb crop
-# is before the wether lambs are drafted off.
-sex_factor = 1.075
+# S, TMC Eq. 14: 1.075 for a mixed-sex mob, which is what a
+# weaned lamb crop is before the wether lambs are drafted off.
+sex_factor = { value = 1.075, status = "direct", source = "tmc_animal_me" }
 
-# PLACEHOLDER, as for the ewe. Frater et al. do not state the reference weight
-# their worked example assumes, and the answer moves with it: 9.807 MJ/day at
-# 60 kg and 9.560 at 65, bracketing their published 9.72.
-standard_reference_weight_kg = 65.0
-reference_weight_verified = false
+# SRW. No source: the OVERSEER chapter that carries breed characteristics has
+# not been retrieved, and Beef + Lamb NZ's feeding tables give liveweight
+# classes rather than breed mature weights - which their own guidance says must
+# not be read as one. SRW drives the energy value of gain (TMC Eq. 45), so a
+# growth rate resting on this number is not quotable.
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
 
-# SpGraze, TMC Eq. 20; see the note in sheep-ewe.toml.
-grazing_coefficient = 0.0025
+# SpGraze, TMC Eq. 20. The manual gives 0.0025 for dairy and beef and states no
+# sheep value in the chapter read, so this is the cattle figure carried across.
+grazing_coefficient = { value = 0.0025, status = "placeholder" }
 
-# k1, TMC Eq. 44.
-gain_energy_ceiling_mj_per_kg = 20.3
+# k1, TMC Eq. 44: 16.5 for large lean cattle breeds, 20.3 otherwise.
+gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 28.0

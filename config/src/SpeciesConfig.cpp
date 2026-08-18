@@ -16,6 +16,37 @@ namespace paddock::config {
 
 namespace {
 
+/// One `key = { value = ..., status = "...", source = "..." }` entry.
+///
+/// The status has no default. That is the whole point of the field: defaulting
+/// it to `direct` would launder a guess into a published figure, and defaulting
+/// it to `placeholder` would let a real citation go unrecorded. The author has
+/// to say which it is.
+SourcedValue read_sourced(const toml::table& parent, std::string_view key,
+                          const std::string& path) {
+  const toml::table& entry = detail::require_table(parent, key, path);
+  detail::reject_unknown_keys(entry, {"value", "status", "source"}, path,
+                              "'" + std::string(key) + "'");
+
+  SourcedValue sourced;
+  sourced.value = detail::require_double(entry, "value", path);
+
+  const std::string status = detail::require_string(entry, "status", path);
+  if (!provenance_from_string(status, sourced.status)) {
+    detail::throw_in(entry, path,
+                     "'" + std::string(key) + "' has status '" + status +
+                         "'. It must be one of: direct, derived, verify, placeholder");
+  }
+
+  sourced.source_id = detail::optional_string(entry, "source", "");
+
+  const std::string error = sourced.validation_error(std::string(key));
+  if (!error.empty()) {
+    detail::throw_in(entry, path, error);
+  }
+  return sourced;
+}
+
 SpeciesDefinition read(const toml::table& root, const std::string& path) {
   detail::reject_unknown_keys(root, {"species", "energy", "typical"}, path, "the file");
 
@@ -28,30 +59,26 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   definition.description = detail::optional_string(species, "description", "");
 
   const toml::table& energy = detail::require_table(root, "energy", path);
-  detail::reject_unknown_keys(
-      energy,
-      {"species_factor", "sex_factor", "standard_reference_weight_kg", "reference_weight_verified",
-       "grazing_coefficient", "gain_energy_ceiling_mj_per_kg"},
-      path, "[energy]");
+  detail::reject_unknown_keys(energy,
+                              {"species_factor", "sex_factor", "standard_reference_weight_kg",
+                               "grazing_coefficient", "gain_energy_ceiling_mj_per_kg"},
+                              path, "[energy]");
 
   // class_id is the species name rather than a second field: two identifiers
   // for one thing is two things to keep in step.
   definition.energy.class_id = definition.name;
-  definition.energy.species_factor = detail::require_double(energy, "species_factor", path);
-  definition.energy.sex_factor = detail::require_double(energy, "sex_factor", path);
-  definition.energy.standard_reference_weight_kg =
-      detail::require_double(energy, "standard_reference_weight_kg", path);
-  definition.energy.grazing_coefficient =
-      detail::require_double(energy, "grazing_coefficient", path);
-  definition.energy.gain_energy_ceiling_mj_per_kg =
-      detail::require_double(energy, "gain_energy_ceiling_mj_per_kg", path);
 
-  // Required rather than defaulted, because the honest answer is the one the
-  // author had to type. A definition that silently defaulted to "verified"
-  // would launder a guess into a published figure, and one that silently
-  // defaulted to "not verified" would let a real citation go unrecorded.
-  definition.reference_weight_verified =
-      detail::require_bool(energy, "reference_weight_verified", path);
+  definition.species_factor = read_sourced(energy, "species_factor", path);
+  definition.sex_factor = read_sourced(energy, "sex_factor", path);
+  definition.standard_reference_weight = read_sourced(energy, "standard_reference_weight_kg", path);
+  definition.grazing_coefficient = read_sourced(energy, "grazing_coefficient", path);
+  definition.gain_energy_ceiling = read_sourced(energy, "gain_energy_ceiling_mj_per_kg", path);
+
+  definition.energy.species_factor = definition.species_factor.value;
+  definition.energy.sex_factor = definition.sex_factor.value;
+  definition.energy.standard_reference_weight_kg = definition.standard_reference_weight.value;
+  definition.energy.grazing_coefficient = definition.grazing_coefficient.value;
+  definition.energy.gain_energy_ceiling_mj_per_kg = definition.gain_energy_ceiling.value;
 
   const toml::table& typical = detail::require_table(root, "typical", path);
   detail::reject_unknown_keys(typical, {"liveweight_kg", "age_days"}, path, "[typical]");
@@ -93,6 +120,28 @@ std::string SpeciesDefinition::validation_error() const {
            " kg, which is the mature weight of the breed";
   }
   return {};
+}
+
+std::vector<const SourcedValue*> SpeciesDefinition::sourced_values() const {
+  return {&species_factor, &sex_factor, &standard_reference_weight, &grazing_coefficient,
+          &gain_energy_ceiling};
+}
+
+Provenance SpeciesDefinition::weakest_status() const {
+  // The enumerators run from strongest to weakest, so the largest wins.
+  Provenance weakest = Provenance::Direct;
+  for (const SourcedValue* value : sourced_values()) {
+    if (static_cast<int>(value->status) > static_cast<int>(weakest)) {
+      weakest = value->status;
+    }
+  }
+  return weakest;
+}
+
+bool SpeciesDefinition::fully_evidenced() const {
+  const std::vector<const SourcedValue*> values = sourced_values();
+  return std::all_of(values.begin(), values.end(),
+                     [](const SourcedValue* value) { return value->is_evidence(); });
 }
 
 SpeciesDefinition parse_species(std::string_view text, const std::string& path) {

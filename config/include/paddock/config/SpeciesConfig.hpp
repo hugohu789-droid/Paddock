@@ -7,6 +7,7 @@
 #include <string_view>
 #include <vector>
 
+#include <paddock/config/Provenance.hpp>
 #include <paddock/core/AnimalEnergy.hpp>
 
 namespace paddock::config {
@@ -34,12 +35,30 @@ struct SpeciesDefinition {
   double typical_liveweight_kg = 0.0;
   double typical_age_days = 0.0;
 
-  /// False when the standard reference weight is a placeholder rather than a
-  /// published figure. SRW drives the energy value of gain (TMC Eq. 45), so a
-  /// definition that guesses it produces a plausible-looking growth rate with
-  /// nothing behind it. Every definition shipped today is false; see
-  /// docs/verify.md.
-  bool reference_weight_verified = false;
+  /// Where each of those numbers came from.
+  ///
+  /// `energy` above holds the plain values because that is what the model
+  /// consumes; these hold the account. Keeping them apart is the point: an
+  /// equation is the same equation whether its inputs are published or guessed,
+  /// so the difference has to live somewhere a report can read.
+  SourcedValue species_factor;
+  SourcedValue sex_factor;
+  SourcedValue standard_reference_weight;
+  SourcedValue grazing_coefficient;
+  SourcedValue gain_energy_ceiling;
+
+  /// Every sourced value in this definition, for a caller that wants to report
+  /// on the lot rather than name them one at a time.
+  [[nodiscard]] std::vector<const SourcedValue*> sourced_values() const;
+
+  /// The weakest status any of these numbers carries. A species is only as
+  /// quotable as its least supported parameter, so a result depending on the
+  /// whole definition should be reported against this rather than against
+  /// whichever value the reader happened to look at.
+  [[nodiscard]] Provenance weakest_status() const;
+
+  /// True when every number rests on something published.
+  [[nodiscard]] bool fully_evidenced() const;
 
   [[nodiscard]] std::string validation_error() const;
 };
@@ -53,24 +72,24 @@ struct SpeciesDefinition {
 /// description = "A mature breeding ewe."
 ///
 /// [energy]
-/// # K, TMC Eq. 13. CSIRO (2007) and Nicol and Brookes (2007) both give 1.0
-/// # for sheep - the one species factor the two sources agree on.
-/// species_factor = 1.0
-/// # S, TMC Eq. 14: 1.0 for females and castrates, 1.075 mixed, 1.15 entire
-/// # males.
-/// sex_factor = 1.0
-/// # PLACEHOLDER - verify against a published mature weight for the breed.
-/// standard_reference_weight_kg = 65.0
-/// reference_weight_verified = false
-/// # SpGraze, TMC Eq. 20.
-/// grazing_coefficient = 0.0025
-/// # k1, TMC Eq. 44: 16.5 for large lean cattle breeds, 20.3 otherwise.
-/// gain_energy_ceiling_mj_per_kg = 20.3
+/// # Every value is an inline table: the number, where it sits on the evidence
+/// # scale, and what it cites. `source` is an identifier into
+/// # data/calibration/livestock/sources.toml.
+/// species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+/// sex_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+/// standard_reference_weight_kg = { value = 65.0, status = "verify" }
+/// grazing_coefficient = { value = 0.0025, status = "direct", source = "tmc_animal_me" }
+/// gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 ///
 /// [typical]
 /// liveweight_kg = 60.0
 /// age_days = 1200.0
 /// ```
+///
+/// The four statuses are `direct`, `derived`, `verify` and `placeholder`; see
+/// Provenance.hpp. A `direct` or `derived` value must cite a source, because a
+/// citation with nothing to cite is decoration. `verify` and `placeholder` need
+/// not, being by definition not yet attached to one.
 [[nodiscard]] SpeciesDefinition load_species(const std::string& path);
 
 [[nodiscard]] SpeciesDefinition parse_species(std::string_view text, const std::string& path);

@@ -39,13 +39,36 @@ here so that M2 has nowhere else to put them.
 is a file, `name` must be unique, and no code changes. A definition supplies the
 energy parameters directly, so a ewe and a dairy cow differ only in numbers.
 
-Two fields are worth knowing about. `reference_weight_verified` has no default
-and must be typed: defaulting it to true would launder a guess into a published
-figure, and defaulting it to false would let a real citation go unrecorded.
-Every definition shipped today sets it false, because standard reference weight
-by breed sits in a source not yet retrieved. And `cattle-dry-cow.toml` is named
-for the dry cow it actually models — lactation is not implemented, so there is
-no milking class to define yet.
+**Every number carries where it came from.** Each energy parameter is an inline
+table with a value, a status and a citation:
+
+```toml
+species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
+```
+
+The four statuses run from strongest to weakest:
+
+| Status | Means |
+|---|---|
+| `direct` | Explicitly stated in the cited source |
+| `derived` | Arithmetic on values the source states, and nothing more |
+| `verify` | The source looks as though it has it; the reading needs confirming |
+| `placeholder` | An engineering value with no evidence behind it |
+
+There is no default. That is the point: defaulting to `direct` would launder a
+guess into a published figure, and defaulting to `placeholder` would let a real
+citation go unrecorded. A `direct` or `derived` value must name a source in
+[calibration/livestock/sources.toml](calibration/livestock/sources.toml), and a
+test fails if it names one that is not there — a dangling citation reads as
+evidence and is not.
+
+Standard reference weight is `verify` on every definition shipped today, and it
+drives the energy value of gain, so no absolute liveweight gain from this model
+is quotable yet. Comparisons that hold it fixed are.
+
+`cattle-dry-cow.toml` is named for the dry cow it actually models — lactation is
+not implemented, so there is no milking class to define.
 
 ## Adding a farm
 

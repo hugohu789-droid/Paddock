@@ -24,12 +24,11 @@ constexpr std::string_view kEwe = R"(
 name = "test_ewe"
 
 [energy]
-species_factor = 1.0
-sex_factor = 1.0
-standard_reference_weight_kg = 65.0
-reference_weight_verified = false
-grazing_coefficient = 0.0025
-gain_energy_ceiling_mj_per_kg = 20.3
+species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+sex_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
+grazing_coefficient = { value = 0.0025, status = "placeholder" }
+gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 60.0
@@ -49,7 +48,8 @@ TEST(SpeciesConfigTest, ASpeciesLoadsIntoTheParametersTheEnergyModelUses) {
   EXPECT_DOUBLE_EQ(species.energy.species_factor, 1.0);
   EXPECT_DOUBLE_EQ(species.energy.standard_reference_weight_kg, 65.0);
   EXPECT_TRUE(species.energy.validation_error().empty());
-  EXPECT_FALSE(species.reference_weight_verified);
+  EXPECT_EQ(species.standard_reference_weight.status, Provenance::Verify);
+  EXPECT_FALSE(species.fully_evidenced()) << "SRW is not evidenced";
 }
 
 // The definition feeds straight into the energy model, so the round trip is
@@ -77,21 +77,20 @@ TEST(SpeciesConfigTest, TheDefinitionDrivesTheEnergyModelDirectly) {
   EXPECT_LT(need.intake_kg_dm, 1.2);
 }
 
-// The flag exists so a guess cannot pass as a published figure. Leaving it out
-// must be an error rather than defaulting either way: defaulting to true would
-// launder a guess, and defaulting to false would let a real citation go
-// unrecorded.
-TEST(SpeciesConfigTest, TheReferenceWeightFlagCannotBeOmitted) {
+// A status has no default, and that is the point of the field: defaulting to
+// direct would launder a guess into a published figure, and defaulting to
+// placeholder would let a real citation go unrecorded.
+TEST(SpeciesConfigTest, AValueWithoutAStatusIsRefused) {
   EXPECT_THROW(static_cast<void>(parse(R"(
 [species]
 name = "no_flag"
 
 [energy]
-species_factor = 1.0
-sex_factor = 1.0
-standard_reference_weight_kg = 65.0
-grazing_coefficient = 0.0025
-gain_energy_ceiling_mj_per_kg = 20.3
+species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+sex_factor = { value = 1.0, status = "direct" }
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
+grazing_coefficient = { value = 0.0025, status = "placeholder" }
+gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 60.0
@@ -109,12 +108,11 @@ TEST(SpeciesConfigTest, AnAnimalHeavierThanItsBreedsMatureWeightIsRefused) {
 name = "impossible"
 
 [energy]
-species_factor = 1.0
-sex_factor = 1.0
-standard_reference_weight_kg = 65.0
-reference_weight_verified = false
-grazing_coefficient = 0.0025
-gain_energy_ceiling_mj_per_kg = 20.3
+species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+sex_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
+grazing_coefficient = { value = 0.0025, status = "placeholder" }
+gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 90.0
@@ -129,12 +127,11 @@ TEST(SpeciesConfigTest, AMistypedKeyIsRejectedRatherThanIgnored) {
 name = "typo"
 
 [energy]
-species_factor = 1.0
-sex_facter = 1.0
-standard_reference_weight_kg = 65.0
-reference_weight_verified = false
-grazing_coefficient = 0.0025
-gain_energy_ceiling_mj_per_kg = 20.3
+species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+sex_facter = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
+grazing_coefficient = { value = 0.0025, status = "placeholder" }
+gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 60.0
@@ -149,12 +146,11 @@ TEST(SpeciesConfigTest, ParametersTheEnergyModelWouldRejectAreRefusedHere) {
 name = "no_species_factor"
 
 [energy]
-species_factor = 0.0
-sex_factor = 1.0
-standard_reference_weight_kg = 65.0
-reference_weight_verified = false
-grazing_coefficient = 0.0025
-gain_energy_ceiling_mj_per_kg = 20.3
+species_factor = { value = 0.0, status = "direct", source = "tmc_animal_me" }
+sex_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
+grazing_coefficient = { value = 0.0025, status = "placeholder" }
+gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 60.0
