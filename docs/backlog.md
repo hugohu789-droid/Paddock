@@ -22,10 +22,12 @@ The simulation is a loop, and it is currently cut in two places:
                   │                          (2) WIRED
             paddock rests                        ↓
                   ↑                        farmer moves mob
-                  └───── (1) NOT WIRED ─────────┘
+                  └────────  (1) WIRED  ────────┘
 ```
 
-Gap (2) closed with B1. One left.
+**The loop is closed.** B1 wired the feedback from being underfed; B4 wired the
+farmer. What is left for the MVP is B6, which demonstrates the loop rather than
+building any more of it.
 
 Everything else is in place. The pasture model grows and senesces on light,
 temperature, water and nitrogen; the terrain model varies radiation by slope and
@@ -51,7 +53,7 @@ farm, run a full year, watch a stable grazing–regrowth loop*. In order.
 | ~~B1~~ | ~~**Liveweight responds to intake**~~ | **Done.** Gap (2) is closed: `liveweight_response` inverts the requirement calculation and `advance_one_day` applies it, so an underfed mob loses weight | small |
 | ~~B2~~ | ~~**Species definitions in TOML**~~ | **Done.** `SpeciesConfig` loads an animal class straight into the parameters the energy model uses, and `data/species/` is discovered by scanning | small |
 | ~~B3~~ | ~~**A farm that owns paddocks, swards and mobs**~~ | **Done.** `core/Farm` holds the grid, the mask, the paddocks and the mobs, and steps a day. **The ground stays per cell**: a paddock is a set of cells, not a unit of pasture, so a shallow corner still dries out on its own and the map view can show it | large |
-| B4 | **The farmer moves mobs** | Closes gap (1). Reads the grazing calendar, picks the next paddock by rest and cover, respects the graze-length and spell rules. The "shuffle" emerges here when paddocks are too few | medium |
+| ~~B4~~ | ~~**The farmer moves mobs**~~ | **Done.** Gap (1) is closed. `core/Farmer` reads the calendar and sends a mob to whichever free paddock has rested longest. **The shuffle emerges**: on a settled farm of 2 paddocks, 39 moves in 200 days had to break the spell rule; on one of 35, none did — and nothing in the code implements a shuffle | medium |
 | ~~B5~~ | ~~**Conservation across the whole farm**~~ | **Done with B3.** `FarmConservationTest` closes all three budgets to 1e-9 over 365 grazed days with two mobs, and has a negative control that fails when an offtake goes unrecorded | medium |
 | B6 | **A year-long scenario that demonstrates the loop** | The acceptance artefact: one bundle, one command, a stable grazing–regrowth cycle with cover and liveweight series out | small |
 

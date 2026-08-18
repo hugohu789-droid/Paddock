@@ -10,6 +10,7 @@ add_executable(
   unit/BudgetLedgerTest.cpp
   unit/DistributionsTest.cpp
   unit/EntityTest.cpp
+  unit/FarmerTest.cpp
   unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
   unit/GrazingCalendarTest.cpp
