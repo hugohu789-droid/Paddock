@@ -90,6 +90,61 @@ count and the published mean. The generator's target size of 2.5 ha is tuned to
 achieve that and is labelled as tuned in the file, because feeding in the
 published mean instead yields 70 paddocks of 3.16 ha, which matches neither.
 
+## Grazing systems (task #25)
+
+The systems worth comparing are not a design choice: New Zealand hill country
+extension literature describes three, and names what separates them.
+
+> Smith, M E and Dawson, A D (1976). *Hill country grazing management.*
+> Proceedings of the New Zealand Grassland Association, volume 38. MAF Advisory
+> Services Division, Hamilton.
+> [PDF](https://www.nzgajournal.org.nz/index.php/ProNZGA/article/view/1469)
+> — running heads in the PDF put it at pages 47–54; the exact range is not
+> stated on the article page, so it is not cited here.
+
+| System | Definition, from the paper | Expected effect |
+|---|---|---|
+| Set stocking | "animals graze the pasture almost continuously"; spelling happens but "the process is uncontrolled and often highly selective" | Erect grasses and clovers suffer, browntop persists; "lower production and utilization" |
+| The "shuffle" | An attempt at rotation with too few paddocks: "with a limited number of paddocks and five or six mobs, the effect must be to lengthen the grazing period or shorten the spelling period" | "little improvement on set-stocking" |
+| True rotational | "the pasture is grazed for a short time and spelled for a long time" | Erect grasses and palatable legumes encouraged; more leaf area in winter, deeper roots in summer |
+
+**Quantified guidelines, same source.** Graze no more than **3 days** with the
+major mob. Minimum spell for the Hamilton region: **spring 12 days, summer 35,
+autumn 35, winter 35**; summer may fall to 25 days "only if substantial rain
+falls", and colder regions need "40 days plus" in winter. Context: hill country
+farms then had **15–25 major grazing paddocks and 5–6 mobs**.
+
+**The shuffle should emerge, not be implemented.** The paper defines it as what
+happens when rotational intent meets an under-subdivided farm — too few
+paddocks for too many mobs forces either longer grazings or shorter spells. A
+model that carries paddock count, mob count and the two rotational parameters
+will produce it on its own. Coding it as a third mode would be modelling the
+symptom instead of the cause, and would lose the thing a farmer actually wants
+to know: how many paddocks their farm needs before rotation starts paying.
+
+### Validation target
+
+Table 1 of the same paper, a Tauranga property running both systems at the same
+stocking rate of 15.6 SU/ha:
+
+| Hogget measure | Rotational | Set stocking | Difference |
+|---|---|---|---|
+| Liveweight, November (kg) | 45.5 | 38.5 | +7.0 |
+| Liveweight, February (kg) | 50.5 | 44.6 | +5.9 |
+| Fleece weight, March–October (kg) | 2.28 | 1.73 | +0.55 (+32%) |
+
+The paper adds that this weight difference at mating implies "about a 12%
+advantage in lambing percentage".
+
+**How much this target is worth.** Less than the Gillingham and Frater ones, and
+the difference should not be quietly forgotten. This is a 1976 advisory paper
+arguing for a system its authors recommend; Table 1 is one property, not a
+replicated trial, and the February figure is confounded because both groups were
+rotationally grazed from October. It is a plausible magnitude to reproduce — a
+few kilograms of hogget liveweight, not tens — rather than a number to hit. A
+model that showed set stocking ahead, or showed a 30 kg gap, would be wrong;
+one that shows 4 kg is not.
+
 ## Livestock energy (task #23)
 
 The equations below are quoted from one document, cited here once and referred
@@ -292,6 +347,7 @@ The suites here fall into three kinds, and the comments say which:
 | 7 | LINZ, NIWA and Manaaki Whenua licence terms and access methods; Open-Meteo and VCSN terms; the OVERSEER technical manual's no-promotion clause | M2-M3 | Dataset and document licences | open |
 
 | 8 | Farm boundaries and centroids for the three example farms | M3 | LINZ NZ Primary Parcels, via `scripts/linz-snapshot.py` | open - all three ship with generated boundaries and locality coordinates, marked `location_verified = false` |
+| 9 | Where stock choose to graze on a paddock of varying slope: utilisation by slope class | M3, task #24 | Lambert and Gillingham on stock camps and nutrient transfer | open - Gillingham et al. (1998) gives pasture *production* by slope and aspect, but not the animals' *distribution* over it. The energy cost of walking a slope is sourced (TMC Eq. 23); the preference that follows from it is not |
 
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.
