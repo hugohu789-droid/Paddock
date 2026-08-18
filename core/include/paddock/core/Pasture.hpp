@@ -144,6 +144,34 @@ class PastureSward {
   /// Legume share of green dry matter, 0 when there is no green.
   [[nodiscard]] double legume_fraction() const noexcept;
 
+  /// What one defoliation took, by species.
+  struct Defoliation {
+    double grass_kg_dm = 0.0;
+    double legume_kg_dm = 0.0;
+    double nitrogen_kg = 0.0;
+
+    [[nodiscard]] double total_kg_dm() const noexcept { return grass_kg_dm + legume_kg_dm; }
+  };
+
+  /// Removes green dry matter, and returns what was actually taken.
+  ///
+  /// Capped at what stands above each species' residual, for the same reason
+  /// senescence is: the crown and stubble are what the plant regrows from, and
+  /// a sward grazed to nothing would have no leaf area, intercept no light and
+  /// never grow again. Asking for more than that is not an error - it is a farm
+  /// short of feed - and the shortfall is what the caller sees in the
+  /// difference between what it asked for and what it got.
+  ///
+  /// **Grass and legume are taken in proportion to what is on offer.** Real
+  /// animals select, and Smith and Dawson (1976) report that set stocking is
+  /// "highly selective" and overgrazes clover in particular. Modelling that
+  /// needs a source for how strong the preference is, which this project does
+  /// not have yet; see docs/verify.md. Until it does, a system comparison here
+  /// cannot show the species-composition half of their finding.
+  ///
+  /// Nitrogen leaves with the dry matter, at each species' own content.
+  Defoliation remove_green_dry_matter(double requested_kg_dm);
+
   [[nodiscard]] double soil_mineral_nitrogen_kg() const noexcept {
     return soil_mineral_nitrogen_kg_;
   }

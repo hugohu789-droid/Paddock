@@ -112,6 +112,38 @@ double PastureSward::legume_fraction() const noexcept {
   return green > 0.0 ? legume_kg_dm_ / green : 0.0;
 }
 
+PastureSward::Defoliation PastureSward::remove_green_dry_matter(double requested_kg_dm) {
+  Defoliation taken;
+  if (requested_kg_dm <= 0.0) {
+    return taken;
+  }
+
+  // Only what stands above each residual is on offer, for the same reason
+  // senescence works that way: below it is the crown the plant regrows from.
+  const double grass_offered =
+      std::max(0.0, grass_kg_dm_ - parameters_.grass.residual_kg_dm_per_ha);
+  const double legume_offered =
+      std::max(0.0, legume_kg_dm_ - parameters_.legume.residual_kg_dm_per_ha);
+  const double offered = grass_offered + legume_offered;
+  if (offered <= 0.0) {
+    return taken;
+  }
+
+  const double eaten = std::min(requested_kg_dm, offered);
+
+  // In proportion to what is on offer, not to what is standing: a species
+  // already at its residual contributes nothing and must not be drawn down.
+  taken.grass_kg_dm = eaten * (grass_offered / offered);
+  taken.legume_kg_dm = eaten - taken.grass_kg_dm;
+
+  grass_kg_dm_ -= taken.grass_kg_dm;
+  legume_kg_dm_ -= taken.legume_kg_dm;
+
+  taken.nitrogen_kg = (taken.grass_kg_dm * parameters_.grass.nitrogen_content_fraction) +
+                      (taken.legume_kg_dm * parameters_.legume.nitrogen_content_fraction);
+  return taken;
+}
+
 double PastureSward::plant_nitrogen_kg() const noexcept {
   return (grass_kg_dm_ * parameters_.grass.nitrogen_content_fraction) +
          (legume_kg_dm_ * parameters_.legume.nitrogen_content_fraction) + dead_nitrogen_kg_;
