@@ -394,7 +394,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The largest install in the workflow, and it got larger when clang-tidy
+      # arrived: clang-tools-19 pulls a JRE behind it. This job has thirty
+      # minutes, so it can afford to wait out a slow mirror rather than have an
+      # attempt killed mid-fetch.
       - name: Install Qt6, VTK, clang-tidy and a virtual display
+        env:
+          CI_APT_TIMEOUT: 900
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
             | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null

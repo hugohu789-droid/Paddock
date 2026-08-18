@@ -42,15 +42,30 @@ use_main_archive() {
     /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
 }
 
-# Measured, not guessed. On a healthy runner, update and install together take
-# 20 seconds for ninja-build with GDAL and PROJ, and 127 seconds for the
-# map-view job's Qt6, VTK and clang - the largest install in the workflow. The
-# bound covers the whole attempt rather than each apt-get call, so three
-# attempts cost at most three times it: 9 minutes, which fits the tightest job
-# budget in the workflow with the sleeps between attempts. 180 seconds is
-# therefore generous against every install that is working and short against
-# every one that is not.
-attempt_seconds="${CI_APT_TIMEOUT:-180}"
+# What this bound is for, and what it is not.
+#
+# It exists to catch a mirror that has stopped answering, which produces no
+# output at all for as long as the job will allow. It is NOT a judgement about
+# how slow an install may be, and sizing it as one was a mistake worth
+# recording: 180 seconds was chosen from a single healthy measurement of the
+# largest install, and the next slow-but-working run of that same install was
+# killed three times over while it was still fetching packages one by one.
+# Turning a slow install into a hard failure is worse than the hang, because it
+# fails work that would have finished.
+#
+# So the default is deliberately loose - it only has to be shorter than the job
+# timeout, so that a stall is reported and retried instead of running the clock
+# out - and a job whose install is unusually large says so itself. The right
+# fix is a stall detector that watches for no progress rather than for elapsed
+# time, and that is recorded in docs/backlog.md rather than written here,
+# because killing a process group under sudo is not something this repository
+# can test anywhere but on CI.
+#
+# Measurements, so the next person tuning this has more than one: ninja-build
+# with GDAL and PROJ installs in 20 seconds, and the map-view job's Qt6, VTK,
+# clang and clang-tidy in 127 seconds on a fast mirror and more than 180 on a
+# slow one.
+attempt_seconds="${CI_APT_TIMEOUT:-300}"
 
 attempts=3
 for attempt in $(seq 1 "${attempts}"); do
