@@ -81,4 +81,31 @@ GrazingDay graze(PastureSward& sward, double paddock_hectares, const Mob& mob,
   return day;
 }
 
+LiveweightResponse advance_one_day(Mob& mob, const GrazingDay& day, const DietQuality& diet,
+                                   const GrazingConditions& ground) {
+  const std::string mob_error = mob.validation_error();
+  if (!mob_error.empty()) {
+    throw std::invalid_argument("advance_one_day: " + mob_error);
+  }
+
+  const LiveweightResponse response =
+      liveweight_response(mob.animal, mob.state, diet, ground, day.intake_per_head_kg_dm);
+
+  mob.state.liveweight_kg += response.liveweight_change_kg;
+  mob.state.liveweight_change_kg_per_day = response.liveweight_change_kg;
+  mob.state.age_days += 1.0;
+
+  // An animal cannot weigh nothing. Starvation and mortality are not modelled -
+  // see liveweight_response - so this floor exists to keep the arithmetic
+  // meaningful rather than to represent a biological limit, and a run that
+  // reaches it is reporting a feed budget that does not work.
+  if (mob.state.liveweight_kg <= 0.0) {
+    throw std::runtime_error("advance_one_day: mob '" + mob.name +
+                             "' has been starved to zero liveweight; the feed budget for this "
+                             "run does not work, and mortality is not modelled");
+  }
+
+  return response;
+}
+
 }  // namespace paddock::core
