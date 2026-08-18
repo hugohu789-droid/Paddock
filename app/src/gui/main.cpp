@@ -12,6 +12,7 @@
 #include <QSurfaceFormat>
 #include <QVTKOpenGLNativeWidget.h>
 #include <algorithm>
+#include <cstdio>
 #include <exception>
 #include <iostream>
 #include <iterator>
@@ -33,6 +34,18 @@ void print_usage() {
             << "  --screenshot   Write that frame to a PNG and exit. Implies --smoke,\n"
             << "                 and is how the map gets looked at without a person\n"
             << "                 at the screen\n";
+}
+
+/// Failure reporting that cannot itself fail, for the handlers in main. A throw
+/// raised inside a handler is not caught by that handler's siblings: it escapes
+/// main and the process ends in std::terminate with nothing printed. C stdio
+/// does not throw, and `noexcept` holds this to it. The same reasoning, and the
+/// reason CI cannot be relied on to catch a regression, is written out in
+/// app/src/main.cpp.
+void report_fatal(const char* message) noexcept {
+  std::fputs("paddock-gui: ", stderr);
+  std::fputs(message, stderr);
+  std::fputc('\n', stderr);
 }
 
 }  // namespace
@@ -98,7 +111,16 @@ int main(int argc, char** argv) {
 
     return QApplication::exec();
   } catch (const std::exception& error) {
-    std::cerr << "paddock-gui: " << error.what() << '\n';
+    report_fatal(error.what());
     return 1;
+  } catch (...) {
+    // A throw of something outside the std::exception hierarchy - Qt and VTK
+    // are C++ libraries with their own ideas, and either could grow one - would
+    // otherwise reach std::terminate, which prints nothing and, in a windowed
+    // program, means the window simply vanishes. Nothing can be asked of the
+    // value, so the report says only that it happened, and the exit code is the
+    // same 3 the `paddock` command line tool uses for the same situation.
+    report_fatal("an exception that is not a std::exception escaped; the run did not finish");
+    return 3;
   }
 }

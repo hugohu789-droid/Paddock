@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
 #include <cctype>
+#include <cstdio>
 #include <exception>
 #include <fstream>
 #include <iomanip>
@@ -169,6 +170,23 @@ int run_scenario(const std::string& bundle_directory, const std::string& csv_pat
 
 #endif  // PADDOCK_WITH_CONFIG
 
+/// The last word before the process ends, and it must not itself fail: a throw
+/// from inside one of main's handlers is not caught by the sibling handlers, so
+/// it leaves main and the process dies in std::terminate having printed
+/// nothing - the exact outcome those handlers exist to prevent. Hence C stdio,
+/// which does not throw, with `noexcept` to hold this to it.
+///
+/// This is not hypothetical: it is what clang-tidy's bugprone-exception-escape
+/// reports here against the MSVC standard library, whose ostream insertion
+/// carries a visible throw path. libstdc++ keeps its equivalent out of line, so
+/// the Linux CI gate says nothing about this file. Do not expect CI to notice
+/// if it comes back.
+void report_fatal(const char* message) noexcept {
+  std::fputs("paddock: ", stderr);
+  std::fputs(message, stderr);
+  std::fputc('\n', stderr);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -206,7 +224,19 @@ int main(int argc, char** argv) {
     print_usage(std::cerr);
     return 2;
   } catch (const std::exception& error) {
-    std::cerr << "paddock: " << error.what() << '\n';
+    report_fatal(error.what());
     return 1;
+  } catch (...) {
+    // Something was thrown that does not derive from std::exception: a foreign
+    // library's own type, or a bare `throw 42`. There is no interface to ask it
+    // anything, so all that can honestly be said is that it happened - but that
+    // is worth far more than the alternative, which is std::terminate ending
+    // the process with no output at all and looking to the user like a crash.
+    // The exit code is its own, so a script can tell this apart from a run that
+    // failed for a reason we understood (1) or a mistyped command (2).
+    //
+    // paddock-gui says the same thing with the same code; see app/src/gui/main.cpp.
+    report_fatal("an exception that is not a std::exception escaped; the run did not finish");
+    return 3;
   }
 }
