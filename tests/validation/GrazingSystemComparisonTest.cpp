@@ -120,8 +120,8 @@ TEST(GrazingSystemComparisonTest, OnlyRotationRestsAnything) {
   }
 
   // The rotating mob works its way round.
-  std::set<int> visited(result.rotational.paddock_of_first_mob.begin(),
-                        result.rotational.paddock_of_first_mob.end());
+  const std::set<int> visited(result.rotational.paddock_of_first_mob.begin(),
+                              result.rotational.paddock_of_first_mob.end());
   EXPECT_GT(visited.size(), 20U) << "a year of rotation should reach most of the farm";
 }
 

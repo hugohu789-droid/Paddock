@@ -73,7 +73,7 @@ TEST(ScenarioReportTest, AFarmThatBoughtNothingSaysSo) {
 // The caveats travel with the numbers. This is the test that stops a
 // good-looking report from being a misleading one.
 TEST(ScenarioReportTest, TheEvidenceCaveatsTravelWithTheNumbers) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = load_scenario(bundle_path());
   const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "managed");
   const std::string report = render_report(bundle, run);
 
@@ -88,7 +88,7 @@ TEST(ScenarioReportTest, TheEvidenceCaveatsTravelWithTheNumbers) {
 
 // The pasture and the stock, month by month, because a year is not one number.
 TEST(ScenarioReportTest, ItShowsTheYearMonthByMonth) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = load_scenario(bundle_path());
   const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "managed");
   const std::string report = render_report(bundle, run);
 

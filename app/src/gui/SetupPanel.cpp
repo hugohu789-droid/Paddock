@@ -228,9 +228,10 @@ QString SetupPanel::problem() const {
     return "There is no scenario to run.";
   }
   if (cover_floor_box_->value() >= rotation_box_->value()) {
-    return QString("The cover floor (%1) is at or above the rotation threshold (%2), so the "
-                   "farmer would be told to start rotating only once the sward is already below "
-                   "the cover being protected. Put the floor below the threshold.")
+    return QString(
+               "The cover floor (%1) is at or above the rotation threshold (%2), so the "
+               "farmer would be told to start rotating only once the sward is already below "
+               "the cover being protected. Put the floor below the threshold.")
         .arg(number(cover_floor_box_->value()))
         .arg(number(rotation_box_->value()));
   }
@@ -246,8 +247,9 @@ QString SetupPanel::caveat() const {
   if (weakest == config::Provenance::Direct || weakest == config::Provenance::Derived) {
     return {};
   }
-  return QString("%1 rests on at least one parameter marked '%2'. The run will be arithmetically "
-                 "sound and its absolute figures are not quotable.")
+  return QString(
+             "%1 rests on at least one parameter marked '%2'. The run will be arithmetically "
+             "sound and its absolute figures are not quotable.")
       .arg(QString::fromStdString(species->display_name),
            QString::fromStdString(config::to_string(weakest)));
 }
@@ -282,11 +284,11 @@ void SetupPanel::set_running(bool running) {
 }
 
 void SetupPanel::show_results(const config::RunSummary& run, bool has_stock) {
-  QString text = QString("<b>%1 days</b> simulated.<br>").arg(static_cast<qulonglong>(run.dates.size()));
+  QString text =
+      QString("<b>%1 days</b> simulated.<br>").arg(static_cast<qulonglong>(run.dates.size()));
   text += QString("Cover %1 to %2, mean %3 kg DM/ha.<br>")
               .arg(number(run.lowest_cover_kg_dm_per_ha()),
-                   number(run.highest_cover_kg_dm_per_ha()),
-                   number(run.mean_cover_kg_dm_per_ha()));
+                   number(run.highest_cover_kg_dm_per_ha()), number(run.mean_cover_kg_dm_per_ha()));
 
   if (has_stock) {
     text += QString("Liveweight %1 to %2 kg, a change of %3 kg.<br>")
