@@ -354,6 +354,68 @@ the agronomic point fall out on its own - under set stocking every paddock is
 grazed every day, so none of them rests, which is why the source says the system
 grows less.
 
+### Calibrating against New Zealand industry sources
+
+Six sources were fetched and read before anything was recorded against them, and
+`data/calibration/livestock/sources.toml` holds the manifest with hashes. Three
+findings came out of doing that rather than taking the numbers on trust.
+
+**Cattle maintenance validates to 2%.** DairyNZ's *Lactating cow* page gives
+maintenance ME by liveweight, stated as calculated at 11.0 MJ ME/kg DM. The
+equations already in `core/AnimalEnergy.cpp` reproduce it across the whole
+published range:
+
+| Liveweight | DairyNZ | This model | Difference |
+|---|---|---|---|
+| 300 kg | 40 | 39.7 | −0.8% |
+| 400 kg | 50 | 49.2 | −1.5% |
+| 500 kg | 59 | 58.2 | −1.4% |
+| 600 kg | 68 | 66.7 | −1.9% |
+
+This is the cattle validation this file had been missing, and it is stronger
+than the Simpson sheep check because it spans a range rather than a point.
+
+**But only with the age factor set to one.** Applying TMC Eq. 17 to a six-year-
+old cow (0.839) puts the model 17% below DairyNZ at 500 kg. Either DairyNZ apply
+no age discount to a mature cow, or Eq. 17 is being applied more widely here
+than it should be. Not resolved; recorded as open item 11.
+
+**Sheep is a different story, and the difference is systematic.** Beef + Lamb
+NZ's *Making every mating count*, Appendix 3.1, gives mature ewe maintenance.
+The model sits 26% below it at every weight — a flat offset, not scatter:
+
+| Ewe | B+LNZ | This model | Difference |
+|---|---|---|---|
+| 40 kg | 8.5 | 6.3 | −26.0% |
+| 50 kg | 10.0 | 7.4 | −25.7% |
+| 60 kg | 11.5 | 8.5 | −25.9% |
+
+The model agrees with Simpson (1978b) here, so it is not the model that has
+moved. B+LNZ's 10.0 for a 50 kg ewe is 0.53 MJ ME per kg lwt^0.75, which is
+close to the figure Simpson gives for *cattle*. These are practical feeding
+tables for hill country and include walking and a margin; treating them as
+physiological maintenance would double-count activity. Recorded as open item 12,
+because the right response is to work out what the offset is made of rather than
+to scale one to the other.
+
+The liveweight-change constants disagree in both directions and by more:
+B+LNZ give 65 MJ ME per kg gained and 17 MJ released per kg lost, against 50 and
+26 from the implemented equations.
+
+**One attribution in the brief was wrong, and it mattered.** The OVERSEER ME
+review was cited for K = 1.4 for beef cattle. The review does quote OVERSEER's
+values — 1.4, 1.4, 1.0, 1.4, 1.7, 1.25 — but its Recommendation 6 is to *change*
+them: "Modify the value of Kantype in the BASAL equation to be 1.0 for sheep,
+1.3 for British cattle breeds and 1.5 for beef and dairy cattle of dairy
+origin." It also notes that OVERSEER's equation "is cited as derived from Nicol
+and Brookes (2007), but uses the K values" of another source. So the K table is
+a record of what OVERSEER does, not a value that review endorses — and the
+disagreement recorded above now has an independent reviewer on the 1.3 side.
+
+The same review gives a route for the cold-stress term this model lacks
+(Recommendation 9): CSIRO (2007) equations, NIWA monthly climate, and Cottle and
+Pacheco (2016) for fleece depth.
+
 ### What is still not sourced
 
 - **Nicol & Brookes (2007)** itself — NZ Society of Animal Production Occasional
@@ -418,6 +480,9 @@ work and which do not.
 | 9 | Where stock choose to graze on a paddock of varying slope: utilisation by slope class | M3, task #24 | Lambert and Gillingham on stock camps and nutrient transfer | open - Gillingham et al. (1998) gives pasture *production* by slope and aspect, but not the animals' *distribution* over it. The energy cost of walking a slope is sourced (TMC Eq. 23); the preference that follows from it is not |
 
 | 10 | Grazing selectivity: how strongly stock prefer clover over grass, and how that differs between set stocking and rotation | M3, task #24 | NZ grazing behaviour literature | open - the direction is stated by Smith and Dawson (1976), the magnitude is not |
+
+| 11 | Whether the age factor applies to a mature cow | M3 | DairyNZ maintenance table against TMC Eq. 17 | open - the model matches DairyNZ with AgeFactor = 1 and is 17% low with it applied |
+| 12 | What the 26% between B+LNZ sheep feeding tables and physiological maintenance is made of | M3 | B+LNZ Appendix 3.1, CSIRO (2007) activity terms | open - a flat offset across the range, so it is a difference in what is being measured rather than noise |
 
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.
