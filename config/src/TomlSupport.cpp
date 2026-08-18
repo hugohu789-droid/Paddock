@@ -113,6 +113,17 @@ std::string require_string(const toml::table& table, std::string_view key,
   return node->as_string()->get();
 }
 
+bool require_bool(const toml::table& table, std::string_view key, const std::string& path) {
+  const toml::node* node = table.get(key);
+  if (node == nullptr) {
+    throw_in(table, path, "missing required key " + quoted(key));
+  }
+  if (!node->is_boolean()) {
+    throw_at(*node, path, quoted(key) + " must be true or false, found " + type_name(node->type()));
+  }
+  return node->as_boolean()->get();
+}
+
 double optional_double(const toml::table& table, std::string_view key, double fallback,
                        const std::string& path) {
   if (table.get(key) == nullptr) {
@@ -128,6 +139,14 @@ std::string optional_string(const toml::table& table, std::string_view key,
     return fallback;
   }
   return node->as_string()->get();
+}
+
+bool optional_bool(const toml::table& table, std::string_view key, bool fallback,
+                   const std::string& path) {
+  if (table.get(key) == nullptr) {
+    return fallback;
+  }
+  return require_bool(table, key, path);
 }
 
 bool has(const toml::table& table, std::string_view key) {

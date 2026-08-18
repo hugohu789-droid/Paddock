@@ -1,0 +1,32 @@
+# Lincoln University Research Farms, Canterbury.
+#
+# The rolling/complex-terrain case of the three examples, and the one whose
+# weather the project already has: the CliFlo snapshot script defaults to
+# Lincoln (NIWA agent 4881), and the DairyNZ Lincoln P21 series is the T3
+# validation reference.
+#
+# Boundaries are SYNTHETIC and say so; see ruakura-research-centre.toml.
+
+[farm]
+name = "lincoln_research_farms"
+display_name = "Lincoln University Research Farms"
+description = "Canterbury research land; the site the weather snapshot and the T3 growth reference both belong to."
+region = "Canterbury"
+
+[location]
+# The LINZ-converted Canterbury Plains control point from
+# tests/gis/ProjectionTest.cpp. It lies within a few kilometres of Lincoln, so
+# it is the right place for solar geometry and the wrong place for a fence.
+# location_verified is false accordingly. See docs/verify.md, open item 8.
+centre_easting = 1557252.3158
+centre_northing = 5167862.7895
+latitude_degrees = -43.6410
+location_verified = false
+source = "LINZ Concord conversion of 172.470 E, 43.641 S (Canterbury Plains), via tests/gis/ProjectionTest.cpp. A regional point some kilometres from the farm, not a farm survey."
+
+[boundary]
+kind = "synthetic"
+# PLACEHOLDER - a demonstration extent, not this farm's actual shape or size.
+extent_width_m = 1800.0
+extent_height_m = 1400.0
+paddock_hectares = 2.5

@@ -82,7 +82,7 @@ endif()
 # stops parsing fails the build rather than the first run that needs it.
 if(PADDOCK_BUILD_CONFIG)
   add_executable(paddock_config_tests config/ConfigTest.cpp config/DataFilesTest.cpp
-                                      config/ScenarioTest.cpp)
+                                      config/FarmConfigTest.cpp config/ScenarioTest.cpp)
 
   target_link_libraries(paddock_config_tests PRIVATE Paddock::config GTest::gtest_main
                                                      Paddock::project_options)

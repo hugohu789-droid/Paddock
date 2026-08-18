@@ -43,6 +43,33 @@ they are not a description of any real site, soil or sward.
 | Slope and aspect from a DEM | Horn's 3×3 finite difference | [Horn (1981), Proc. IEEE 69(1):14–47](https://doi.org/10.1109/PROC.1981.11918); the default in `gdaldem` and ArcGIS | `core/Topography.cpp` |
 | Radiation on a slope | Numerical integration of the surface-normal / sun dot product | Method of [Allen, Trezza & Tasumi (2006), Ag & Forest Met 139:55–73](https://doi.org/10.1016/j.agrformet.2006.05.012), integrated numerically rather than analytically | `core/Solar.cpp` |
 
+## Example farms
+
+The farm set is open: `data/farms/` is scanned, not enumerated, so what is
+recorded here is the provenance of each file's numbers rather than a list the
+code depends on.
+
+| Parameter | Value | Source | Used in |
+|---|---|---|---|
+| Massey Dairy 4 effective area | 221 ha | [Massey University, Dairy 4 farm page](https://www.massey.ac.nz/about/massey-subsidiaries-and-commercial-ventures/massey-farms/dairy-farm-4/), "Effective Area: 221 hectares", retrieved 18 August 2026 | `data/farms/massey-dairy-4.toml`, asserted in `tests/config/DataFilesTest.cpp` |
+| Massey Dairy 4 subdivision | approximately 80 paddocks of 1.5–3.5 ha | same page: "approximately 80 x 1.5-3.5 hectare paddocks all with race access" | same; also the source of the 2.5 ha default in `SyntheticParcelSource` |
+| Massey Dairy 4 soils | Tokomaru silt loam, some Ohakea silt loam on lower terraces | same page | not yet used — this is what the S-map lookup should return for this farm |
+| Farm centre coordinates, all three farms | NZTM2000 | LINZ Concord conversions, via the control point table in `tests/gis/ProjectionTest.cpp` | `data/farms/*.toml`, all marked `location_verified = false` |
+
+**On the farm centres.** Each of the three files takes its coordinates from a
+LINZ-converted control point for the *locality* - Ruakura, the Canterbury
+Plains, Palmerston North - and none of them is a surveyed farm centroid. They
+are right to within a few kilometres, which is right for solar geometry and
+wrong for a fence. Every file says so in its `source` field and carries
+`location_verified = false`; see open item 8.
+
+**On the Massey extent.** The rectangle is not the farm's outline and is not
+claimed to be. What is claimed, and tested, is that it encloses the published
+221 ha and subdivides into 80 paddocks averaging 2.7625 ha - the published
+count and the published mean. The generator's target size of 2.5 ha is tuned to
+achieve that and is labelled as tuned in the file, because feeding in the
+published mean instead yields 70 paddocks of 3.16 ha, which matches neither.
+
 ## Livestock energy (task #23)
 
 The equations below are quoted from one document, cited here once and referred
@@ -206,8 +233,14 @@ The suites here fall into three kinds, and the comments say which:
 | 6 | Nitrogen leaching: regulatory thresholds | M4 | Current Regional Council rules | open |
 | 7 | LINZ, NIWA and Manaaki Whenua licence terms and access methods; Open-Meteo and VCSN terms; the OVERSEER technical manual's no-promotion clause | M2-M3 | Dataset and document licences | open |
 
+| 8 | Farm boundaries and centroids for the three example farms | M3 | LINZ NZ Primary Parcels, via `scripts/linz-snapshot.py` | open - all three ship with generated boundaries and locality coordinates, marked `location_verified = false` |
+
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.
+
+Item 8 is what turns the example farms from plausible into real, and the format
+is already in place to receive it: a farm switches from generated rectangles to
+LINZ parcels by changing its `[boundary]` section to `kind = "geopackage"`.
 
 ## Engineering caveats
 

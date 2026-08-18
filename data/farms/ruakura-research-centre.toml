@@ -1,0 +1,35 @@
+# Ruakura Research Centre, Hamilton, Waikato.
+#
+# One of three example farms, chosen to span the terrain the model has to cope
+# with: this one is the flat case. See lincoln-research-farms.toml for rolling
+# Canterbury and massey-dairy-4.toml for the Manawatu.
+#
+# The boundaries here are SYNTHETIC and say so. Real ones arrive with the LINZ
+# parcel fetch (scripts/linz-snapshot.py), and replacing them is a change to
+# the [boundary] section of this file and nothing else.
+
+[farm]
+name = "ruakura_research_centre"
+display_name = "Ruakura Research Centre"
+description = "Flat Waikato research land, the low-relief end of the example set."
+region = "Waikato"
+
+[location]
+# The LINZ-converted coordinate for the Ruakura locality, taken from the control
+# point table in tests/gis/ProjectionTest.cpp, which came from LINZ's Concord
+# conversion service. That makes the number traceable, but it is a locality
+# reference point and NOT a surveyed farm centroid - which is why
+# location_verified is false. See docs/verify.md, open item 8.
+centre_easting = 1804011.1268
+centre_northing = 5815700.0870
+latitude_degrees = -37.7833
+location_verified = false
+source = "LINZ Concord conversion of 175.3167 E, 37.7833 S (the Ruakura locality), via tests/gis/ProjectionTest.cpp. A locality point, not a farm survey."
+
+[boundary]
+kind = "synthetic"
+# PLACEHOLDER - a demonstration extent, not this farm's actual shape or size.
+# 1600 m by 1200 m is 192 ha, the right order of magnitude for a research block.
+extent_width_m = 1600.0
+extent_height_m = 1200.0
+paddock_hectares = 2.5

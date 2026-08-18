@@ -31,11 +31,19 @@ const toml::table& require_table(const toml::table& parent, std::string_view key
 double require_double(const toml::table& table, std::string_view key, const std::string& path);
 std::string require_string(const toml::table& table, std::string_view key, const std::string& path);
 
+bool require_bool(const toml::table& table, std::string_view key, const std::string& path);
+
 /// Missing is allowed; present but wrong is not.
 double optional_double(const toml::table& table, std::string_view key, double fallback,
                        const std::string& path);
 std::string optional_string(const toml::table& table, std::string_view key,
                             const std::string& fallback);
+
+/// Unlike optional_string, a present-but-not-a-boolean value is an error rather
+/// than a fallback: `location_verified = "yes"` claiming a survey that never
+/// happened is exactly the mistake worth catching.
+bool optional_bool(const toml::table& table, std::string_view key, bool fallback,
+                   const std::string& path);
 
 [[nodiscard]] bool has(const toml::table& table, std::string_view key);
 
