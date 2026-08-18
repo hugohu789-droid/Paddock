@@ -62,6 +62,7 @@ gtest_discover_tests(paddock_statistical_tests PROPERTIES LABELS "unit\;statisti
 # Conservation suite: closed system, 365 simulated days, budgets closing to
 # 1e-9. Never skipped, never weakened, never marked flaky.
 add_executable(paddock_conservation_tests conservation/ClosedSystemTest.cpp
+                                          conservation/FarmBalanceTest.cpp
                                           conservation/PastureBalanceTest.cpp
                                           conservation/TerrainBalanceTest.cpp
                                           conservation/WaterBalanceTest.cpp)

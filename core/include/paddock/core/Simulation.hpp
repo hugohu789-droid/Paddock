@@ -68,6 +68,14 @@ class Farmlet {
 
   [[nodiscard]] const PastureSward& sward() const noexcept { return sward_; }
 
+  /// Removes green dry matter from this cell, in kg per hectare of it.
+  ///
+  /// A narrow entry rather than a mutable reference to the sward: defoliation
+  /// has to respect the residual, and handing out the sward would let a caller
+  /// reach past that. What comes back is what was actually taken, which is less
+  /// than was asked for when the cell is grazed down.
+  PastureSward::Defoliation graze(double requested_kg_dm_per_ha);
+
   [[nodiscard]] double latitude_degrees() const noexcept { return latitude_degrees_; }
 
   /// Opening stocks for the three budget lines, in ledger order.

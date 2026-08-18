@@ -72,6 +72,15 @@ class FarmletGrid {
 
   [[nodiscard]] const Farmlet& cell(std::size_t col, std::size_t row) const;
 
+  /// Grazes one cell, in kg of dry matter per hectare of that cell.
+  ///
+  /// The grid does not decide how much: it does not know about mobs, and a
+  /// class that knew both the soil physics and the stocking rate would be two
+  /// models in one file. Deciding is Farm's job; this is how the decision
+  /// reaches the ground.
+  PastureSward::Defoliation graze_cell(std::size_t col, std::size_t row,
+                                       double requested_kg_dm_per_ha);
+
   /// Snapshots for the map view. Each returns a raster sharing this grid's
   /// georeferencing, so the view never has to reconstruct it.
   [[nodiscard]] Raster<double> cover_kg_dm() const;
