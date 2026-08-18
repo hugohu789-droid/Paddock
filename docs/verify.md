@@ -504,6 +504,31 @@ The suites here fall into three kinds, and the comments say which:
   midwinter slope ratios of about 2.00 and 0.06, the 0.9 floor on a midsummer
   tilt, and the 0.1 ha bound on rasterisation error are all of this kind.
 
+## What this model may be quoted for
+
+The evidence is uneven, so this says plainly which outputs carry weight today
+and which do not. It is the short version; the sections above are the working.
+
+| Output | Standing | Why |
+|---|---|---|
+| Conservation of dry matter, water and nitrogen | **Sound** | A property of the bookkeeping, not of any parameter. Closes to 1e-9 over a grazed year |
+| Deterministic replay | **Sound** | Same reason |
+| Comparison between grazing systems | **Sound** | Both arms carry the same stock and the same parameters, so an error in a parameter cancels |
+| Direction of a seasonal or terrain effect | **Sound** | Checked against Gillingham's field trial for slope and aspect |
+| Cattle maintenance requirement | **Sound to about 2%** | Reproduces DairyNZ across 300-600 kg |
+| Sheep maintenance requirement | **Low by 2% to 15%** | Against Nicol and Brookes, growing with liveweight. Open item 12 |
+| **Carrying capacity for sheep** | **Overstated, by up to 17%** | Follows directly from the line above: a 60 kg ewe is modelled as needing 8.5 MJ where the published table says 10.0, so a farm looks able to carry more stock than it can |
+| **Absolute liveweight gain** | **Not quotable** | Standard reference weight is `verify` on every species definition, and it drives the energy value of gain |
+| Anything involving a milking cow | **Not modelled** | Lactation is absent; a "dairy cow" here is a dry cow |
+| Nitrogen over more than a season | **Wrong in a known direction** | Dung and urine are not returned, so a long run strips the farm |
+
+The sheep figure is the one to watch, and it is an **approximation carried
+deliberately** rather than an unknown: the size and sign are measured, a test
+holds them inside 16%, and open item 12 names the chapter that would settle it.
+Work that compares scenarios is unaffected. Work that answers "how many ewes
+will this farm carry" is not, and should not be published from this model until
+item 12 closes.
+
 ## Open items
 
 These are gaps in *evidence*. What is scheduled to be *built*, and in what
