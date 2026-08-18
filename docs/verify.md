@@ -336,6 +336,10 @@ The suites here fall into three kinds, and the comments say which:
 
 ## Open items
 
+These are gaps in *evidence*. What is scheduled to be *built*, and in what
+order, is in [backlog.md](backlog.md) - which also marks which of these block
+work and which do not.
+
 | # | Item | Needed by | Source to check | Status |
 |---|---|---|---|---|
 | 1 | Pasture growth: base and optimal temperatures, seasonal growth rates, annual DM yield by region | M2 | DairyNZ, AgResearch | open |

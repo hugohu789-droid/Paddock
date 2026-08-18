@@ -78,7 +78,7 @@ agricultural systems model and playable as a farm-management simulation.
 core/   pure C++17 simulation kernel   gis/   GDAL · PROJ · GEOS
 viz/    VTK                            app/   Qt6 desktop application
 ai/     optional LLM features          tests/ gtest + benchmarks
-data/   species, pastures, calibration docs/  ADRs, devlog, setup, verification
+data/   species, pastures, calibration docs/  ADRs, devlog, setup, verification, backlog
 ```
 
 Dependency direction is one-way: `gis → core`, `viz → core`, `app → core`,
