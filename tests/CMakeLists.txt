@@ -13,6 +13,7 @@ add_executable(
   unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
   unit/GrazingCalendarTest.cpp
+  unit/GrazingTest.cpp
   unit/PaddockMaskTest.cpp
   unit/PastureTest.cpp
   unit/RasterTest.cpp

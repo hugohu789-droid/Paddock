@@ -290,6 +290,27 @@ One reading is this project's and not the manual's: TMC gives km for milk diets
 is the obvious interpolation, and it is flagged here rather than presented as
 sourced.
 
+### Grazing: what the coupling does and does not do
+
+`core/Grazing.cpp` takes a mob's intake from the energy chain above and removes
+it from the sward, capped at what stands above each species' residual. Two
+simplifications are large enough that a reader should meet them here rather
+than discover them in a long run.
+
+**Dung and urine are not returned.** Eaten dry matter and the nitrogen in it are
+both recorded as outflows, so the budget closes exactly - but on a real paddock
+most of that nitrogen is back within days. A multi-year run will therefore strip
+nitrogen from the farm in a way a real one does not, and any nitrogen result
+from such a run is wrong in a known direction. Fixing it means modelling
+excretal return, which is a piece of work in its own right.
+
+**Grazing is not selective.** Grass and legume are taken in proportion to what
+each offers above its residual. Smith and Dawson (1976) report that set stocking
+is "highly selective" and that clovers under it "tend to be overgrazed, existing
+only as stunted plants" - so the species-composition half of their finding is
+outside what this model can currently show. Quantifying a preference needs a
+source this project does not yet have; see open item 10.
+
 ### What is still not sourced
 
 - **Nicol & Brookes (2007)** itself — NZ Society of Animal Production Occasional
@@ -348,6 +369,8 @@ The suites here fall into three kinds, and the comments say which:
 
 | 8 | Farm boundaries and centroids for the three example farms | M3 | LINZ NZ Primary Parcels, via `scripts/linz-snapshot.py` | open - all three ship with generated boundaries and locality coordinates, marked `location_verified = false` |
 | 9 | Where stock choose to graze on a paddock of varying slope: utilisation by slope class | M3, task #24 | Lambert and Gillingham on stock camps and nutrient transfer | open - Gillingham et al. (1998) gives pasture *production* by slope and aspect, but not the animals' *distribution* over it. The energy cost of walking a slope is sourced (TMC Eq. 23); the preference that follows from it is not |
+
+| 10 | Grazing selectivity: how strongly stock prefer clover over grass, and how that differs between set stocking and rotation | M3, task #24 | NZ grazing behaviour literature | open - the direction is stated by Smith and Dawson (1976), the magnitude is not |
 
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.
