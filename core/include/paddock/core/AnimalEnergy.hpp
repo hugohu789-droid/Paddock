@@ -1,0 +1,225 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Gejile Hu. All rights reserved.
+
+#pragma once
+
+#include <string>
+
+/// What a grazing animal needs to eat, and why.
+///
+/// Every equation here is quoted from one document, and each function names the
+/// equation it implements so a reader can check it against the source:
+///
+///   Wheeler, D M (2018). Animal metabolisable energy requirements. Technical
+///   Manual for the description of the OVERSEER Nutrient Budgets engine,
+///   version 6.3.0. AgResearch Ltd for OVERSEER Limited. ISSN 2253-461X.
+///
+/// docs/verify.md carries the URL, the SHA-256 of the PDF these were read from,
+/// and the primary sources the manual itself cites - chiefly Nicol and Brookes
+/// (2007) and CSIRO (2007), which disagree about the species factor K in a way
+/// that is recorded rather than resolved.
+///
+/// Nothing here is stateful and nothing draws a random number: an animal's
+/// requirement on a given day is a function of its weight, age, diet and
+/// ground. The herd that carries the state belongs elsewhere.
+namespace paddock::core {
+
+/// Gross energy of feed dry matter, MJ/kg. CSIRO (2007), quoted as TMC Eq. 2.
+inline constexpr double kGrossEnergyMjPerKgDm = 18.4;
+
+/// Ratio of empty body weight to liveweight, TMC Eq. 43.
+inline constexpr double kEmptyBodyFraction = 0.92;
+
+/// What the animal is eating.
+struct DietQuality {
+  /// dietME: metabolisable energy per kilogram of dry matter eaten.
+  double metabolisable_energy_mj_per_kg_dm = 0.0;
+
+  /// Organic matter digestibility, percent. Drives the cost of chewing
+  /// (TMC Eq. 18): coarser feed costs more to process.
+  double digestibility_percent = 0.0;
+
+  /// Proportion of the diet that is milk, 0 to 1. Changes which efficiency
+  /// applies (TMC Eq. 5 against Eq. 6) and so is not a cosmetic input.
+  double milk_fraction = 0.0;
+
+  /// qm, the energy density: dietME / gross energy. TMC Eq. 2.
+  [[nodiscard]] double energy_density() const noexcept;
+
+  /// km, the efficiency with which ME is used for maintenance.
+  ///
+  /// TMC Eq. 5 gives 0.85 for milk diets; Eq. 6 gives 0.35 qm + 0.503 for
+  /// everything else, from CSIRO (2007). On a 10.5 MJ/kg pasture diet this is
+  /// 0.703, and 0.28 / 0.703 = 0.40 MJ ME per kg lwt^0.75 - the figure Simpson
+  /// (1978b) published for sheep. That agreement is what fixes which case is
+  /// which; see docs/verify.md.
+  [[nodiscard]] double maintenance_efficiency() const noexcept;
+
+  /// kg, the efficiency with which ME is used for liveweight gain.
+  ///
+  /// TMC Eq. 9, kgf = 0.042 dietME + 0.006, blended with milk at 0.7 by Eq. 8.
+  /// The manual also states a temperate-pasture form (Eq. 11) that varies with
+  /// legume content and day of year, and then says it "has not been
+  /// implemented"; that form is recorded in docs/verify.md and deliberately not
+  /// used here, partly because the text of its seasonal term did not survive
+  /// extraction unambiguously.
+  [[nodiscard]] double gain_efficiency() const noexcept;
+
+  [[nodiscard]] std::string validation_error() const;
+};
+
+/// What distinguishes one class of animal from another - a dairy cow from a
+/// ewe, a stag from a weaner.
+///
+/// Nothing here has a default that means anything, for the same reason
+/// PastureSpeciesParameters has none: an animal class is a data definition, and
+/// a silent default would be a number nobody chose.
+struct AnimalClassParameters {
+  std::string class_id;
+
+  /// K, the species factor of TMC Eq. 13.
+  ///
+  /// The two primaries disagree. CSIRO (2007), which the manual follows for
+  /// sheep, dairy and beef: 1.0 sheep, 1.4 dairy, 1.4 dairy replacements, 1.4
+  /// beef, 1.25 dairy goats. Nicol and Brookes (2007): 1.0 sheep, 1.3 beef,
+  /// 1.5 dairy, 1.4 deer. The manual takes 1.7 for deer from a New Zealand
+  /// source. Which one a farm uses is a data decision and belongs in the TOML.
+  double species_factor = 0.0;
+
+  /// S, TMC Eq. 14: 1.15 entire males, 1.075 mixed-sex mobs, 1.0 females and
+  /// castrated males.
+  double sex_factor = 0.0;
+
+  /// SRW, the standard reference weight: the mature weight of a female of the
+  /// breed. Sets maturity (TMC Eq. 45) and so the energy value of gain.
+  double standard_reference_weight_kg = 0.0;
+
+  /// SpGraze, TMC Eq. 20: 0.0025 for dairy and beef.
+  double grazing_coefficient = 0.0;
+
+  /// k1 of TMC Eq. 44: 16.5 for large lean cattle breeds, 20.3 otherwise. The
+  /// ceiling the energy value of gain approaches at maturity.
+  double gain_energy_ceiling_mj_per_kg = 0.0;
+
+  [[nodiscard]] std::string validation_error() const;
+};
+
+/// One animal on one day.
+struct AnimalState {
+  double liveweight_kg = 0.0;
+  double age_days = 0.0;
+
+  /// Positive when gaining, negative when losing. TMC Eq. 43.
+  double liveweight_change_kg_per_day = 0.0;
+};
+
+/// The ground the animal is grazing, and how far it walks over it.
+///
+/// This is where terrain enters the livestock model. TMC Eq. 23 makes the cost
+/// of movement scale with 1 + tan(slope), and Eq. 24 charges eleven times as
+/// much per kilometre climbed as per kilometre walked on the flat, so the same
+/// animal on the same feed costs more on a hill face than on a terrace.
+struct GrazingConditions {
+  /// PastureMass, t DM/ha, in TMC Eq. 22: on a heavier cover an animal walks
+  /// less for the same intake.
+  double pasture_mass_t_dm_per_ha = 0.0;
+
+  double slope_degrees = 0.0;
+
+  /// TSR/SD in TMC Eq. 21 - the stocking rate over the stock density, which is
+  /// the share of the paddock one animal has to cover.
+  double area_per_animal_ha = 0.0;
+
+  /// Hkm and Vkm of TMC Eq. 24: kilometres walked horizontally and climbed
+  /// vertically in a day, beyond grazing itself.
+  double horizontal_km_per_day = 0.0;
+  double vertical_km_per_day = 0.0;
+};
+
+/// Agefactor, TMC Eq. 17: exp(-0.00008 a) with a in days, floored at 0.84.
+///
+/// Freer et al. (2006). The manual records this as differing from Nicol and
+/// Brookes' and CSIRO's year-based forms by about 0.14% on average.
+[[nodiscard]] double age_factor(double age_days) noexcept;
+
+/// NEbasal, TMC Eq. 13: 0.28 K S M Agefactor lwt^0.75, attributed to Nicol and
+/// Brookes (2007) equation 1.
+///
+/// The milk factor M is 1 here: it applies only before weaning, and Nicol and
+/// Brookes did not include it at all (TMC Eq. 15). Pre-weaned animals are a
+/// separate case in the manual and are not modelled yet.
+[[nodiscard]] double basal_net_energy_mj(const AnimalClassParameters& animal,
+                                         const AnimalState& state) noexcept;
+
+/// SlopeMoveFactor, TMC Eq. 23: 1 + tan(slope). 1.00 flat, 1.18 at 10 degrees,
+/// 1.36 at 20, 1.58 at 30.
+[[nodiscard]] double slope_movement_factor(double slope_degrees) noexcept;
+
+/// NEmove, TMC Eq. 21 with the pasture-mass term of Eq. 22.
+[[nodiscard]] double movement_net_energy_mj(const AnimalState& state,
+                                            const GrazingConditions& ground) noexcept;
+
+/// NEactivity, TMC Eq. 24.
+[[nodiscard]] double activity_net_energy_mj(const AnimalState& state,
+                                            const GrazingConditions& ground) noexcept;
+
+/// NEchew, TMC Eq. 18. Depends on intake, which depends on the total
+/// requirement, which depends on this - see daily_energy_requirement.
+[[nodiscard]] double chewing_net_energy_mj(const AnimalClassParameters& animal,
+                                           const AnimalState& state, const DietQuality& diet,
+                                           double intake_kg_dm) noexcept;
+
+/// EVG, TMC Eq. 44-46: the net energy in a kilogram of empty body gain, which
+/// rises with maturity as the animal lays down fat rather than protein.
+[[nodiscard]] double energy_value_of_gain_mj_per_kg(const AnimalClassParameters& animal,
+                                                    const AnimalState& state) noexcept;
+
+/// NElwt, TMC Eq. 43.
+[[nodiscard]] double liveweight_change_net_energy_mj(const AnimalClassParameters& animal,
+                                                     const AnimalState& state) noexcept;
+
+/// What one animal needs on one day, and what it has to eat to get it.
+struct EnergyRequirement {
+  double basal_net_mj = 0.0;
+  double chewing_net_mj = 0.0;
+  double movement_net_mj = 0.0;
+  double activity_net_mj = 0.0;
+
+  /// ME rather than NE: liveweight change is converted by kg at TMC Eq. 81.
+  double liveweight_change_me_mj = 0.0;
+
+  /// MEmaintenance, TMC Eq. 54 - the net terms over km, plus a tenth of the
+  /// production cost, which is Freer et al.'s way of charging the maintenance
+  /// that comes with producing rather than adding it to production.
+  double maintenance_me_mj = 0.0;
+
+  /// MErequirements, TMC Eq. 55.
+  double total_me_mj = 0.0;
+
+  /// TMC Eq. 19: what the animal has to eat to cover total_me_mj.
+  double intake_kg_dm = 0.0;
+
+  /// How many passes the chewing loop took, and whether it settled. The manual
+  /// stops at five whether or not it has converged (TMC section 5.2.2), so a
+  /// caller that cares can see which happened.
+  int iterations = 0;
+  bool converged = false;
+};
+
+/// Solves the requirement, chewing cost included.
+///
+/// Chewing costs energy in proportion to what is eaten, and what is eaten is
+/// set by the total requirement, which includes the cost of chewing. The manual
+/// resolves the circle by iterating from an initial guess of
+/// NEchew = 0.046 NEbasal (TMC Eq. 52) until maintenance moves by less than
+/// 0.1 MJ, or five passes have gone by - a bounded loop, so the result is
+/// reproducible rather than dependent on how long a solver was allowed to run.
+///
+/// Throws std::invalid_argument when the animal or the diet is not valid;
+/// a requirement computed from a zero-energy diet would be an infinite intake.
+[[nodiscard]] EnergyRequirement daily_energy_requirement(const AnimalClassParameters& animal,
+                                                         const AnimalState& state,
+                                                         const DietQuality& diet,
+                                                         const GrazingConditions& ground);
+
+}  // namespace paddock::core

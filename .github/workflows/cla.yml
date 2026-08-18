@@ -27,6 +27,7 @@ jobs:
   cla:
     name: Check the contributor licence agreement
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     # "recheck" lets a maintainer re-run the gate after a signature; the
     # signature phrase is what a contributor comments to sign.
     if: >

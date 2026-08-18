@@ -101,9 +101,12 @@ TEST(SlopeRadiationTest, LevelGroundIsExactlyOneAllYear) {
 }
 
 // The seasonal reversal, through the table rather than the function: a northerly
-// slope gains in winter and loses slightly in high summer. This is the behaviour
-// the whole mechanistic approach exists to reproduce, so it is asserted at the
-// level a caller actually uses.
+// slope gains in winter and loses slightly in high summer.
+//
+// The direction of each inequality is geometry and holds independently of this
+// code. The threshold of 1.5 is not - it is a regression pin taken from this
+// implementation, loose enough to leave the interpolation room and tight enough
+// that losing the winter gain would fail.
 TEST(SlopeRadiationTest, ANortherlySlopeGainsInWinterAndNotInSummer) {
   const Topography ground = sloping_ground(0.0, -0.36);  // about 20 degrees, facing north
   const SlopeRadiationTable table(ground, kCanterburyLatitude);

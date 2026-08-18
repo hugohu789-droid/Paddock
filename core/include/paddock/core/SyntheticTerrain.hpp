@@ -79,8 +79,10 @@ class SyntheticElevationSource : public ElevationSource {
 /// Rectangular paddocks laid out in rows and columns over the area.
 ///
 /// The default paddock size is 2.5 ha, in the middle of the 1.5-3.5 ha range
-/// Massey University's Dairy 4 subdivides its 221 effective hectares into. It
-/// is a stand-in for a real cadastral layer, not a model of one: real paddocks
+/// Massey University's Dairy 4 subdivides its 221 effective hectares into -
+/// "approximately 80 x 1.5-3.5 hectare paddocks all with race access", from
+/// Massey's own farm page, cited in data/farms/massey-dairy-4.toml. It is a
+/// stand-in for a real cadastral layer, not a model of one: real paddocks
 /// follow fences, drains and contours, and none of those are rectangles.
 class SyntheticParcelSource : public ParcelSource {
  public:

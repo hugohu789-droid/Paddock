@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -98,6 +99,10 @@ TEST(SolarSlopeTest, InNewZealandTheSunnySideFacesNorth) {
 // The counter-intuitive one, and the reason the test above does not simply
 // assert that a north-facing slope beats level ground.
 //
+// The lower bound of 0.9 is a regression pin taken from this implementation.
+// The upper bound of 1.0 is not: that a tilt cannot beat level ground when the
+// sun passes near overhead follows from the geometry.
+//
 // In midsummer at 43.6 S every 20 degree slope receives less than level ground,
 // whichever way it faces - north 0.96, east 0.97, south 0.94. The sun passes
 // close to overhead, so any tilt costs; and the day is long enough that it rises
@@ -112,12 +117,55 @@ TEST(SolarSlopeTest, InHighSummerEveryTiltLosesToLevelGround) {
   }
 }
 
-// Winter is where the difference lives, and it is large: at 43.6 S a 20 degree
-// northerly slope receives about twice what level ground does, and a southerly
-// one about a sixteenth - a factor of thirty between two sides of the same hill.
-// This is the geometry behind the seasonal reversal Ballantrae measured in
-// pasture production, and the reason aspect is modelled through radiation rather
-// than applied as an annual coefficient.
+// The classical check, and the only one here that tests the geometry against
+// something outside this project.
+//
+// At an equinox the sun's declination is nearly zero, and a slope tilted by
+// beta towards the equator then receives what level ground at latitude
+// (phi + beta) receives - the "equivalent latitude" result of solar geometry. It
+// follows from the geometry alone, so it holds whatever this implementation
+// does, and a sign error in either the surface normal or the sun direction
+// breaks it. Verified here at four latitude and slope combinations on both
+// equinoxes, where it holds to about 1e-6 MJ.
+TEST(SolarSlopeTest, ASlopeTowardsTheEquatorMatchesItsEquivalentLatitude) {
+  struct Case {
+    double latitude;
+    double slope;
+  };
+
+  constexpr std::array<Case, 4> kCases = {{
+      {-43.6, 10.0},  // Canterbury
+      {-43.6, 20.0},
+      {-37.8, 15.0},  // Waikato
+      {-46.6, 25.0},  // Southland
+  }};
+
+  for (const int day : {kEquinoxAutumn, kEquinoxSpring}) {
+    for (const Case& scenario : kCases) {
+      // Towards the equator from the southern hemisphere is north, bearing 0.
+      const double on_slope =
+          extraterrestrial_radiation_on_slope_mj(scenario.latitude, day, scenario.slope, 0.0);
+      const double at_equivalent_latitude =
+          extraterrestrial_radiation_on_slope_mj(scenario.latitude + scenario.slope, day, 0.0, 0.0);
+
+      ASSERT_NEAR(on_slope, at_equivalent_latitude, 1e-3)
+          << "latitude " << scenario.latitude << ", slope " << scenario.slope << ", day " << day;
+    }
+  }
+}
+
+// A REGRESSION PIN, not a validation. These numbers came out of this
+// implementation; no published measurement was compared against. They are here
+// so that a change which alters the winter contrast between two sides of a hill
+// has to be deliberate, and they should not be read as evidence that the
+// contrast is right.
+//
+// What supports the contrast being right is the equinox identity above, which
+// is independent of this code, and the level-ground case matching FAO-56.
+//
+// The magnitude is worth recording either way: at 43.6 S a 20 degree northerly
+// slope receives about twice what level ground does in midwinter, a southerly
+// one about a sixteenth.
 TEST(SolarSlopeTest, MidwinterSeparatesTheTwoSidesOfAHillDramatically) {
   const double north = slope_radiation_ratio(kCanterburyLatitude, kMidwinter, 20.0, 0.0);
   const double south = slope_radiation_ratio(kCanterburyLatitude, kMidwinter, 20.0, 180.0);
@@ -205,6 +253,63 @@ TEST(SolarSlopeTest, TheSunnySideGainsMostInWinter) {
 
   EXPECT_GT(winter, summer) << "winter ratio " << winter << ", summer ratio " << summer;
   EXPECT_GT(winter, 1.5) << "a 20 degree northerly slope gains about double in midwinter";
+}
+
+// VALIDATION against a field trial, not against this model's own arithmetic.
+//
+// Gillingham, Gray and Smith (1998), Proc. NZ Grassland Association 60,
+// measured pasture growth on a southern Hawke's Bay hill farm across four
+// classes: north- and south-facing aspects, each with easy (15-20 degrees) and
+// steep (25-30 degrees) slopes. Two of their findings are directional and so
+// can be checked without their figures, whose numbers are in bar charts this
+// project cannot read:
+//
+//   "Production was higher on easy than on steep slopes at all times within
+//    each aspect; however, pasture growth on north-facing steep slopes in
+//    winter was greater than on any areas within the south aspect at this
+//    time."
+//
+// The second half is the sharp one. Growth depends on moisture and temperature
+// as well as light, and Gillingham found soil moisture *higher* on the south
+// aspect - so the north aspect won its winter advantage despite being drier.
+// Radiation is what is left to explain it. This test does not claim to
+// reproduce their growth rates; it checks that the radiation model ranks the
+// two the same way, because a model that ranked them the other way could not
+// reproduce the measurement whatever the pasture code did.
+TEST(SolarSlopeTest, MidwinterRadiationRanksHawkesBayAspectsAsGillinghamMeasuredThem) {
+  // Southern Hawke's Bay, and the midpoints of the trial's two slope classes.
+  constexpr double kHawkesBayLatitude = -40.3;
+  constexpr double kEasySlope = 17.5;   // their "easy", 15-20 degrees
+  constexpr double kSteepSlope = 27.5;  // their "steep", 25-30 degrees
+  constexpr double kNorthFacing = 0.0;
+  constexpr double kSouthFacing = 180.0;
+
+  const double north_easy =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kEasySlope, kNorthFacing);
+  const double north_steep =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kSteepSlope, kNorthFacing);
+  const double south_easy =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kEasySlope, kSouthFacing);
+  const double south_steep =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kSteepSlope, kSouthFacing);
+
+  // The steep north face beats every part of the south aspect, easy included.
+  EXPECT_GT(north_steep, south_easy)
+      << "north steep " << north_steep << ", south easy " << south_easy;
+  EXPECT_GT(north_steep, south_steep);
+
+  // And within the south aspect, steeper is worse - which is the same
+  // direction as their "easy above steep within each aspect", for the one
+  // driver this function models.
+  EXPECT_GT(south_easy, south_steep);
+
+  // On the north aspect the radiation ordering is the opposite way round: a
+  // steeper slope faces the low winter sun more squarely. Gillingham still
+  // measured easy above steep there, so light is not the whole story on that
+  // side - moisture and soil depth are, and the pasture model has to carry
+  // them. Recording the disagreement is the point of the test.
+  EXPECT_GT(north_steep, north_easy) << "north steep " << north_steep << ", north easy "
+                                     << north_easy << " - radiation alone favours the steeper face";
 }
 
 }  // namespace

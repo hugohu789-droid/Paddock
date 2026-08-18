@@ -3,12 +3,14 @@
 
 add_library(
   paddock_core STATIC
+  src/AnimalEnergy.cpp
   src/BudgetLedger.cpp
   src/DataSource.cpp
   src/Distributions.cpp
   src/Entity.cpp
   src/FarmletGrid.cpp
   src/Geometry.cpp
+  src/GrazingCalendar.cpp
   src/PaddockMask.cpp
   src/Pasture.cpp
   src/SimulationClock.cpp

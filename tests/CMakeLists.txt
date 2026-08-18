@@ -6,11 +6,13 @@ include(GoogleTest)
 # this set and it must stay under ten seconds.
 add_executable(
   paddock_unit_tests
+  unit/AnimalEnergyTest.cpp
   unit/BudgetLedgerTest.cpp
   unit/DistributionsTest.cpp
   unit/EntityTest.cpp
   unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
+  unit/GrazingCalendarTest.cpp
   unit/PaddockMaskTest.cpp
   unit/PastureTest.cpp
   unit/RasterTest.cpp
@@ -82,7 +84,7 @@ endif()
 # stops parsing fails the build rather than the first run that needs it.
 if(PADDOCK_BUILD_CONFIG)
   add_executable(paddock_config_tests config/ConfigTest.cpp config/DataFilesTest.cpp
-                                      config/ScenarioTest.cpp)
+                                      config/FarmConfigTest.cpp config/ScenarioTest.cpp)
 
   target_link_libraries(paddock_config_tests PRIVATE Paddock::config GTest::gtest_main
                                                      Paddock::project_options)

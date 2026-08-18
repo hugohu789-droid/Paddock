@@ -205,6 +205,27 @@ ctest --preset fast
 If your clang-format major differs from CI's, point the script at the right
 binary: `CLANG_FORMAT=clang-format-19 scripts/check-format.sh`.
 
+### Running clang-tidy before you push
+
+The clang-tidy job is the slowest gate and the one most likely to fail on a
+change that builds and passes its tests, so it is worth running locally.
+
+On Windows, Visual Studio ships LLVM 19 - the major CI pins - but in two
+copies, and **only the 64-bit one works**. The 32-bit build under
+`VC\Tools\Llvm\bin\` segfaults on this project. Use the `x64` path:
+
+```bash
+"/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/x64/bin/clang-tidy.exe" --quiet core/src/YourFile.cpp -- -std=c++17 -Icore/include
+```
+
+Two cautions when invoking it by hand rather than through the compile database.
+Findings in a file whose includes could not be resolved are not to be trusted:
+clang-tidy cannot see the real types, so untouched variables look
+const-assignable and defined functions look undeclared. And `modernize-type-traits`
+fires inside Google Test's own macro expansions, which CI's header filter
+suppresses and an ad-hoc run does not. Check a finding against the file's
+includes before acting on it.
+
 ## Line endings and case sensitivity
 
 The index stores LF for every text file; working trees may use whatever the

@@ -9,6 +9,7 @@ paddock_provide_tomlplusplus()
 add_library(
   paddock_config STATIC
   src/ConfigError.cpp
+  src/FarmConfig.cpp
   src/PastureConfig.cpp
   src/ScenarioConfig.cpp
   src/SoilConfig.cpp

@@ -1,0 +1,52 @@
+# Massey University Dairy 4, Manawatu.
+#
+# The best-documented of the three examples: Massey publishes its effective
+# area, its paddock count and size range, and its soils, so this farm's
+# generated boundaries can be checked against something rather than merely
+# declared. tests/config/FarmConfigTest.cpp does exactly that.
+#
+# The SHAPE is still synthetic - a rectangle is not this farm's outline - but
+# the AREA is the published one, which is a meaningful difference: the total
+# hectares and the paddock size distribution are sourced, the outline is not.
+
+[farm]
+name = "massey_dairy_4"
+display_name = "Massey University Dairy 4"
+description = "Manawatu dairy platform; the example with a published area and paddock count to check against."
+region = "Manawatu-Whanganui"
+# Massey University, Dairy 4 farm page: "Effective Area: 221 hectares".
+# https://www.massey.ac.nz/about/massey-subsidiaries-and-commercial-ventures/massey-farms/dairy-farm-4/
+# Retrieved 18 August 2026. The same page gives "approximately 80 x 1.5-3.5
+# hectare paddocks all with race access", and soils "Predominately Tokomaru
+# Silt Loam with some Ohakea Silt Loam soils on the lower terraces" - the
+# latter is what the S-map lookup should return for this farm in M3.
+effective_hectares = 221.0
+
+[location]
+# The LINZ-converted Palmerston North control point from
+# tests/gis/ProjectionTest.cpp. Massey's Dairy 4 is on Tennent Drive about 5 km
+# from the city, so this is the right locality and not the farm's centroid;
+# location_verified stays false. See docs/verify.md, open item 8.
+centre_easting = 1821633.1767
+centre_northing = 5526347.9734
+latitude_degrees = -40.3840
+location_verified = false
+source = "LINZ Concord conversion of 175.611 E, 40.384 S (Palmerston North), via tests/gis/ProjectionTest.cpp. The city, about 5 km from the farm; not a farm survey."
+
+[boundary]
+kind = "synthetic"
+# 1700 m by 1300 m is 221.0 ha exactly, the published effective area. The
+# rectangle is a stand-in for the outline; the area it encloses is not a guess.
+extent_width_m = 1700.0
+extent_height_m = 1300.0
+# This is the generator's TARGET size, and it is tuned rather than published:
+# the synthetic source fits whole paddocks into the extent, so what comes out
+# is not what goes in. A target of 2.5 ha tiles this extent into 10 by 8 = 80
+# paddocks of 2.7625 ha, which is the published count and the published mean
+# (221 / 80 = 2.7625). Feeding the mean itself in - 2.76 - yields 70 paddocks
+# of 3.16 ha instead, which matches neither.
+#
+# So: 221 ha, "approximately 80" and the 1.5-3.5 ha range are Massey's. The
+# 2.5 here is chosen so the generated subdivision reproduces them, and
+# tests/config/DataFilesTest.cpp checks that it does.
+paddock_hectares = 2.5
