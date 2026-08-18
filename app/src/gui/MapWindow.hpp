@@ -66,6 +66,14 @@ class MapWindow : public QMainWindow {
   /// to click anything.
   void render_once();
 
+  /// Writes the current frame to a PNG.
+  ///
+  /// A map is a claim about what the model did, and a claim nobody looks at is
+  /// not checked. This is how the map gets checked without a person at the
+  /// screen: render a day, write it out, look at it. Returns false if the file
+  /// could not be written.
+  bool save_screenshot(const std::string& path);
+
   [[nodiscard]] std::size_t day_count() const noexcept { return dates_.size(); }
 
   /// The day on which the selected field varies most across the farm.
@@ -105,6 +113,9 @@ class MapWindow : public QMainWindow {
   void adopt_series();
 
   void keep_day(const core::FarmletGrid& grid, const std::string& date);
+
+  /// Which paddocks had stock on them on `day`, or empty for a run without.
+  [[nodiscard]] const std::vector<std::size_t>& grazed_on(std::size_t day) const;
   void refresh();
   [[nodiscard]] const std::vector<core::Raster<double>>& series_of(Field field) const;
 
@@ -133,6 +144,15 @@ class MapWindow : public QMainWindow {
   std::vector<core::Raster<double>> water_stress_;
   std::vector<core::Raster<double>> legume_fraction_;
   std::vector<std::string> dates_;
+
+  /// The fences, and where the stock were behind them.
+  ///
+  /// The boundaries are fixed for a run and the grazed set is not, so they are
+  /// kept apart: one is handed to the scene once, the other every frame. Under
+  /// set stocking the day's list is every paddock on the farm, which is exactly
+  /// what set stocking looks like and is worth being able to see.
+  std::vector<core::Polygon> boundaries_;
+  std::vector<std::vector<std::size_t>> grazed_each_day_;
   /// Indexed by Field.
   std::vector<std::pair<double, double>> whole_run_ranges_;
   std::vector<double> mean_cover_;

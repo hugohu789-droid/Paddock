@@ -396,6 +396,13 @@ jobs:
           cmake --preset ci-gui
           cmake --build --preset ci-gui
 
+      # Where the map puts things, which a rendered frame does not check: the
+      # field was once drawn half a cell south-west of the ground it described
+      # and looked entirely reasonable.
+      - name: Map placement
+        run: |
+          xvfb-run -a ctest --test-dir build/ci-gui -R MapSceneTest --output-on-failure
+
       # Rendering needs a GL context even for a 2D image, so the smoke test runs
       # under a virtual display. It steps the whole scenario, builds every day's
       # rasters and renders one frame; a blank or broken pipeline fails here
@@ -403,3 +410,15 @@ jobs:
       - name: Render the map headlessly
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-baseline --smoke
+
+      # And that the fences land on the field rather than beside it. A PNG is
+      # the only way to check that without a person at the screen, and it is
+      # kept so a reviewer can look at what the run actually drew.
+      - name: Draw a grazed day
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-grazed             --screenshot grazed-day.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: map-grazed-day
+          path: grazed-day.png

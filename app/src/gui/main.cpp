@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <exception>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,10 +26,13 @@
 namespace {
 
 void print_usage() {
-  std::cout << "paddock-gui <bundle> [--smoke]\n\n"
-            << "  <bundle>   A scenario bundle directory with a [grid] section\n"
-            << "  --smoke    Render one frame and exit; used by CI, which has\n"
-            << "             no one to click anything\n";
+  std::cout << "paddock-gui <bundle> [--smoke] [--screenshot FILE]\n\n"
+            << "  <bundle>       A scenario bundle directory with a [grid] section\n"
+            << "  --smoke        Render one frame and exit; used by CI, which has\n"
+            << "                 no one to click anything\n"
+            << "  --screenshot   Write that frame to a PNG and exit. Implies --smoke,\n"
+            << "                 and is how the map gets looked at without a person\n"
+            << "                 at the screen\n";
 }
 
 }  // namespace
@@ -41,7 +45,17 @@ int main(int argc, char** argv) {
       return args.empty() ? 2 : 0;
     }
 
-    const bool smoke = std::find(args.begin(), args.end(), "--smoke") != args.end();
+    const auto screenshot_flag = std::find(args.begin(), args.end(), "--screenshot");
+    std::string screenshot;
+    if (screenshot_flag != args.end()) {
+      if (std::next(screenshot_flag) == args.end()) {
+        std::cerr << "paddock-gui: --screenshot needs a file to write to\n";
+        return 2;
+      }
+      screenshot = std::string(*std::next(screenshot_flag));
+    }
+    const bool smoke =
+        !screenshot.empty() || std::find(args.begin(), args.end(), "--smoke") != args.end();
     // Must be set before the QApplication exists, or the widget and the render
     // window disagree about the surface they share.
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
@@ -72,6 +86,13 @@ int main(int argc, char** argv) {
       window.render_once();
       std::cout << "paddock-gui: rendered " << window.day_count() << " days of " << bundle.name
                 << '\n';
+      if (!screenshot.empty()) {
+        if (!window.save_screenshot(screenshot)) {
+          std::cerr << "paddock-gui: could not write " << screenshot << '\n';
+          return 1;
+        }
+        std::cout << "paddock-gui: wrote " << screenshot << '\n';
+      }
       return 0;
     }
 

@@ -50,10 +50,16 @@ available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
 origin_easting = 1570000.0
 origin_northing = 5180000.0
 
-# Subdividing 96 ha into 2 ha paddocks gives about 48 of them, which is enough
-# to hold a 35 day spell on a three day graze. A block cut into four could not,
-# and the farmer would report the shuffle rather than the rotation - see
-# tests/unit/FarmerTest.cpp.
+# Subdividing 96 ha at 2 ha gives 40 paddocks of 2.4 ha, not 48 of 2.0. The
+# generator fits as many WHOLE paddocks of the target size as the block takes -
+# 8 across and 5 down at 141 m square - and then divides the block exactly among
+# them, so they tile it with no gap and come out a little larger than asked. A
+# gap would be a cell no paddock owns, which is a cell that is silently never
+# grazed, and that is the worse failure of the two.
+#
+# 40 is still enough to hold a 35 day spell on a three day graze. A block cut
+# into four could not, and the farmer would report the shuffle rather than the
+# rotation - see tests/unit/FarmerTest.cpp.
 paddock_hectares = 2.0
 
 # The stock. A species is referenced the way every other input is, by relative

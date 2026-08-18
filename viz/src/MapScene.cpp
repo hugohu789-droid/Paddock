@@ -2,12 +2,16 @@
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
 #include <vtkAxisActor2D.h>
 #include <vtkCamera.h>
+#include <vtkCellArray.h>
+#include <vtkPoints.h>
+#include <vtkProperty.h>
 #include <vtkTextProperty.h>
 
 #include <paddock/viz/MapScene.hpp>
@@ -24,6 +28,48 @@ constexpr double kColourMaximum = 255.0;
 
 /// Labels on the colour bar.
 constexpr int kLegendLabels = 5;
+
+/// Fence widths, in pixels. The rested paddocks are drawn thin and half
+/// transparent so they read as context; the grazed ones are what the eye should
+/// go to.
+constexpr float kFenceWidth = 1.0F;
+constexpr float kGrazedFenceWidth = 3.0F;
+constexpr double kFenceOpacity = 0.45;
+
+/// Builds one polydata of closed rings from the polygons at `indices`.
+void build_rings(const std::vector<core::Polygon>& boundaries,
+                 const std::vector<std::size_t>& indices, vtkPolyData* into) {
+  vtkNew<vtkPoints> points;
+  vtkNew<vtkCellArray> lines;
+
+  for (const std::size_t index : indices) {
+    if (index >= boundaries.size()) {
+      continue;
+    }
+    const std::vector<core::Point2D>& vertices = boundaries[index].vertices();
+    if (vertices.size() < 3) {
+      continue;
+    }
+    const vtkIdType first = points->GetNumberOfPoints();
+    for (const core::Point2D& vertex : vertices) {
+      // Slightly above the image, or the fence and the field fight for the same
+      // depth and the line disappears in patches as the camera moves.
+      points->InsertNextPoint(vertex.easting, vertex.northing, 0.1);
+    }
+    const auto count = static_cast<vtkIdType>(vertices.size());
+    lines->InsertNextCell(count + 1);
+    for (vtkIdType i = 0; i < count; ++i) {
+      lines->InsertCellPoint(first + i);
+    }
+    // Back to the start: a paddock is a closed ring, and leaving it open draws
+    // every paddock with one fence missing.
+    lines->InsertCellPoint(first);
+  }
+
+  into->SetPoints(points);
+  into->SetLines(lines);
+  into->Modified();
+}
 
 }  // namespace
 
@@ -83,6 +129,46 @@ MapScene::MapScene() {
 
   colours_->SetLookupTable(lookup_);
   colours_->SetOutputFormatToRGB();
+
+  fence_mapper_->SetInputData(fences_);
+  fence_actor_->SetMapper(fence_mapper_);
+  fence_actor_->GetProperty()->SetColor(1.0, 1.0, 1.0);
+  fence_actor_->GetProperty()->SetLineWidth(kFenceWidth);
+  fence_actor_->GetProperty()->SetOpacity(kFenceOpacity);
+  // Lighting would shade a flat line by its normal, which for a ring drawn in
+  // the ground plane means it comes out grey and uneven.
+  fence_actor_->GetProperty()->LightingOff();
+  renderer_->AddActor(fence_actor_);
+
+  grazed_mapper_->SetInputData(grazed_fences_);
+  grazed_actor_->SetMapper(grazed_mapper_);
+  // Amber against the greens and the viridis blues, neither of which has
+  // anything near it, so "being grazed today" cannot be mistaken for a value on
+  // the colour scale.
+  grazed_actor_->GetProperty()->SetColor(1.0, 0.72, 0.2);
+  grazed_actor_->GetProperty()->SetLineWidth(kGrazedFenceWidth);
+  grazed_actor_->GetProperty()->LightingOff();
+  renderer_->AddActor(grazed_actor_);
+}
+
+void MapScene::set_boundaries(const std::vector<core::Polygon>& boundaries) {
+  boundaries_ = boundaries;
+  std::vector<std::size_t> all(boundaries_.size());
+  for (std::size_t i = 0; i < all.size(); ++i) {
+    all[i] = i;
+  }
+  build_rings(boundaries_, all, fences_);
+  build_rings(boundaries_, {}, grazed_fences_);
+}
+
+void MapScene::show_grazed(const std::vector<std::size_t>& grazed) {
+  build_rings(boundaries_, grazed, grazed_fences_);
+}
+
+void MapScene::clear_boundaries() {
+  boundaries_.clear();
+  build_rings(boundaries_, {}, fences_);
+  build_rings(boundaries_, {}, grazed_fences_);
 }
 
 void MapScene::show(const core::Raster<double>& raster, const ColourScale& scale,
@@ -98,11 +184,26 @@ void MapScene::show(const core::Raster<double>& raster, const ColourScale& scale
 
   image_->SetDimensions(cols, rows, 1);
   image_->SetSpacing(cell, cell, 1.0);
-  // The image sits at the raster's south-west corner in NZTM2000 metres, so
-  // that a later layer - a paddock boundary, a farm track - can be drawn in the
-  // same coordinates without a conversion step.
-  image_->SetOrigin(raster.transform().origin_easting,
-                    raster.transform().origin_northing - (rows * cell), 0.0);
+  // The image is placed in NZTM2000 metres, so that a later layer - a paddock
+  // boundary, a farm track - is drawn in the same coordinates with no
+  // conversion step.
+  //
+  // At the CELL CENTRES, not at the south-west corner. A vtkImageData of N
+  // samples spans (N - 1) spacings, because its samples are points rather than
+  // areas, so anchoring sample zero on the corner of the farm drew every value
+  // half a cell south-west of where it belongs and left the field a whole cell
+  // short in each direction. Nothing showed it until there were fences to
+  // compare against, and then the field sat visibly inside them along the north
+  // edge.
+  //
+  // The consequence of drawing point samples honestly is that the coloured area
+  // stops at the outermost cell centres, half a cell inside the boundary, all
+  // the way round. That is what the data supports: between two cell centres the
+  // colour is interpolated, and beyond the last one there is nothing to
+  // interpolate from.
+  const double half_cell = cell / 2.0;
+  image_->SetOrigin(raster.transform().origin_easting + half_cell,
+                    raster.transform().origin_northing - (rows * cell) + half_cell, 0.0);
   image_->AllocateScalars(VTK_DOUBLE, 1);
 
   // Row 0 of a Paddock raster is the northernmost, because that is how a
@@ -136,6 +237,26 @@ void MapScene::show(const core::Raster<double>& raster, const ColourScale& scale
   legend_->SetLabelFormat(format.c_str());
 
   has_field_ = true;
+}
+
+core::BoundingBox MapScene::field_bounds() const {
+  core::BoundingBox bounds = core::BoundingBox::empty();
+  if (!has_field_) {
+    return bounds;
+  }
+  std::array<double, 6> extent{};
+  image_->GetBounds(extent.data());
+  bounds.expand_to_include(core::Point2D{extent[0], extent[2]});
+  bounds.expand_to_include(core::Point2D{extent[1], extent[3]});
+  return bounds;
+}
+
+std::size_t MapScene::fence_ring_count() const {
+  return static_cast<std::size_t>(fences_->GetNumberOfLines());
+}
+
+std::size_t MapScene::grazed_ring_count() const {
+  return static_cast<std::size_t>(grazed_fences_->GetNumberOfLines());
 }
 
 void MapScene::reset_camera() {

@@ -17,7 +17,9 @@
 #include <utility>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkNew.h>
+#include <vtkPNGWriter.h>
 #include <vtkRenderWindow.h>
+#include <vtkWindowToImageFilter.h>
 
 #include <paddock/config/ScenarioReport.hpp>
 #include <paddock/core/FarmletGrid.hpp>
@@ -219,6 +221,27 @@ void MapWindow::open_report() {
   dialog->show();
 }
 
+bool MapWindow::save_screenshot(const std::string& path) {
+  vtkRenderWindow* window = view_->renderWindow();
+  if (window == nullptr) {
+    return false;
+  }
+  window->Render();
+
+  vtkNew<vtkWindowToImageFilter> capture;
+  capture->SetInput(window);
+  // The back buffer, because the front one may already have been composited
+  // with whatever is in front of the window.
+  capture->ReadFrontBufferOff();
+  capture->Update();
+
+  vtkNew<vtkPNGWriter> writer;
+  writer->SetFileName(path.c_str());
+  writer->SetInputConnection(capture->GetOutputPort());
+  writer->Write();
+  return writer->GetErrorCode() == 0;
+}
+
 void MapWindow::clear_series() {
   cover_.clear();
   soil_water_.clear();
@@ -227,6 +250,13 @@ void MapWindow::clear_series() {
   dates_.clear();
   mean_cover_.clear();
   whole_run_ranges_.clear();
+  boundaries_.clear();
+  grazed_each_day_.clear();
+}
+
+const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
+  static const std::vector<std::size_t> kNone;
+  return day < grazed_each_day_.size() ? grazed_each_day_[day] : kNone;
 }
 
 void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date) {
@@ -247,6 +277,25 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
   last_run_ = config::run_managed_scenario(
       bundle, policy, diet, bundle.name, [this](const core::Farm& farm, const core::FarmDay& day) {
         keep_day(farm.grid(), day.date.to_iso_string());
+
+        // The fences do not move, so they are taken once, on the first day.
+        if (boundaries_.empty()) {
+          boundaries_.reserve(farm.paddocks().size());
+          for (const core::Paddock& paddock : farm.paddocks()) {
+            boundaries_.push_back(paddock.boundary);
+          }
+        }
+
+        // Where the stock were. Taken from the farm rather than from the day's
+        // MobDay, which carries one index per mob: a set stocked mob has the
+        // run of every paddock, and only the farm knows the whole list.
+        std::vector<std::size_t> grazed;
+        for (const core::FarmMob& mob : farm.mobs()) {
+          grazed.insert(grazed.end(), mob.paddocks.begin(), mob.paddocks.end());
+        }
+        std::sort(grazed.begin(), grazed.end());
+        grazed.erase(std::unique(grazed.begin(), grazed.end()), grazed.end());
+        grazed_each_day_.push_back(std::move(grazed));
       });
 }
 
@@ -293,6 +342,12 @@ void MapWindow::adopt_series() {
   }
 
   timeline_->setRange(0, static_cast<int>(dates_.empty() ? 0 : dates_.size() - 1));
+
+  if (boundaries_.empty()) {
+    scene_.clear_boundaries();
+  } else {
+    scene_.set_boundaries(boundaries_);
+  }
 
   // The exact extent goes in the title, where it can be read once. Axis labels
   // are for orientation; seven-digit coordinates repeated across the bottom of
@@ -403,6 +458,7 @@ void MapWindow::refresh() {
   }
 
   scene_.show(raster, viz::ColourScale(style.ramp, lowest, highest), legend);
+  scene_.show_grazed(grazed_on(day));
   // The day number is here so that a playing timeline is visibly playing even
   // on a field whose colours barely move: legume fraction shifts by about a
   // ten-thousandth from one day to the next.
