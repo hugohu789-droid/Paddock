@@ -42,6 +42,26 @@ they are not a description of any real site, soil or sward.
 |---|---|---|---|
 | Slope and aspect from a DEM | Horn's 3×3 finite difference | [Horn (1981), Proc. IEEE 69(1):14–47](https://doi.org/10.1109/PROC.1981.11918); the default in `gdaldem` and ArcGIS | `core/Topography.cpp` |
 | Radiation on a slope | Numerical integration of the surface-normal / sun dot product | Method of [Allen, Trezza & Tasumi (2006), Ag & Forest Met 139:55–73](https://doi.org/10.1016/j.agrformet.2006.05.012), integrated numerically rather than analytically | `core/Solar.cpp` |
+| Hill country slope classes | easy 15–20°, steep 25–30° | [Gillingham, Gray & Smith (1998), Proc. NZ Grassland Association 60](https://www.nzgajournal.org.nz/index.php/ProNZGA/article/view/2319) | `tests/unit/SolarSlopeTest.cpp` |
+
+**A field check on the slope radiation model.** Gillingham et al. measured
+pasture growth on a southern Hawke's Bay hill farm across north and south
+aspects at both slope classes, and report that "pasture growth on north-facing
+steep slopes in winter was greater than on any areas within the south aspect at
+this time" — while soil moisture was *higher* on the south aspect throughout.
+The north aspect therefore won its winter advantage despite being drier, which
+leaves radiation to explain it.
+
+`SolarSlopeTest.MidwinterRadiationRanksHawkesBayAspectsAsGillinghamMeasuredThem`
+checks that the model ranks those four classes the same way. It is validation
+rather than a pin: the ordering comes from a field trial by other authors.
+
+It also records where the model and the measurement *disagree*. On the north
+aspect, radiation alone favours the steeper face, because a steeper slope meets
+the low winter sun more squarely; Gillingham still measured easy above steep
+there. Light is not the whole story on the sunny side — soil depth and moisture
+are — and the test says so rather than hiding it. Their numeric growth rates
+are in bar charts, not tables, so only the ordering could be extracted.
 
 ## Example farms
 

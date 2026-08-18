@@ -255,5 +255,62 @@ TEST(SolarSlopeTest, TheSunnySideGainsMostInWinter) {
   EXPECT_GT(winter, 1.5) << "a 20 degree northerly slope gains about double in midwinter";
 }
 
+// VALIDATION against a field trial, not against this model's own arithmetic.
+//
+// Gillingham, Gray and Smith (1998), Proc. NZ Grassland Association 60,
+// measured pasture growth on a southern Hawke's Bay hill farm across four
+// classes: north- and south-facing aspects, each with easy (15-20 degrees) and
+// steep (25-30 degrees) slopes. Two of their findings are directional and so
+// can be checked without their figures, whose numbers are in bar charts this
+// project cannot read:
+//
+//   "Production was higher on easy than on steep slopes at all times within
+//    each aspect; however, pasture growth on north-facing steep slopes in
+//    winter was greater than on any areas within the south aspect at this
+//    time."
+//
+// The second half is the sharp one. Growth depends on moisture and temperature
+// as well as light, and Gillingham found soil moisture *higher* on the south
+// aspect - so the north aspect won its winter advantage despite being drier.
+// Radiation is what is left to explain it. This test does not claim to
+// reproduce their growth rates; it checks that the radiation model ranks the
+// two the same way, because a model that ranked them the other way could not
+// reproduce the measurement whatever the pasture code did.
+TEST(SolarSlopeTest, MidwinterRadiationRanksHawkesBayAspectsAsGillinghamMeasuredThem) {
+  // Southern Hawke's Bay, and the midpoints of the trial's two slope classes.
+  constexpr double kHawkesBayLatitude = -40.3;
+  constexpr double kEasySlope = 17.5;   // their "easy", 15-20 degrees
+  constexpr double kSteepSlope = 27.5;  // their "steep", 25-30 degrees
+  constexpr double kNorthFacing = 0.0;
+  constexpr double kSouthFacing = 180.0;
+
+  const double north_easy =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kEasySlope, kNorthFacing);
+  const double north_steep =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kSteepSlope, kNorthFacing);
+  const double south_easy =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kEasySlope, kSouthFacing);
+  const double south_steep =
+      slope_radiation_ratio(kHawkesBayLatitude, kMidwinter, kSteepSlope, kSouthFacing);
+
+  // The steep north face beats every part of the south aspect, easy included.
+  EXPECT_GT(north_steep, south_easy)
+      << "north steep " << north_steep << ", south easy " << south_easy;
+  EXPECT_GT(north_steep, south_steep);
+
+  // And within the south aspect, steeper is worse - which is the same
+  // direction as their "easy above steep within each aspect", for the one
+  // driver this function models.
+  EXPECT_GT(south_easy, south_steep);
+
+  // On the north aspect the radiation ordering is the opposite way round: a
+  // steeper slope faces the low winter sun more squarely. Gillingham still
+  // measured easy above steep there, so light is not the whole story on that
+  // side - moisture and soil depth are, and the pasture model has to carry
+  // them. Recording the disagreement is the point of the test.
+  EXPECT_GT(north_steep, north_easy) << "north steep " << north_steep << ", north easy "
+                                     << north_easy << " - radiation alone favours the steeper face";
+}
+
 }  // namespace
 }  // namespace paddock::core
