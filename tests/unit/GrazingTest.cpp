@@ -192,6 +192,56 @@ TEST(GrazingTest, ASpeciesAtItsResidualIsNotDrawnDownFurther) {
   EXPECT_DOUBLE_EQ(sward.legume_kg_dm(), parameters.legume.residual_kg_dm_per_ha);
 }
 
+// The loop closing. Run the same mob for a fortnight on a paddock that can feed
+// it and one that cannot, and the two animals must end up different weights.
+// Before advance_one_day existed they ended up identical, which is why running
+// out of feed had no consequence and no grazing system could beat another.
+TEST(GrazingTest, AFortnightOnShortFeedCostsWeightThatGoodFeedDoesNot) {
+  const DietQuality diet = pasture_diet();
+  const GrazingConditions ground = flat_paddock();
+
+  PastureSward plenty(two_species_sward(), 3500.0, 1100.0, 60.0);
+  PastureSward short_feed(two_species_sward(), 1260.0, 410.0, 60.0);
+
+  Mob well_fed = ewes(60);
+  Mob underfed = ewes(60);
+  const double starting_weight = well_fed.state.liveweight_kg;
+
+  for (int day = 0; day < 14; ++day) {
+    const GrazingDay on_plenty = graze(plenty, 3.0, well_fed, diet, ground);
+    const GrazingDay on_short = graze(short_feed, 3.0, underfed, diet, ground);
+    advance_one_day(well_fed, on_plenty, diet, ground);
+    advance_one_day(underfed, on_short, diet, ground);
+  }
+
+  EXPECT_LT(underfed.state.liveweight_kg, starting_weight) << "the underfed mob has to lose";
+  EXPECT_GT(well_fed.state.liveweight_kg, underfed.state.liveweight_kg)
+      << "well fed " << well_fed.state.liveweight_kg << " kg, underfed "
+      << underfed.state.liveweight_kg << " kg after 14 days";
+
+  // Age advances with the days, which is what makes the maintenance requirement
+  // drift over a long run rather than staying pinned to the starting state.
+  EXPECT_DOUBLE_EQ(well_fed.state.age_days, ewes(1).state.age_days + 14.0);
+}
+
+// A mob eating exactly what a well-stocked paddock offers should hold its
+// weight rather than drift, because the grazing step and the energy step are
+// the same equations read in opposite directions.
+TEST(GrazingTest, AMobWithFeedToSpareHoldsItsWeight) {
+  const DietQuality diet = pasture_diet();
+  const GrazingConditions ground = flat_paddock();
+
+  PastureSward sward(two_species_sward(), 4000.0, 1200.0, 60.0);
+  Mob mob = ewes(20);
+
+  const GrazingDay day = graze(sward, 5.0, mob, diet, ground);
+  ASSERT_FALSE(day.feed_limited);
+
+  const LiveweightResponse response = advance_one_day(mob, day, diet, ground);
+  EXPECT_NEAR(response.liveweight_change_kg, 0.0, 1e-6)
+      << "a mob that ate its requirement should not drift";
+}
+
 TEST(GrazingTest, AnImpossibleMobOrPaddockIsRefused) {
   PastureSward sward(two_species_sward(), 3000.0, 900.0, 60.0);
 

@@ -65,6 +65,16 @@ struct DietQuality {
   /// extraction unambiguously.
   [[nodiscard]] double gain_efficiency() const noexcept;
 
+  /// The efficiency that applies when an animal is *losing* weight rather than
+  /// gaining, TMC Eq. 8: km / 0.8 for a non-lactating animal.
+  ///
+  /// The asymmetry is real and it is the manual's, not an assumption made here.
+  /// Body tissue is mobilised for maintenance more efficiently than feed energy
+  /// is converted to it, so a kilogram lost buys more than a kilogram gained
+  /// cost. The arithmetic is self-consistent: tissue energy used at 0.8 equals
+  /// feed ME used at km.
+  [[nodiscard]] double loss_efficiency() const noexcept;
+
   [[nodiscard]] std::string validation_error() const;
 };
 
@@ -221,5 +231,54 @@ struct EnergyRequirement {
                                                          const AnimalState& state,
                                                          const DietQuality& diet,
                                                          const GrazingConditions& ground);
+
+/// What actually eating a given amount does to an animal's weight.
+///
+/// The inverse of daily_energy_requirement, and the direction a simulation
+/// needs: that function answers "to grow this fast, what must it eat", and this
+/// one answers "having eaten this, how fast does it grow". A model with only
+/// the first has no way for a paddock short of feed to have any consequence.
+struct LiveweightResponse {
+  /// What the intake carried.
+  double metabolisable_energy_mj = 0.0;
+
+  /// What standing still cost: the net terms over km, TMC Eq. 54 without the
+  /// production share.
+  double maintenance_me_mj = 0.0;
+
+  /// Positive when there was energy left over, negative when the animal had to
+  /// find the difference in its own tissue.
+  double surplus_me_mj = 0.0;
+
+  /// The answer, kg per day. Negative when losing.
+  double liveweight_change_kg = 0.0;
+
+  /// True when the animal did not cover maintenance from what it ate.
+  bool losing = false;
+
+  int iterations = 0;
+  bool converged = false;
+};
+
+/// Works out what a day's intake did to an animal.
+///
+/// The energy value of gain depends on how fast the weight is changing (TMC
+/// Eq. 46), and how fast it changes is what this function is solving for, so it
+/// iterates - bounded, like the chewing loop, so the answer does not depend on
+/// how long a solver was allowed to run. The dependence is weak at ordinary
+/// growth rates, and the loop usually settles in two passes.
+///
+/// **Starvation is not modelled.** An animal that cannot cover maintenance
+/// loses weight here for as long as it is underfed, with no floor and no
+/// mortality. A run that drives one to implausible weights is telling you the
+/// feed budget is wrong, not that the animal survived it.
+///
+/// Throws std::invalid_argument on the same grounds daily_energy_requirement
+/// does, and for a negative intake.
+[[nodiscard]] LiveweightResponse liveweight_response(const AnimalClassParameters& animal,
+                                                     const AnimalState& state,
+                                                     const DietQuality& diet,
+                                                     const GrazingConditions& ground,
+                                                     double intake_kg_dm);
 
 }  // namespace paddock::core

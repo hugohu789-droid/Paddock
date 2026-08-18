@@ -266,6 +266,22 @@ it sets the accuracy this part of the model can honestly claim.
 13, 14, 17), the grazing terms (Eq. 18, 20–24), liveweight change (Eq. 43–46,
 81) and the iterative solution of the chewing circularity (Eq. 52, 54–55).
 
+The inverse - what a given intake does to an animal's weight - is also
+implemented, and it is the direction a simulation needs: the manual answers
+"to grow this fast, what must it eat", and a farm needs "having eaten this, how
+fast does it grow". The efficiency is asymmetric and the asymmetry is the
+manual's: TMC Eq. 8 gives km / 0.8 for a non-lactating animal losing weight
+against kgf for one gaining, so mobilising tissue is more efficient than
+depositing it and the same energy gap moves the animal further down than up.
+
+Two readings there are this project's rather than the manual's, both flagged in
+the code. TMC Eq. 54 charges a tenth of the production cost to maintenance;
+that share is not charged on a deficit here, because an animal losing weight is
+not producing and the manual does not cover the case. And **starvation is not
+modelled**: an underfed animal loses weight indefinitely, with no floor and no
+mortality, so a run that reaches implausible weights is reporting a feed budget
+that does not work rather than an animal that survived it.
+
 **Not implemented, and a farm model is incomplete without them:**
 
 | Missing | Equations | Consequence |

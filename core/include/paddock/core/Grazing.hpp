@@ -77,4 +77,15 @@ GrazingDay graze(PastureSward& sward, double paddock_hectares, const Mob& mob,
                  const DietQuality& diet, const GrazingConditions& ground,
                  BudgetLedger* ledger = nullptr);
 
+/// Advances a mob by one day on what it actually ate, and by one day of age.
+///
+/// This is the step that gives a short paddock a consequence. Without it a mob
+/// grazes, comes back marked feed-limited, and is exactly the same animal
+/// tomorrow - so a farm that ran out of feed would look identical to one that
+/// did not, and no grazing system could be judged against another.
+///
+/// Returns what the day did, so a caller can report it.
+LiveweightResponse advance_one_day(Mob& mob, const GrazingDay& day, const DietQuality& diet,
+                                   const GrazingConditions& ground);
+
 }  // namespace paddock::core

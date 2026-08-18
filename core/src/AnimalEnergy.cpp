@@ -48,6 +48,10 @@ constexpr double kGainEfficiencySlope = 0.042;
 constexpr double kGainEfficiencyIntercept = 0.006;
 constexpr double kMilkGainEfficiency = 0.7;
 
+/// TMC Eq. 8: the divisor that makes mobilised tissue more efficient than
+/// deposited tissue.
+constexpr double kLossEfficiencyDivisor = 0.8;
+
 /// TMC Eq. 52 and section 5.2.2.
 constexpr double kInitialChewFractionOfBasal = 0.046;
 constexpr double kMaintenanceToleranceMj = 0.1;
@@ -85,6 +89,10 @@ double DietQuality::gain_efficiency() const noexcept {
   const double forage =
       (kGainEfficiencySlope * metabolisable_energy_mj_per_kg_dm) + kGainEfficiencyIntercept;
   return (forage * (1.0 - milk_fraction)) + (kMilkGainEfficiency * milk_fraction);
+}
+
+double DietQuality::loss_efficiency() const noexcept {
+  return maintenance_efficiency() / kLossEfficiencyDivisor;
 }
 
 std::string DietQuality::validation_error() const {
@@ -243,6 +251,77 @@ EnergyRequirement daily_energy_requirement(const AnimalClassParameters& animal,
   }
 
   return result;
+}
+
+LiveweightResponse liveweight_response(const AnimalClassParameters& animal,
+                                       const AnimalState& state, const DietQuality& diet,
+                                       const GrazingConditions& ground, double intake_kg_dm) {
+  const std::string animal_error = animal.validation_error();
+  if (!animal_error.empty()) {
+    throw std::invalid_argument("liveweight_response: " + animal_error);
+  }
+  const std::string diet_error = diet.validation_error();
+  if (!diet_error.empty()) {
+    throw std::invalid_argument("liveweight_response: " + diet_error);
+  }
+  if (state.liveweight_kg <= 0.0) {
+    throw std::invalid_argument("liveweight_response: liveweight must be positive");
+  }
+  if (intake_kg_dm < 0.0) {
+    throw std::invalid_argument("liveweight_response: intake cannot be negative");
+  }
+
+  LiveweightResponse response;
+  response.metabolisable_energy_mj = intake_kg_dm * diet.metabolisable_energy_mj_per_kg_dm;
+
+  // Chewing is not circular here: the intake is given rather than solved for,
+  // which is the whole difference between this function and its inverse.
+  const double net_maintenance = basal_net_energy_mj(animal, state) +
+                                 chewing_net_energy_mj(animal, state, diet, intake_kg_dm) +
+                                 movement_net_energy_mj(state, ground) +
+                                 activity_net_energy_mj(state, ground);
+
+  const double maintenance_efficiency = diet.maintenance_efficiency();
+  response.maintenance_me_mj = net_maintenance / maintenance_efficiency;
+  response.surplus_me_mj = response.metabolisable_energy_mj - response.maintenance_me_mj;
+  response.losing = response.surplus_me_mj < 0.0;
+
+  // TMC Eq. 54 charges a tenth of the production cost to maintenance, so with
+  // ME available fixed the production term solves in closed form:
+  //   available = net/km + 0.1 P + P, hence P = (available - net/km) / 1.1.
+  //
+  // The share is not charged on a deficit: it is the cost of producing, and an
+  // animal losing weight is not producing. TMC does not cover that case, so
+  // this is a reading rather than the manual's, and docs/verify.md says so.
+  const double production_me = response.losing
+                                   ? response.surplus_me_mj
+                                   : response.surplus_me_mj / (1.0 + kProductionMaintenanceShare);
+
+  const double efficiency = response.losing ? diet.loss_efficiency() : diet.gain_efficiency();
+
+  // TMC Eq. 81 rearranged: NElwt = MElwt * kg, then Eq. 43 rearranged again
+  // for the weight. The energy value of gain depends on the rate, so iterate.
+  const double net_liveweight_energy = production_me * efficiency;
+
+  AnimalState working = state;
+  double previous_change = 0.0;
+  for (int pass = 1; pass <= kMaximumIterations; ++pass) {
+    const double energy_value = energy_value_of_gain_mj_per_kg(animal, working);
+    if (energy_value <= 0.0) {
+      break;
+    }
+    response.liveweight_change_kg = net_liveweight_energy / (kEmptyBodyFraction * energy_value);
+    response.iterations = pass;
+
+    if (pass > 1 && std::abs(response.liveweight_change_kg - previous_change) < 1e-6) {
+      response.converged = true;
+      break;
+    }
+    previous_change = response.liveweight_change_kg;
+    working.liveweight_change_kg_per_day = response.liveweight_change_kg;
+  }
+
+  return response;
 }
 
 }  // namespace paddock::core
