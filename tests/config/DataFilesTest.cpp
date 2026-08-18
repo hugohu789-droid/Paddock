@@ -102,11 +102,15 @@ TEST(DataFilesTest, MasseyDairy4MatchesItsPublishedAreaAndPaddockCount) {
   const FarmDefinition farm = load_farm(data_path("farms/massey-dairy-4.toml"));
 
   ASSERT_TRUE(farm.stated_effective_hectares.has_value());
-  EXPECT_DOUBLE_EQ(farm.stated_effective_hectares.value(), 221.0);
+  // value_or rather than a dereference: gtest's ASSERT_TRUE stops the test on
+  // failure, but clang-tidy's optional analysis does not model that, and a
+  // check silenced with a comment is worth less than one written so it passes.
+  const double stated_hectares = farm.stated_effective_hectares.value_or(0.0);
+  EXPECT_DOUBLE_EQ(stated_hectares, 221.0);
 
   // The declared extent has to reproduce the published area, or the file is
   // describing a different farm from the one it cites.
-  EXPECT_NEAR(farm.boundary_hectares(), farm.stated_effective_hectares.value(), 1e-6);
+  EXPECT_NEAR(farm.boundary_hectares(), stated_hectares, 1e-6);
 
   // "approximately 80 x 1.5-3.5 hectare paddocks all with race access".
   //

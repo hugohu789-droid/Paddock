@@ -167,10 +167,10 @@ double chewing_net_energy_mj(const AnimalClassParameters& animal, const AnimalSt
 double energy_value_of_gain_mj_per_kg(const AnimalClassParameters& animal,
                                       const AnimalState& state) noexcept {
   // TMC Eq. 46: the adjustment for how fast the weight is being put on.
-  const double rate_adjustment =
-      (state.liveweight_change_kg_per_day * 1000.0 * kEmptyBodyFraction) /
-          (kGainRateDivisor * metabolic_weight(animal.standard_reference_weight_kg)) -
-      1.0;
+  const double empty_body_gain_g = state.liveweight_change_kg_per_day * 1000.0 * kEmptyBodyFraction;
+  const double reference_scale =
+      kGainRateDivisor * metabolic_weight(animal.standard_reference_weight_kg);
+  const double rate_adjustment = (empty_body_gain_g / reference_scale) - 1.0;
 
   // TMC Eq. 45.
   const double maturity = state.liveweight_kg / animal.standard_reference_weight_kg;

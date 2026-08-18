@@ -265,7 +265,7 @@ TEST(AnimalEnergyTest, TheChewingIterationConvergesWithinTheManualsFivePasses) {
 TEST(AnimalEnergyTest, AnImpossibleDietOrAnimalIsRefused) {
   const AnimalClassParameters animal = lamb(65.0);
   const AnimalState state = growing_lamb();
-  GrazingConditions ground;
+  const GrazingConditions ground;
 
   DietQuality no_energy = pasture_diet();
   no_energy.metabolisable_energy_mj_per_kg_dm = 0.0;

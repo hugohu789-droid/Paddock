@@ -10,6 +10,7 @@ add_library(
   src/Entity.cpp
   src/FarmletGrid.cpp
   src/Geometry.cpp
+  src/GrazingCalendar.cpp
   src/PaddockMask.cpp
   src/Pasture.cpp
   src/SimulationClock.cpp
