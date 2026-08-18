@@ -39,7 +39,7 @@ QString number(double value, int decimals = 0) {
 
 }  // namespace
 
-SetupPanel::SetupPanel(std::string data_directory, QWidget* parent) : QWidget(parent) {
+SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWidget(parent) {
   scenario_box_ = new QComboBox(this);
   species_box_ = new QComboBox(this);
 

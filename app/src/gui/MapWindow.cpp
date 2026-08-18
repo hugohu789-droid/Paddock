@@ -45,6 +45,10 @@ constexpr int kFrameInterval = 30;
 constexpr double kPastureMe = 10.5;
 constexpr double kPastureDigestibility = 75.0;
 
+/// What grazed_on returns for a day the run does not have, and for a run with
+/// no stock in it. A reference has to refer to something.
+const std::vector<std::size_t> kNothingGrazed;
+
 struct FieldStyle {
   const char* label;
   const char* legend;
@@ -73,7 +77,7 @@ FieldStyle style_of(MapWindow::Field field) {
 
 }  // namespace
 
-MapWindow::MapWindow(const config::ScenarioBundle& bundle, std::string bundle_directory,
+MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bundle_directory,
                      std::string data_directory, QWidget* parent)
     : QMainWindow(parent), data_directory_(std::move(data_directory)) {
   setWindowTitle(QString::fromStdString("Paddock - " + bundle.name));
@@ -259,8 +263,7 @@ void MapWindow::clear_series() {
 }
 
 const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
-  static const std::vector<std::size_t> kNone;
-  return day < grazed_each_day_.size() ? grazed_each_day_[day] : kNone;
+  return day < grazed_each_day_.size() ? grazed_each_day_[day] : kNothingGrazed;
 }
 
 void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date) {

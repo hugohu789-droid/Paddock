@@ -59,7 +59,7 @@ class MapWindow : public QMainWindow {
   /// for the scenarios and species it offers. `bundle` is the one to open on,
   /// and it is passed already loaded so that a bundle which will not load fails
   /// on the command line rather than inside a window.
-  MapWindow(const config::ScenarioBundle& bundle, std::string bundle_directory,
+  MapWindow(const config::ScenarioBundle& bundle, const std::string& bundle_directory,
             std::string data_directory, QWidget* parent = nullptr);
 
   /// Renders one frame and returns. Used by the CI smoke test, which has no one

@@ -59,7 +59,7 @@ class SetupPanel : public QWidget {
   /// directory with neither leaves the panel empty and disabled rather than
   /// throwing: an application that cannot find its data should say so in the
   /// window, not fail to open one.
-  explicit SetupPanel(std::string data_directory, QWidget* parent = nullptr);
+  explicit SetupPanel(const std::string& data_directory, QWidget* parent = nullptr);
 
   [[nodiscard]] Choices choices() const;
 

@@ -57,7 +57,10 @@ void build_rings(const std::vector<core::Polygon>& boundaries,
       points->InsertNextPoint(vertex.easting, vertex.northing, 0.1);
     }
     const auto count = static_cast<vtkIdType>(vertices.size());
-    lines->InsertNextCell(count + 1);
+    // InsertNextCell counts points in an int while the ids are vtkIdType, which
+    // is 64-bit. A paddock has a handful of corners, so the cast is safe here
+    // and saying so explicitly is better than letting it narrow silently.
+    lines->InsertNextCell(static_cast<int>(count + 1));
     for (vtkIdType i = 0; i < count; ++i) {
       lines->InsertCellPoint(first + i);
     }

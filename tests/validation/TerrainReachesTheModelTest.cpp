@@ -24,12 +24,15 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <optional>
 #include <string>
 
 #include <paddock/config/ScenarioRun.hpp>
 
 namespace paddock::config {
 namespace {
+
+constexpr double kPi = 3.14159265358979323846;
 
 std::string bundle_path() {
   return std::string(PADDOCK_DATA_DIR) + "/scenarios/canterbury-grazed";
@@ -82,19 +85,25 @@ TEST(TerrainReachesTheModelTest, TheShippedBundlesAreStillFlat) {
 // Two extents would be two farms.
 TEST(TerrainReachesTheModelTest, ASlopedBundleSamplesItsSurfaceOverTheGrid) {
   const ScenarioBundle bundle = on_a_slope(0.0, -0.10);
-  ASSERT_TRUE(bundle.grid.has_value());
+  const std::optional<core::Raster<double>> elevation = bundle.make_elevation();
+  const std::optional<core::Topography> ground = bundle.make_topography();
 
-  const auto elevation = bundle.make_elevation();
-  ASSERT_TRUE(elevation.has_value());
-  EXPECT_EQ(elevation->cols(), bundle.grid->cols);
-  EXPECT_EQ(elevation->rows(), bundle.grid->rows);
-  EXPECT_DOUBLE_EQ(elevation->transform().cell_size, bundle.grid->cell_size_m);
+  // Written as plain if-and-FAIL rather than ASSERT_TRUE because the assertion
+  // has to be visible to more than a person: clang-tidy's optional analysis
+  // cannot see through a gtest macro to know the value is engaged, and value()
+  // is no better - it throws, which the check counts as unchecked access too.
+  if (!bundle.grid.has_value() || !elevation.has_value() || !ground.has_value()) {
+    FAIL() << "a bundle asking for a slope came back without a grid, an elevation or a slope";
+  }
+  const GridSpec& spec = *bundle.grid;
 
-  const auto ground = bundle.make_topography();
-  ASSERT_TRUE(ground.has_value());
+  EXPECT_EQ(elevation->cols(), spec.cols);
+  EXPECT_EQ(elevation->rows(), spec.rows);
+  EXPECT_DOUBLE_EQ(elevation->transform().cell_size, spec.cell_size_m);
+
   // Verification, not a pin: a 10% grade is atan(0.10), which is 5.71 degrees.
-  const double middle = ground->slope_degrees(bundle.grid->cols / 2, bundle.grid->rows / 2);
-  EXPECT_NEAR(middle, std::atan(0.10) * 180.0 / 3.14159265358979323846, 0.01);
+  const double middle = ground->slope_degrees(spec.cols / 2, spec.rows / 2);
+  EXPECT_NEAR(middle, std::atan(0.10) * 180.0 / kPi, 0.01);
 }
 
 // The reason it matters. In the southern hemisphere the sun sits to the north,

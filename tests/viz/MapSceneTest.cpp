@@ -116,6 +116,7 @@ TEST(MapSceneTest, TheFencesEncloseTheFieldTheyAreDrawnOver) {
 // missing, which reads as a gate rather than as a bug.
 TEST(MapSceneTest, EveryPaddockIsOneClosedRingAndGrazedOnesAreDrawnTwice) {
   std::vector<core::Polygon> paddocks;
+  paddocks.reserve(6);
   for (int i = 0; i < 6; ++i) {
     paddocks.push_back(core::Polygon::rectangle(
         core::Point2D{kOriginEasting + (i * 100.0), kOriginNorthing - 100.0}, 100.0, 100.0));
