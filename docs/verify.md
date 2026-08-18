@@ -327,6 +327,33 @@ only as stunted plants" - so the species-composition half of their finding is
 outside what this model can currently show. Quantifying a preference needs a
 source this project does not yet have; see open item 10.
 
+### Two errors a year-long run caught
+
+Both were found by running `data/scenarios/canterbury-grazed` for a year, not by
+any unit test, and both are recorded because the class of mistake matters more
+than the fix.
+
+**Demand must come from what an animal wants, not what it did.**
+`daily_energy_requirement` answers "to change weight at this rate, what must it
+eat", so feeding it a *realised* rate inverts the question. A mob that lost
+weight overnight returned a negative production term, which reads as an energy
+credit and shrank the requirement - so it ate less, lost more, and asked for
+less again. A year took a mob from 55 kg to two grams on a farm whose mean cover
+never fell below 2000 kg DM/ha and which reported feed-limited on two days out
+of 366. Demand is now computed against holding weight. Appetite rising when an
+animal goes short is real and is not modelled; that needs intake capacity, which
+has its own literature.
+
+**Set stocking is not "do not move".** Modelled as leaving a mob where it
+stands, it confines the stock to one paddock - the opposite of the system. Smith
+and Dawson (1976) say of lambing that "the whole of the farm area should be used
+for grazing". The mob lost fifteen kilograms over seventy days on two hectares
+while forty-seven other paddocks carried feed. A mob now holds a *set* of
+paddocks: one under rotation, all of them under set stocking. That also makes
+the agronomic point fall out on its own - under set stocking every paddock is
+grazed every day, so none of them rests, which is why the source says the system
+grows less.
+
 ### What is still not sourced
 
 - **Nicol & Brookes (2007)** itself — NZ Society of Animal Production Occasional

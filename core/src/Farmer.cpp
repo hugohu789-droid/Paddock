@@ -17,11 +17,25 @@ Farmer::Day Farmer::decide(Farm& farm, const Date& date) {
   const GrazingRule& rule = calendar_.rule_on(date);
   day.system = rule.system;
 
-  // Under set stocking the stock stay where they are. That is what the system
-  // is, and it is why it needs no decision: "animals graze the pasture almost
-  // continuously" (Smith and Dawson, 1976).
+  // Under set stocking the stock get the run of the whole farm. That is what
+  // the system is - Smith and Dawson (1976) say of lambing that "the whole of
+  // the farm area should be used for grazing" - and it is *not* the same as
+  // leaving a mob where it stands. A mob confined to the paddock it happened to
+  // be on would starve there while the rest of the farm grew, which is exactly
+  // what the first run of the year-long scenario did.
   if (rule.system == GrazingSystem::SetStocking) {
+    for (std::size_t index = 0; index < farm.mobs().size(); ++index) {
+      farm.spread_mob(index);
+    }
     return day;
+  }
+
+  // Coming out of set stocking, a mob has the run of everything. It has to be
+  // put somewhere before a rotation can start.
+  for (std::size_t index = 0; index < farm.mobs().size(); ++index) {
+    if (farm.mobs()[index].paddocks.size() > 1) {
+      farm.move_mob(index, farm.mobs()[index].paddocks.front());
+    }
   }
 
   const std::vector<FarmMob>& mobs = farm.mobs();
@@ -39,7 +53,7 @@ Farmer::Day Farmer::decide(Farm& farm, const Date& date) {
     std::size_t best = Farm::kNobody;
     int best_rest = -1;
     for (std::size_t paddock = 0; paddock < rest.size(); ++paddock) {
-      if (paddock == mobs[index].paddock) {
+      if (paddock == mobs[index].paddock()) {
         continue;
       }
       if (farm.mob_on(paddock) != Farm::kNobody) {
@@ -61,7 +75,7 @@ Farmer::Day Farmer::decide(Farm& farm, const Date& date) {
 
     MobMove move;
     move.mob = index;
-    move.from = mobs[index].paddock;
+    move.from = mobs[index].paddock();
     move.to = best;
     move.days_grazed = mobs[index].days_on_paddock;
     move.rest_days = best_rest;

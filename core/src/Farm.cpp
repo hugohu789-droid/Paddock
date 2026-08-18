@@ -74,7 +74,10 @@ std::size_t Farm::add_mob(Mob mob, std::size_t paddock) {
   if (paddock >= paddocks_.size()) {
     throw std::out_of_range("Farm::add_mob: no such paddock");
   }
-  mobs_.push_back(FarmMob{std::move(mob), paddock});
+  FarmMob placed;
+  placed.mob = std::move(mob);
+  placed.paddocks = {paddock};
+  mobs_.push_back(std::move(placed));
   return mobs_.size() - 1;
 }
 
@@ -85,7 +88,21 @@ void Farm::move_mob(std::size_t mob, std::size_t paddock) {
   if (paddock >= paddocks_.size()) {
     throw std::out_of_range("Farm::move_mob: no such paddock");
   }
-  mobs_[mob].paddock = paddock;
+  mobs_[mob].paddocks = {paddock};
+  mobs_[mob].days_on_paddock = 0;
+}
+
+void Farm::spread_mob(std::size_t mob) {
+  if (mob >= mobs_.size()) {
+    throw std::out_of_range("Farm::spread_mob: no such mob");
+  }
+  if (mobs_[mob].paddocks.size() == paddocks_.size()) {
+    return;  // already has the run of the farm; do not reset its day count
+  }
+  mobs_[mob].paddocks.resize(paddocks_.size());
+  for (std::size_t paddock = 0; paddock < paddocks_.size(); ++paddock) {
+    mobs_[mob].paddocks[paddock] = paddock;
+  }
   mobs_[mob].days_on_paddock = 0;
 }
 
@@ -94,7 +111,8 @@ std::size_t Farm::mob_on(std::size_t paddock) const {
     throw std::out_of_range("Farm::mob_on: no such paddock");
   }
   for (std::size_t i = 0; i < mobs_.size(); ++i) {
-    if (mobs_[i].paddock == paddock) {
+    const std::vector<std::size_t>& held = mobs_[i].paddocks;
+    if (std::find(held.begin(), held.end(), paddock) != held.end()) {
       return i;
     }
   }
@@ -127,10 +145,14 @@ double Farm::paddock_offer_kg_dm(std::size_t paddock) const {
   return total * mask_.cell_area_hectares();
 }
 
-GrazingConditions Farm::conditions_on(std::size_t paddock, const Mob& mob) const {
+GrazingConditions Farm::conditions_on(const std::vector<std::size_t>& held, const Mob& mob) const {
   GrazingConditions ground;
 
-  const std::vector<std::size_t>& cells = cells_of_paddock_[paddock];
+  std::vector<std::size_t> cells;
+  for (const std::size_t paddock : held) {
+    const std::vector<std::size_t>& own = cells_of_paddock_[paddock];
+    cells.insert(cells.end(), own.begin(), own.end());
+  }
   const double hectares = static_cast<double>(cells.size()) * mask_.cell_area_hectares();
 
   // The movement equations take one figure for the paddock, so the mob walks on
@@ -138,7 +160,12 @@ GrazingConditions Farm::conditions_on(std::size_t paddock, const Mob& mob) const
   // cost that is non-linear in slope understates a paddock with both flat and
   // steep ground; that is a simplification of the movement term only, and the
   // pasture underneath it is still modelled cell by cell.
-  ground.pasture_mass_t_dm_per_ha = paddock_cover_kg_dm_per_ha(paddock) / 1000.0;
+  double cover_total = 0.0;
+  for (const std::size_t index : cells) {
+    cover_total += grid_.cell(index % grid_.cols(), index / grid_.cols()).sward().cover_kg_dm();
+  }
+  ground.pasture_mass_t_dm_per_ha =
+      cells.empty() ? 0.0 : (cover_total / static_cast<double>(cells.size())) / 1000.0;
   ground.area_per_animal_ha = mob.head > 0 ? hectares / static_cast<double>(mob.head) : 0.0;
 
   if (!slope_degrees_.empty() && !cells.empty()) {
@@ -172,16 +199,40 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetL
   }
 
   for (FarmMob& farm_mob : mobs_) {
-    const std::size_t paddock = farm_mob.paddock;
-    const std::vector<std::size_t>& cells = cells_of_paddock_[paddock];
+    // A mob eats over everything it has the run of: one paddock under rotation,
+    // the whole farm under set stocking.
+    std::vector<std::size_t> cells;
+    for (const std::size_t paddock : farm_mob.paddocks) {
+      const std::vector<std::size_t>& own = cells_of_paddock_[paddock];
+      cells.insert(cells.end(), own.begin(), own.end());
+    }
 
     MobDay mob_day;
     mob_day.mob_name = farm_mob.mob.name;
-    mob_day.paddock = paddock;
+    mob_day.paddock = farm_mob.paddocks.front();
 
-    const GrazingConditions ground = conditions_on(paddock, farm_mob.mob);
+    const GrazingConditions ground = conditions_on(farm_mob.paddocks, farm_mob.mob);
+
+    // **Demand is what the mob wants, not what it did yesterday.**
+    //
+    // daily_energy_requirement answers "to change weight at this rate, what
+    // must it eat", so feeding it a *realised* rate inverts the meaning. A mob
+    // that lost weight overnight would come back with a negative production
+    // term, which reads as an energy credit and shrinks today's requirement -
+    // and then it eats less, loses more, and asks for less again. A run of a
+    // year took a mob from 55 kg to two grams that way, on a farm whose cover
+    // never fell below 2000 kg DM/ha and which reported feed-limited on two
+    // days out of 366. Well fed, and starved by arithmetic.
+    //
+    // So demand is computed against holding weight. Appetite does not fall
+    // because an animal went short; if anything it rises, and modelling that
+    // properly means intake capacity, which is a piece of work with its own
+    // literature. Holding weight is the honest floor in the meantime.
+    AnimalState wanting = farm_mob.mob.state;
+    wanting.liveweight_change_kg_per_day = std::max(0.0, wanting.liveweight_change_kg_per_day);
+
     const EnergyRequirement need =
-        daily_energy_requirement(farm_mob.mob.animal, farm_mob.mob.state, diet, ground);
+        daily_energy_requirement(farm_mob.mob.animal, wanting, diet, ground);
 
     mob_day.grazing.demand_kg_dm = need.intake_kg_dm * static_cast<double>(farm_mob.mob.head);
 
@@ -234,8 +285,12 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetL
     mob_day.grazing.feed_limited =
         mob_day.grazing.eaten_kg_dm < (mob_day.grazing.demand_kg_dm - 1e-9);
 
+    // Every paddock the mob had the run of has been grazed, which is why set
+    // stocking gives no rest: under it this resets all of them, every day.
     if (mob_day.grazing.eaten_kg_dm > 0.0) {
-      days_since_grazed_[paddock] = 0;
+      for (const std::size_t paddock : farm_mob.paddocks) {
+        days_since_grazed_[paddock] = 0;
+      }
     }
 
     mob_day.response = advance_one_day(farm_mob.mob, mob_day.grazing, diet, ground);
