@@ -17,6 +17,7 @@
 #include <paddock/config/FarmConfig.hpp>
 #include <paddock/config/PastureConfig.hpp>
 #include <paddock/config/SoilConfig.hpp>
+#include <paddock/config/SpeciesConfig.hpp>
 #include <paddock/config/WeatherConfig.hpp>
 
 namespace paddock::config {
@@ -135,6 +136,64 @@ TEST(DataFilesTest, MasseyDairy4MatchesItsPublishedAreaAndPaddockCount) {
 
   GTEST_LOG_(INFO) << paddocks.size() << " paddocks averaging " << mean_hectares << " ha, over "
                    << farm.boundary_hectares() << " ha";
+}
+
+// Like the farms, the species set is discovered rather than enumerated, and
+// this test deliberately does not name the three that ship today.
+TEST(DataFilesTest, EverySpeciesDefinitionLoads) {
+  const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
+
+  ASSERT_FALSE(species.empty()) << "data/species/ has no definitions";
+  for (const SpeciesDefinition& definition : species) {
+    EXPECT_TRUE(definition.validation_error().empty())
+        << definition.name << ": " << definition.validation_error();
+    EXPECT_TRUE(definition.energy.validation_error().empty()) << definition.name;
+    EXPECT_GT(definition.typical_liveweight_kg, 0.0) << definition.name;
+  }
+}
+
+// Every definition shipped today guesses its standard reference weight, and
+// every one of them says so. If a later file sets the flag true it must have a
+// citation beside it - this test will start passing for a better reason, and
+// the assertion below is written so that it does not have to change when that
+// happens.
+TEST(DataFilesTest, NoShippedSpeciesClaimsAVerifiedReferenceWeightItDoesNotHave) {
+  const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
+
+  for (const SpeciesDefinition& definition : species) {
+    if (definition.reference_weight_verified) {
+      // Nothing to check here mechanically: a true flag is a claim about a
+      // source, and the source lives in the file comments and docs/verify.md.
+      // What matters is that it was typed deliberately.
+      continue;
+    }
+    GTEST_LOG_(INFO) << definition.name << ": standard reference weight "
+                     << definition.energy.standard_reference_weight_kg << " kg is a placeholder";
+  }
+
+  // The open item this corresponds to is real: SRW by breed and class sits in
+  // a TMC chapter not yet retrieved. Until one of these is verified the
+  // liveweight-gain arithmetic rests on a plausible number rather than a
+  // published one, and docs/verify.md says so.
+  const bool any_verified = std::any_of(
+      species.begin(), species.end(),
+      [](const SpeciesDefinition& definition) { return definition.reference_weight_verified; });
+  EXPECT_FALSE(any_verified)
+      << "a species now claims a verified reference weight; if that is right, cite it in "
+         "docs/verify.md and update this test to match";
+}
+
+// A dairy cow in this model is a dry cow, because lactation is not implemented.
+// The definition is named for what it models, and this test is what keeps that
+// true if someone later adds a milking class without adding lactation.
+TEST(DataFilesTest, TheDairyDefinitionIsNamedForTheDryCowItActuallyModels) {
+  const SpeciesDefinition cow = load_species(data_path("species/cattle-dry-cow.toml"));
+
+  EXPECT_EQ(cow.name, "cattle_dairy_dry");
+  EXPECT_NE(cow.description.find("not modelled"), std::string::npos)
+      << "the description has to say lactation is absent: " << cow.description;
+  // CSIRO (2007) for dairy, which is the value the OVERSEER manual follows.
+  EXPECT_DOUBLE_EQ(cow.energy.species_factor, 1.4);
 }
 
 }  // namespace

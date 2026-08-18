@@ -49,7 +49,7 @@ farm, run a full year, watch a stable grazing–regrowth loop*. In order.
 | # | Item | Why it is on the critical path | Size |
 |---|---|---|---|
 | ~~B1~~ | ~~**Liveweight responds to intake**~~ | **Done.** Gap (2) is closed: `liveweight_response` inverts the requirement calculation and `advance_one_day` applies it, so an underfed mob loses weight | small |
-| B2 | **Species definitions in TOML** | M3 requires livestock "fully driven by species TOML". `data/species/` is empty and there is no loader; animal classes exist only in test fixtures today | small |
+| ~~B2~~ | ~~**Species definitions in TOML**~~ | **Done.** `SpeciesConfig` loads an animal class straight into the parameters the energy model uses, and `data/species/` is discovered by scanning | small |
 | B3 | **A farm that owns paddocks, swards and mobs** | The integration layer. `PaddockMask` is built and **used by nothing** — paddock rasterisation exists but no run consumes it. `FarmletGrid` steps soil and sward per cell and knows nothing of paddocks or stock | large |
 | B4 | **The farmer moves mobs** | Closes gap (1). Reads the grazing calendar, picks the next paddock by rest and cover, respects the graze-length and spell rules. The "shuffle" emerges here when paddocks are too few | medium |
 | B5 | **Conservation across the whole farm** | The existing gate covers one hectare. An integrated run has to close the same three budgets over every paddock and every mob for 365 days | medium |
