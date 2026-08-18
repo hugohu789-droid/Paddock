@@ -12,6 +12,7 @@ add_library(
   src/FarmConfig.cpp
   src/PastureConfig.cpp
   src/ScenarioConfig.cpp
+  src/ScenarioRun.cpp
   src/SoilConfig.cpp
   src/Provenance.cpp
   src/SpeciesConfig.cpp

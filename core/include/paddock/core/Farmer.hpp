@@ -19,6 +19,12 @@ namespace paddock::core {
 /// One mob moved, or not moved when it should have been.
 struct MobMove {
   std::size_t mob = 0;
+
+  /// True when the mob was moved because it ran out of feed rather than because
+  /// its graze length was up. On a farm with enough paddocks this is rare; on
+  /// one without, it is most of them.
+  bool moved_early = false;
+
   std::size_t from = 0;
   std::size_t to = 0;
 
@@ -69,6 +75,17 @@ class Farmer {
 
   /// Decides and applies today's moves. Call before Farm::step, so a mob that
   /// moves eats on the paddock it moved to.
+  ///
+  /// `went_short` names the mobs that could not get what they needed yesterday,
+  /// which is what makes a farmer move early. Smith and Dawson's rule is "do
+  /// not graze a pasture for more than three days" - a maximum, not a fixed
+  /// period - and a mob standing on ground it has already eaten while other
+  /// paddocks carry feed is not a farm anybody runs. Pass an empty set on the
+  /// first day, or when the caller is not tracking it.
+  Day decide(Farm& farm, const Date& date, const std::vector<bool>& went_short);
+
+  /// As above, for a caller that does not track shortfalls. Moves only on the
+  /// graze-length rule.
   Day decide(Farm& farm, const Date& date);
 
   [[nodiscard]] const GrazingCalendar& calendar() const noexcept { return calendar_; }

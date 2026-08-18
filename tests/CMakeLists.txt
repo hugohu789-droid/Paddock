@@ -113,6 +113,7 @@ if(PADDOCK_BUILD_CONFIG)
   file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
 
   add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
+                                          validation/GrazingSystemComparisonTest.cpp
                                           validation/LivestockCalibrationTest.cpp
                                           validation/SeasonalGrowthTest.cpp)
 

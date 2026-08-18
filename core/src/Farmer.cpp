@@ -12,6 +12,10 @@ namespace paddock::core {
 Farmer::Farmer(GrazingCalendar calendar) : calendar_(std::move(calendar)) {}
 
 Farmer::Day Farmer::decide(Farm& farm, const Date& date) {
+  return decide(farm, date, {});
+}
+
+Farmer::Day Farmer::decide(Farm& farm, const Date& date, const std::vector<bool>& went_short) {
   Day day;
 
   const GrazingRule& rule = calendar_.rule_on(date);
@@ -42,7 +46,11 @@ Farmer::Day Farmer::decide(Farm& farm, const Date& date) {
   const std::vector<int>& rest = farm.days_since_grazed();
 
   for (std::size_t index = 0; index < mobs.size(); ++index) {
-    if (mobs[index].days_on_paddock < rule.maximum_graze_days) {
+    // The graze length is a maximum, not a period to serve out. A mob that
+    // emptied its paddock yesterday moves today, whatever the calendar says.
+    const bool hungry = index < went_short.size() && went_short[index];
+    const bool grazed_long_enough = mobs[index].days_on_paddock >= rule.maximum_graze_days;
+    if (!hungry && !grazed_long_enough) {
       continue;
     }
 
@@ -79,6 +87,7 @@ Farmer::Day Farmer::decide(Farm& farm, const Date& date) {
     move.to = best;
     move.days_grazed = mobs[index].days_on_paddock;
     move.rest_days = best_rest;
+    move.moved_early = hungry && !grazed_long_enough;
 
     // The mob moves whether or not the paddock has had its spell, because the
     // stock have to eat. Going anyway with the shortfall recorded is what makes
