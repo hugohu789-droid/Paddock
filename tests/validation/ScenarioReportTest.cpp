@@ -84,6 +84,14 @@ TEST(ScenarioReportTest, TheEvidenceCaveatsTravelWithTheNumbers) {
       << "the report does not say absolute liveweight gain cannot be quoted";
   EXPECT_TRUE(contains(report, "lactation is absent"));
   EXPECT_TRUE(contains(report, "docs/verify.md"));
+
+  // The ground the run was over. Until a [terrain] section existed every farm
+  // was flat and nothing said so, which made the slope equations look like they
+  // were in play when they had never once run.
+  EXPECT_TRUE(contains(report, "modelled flat"))
+      << "the report does not say the ground was flat, and this bundle's is";
+  EXPECT_TRUE(contains(report, "Anything to do with slope"))
+      << "the report does not say the slope terms did not apply";
 }
 
 // The pasture and the stock, month by month, because a year is not one number.

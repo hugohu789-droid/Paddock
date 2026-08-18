@@ -16,6 +16,8 @@
 #include <paddock/core/Raster.hpp>
 #include <paddock/core/Simulation.hpp>
 #include <paddock/core/SoilWater.hpp>
+#include <paddock/core/SyntheticTerrain.hpp>
+#include <paddock/core/Topography.hpp>
 #include <paddock/core/Weather.hpp>
 
 namespace paddock::config {
@@ -60,6 +62,31 @@ struct GridSpec {
 /// species definition every time. Ewes coming out of a drought at 50 kg and
 /// well-wintered ewes at 65 are the same class of animal on two different
 /// farms, and which of them a run starts with changes the year that follows.
+/// The shape of the ground under a scenario.
+///
+/// **Absent means flat, and flat is a modelling choice rather than an absence
+/// of one.** Every scenario in this project ran flat until this existed, which
+/// meant two sourced pieces of the model never fired in a single run: the
+/// energy cost of walking a slope (TMC Eq. 23, via `Farm::set_slopes`) and the
+/// radiation a slope actually receives (Gillingham, via
+/// `FarmletGrid::set_terrain`). Both were implemented and tested in isolation
+/// and connected to nothing, and no report said the ground was level.
+///
+/// A synthetic surface is INVENTED GROUND. It is a formula with exact known
+/// derivatives, which is what makes the topography code checkable against
+/// something other than itself, and it is not a description of any hill in New
+/// Zealand. A report run over one says so.
+struct TerrainSpec {
+  enum class Kind { Flat, Synthetic };
+
+  Kind kind = Kind::Flat;
+
+  /// Only read when kind is Synthetic.
+  core::SyntheticSurface surface;
+
+  [[nodiscard]] bool is_flat() const noexcept { return kind == Kind::Flat; }
+};
+
 struct MobSpec {
   std::string name;
   std::size_t paddock = 0;
@@ -136,6 +163,9 @@ struct ScenarioBundle {
   /// Present when the manifest has a [grid] section.
   std::optional<GridSpec> grid;
 
+  /// The ground. Flat unless the manifest says otherwise.
+  TerrainSpec terrain;
+
   /// The stock the run starts with. Empty for a bundle that models pasture
   /// alone, which is what every bundle written before livestock existed does.
   std::vector<MobSpec> mobs;
@@ -162,6 +192,16 @@ struct ScenarioBundle {
 
   /// A grid of farmlets ready to step. Throws when there is no [grid] section.
   [[nodiscard]] core::FarmletGrid make_grid() const;
+
+  /// The elevation the terrain describes, over the grid's extent and at its
+  /// resolution. Empty for flat ground, which has no surface to sample.
+  ///
+  /// Public because the 3D view needs the same elevation the model ran on
+  /// rather than one it generates for itself. Two surfaces would be two farms.
+  [[nodiscard]] std::optional<core::Raster<double>> make_elevation() const;
+
+  /// Slope and aspect from that elevation, by Horn's method. Empty for flat.
+  [[nodiscard]] std::optional<core::Topography> make_topography() const;
 
   /// The paddocks the grid subdivides into. Empty when `paddock_hectares` is
   /// zero.

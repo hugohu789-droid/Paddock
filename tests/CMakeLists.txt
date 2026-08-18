@@ -117,7 +117,8 @@ if(PADDOCK_BUILD_CONFIG)
                                           validation/ManagedFarmTest.cpp
                                           validation/ScenarioReportTest.cpp
                                           validation/LivestockCalibrationTest.cpp
-                                          validation/SeasonalGrowthTest.cpp)
+                                          validation/SeasonalGrowthTest.cpp
+                                          validation/TerrainReachesTheModelTest.cpp)
 
   target_link_libraries(paddock_validation_tests PRIVATE Paddock::config GTest::gtest_main
                                                          Paddock::project_options)

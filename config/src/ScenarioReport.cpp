@@ -101,6 +101,17 @@ void write_what_was_simulated(std::ostringstream& out, const ScenarioBundle& bun
   out << "| Area | " << fixed(hectares, 1) << " ha |\n";
   out << "| Paddocks | " << paddocks << " |\n";
 
+  // The ground, because it decides whether two sourced pieces of the model ran
+  // at all: what a slope costs an animal to walk, and what radiation a slope
+  // receives. A reader cannot tell from any other number in this report.
+  if (bundle.terrain.is_flat()) {
+    out << "| Ground | modelled flat |\n";
+  } else {
+    out << "| Ground | synthetic surface, falling "
+        << fixed(bundle.terrain.surface.gradient_east * 100.0, 1) << "% east and "
+        << fixed(bundle.terrain.surface.gradient_north * 100.0, 1) << "% north |\n";
+  }
+
   int head = 0;
   for (const MobSpec& mob : bundle.mobs) {
     head += mob.head;
@@ -288,7 +299,7 @@ void write_budgets(std::ostringstream& out, const RunSummary& run) {
   }
 }
 
-void write_evidence_notes(std::ostringstream& out) {
+void write_evidence_notes(std::ostringstream& out, const ScenarioBundle& bundle) {
   out << "## What this report may be relied on for\n\n";
   out << "The evidence under this model is uneven, and a report that did not say so would be "
          "worse than no report. The full working is in `docs/verify.md`.\n\n";
@@ -305,7 +316,16 @@ void write_evidence_notes(std::ostringstream& out) {
          "unverified on every species |\n";
   out << "| Anything involving a milking cow | **Not modelled** — lactation is absent |\n";
   out << "| Nitrogen over more than a season | **Wrong in a known direction** — dung and urine "
-         "are not returned |\n\n";
+         "are not returned |\n";
+  if (bundle.terrain.is_flat()) {
+    out << "| Anything to do with slope | **Not in this run** — the ground was modelled flat, so "
+           "neither the cost of walking a slope nor the radiation a slope receives applied |\n";
+  } else {
+    out << "| Where the hills are | **Invented** — the surface is a formula, chosen so the "
+           "topography can be checked against known derivatives. It is not a survey of any "
+           "ground |\n";
+  }
+  out << "\n";
 
   out << "The pasture, soil and weather definitions in the example scenarios are placeholders "
          "and are marked as such in their own files. They demonstrate that the model runs and "
@@ -327,7 +347,7 @@ std::string render_report(const ScenarioBundle& bundle, const RunSummary& run,
   write_bought_feed(out, run);
   write_budgets(out, run);
   if (options.include_evidence_notes) {
-    write_evidence_notes(out);
+    write_evidence_notes(out, bundle);
   }
   return out.str();
 }
@@ -369,7 +389,7 @@ std::string render_comparison_report(const ScenarioBundle& bundle, const RunSumm
          "rather than removed it.\n\n";
 
   if (options.include_evidence_notes) {
-    write_evidence_notes(out);
+    write_evidence_notes(out, bundle);
   }
   return out.str();
 }

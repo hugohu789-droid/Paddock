@@ -95,7 +95,7 @@ is the argument for B6 being an acceptance artefact rather than a demonstration.
 | B7 | Paddock drawing and editing on the 2D map | Task #22, deferred by the user. The file format it will read and write already exists and is tested, so this is an editor for a settled format, not a new way to define a farm |
 | B8 | Real farm boundaries from LINZ | **Half done.** The fetch works and a real square of NZ Primary Parcels around Lincoln is on disk; what is missing is knowing which of those parcels is the farm, which needs an authoritative location and is open item 15. All three example farms still ship with generated rectangles marked `location_verified = false`, though LURDF's is now at least the right *area*. Switching one over is a change to its `[boundary]` section |
 | B9 | 3D terrain view | Task #26. DEM relief, pasture colouring, livestock glyphs |
-| B9a | Paddock boundaries on the 2D map | The setup panel and the run are done; the map still draws cells and not fences, so a rotation is visible as a moving patch of shorter grass rather than as a mob in a paddock |
+| ~~B9a~~ | ~~Paddock boundaries on the 2D map~~ | **Done.** The fences are drawn and the paddocks carrying stock that day are picked out. Drawing them found the field was placed half a cell south-west of the ground it described; `tests/viz/MapSceneTest.cpp` pins the placement now |
 
 ### Making the livestock model honest
 
