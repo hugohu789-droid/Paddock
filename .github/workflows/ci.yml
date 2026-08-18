@@ -15,6 +15,20 @@ name: T2 and T3
 #
 # The three-platform GUI *packaging* matrix joins this workflow in M3 with the
 # 3D view. See docs/adr/0006-ci-scope.md and docs/adr/0010-2d-map-view-with-vtk.md.
+#
+# Two rules about how this file fails, both learned the hard way:
+#
+# Every job carries a timeout-minutes sized at roughly three times what it takes
+# when healthy. Without one, a job that hangs holds the pull request for GitHub's
+# six-hour default rather than failing and being re-run. The numbers are meant to
+# be generous - if one starts firing on healthy runs, raise it rather than
+# quietly re-running the job.
+#
+# Every apt install goes through scripts/ci-apt-install.sh rather than calling
+# apt-get directly. GitHub's Ubuntu images point apt at azure.archive.ubuntu.com,
+# which intermittently stops answering rather than refusing, and apt waits
+# forever by default. That has stalled the clang-tidy and ASan jobs here for
+# thirty minutes at a stretch while fetching a 129 kB package.
 
 on:
   push:
@@ -32,6 +46,7 @@ env:
 jobs:
   hygiene:
     name: Format, line endings, dependency direction
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -42,8 +57,7 @@ jobs:
             | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update
-          sudo apt-get install -y clang-format-${LLVM_VERSION}
+          scripts/ci-apt-install.sh clang-format-${LLVM_VERSION}
 
       - name: clang-format
         run: CLANG_FORMAT=clang-format-${LLVM_VERSION} scripts/check-format.sh
@@ -56,6 +70,7 @@ jobs:
 
   build:
     name: ${{ matrix.name }}
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -72,7 +87,7 @@ jobs:
 
       - name: Install Ninja (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: scripts/ci-apt-install.sh ninja-build
 
       - name: Install Ninja (macOS)
         if: runner.os == 'macOS'
@@ -104,12 +119,13 @@ jobs:
 
   sanitizers:
     name: Linux Debug (ASan + UBSan)
+    timeout-minutes: 20
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: scripts/ci-apt-install.sh ninja-build
 
       - name: Configure, build and test
         env:
@@ -122,6 +138,7 @@ jobs:
 
   tidy:
     name: clang-tidy
+    timeout-minutes: 25
     runs-on: ubuntu-24.04
     steps:
       # Full history, because working out what a pull request changed needs the
@@ -136,8 +153,7 @@ jobs:
             | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update
-          sudo apt-get install -y ninja-build clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
+          scripts/ci-apt-install.sh ninja-build clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
 
       - name: Generate the compile database
         env:
@@ -202,12 +218,13 @@ jobs:
 
   validation:
     name: T3 validation against measured data
+    timeout-minutes: 20
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: scripts/ci-apt-install.sh ninja-build
 
       - name: Configure and build
         run: |
@@ -234,6 +251,7 @@ jobs:
 
   gis:
     name: ${{ matrix.name }}
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     # Linux and macOS take GDAL and PROJ from the system package manager, which
     # also ships PROJ's proj.db where PROJ already looks for it. Windows takes
@@ -253,7 +271,7 @@ jobs:
 
       - name: Install GDAL, PROJ and Ninja (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libgdal-dev libproj-dev
+        run: scripts/ci-apt-install.sh ninja-build libgdal-dev libproj-dev
 
       - name: Install GDAL, PROJ and Ninja (macOS)
         if: runner.os == 'macOS'
@@ -288,6 +306,7 @@ jobs:
   # cadence of its own.
   gis-windows:
     name: GIS Windows (vcpkg, on request)
+    timeout-minutes: 45
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-2022
     steps:
@@ -358,6 +377,7 @@ jobs:
 
   gui:
     name: Map view (Qt6 + VTK)
+    timeout-minutes: 30
     # Ubuntu 26.04 is the first release whose VTK Qt packages are built against
     # Qt6 rather than Qt5; on 24.04 this job would have to build VTK from
     # source. The image is currently a preview one - if that becomes a problem,
@@ -369,8 +389,7 @@ jobs:
 
       - name: Install Qt6, VTK and a virtual display
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri
+          scripts/ci-apt-install.sh ninja-build qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri
 
       - name: Configure and build
         run: |
