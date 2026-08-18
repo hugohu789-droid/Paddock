@@ -46,6 +46,10 @@ struct FarmMob {
 
   /// Index into the farm's paddocks.
   std::size_t paddock = 0;
+
+  /// Days this mob has been where it is. Zero on the day it arrives, and the
+  /// number a graze-length rule is checked against.
+  int days_on_paddock = 0;
 };
 
 /// What one day did to one mob.
@@ -82,9 +86,16 @@ class Farm {
   /// Puts a mob on a paddock, and returns its index.
   std::size_t add_mob(Mob mob, std::size_t paddock);
 
-  /// Moves a mob. This is all a farmer agent needs from the farm; deciding
-  /// *when* to move belongs to the grazing calendar and to whatever reads it.
+  /// Moves a mob, and resets its count of days where it stands. This is all a
+  /// farmer agent needs from the farm; deciding *when* to move belongs to the
+  /// grazing calendar and to whatever reads it.
   void move_mob(std::size_t mob, std::size_t paddock);
+
+  /// Which mob is on a paddock, or kNobody. A paddock carries at most one mob
+  /// here: two mobs sharing ground is a real practice, but it needs a rule for
+  /// how they divide the feed, and inventing one would be inventing a result.
+  static constexpr std::size_t kNobody = static_cast<std::size_t>(-1);
+  [[nodiscard]] std::size_t mob_on(std::size_t paddock) const;
 
   /// Days since each paddock was last grazed, which is what a rotation is
   /// judged on. A paddock never grazed reports the days since the farm started.

@@ -86,6 +86,19 @@ void Farm::move_mob(std::size_t mob, std::size_t paddock) {
     throw std::out_of_range("Farm::move_mob: no such paddock");
   }
   mobs_[mob].paddock = paddock;
+  mobs_[mob].days_on_paddock = 0;
+}
+
+std::size_t Farm::mob_on(std::size_t paddock) const {
+  if (paddock >= paddocks_.size()) {
+    throw std::out_of_range("Farm::mob_on: no such paddock");
+  }
+  for (std::size_t i = 0; i < mobs_.size(); ++i) {
+    if (mobs_[i].paddock == paddock) {
+      return i;
+    }
+  }
+  return kNobody;
 }
 
 double Farm::paddock_cover_kg_dm_per_ha(std::size_t paddock) const {
@@ -149,6 +162,9 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetL
 
   for (int& days : days_since_grazed_) {
     ++days;
+  }
+  for (FarmMob& farm_mob : mobs_) {
+    ++farm_mob.days_on_paddock;
   }
 
   if (ledger != nullptr) {
