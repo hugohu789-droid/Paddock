@@ -14,6 +14,7 @@
 #include <vtkProperty.h>
 #include <vtkTextProperty.h>
 
+#include <paddock/viz/ColourTable.hpp>
 #include <paddock/viz/MapScene.hpp>
 
 namespace paddock::viz {
@@ -23,8 +24,6 @@ namespace {
 /// Entries in the lookup table. 256 is more than a display can distinguish and
 /// small enough to build every frame without noticing.
 constexpr int kLookupEntries = 256;
-
-constexpr double kColourMaximum = 255.0;
 
 /// Labels on the colour bar.
 constexpr int kLegendLabels = 5;
@@ -221,14 +220,7 @@ void MapScene::show(const core::Raster<double>& raster, const ColourScale& scale
   }
   image_->Modified();
 
-  const std::vector<Rgb> table = scale.lookup_table(kLookupEntries);
-  lookup_->SetNumberOfTableValues(static_cast<vtkIdType>(table.size()));
-  lookup_->SetTableRange(scale.minimum(), scale.maximum());
-  for (std::size_t i = 0; i < table.size(); ++i) {
-    lookup_->SetTableValue(static_cast<vtkIdType>(i), table[i].red / kColourMaximum,
-                           table[i].green / kColourMaximum, table[i].blue / kColourMaximum, 1.0);
-  }
-  lookup_->Build();
+  fill_lookup_table(lookup_, scale, kLookupEntries);
 
   colours_->SetInputData(image_);
   colours_->Update();

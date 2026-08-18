@@ -263,10 +263,16 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                          "'undulation_wavelength_m' must be positive; a wavelength of zero is not "
                          "a flat surface, it is a division by zero");
       }
+    } else if (terrain_kind == "snapshot") {
+      detail::reject_unknown_keys(*terrain, {"kind", "path", "sha256"}, manifest_path,
+                                  "[terrain] with kind = \"snapshot\"");
+      bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
+      bundle.terrain.elevation_path = detail::require_string(*terrain, "path", manifest_path);
+      bundle.terrain.elevation_sha256 = detail::require_string(*terrain, "sha256", manifest_path);
     } else {
-      detail::throw_in(
-          *terrain, manifest_path,
-          "unknown terrain kind '" + terrain_kind + "'. Known kinds are: flat, synthetic");
+      detail::throw_in(*terrain, manifest_path,
+                       "unknown terrain kind '" + terrain_kind +
+                           "'. Known kinds are: flat, synthetic, snapshot");
     }
   }
 
@@ -451,15 +457,25 @@ std::optional<core::Raster<double>> ScenarioBundle::make_elevation() const {
   area.expand_to_include(core::Point2D{spec.origin_easting, spec.origin_northing - height_m});
   area.expand_to_include(core::Point2D{spec.origin_easting + width_m, spec.origin_northing});
 
+  if (terrain.kind == TerrainSpec::Kind::Snapshot) {
+    if (elevation == nullptr) {
+      throw std::runtime_error(
+          "scenario '" + name + "' takes its ground from " + terrain.elevation_path +
+          ", and nothing has supplied a reader for it. Build with the geospatial stack, or the "
+          "farm would run flat without saying so.");
+    }
+    return elevation->fetch(area, spec.cell_size_m);
+  }
+
   return core::SyntheticElevationSource(terrain.surface).fetch(area, spec.cell_size_m);
 }
 
 std::optional<core::Topography> ScenarioBundle::make_topography() const {
-  const std::optional<core::Raster<double>> elevation = make_elevation();
-  if (!elevation.has_value()) {
+  const std::optional<core::Raster<double>> ground = make_elevation();
+  if (!ground.has_value()) {
     return std::nullopt;
   }
-  return core::topography_of(*elevation);
+  return core::topography_of(*ground);
 }
 
 core::FarmletGrid ScenarioBundle::make_grid() const {

@@ -268,6 +268,12 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
   }
 }
 
+void SetupPanel::select_ground(int index) {
+  if (index >= 0 && index < terrain_box_->count()) {
+    terrain_box_->setCurrentIndex(index);
+  }
+}
+
 QString SetupPanel::problem() const {
   if (scenario_box_->count() == 0) {
     return "There is no scenario to run.";

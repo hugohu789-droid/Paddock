@@ -211,7 +211,7 @@ TEST(GeoTiffElevationTest, AMissingFileIsReportedWithSomethingToDoAboutIt) {
 
   EXPECT_FALSE(status.ok);
   EXPECT_NE(status.message.find("no/such/dem.tif"), std::string::npos) << status.message;
-  EXPECT_NE(status.message.find("linz-snapshot.py"), std::string::npos) << status.message;
+  EXPECT_NE(status.message.find("nz-elevation-snapshot.py"), std::string::npos) << status.message;
 }
 
 // The licence is not decoration: LINZ data is CC BY 4.0 and attribution is a

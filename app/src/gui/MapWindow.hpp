@@ -21,6 +21,7 @@
 #include <paddock/core/Farmer.hpp>
 #include <paddock/core/Raster.hpp>
 #include <paddock/viz/MapScene.hpp>
+#include <paddock/viz/TerrainScene.hpp>
 
 #include "SetupPanel.hpp"
 
@@ -66,6 +67,12 @@ class MapWindow : public QMainWindow {
   /// to click anything.
   void render_once();
 
+  /// Sets up and runs one configuration without a person, for the screenshot
+  /// path. `ground` indexes the panel's ground list; `terrain` asks for the
+  /// three-dimensional view, which is ignored when the run was over flat
+  /// ground because there would be nothing to draw.
+  void show_configuration(int ground, bool terrain);
+
   /// Writes the current frame to a PNG.
   ///
   /// A map is a claim about what the model did, and a claim nobody looks at is
@@ -88,6 +95,8 @@ class MapWindow : public QMainWindow {
  private slots:
   /// Runs what the setup panel is asking for, and shows it.
   void start_run();
+  void change_view(int index);
+  void change_exaggeration(int index);
   void open_report();
   void show_day(int day);
   void change_field(int field);
@@ -128,6 +137,8 @@ class MapWindow : public QMainWindow {
 
   QVTKOpenGLNativeWidget* view_ = nullptr;
   SetupPanel* setup_ = nullptr;
+  QComboBox* view_box_ = nullptr;
+  QComboBox* height_box_ = nullptr;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;
@@ -137,6 +148,20 @@ class MapWindow : public QMainWindow {
   QTimer* timer_ = nullptr;
 
   viz::MapScene scene_;
+
+  /// The same farm on the ground it sits on. Both scenes exist for the whole
+  /// life of the window and only one is attached to the render window at a
+  /// time, so switching between them does not rebuild a year of rasters.
+  viz::TerrainScene terrain_;
+
+  /// The elevation the run was over, or empty when it was over flat ground.
+  ///
+  /// Taken from the bundle rather than generated here. A view that made its own
+  /// surface would be drawing a different farm from the one the numbers came
+  /// from.
+  std::optional<core::Raster<double>> elevation_;
+
+  bool showing_terrain_ = false;
 
   /// One entry per simulated day, per field.
   std::vector<core::Raster<double>> cover_;

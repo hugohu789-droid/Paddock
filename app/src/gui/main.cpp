@@ -33,7 +33,11 @@ void print_usage() {
             << "                 no one to click anything\n"
             << "  --screenshot   Write that frame to a PNG and exit. Implies --smoke,\n"
             << "                 and is how the map gets looked at without a person\n"
-            << "                 at the screen\n";
+            << "                 at the screen\n"
+            << "  --ground N     Run over the panel's Nth ground: 0 flat, 1 facing\n"
+            << "                 north, 2 facing south, 3 rolling\n"
+            << "  --terrain      Show the three-dimensional view rather than the\n"
+            << "                 flat map\n";
 }
 
 /// Failure reporting that cannot itself fail, for the handlers in main. A throw
@@ -94,6 +98,16 @@ int main(int argc, char** argv) {
     paddock::app::MapWindow window(bundle, bundle_directory.absolutePath().toStdString(),
                                    data_directory.absolutePath().toStdString());
     window.show();
+
+    const auto ground_flag = std::find(args.begin(), args.end(), "--ground");
+    const bool terrain = std::find(args.begin(), args.end(), "--terrain") != args.end();
+    if (ground_flag != args.end() || terrain) {
+      int ground = 0;
+      if (ground_flag != args.end() && std::next(ground_flag) != args.end()) {
+        ground = std::stoi(std::string(*std::next(ground_flag)));
+      }
+      window.show_configuration(ground, terrain);
+    }
 
     if (smoke) {
       window.render_once();

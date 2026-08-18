@@ -104,7 +104,22 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   date_label_->setMinimumWidth(200);
   summary_label_ = new QLabel(this);
 
+  view_box_ = new QComboBox(this);
+  view_box_->addItem("Flat map", 0);
+  view_box_->addItem("Terrain", 1);
+
+  height_box_ = new QComboBox(this);
+  // The factor is in the label rather than applied quietly, because
+  // exaggeration makes every slope look steeper than it is and a reader has to
+  // be able to see which picture they are looking at.
+  height_box_->addItem("Heights true to scale", 1);
+  height_box_->addItem("Heights x2", 2);
+  height_box_->addItem("Heights x5", 5);
+  height_box_->setEnabled(false);
+
   auto* controls = new QHBoxLayout;
+  controls->addWidget(view_box_);
+  controls->addWidget(height_box_);
   controls->addWidget(field_box_);
   controls->addWidget(scale_box_);
   controls->addWidget(play_button_);
@@ -136,6 +151,8 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   connect(scale_box_, &QComboBox::currentIndexChanged, this, &MapWindow::change_scale);
   connect(play_button_, &QPushButton::clicked, this, &MapWindow::toggle_play);
   connect(timer_, &QTimer::timeout, this, &MapWindow::advance_frame);
+  connect(view_box_, &QComboBox::currentIndexChanged, this, &MapWindow::change_view);
+  connect(height_box_, &QComboBox::currentIndexChanged, this, &MapWindow::change_exaggeration);
   connect(setup_, &SetupPanel::runRequested, this, &MapWindow::start_run);
   connect(setup_, &SetupPanel::reportRequested, this, &MapWindow::open_report);
 
@@ -187,6 +204,10 @@ void MapWindow::start_run() {
     bundle.terrain = choices.terrain;
 
     clear_series();
+    // The ground this run is over, taken once. Empty for flat, which is what
+    // disables the terrain view rather than drawing a plane and calling it
+    // terrain.
+    elevation_ = bundle.make_elevation();
     last_run_had_stock_ = !bundle.mobs.empty();
     if (last_run_had_stock_) {
       simulate_managed(bundle, choices.policy);
@@ -250,6 +271,41 @@ bool MapWindow::save_screenshot(const std::string& path) {
   return writer->GetErrorCode() == 0;
 }
 
+void MapWindow::show_configuration(int ground, bool terrain) {
+  setup_->select_ground(ground);
+  start_run();
+  if (terrain) {
+    view_box_->setCurrentIndex(1);
+  }
+}
+
+void MapWindow::change_view(int index) {
+  const bool terrain = index == 1 && elevation_.has_value();
+  if (terrain == showing_terrain_) {
+    return;
+  }
+  showing_terrain_ = terrain;
+  height_box_->setEnabled(terrain);
+
+  vtkRenderWindow* window = view_->renderWindow();
+  if (window != nullptr) {
+    window->RemoveRenderer(showing_terrain_ ? scene_.renderer() : terrain_.renderer());
+    window->AddRenderer(showing_terrain_ ? terrain_.renderer() : scene_.renderer());
+  }
+  refresh();
+  if (showing_terrain_) {
+    terrain_.reset_camera();
+  } else {
+    scene_.reset_camera();
+  }
+}
+
+void MapWindow::change_exaggeration(int index) {
+  terrain_.set_vertical_exaggeration(height_box_->itemData(index).toDouble());
+  refresh();
+  terrain_.reset_camera();
+}
+
 void MapWindow::clear_series() {
   cover_.clear();
   soil_water_.clear();
@@ -260,6 +316,7 @@ void MapWindow::clear_series() {
   whole_run_ranges_.clear();
   boundaries_.clear();
   grazed_each_day_.clear();
+  elevation_.reset();
 }
 
 const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
@@ -352,8 +409,20 @@ void MapWindow::adopt_series() {
 
   if (boundaries_.empty()) {
     scene_.clear_boundaries();
+    terrain_.clear_boundaries();
   } else {
     scene_.set_boundaries(boundaries_);
+    terrain_.set_boundaries(boundaries_);
+  }
+
+  const bool have_ground = elevation_.has_value();
+  view_box_->setEnabled(have_ground);
+  view_box_->setToolTip(have_ground
+                            ? QString()
+                            : QString("This run was over flat ground, so there is no terrain to "
+                                      "draw. Choose a ground other than Flat and run again."));
+  if (!have_ground && showing_terrain_) {
+    view_box_->setCurrentIndex(0);
   }
 
   // The exact extent goes in the title, where it can be read once. Axis labels
@@ -464,8 +533,14 @@ void MapWindow::refresh() {
       break;
   }
 
-  scene_.show(raster, viz::ColourScale(style.ramp, lowest, highest), legend);
-  scene_.show_grazed(grazed_on(day));
+  const viz::ColourScale colours(style.ramp, lowest, highest);
+  if (showing_terrain_ && elevation_.has_value()) {
+    terrain_.show(raster, *elevation_, colours, legend);
+    terrain_.show_grazed(grazed_on(day));
+  } else {
+    scene_.show(raster, colours, legend);
+    scene_.show_grazed(grazed_on(day));
+  }
   // The day number is here so that a playing timeline is visibly playing even
   // on a field whose colours barely move: legume fraction shifts by about a
   // ten-thousandth from one day to the next.

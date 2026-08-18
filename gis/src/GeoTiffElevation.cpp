@@ -77,7 +77,8 @@ core::SourceDescription GeoTiffElevationSource::describe() const {
       "Sourced from the LINZ Data Service and licensed for re-use under the Creative Commons "
       "Attribution 4.0 International licence.",
       "Whatever the file covers: " + path_,
-      "Fixed. A snapshot does not change; re-fetch with scripts/linz-snapshot.py to update it."};
+      "Fixed. A snapshot does not change; re-fetch with scripts/nz-elevation-snapshot.py to "
+      "update it."};
 }
 
 core::ConnectionStatus GeoTiffElevationSource::test_connection() const {
@@ -91,7 +92,8 @@ core::ConnectionStatus GeoTiffElevationSource::test_connection() const {
   if (!dataset) {
     return core::ConnectionStatus::unavailable(
         "Cannot open " + path_ +
-        ". Snapshots are not committed - fetch one with scripts/linz-snapshot.py, or point the "
+        ". Snapshots are not committed - fetch one with scripts/nz-elevation-snapshot.py, or point "
+        "the "
         "scenario at a file that exists.");
   }
 

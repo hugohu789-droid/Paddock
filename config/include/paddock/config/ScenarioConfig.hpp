@@ -77,12 +77,27 @@ struct GridSpec {
 /// something other than itself, and it is not a description of any hill in New
 /// Zealand. A report run over one says so.
 struct TerrainSpec {
-  enum class Kind { Flat, Synthetic };
+  enum class Kind { Flat, Synthetic, Snapshot };
 
   Kind kind = Kind::Flat;
 
   /// Only read when kind is Synthetic.
   core::SyntheticSurface surface;
+
+  /// Only read when kind is Snapshot: the elevation file, relative to the
+  /// bundle, and what it must hash to.
+  ///
+  /// The path is recorded and never opened here. Reading a GeoTIFF needs GDAL,
+  /// which lives in gis/, and config must not depend on it - so this follows
+  /// what `[boundary] kind = "geopackage"` already does: the manifest names the
+  /// file, and whoever can read it supplies the source. See
+  /// ScenarioBundle::elevation.
+  ///
+  /// The hash is required rather than optional, for the same reason it is
+  /// there: a path into a gitignored directory whose contents nobody can check
+  /// is exactly the reproducibility hole a bundle closes.
+  std::string elevation_path;
+  std::string elevation_sha256;
 
   [[nodiscard]] bool is_flat() const noexcept { return kind == Kind::Flat; }
 };
@@ -165,6 +180,18 @@ struct ScenarioBundle {
 
   /// The ground. Flat unless the manifest says otherwise.
   TerrainSpec terrain;
+
+  /// Ready to sample, for a bundle whose terrain is a snapshot.
+  ///
+  /// Null until somebody who can open the file sets it - `paddock` and
+  /// `paddock-gui` do, when they are built with the geospatial stack. A bundle
+  /// that names an elevation file and never gets a source throws rather than
+  /// quietly running flat, because a farm silently losing its hills is the kind
+  /// of wrong that does not announce itself.
+  ///
+  /// The same shape as `weather` above, and for the same reason: core owns the
+  /// port, gis owns the adapter, and the application wires them together.
+  std::shared_ptr<core::ElevationSource> elevation;
 
   /// The stock the run starts with. Empty for a bundle that models pasture
   /// alone, which is what every bundle written before livestock existed does.
