@@ -101,6 +101,20 @@ def redact(text: str, key: str) -> str:
     return text.replace(key, "<LINZ_API_KEY>") if key else text
 
 
+def explain(error: urllib.error.HTTPError) -> str:
+    """The server's own account of what was wrong with the request, if it gave one."""
+    try:
+        body = error.read().decode("utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+    if not body:
+        return ""
+    # The report is XML wrapped over several lines; a report is easier to read
+    # collapsed, and only the first part of it says anything.
+    collapsed = " ".join(body.split())
+    return "\n" + (collapsed[:600] + "..." if len(collapsed) > 600 else collapsed)
+
+
 def fetch(url: str, destination: Path, key: str) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     partial = destination.with_suffix(destination.suffix + ".partial")
@@ -118,7 +132,13 @@ def fetch(url: str, destination: Path, key: str) -> None:
                 f"LINZ refused the request ({error.code}). The key in LINZ_API_KEY is "
                 "wrong, expired, or lacks access to this layer."
             ) from None
-        raise Failure(f"LINZ returned {error.code} {error.reason}.") from None
+        # WFS says what it did not like in the body, as an ows:ExceptionReport.
+        # Without it a 400 is unactionable - the layer name, the output format
+        # and the bounding box all fail the same way. Redacted before printing
+        # because the endpoint carries the key and servers echo the URL back.
+        raise Failure(
+            redact(f"LINZ returned {error.code} {error.reason}.{explain(error)}", key)
+        ) from None
     except urllib.error.URLError as error:
         partial.unlink(missing_ok=True)
         raise Failure(redact(f"Cannot reach LINZ: {error.reason}", key)) from None
@@ -139,9 +159,14 @@ def main() -> int:
                         help="Farm extent in NZTM2000 metres")
     parser.add_argument("--out", required=True, type=Path,
                         help="Where to write the snapshot, normally under data/snapshots/")
-    parser.add_argument("--format", default="GeoPackage",
-                        help="WFS outputFormat; GeoPackage for vectors (CLAUDE.md forbids "
-                             "shapefile)")
+    # GeoPackage would be the natural choice and is not on offer: LINZ serves it
+    # from the export API, not from WFS, whose GetCapabilities lists only GML,
+    # KML, CSV and JSON. GeoJSON is the one of those that keeps geometry and
+    # attributes together, and being text it diffs and hashes stably. Shapefile
+    # is forbidden by CLAUDE.md and is not used here either way.
+    parser.add_argument("--format", default="application/json",
+                        help="WFS outputFormat; GeoJSON by default, which is the only vector "
+                             "format LINZ WFS offers that CLAUDE.md permits")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print what would be requested, with the key redacted, and stop")
     arguments = parser.parse_args()
