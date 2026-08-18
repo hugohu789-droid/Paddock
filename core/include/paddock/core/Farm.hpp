@@ -140,8 +140,11 @@ class Farm {
   /// nitrogen budgets close against `mean_cover_kg_dm` and
   /// `mean_total_nitrogen_kg` exactly as they did before there were animals.
   /// `supplement_kg_dm` is bought feed to hand out, one entry per mob, in the
-  /// order mobs were added. Empty means none. A mob is fed its supplement on
-  /// top of what it grazes, which is what supplementary feeding is.
+  /// order mobs were added. Empty means none. It **substitutes** for grazing
+  /// rather than adding to it: a mob has an appetite, what it is handed comes
+  /// out of that appetite, and it grazes for the rest. Fed on top instead, a
+  /// 55 kg ewe reached 101 kg in a year, because supplement was buying gain
+  /// the animal had no appetite to eat.
   FarmDay step(const DailyWeather& weather, const DietQuality& diet,
                const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger = nullptr);
 

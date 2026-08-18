@@ -58,6 +58,12 @@ int RunSummary::days_feed_was_bought() const {
 
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label) {
+  return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{});
+}
+
+RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
+                                const core::DietQuality& diet, std::string label,
+                                const DayObserver& each_day) {
   core::Farm farm = bundle.make_farm();
 
   // The calendar is not used by a managing farmer; one is needed to construct
@@ -96,6 +102,10 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);
     summary.paddock_of_first_mob.push_back(static_cast<int>(farm.mobs().front().paddocks.front()));
+
+    if (each_day) {
+      each_day(farm, farm_day);
+    }
   }
 
   summary.closing_cover_kg_dm = farm.grid().mean_cover_kg_dm();

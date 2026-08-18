@@ -54,6 +54,18 @@ a colour scale fixed over the whole run and a timeline you can play. The soil
 gradient in the example bundle is a demonstration until real soils arrive from
 S-map in M3.
 
+The panel on the left sets a run up and starts it: which scenario, which class
+of stock, how many, and the two numbers the farmer manages to - the cover the
+sward is not taken below, and the cover above which the farm rotates. It opens
+on the bundle named on the command line, configured as that bundle configures
+itself, so pressing Run without touching anything reproduces the published
+scenario. A run with stock on it also writes the report, which the Report button
+shows and saves.
+
+What the panel does *not* let you edit is anything the bundle hashes - weather,
+soil, sward. Those are what make a bundle reproducible, and a form that let them
+be retyped would quietly take that away.
+
 ## What it is
 
 Paddock models a New Zealand pastoral farm as a coupled system: terrain and soil

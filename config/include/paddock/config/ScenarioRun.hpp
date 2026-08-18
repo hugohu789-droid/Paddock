@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -93,6 +94,19 @@ struct RunSummary {
 [[nodiscard]] RunSummary run_scenario(const ScenarioBundle& bundle, const core::DietQuality& diet,
                                       std::string label);
 
+/// Called once per simulated day, after the day has been stepped, with the farm
+/// as it then stands.
+///
+/// It exists because a RunSummary keeps means and a map needs cells. The map
+/// view used to grow its own pasture with no stock on it, so what it drew was a
+/// farm nobody was grazing - the one picture guaranteed not to show the thing
+/// the model is for. Rather than have the view run its own loop and drift from
+/// this one, the run offers each day up as it happens.
+///
+/// Taking the Farm by reference and keeping nothing means an observer that
+/// wants a day must copy what it wants there and then.
+using DayObserver = std::function<void(const core::Farm&, const core::FarmDay&)>;
+
 /// Runs a bundle under a farmer who decides rather than follows.
 ///
 /// The farmer picks the system from the state of the farm, moves stock, and
@@ -101,6 +115,12 @@ struct RunSummary {
 [[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
                                               const core::ManagementPolicy& policy,
                                               const core::DietQuality& diet, std::string label);
+
+/// As above, reporting each day to `each_day` as it is stepped.
+[[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
+                                              const core::ManagementPolicy& policy,
+                                              const core::DietQuality& diet, std::string label,
+                                              const DayObserver& each_day);
 
 /// A calendar that runs one system for the whole of `run`, for comparing a
 /// system against another rather than against a mixed year.

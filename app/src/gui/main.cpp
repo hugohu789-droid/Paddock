@@ -8,6 +8,7 @@
 // links Qt or VTK at all.
 
 #include <QApplication>
+#include <QDir>
 #include <QSurfaceFormat>
 #include <QVTKOpenGLNativeWidget.h>
 #include <algorithm>
@@ -54,7 +55,17 @@ int main(int argc, char** argv) {
                    "`paddock scenario run` for the single-hectare summary.\n";
       return 2;
     }
-    paddock::app::MapWindow window(bundle);
+    // The setup panel offers every scenario and species it can find, and what
+    // it looks in is the data directory the named bundle sits under:
+    // data/scenarios/<bundle> means data/. Derived rather than asked for, so
+    // the command line stays what it was and CI keeps working.
+    const QDir bundle_directory(QString::fromStdString(std::string(args.front())));
+    QDir data_directory(bundle_directory);
+    data_directory.cdUp();
+    data_directory.cdUp();
+
+    paddock::app::MapWindow window(bundle, bundle_directory.absolutePath().toStdString(),
+                                   data_directory.absolutePath().toStdString());
     window.show();
 
     if (smoke) {
