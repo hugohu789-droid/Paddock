@@ -1,0 +1,10 @@
+# Metabolisable energy per kilogram of liveweight change in a lactating cow.
+#
+# Source: DairyNZ, "Lactating cow", read 2026-08-18. The page gives "Lwt gain 50"
+# and "Lwt loss -37" with the note "(Diet ME required or saved)".
+#
+# Direction is a column rather than a sign, so that nothing downstream has to
+# remember which way a negative number points.
+process,me_mj_per_kg_liveweight,energy_direction,status,source_id
+gain,50,required,direct,dairynz_lactating_cow
+loss,37,released,direct,dairynz_lactating_cow

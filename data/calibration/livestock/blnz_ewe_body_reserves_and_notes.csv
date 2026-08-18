@@ -1,0 +1,17 @@
+# Companion values to Appendix 3.4, kept out of the lactation grid so that it
+# stays a grid.
+#
+# Source: Beef + Lamb New Zealand, "Making every mating count", Appendix 3.4,
+# read 2026-08-18.
+quantity,litter_size,week_postpartum,value,unit,status,source_id
+lamb_pasture_requirement,1,3,3.0,mj_me_per_day,direct,blnz_mating
+lamb_pasture_requirement,1,6,5.0,mj_me_per_day,direct,blnz_mating
+lamb_pasture_requirement,1,9,9.0,mj_me_per_day,direct,blnz_mating
+lamb_pasture_requirement,2,3,2.0,mj_me_per_day,direct,blnz_mating
+lamb_pasture_requirement,2,6,4.0,mj_me_per_day,direct,blnz_mating
+lamb_pasture_requirement,2,9,8.0,mj_me_per_day,direct,blnz_mating
+triplet_or_quad_addition,3,3,1.0,mj_me_per_day,direct,blnz_mating
+triplet_or_quad_addition,3,6,2.0,mj_me_per_day,direct,blnz_mating
+triplet_or_quad_addition,3,9,4.0,mj_me_per_day,direct,blnz_mating
+ewe_liveweight_lost,,,17,mj_me_released_per_kg,direct,blnz_mating
+ewe_liveweight_gained,,,65,mj_me_required_per_kg,direct,blnz_mating

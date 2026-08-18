@@ -152,35 +152,53 @@ TEST(DataFilesTest, EverySpeciesDefinitionLoads) {
   }
 }
 
-// Every definition shipped today guesses its standard reference weight, and
-// every one of them says so. If a later file sets the flag true it must have a
-// citation beside it - this test will start passing for a better reason, and
-// the assertion below is written so that it does not have to change when that
-// happens.
-TEST(DataFilesTest, NoShippedSpeciesClaimsAVerifiedReferenceWeightItDoesNotHave) {
+// Nothing shipped may claim more evidence than it has, and the report says
+// exactly what each definition is resting on.
+//
+// This is the test that would fail if somebody upgraded a status without adding
+// a citation - which is the only way a guess gets quoted as a finding.
+TEST(DataFilesTest, EveryShippedNumberDeclaresWhereItCameFrom) {
+  const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
+  const std::vector<std::string> known_sources =
+      load_source_ids(data_path("calibration/livestock/sources.toml"));
+
+  ASSERT_FALSE(known_sources.empty());
+
+  for (const SpeciesDefinition& definition : species) {
+    for (const SourcedValue* value : definition.sourced_values()) {
+      // A citation has to point at a source that exists. A dangling id is
+      // worse than no id: it reads as evidence and is not.
+      if (!value->source_id.empty()) {
+        EXPECT_NE(std::find(known_sources.begin(), known_sources.end(), value->source_id),
+                  known_sources.end())
+            << definition.name << " cites '" << value->source_id
+            << "', which is not in sources.toml";
+      }
+      // And anything claiming to rest on evidence has to name it.
+      EXPECT_TRUE(value->validation_error(definition.name).empty())
+          << value->validation_error(definition.name);
+    }
+
+    GTEST_LOG_(INFO) << definition.name << ": weakest status is "
+                     << to_string(definition.weakest_status());
+  }
+}
+
+// Standard reference weight is unresolved everywhere, and it is the number a
+// growth rate rests on (TMC Eq. 45). While that is true, no absolute liveweight
+// gain from this model is quotable - only comparisons that hold it fixed.
+//
+// When a breed mature weight is found and cited, this test should be updated
+// rather than deleted: it is recording a state of the evidence, not a rule.
+TEST(DataFilesTest, StandardReferenceWeightIsStillUnresolvedEverywhere) {
   const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
 
   for (const SpeciesDefinition& definition : species) {
-    if (definition.reference_weight_verified) {
-      // Nothing to check here mechanically: a true flag is a claim about a
-      // source, and the source lives in the file comments and docs/verify.md.
-      // What matters is that it was typed deliberately.
-      continue;
-    }
-    GTEST_LOG_(INFO) << definition.name << ": standard reference weight "
-                     << definition.energy.standard_reference_weight_kg << " kg is a placeholder";
+    EXPECT_FALSE(definition.standard_reference_weight.is_evidence())
+        << definition.name
+        << " now claims an evidenced reference weight; if that is right, cite it in "
+           "sources.toml and docs/verify.md and update this test to match";
   }
-
-  // The open item this corresponds to is real: SRW by breed and class sits in
-  // a TMC chapter not yet retrieved. Until one of these is verified the
-  // liveweight-gain arithmetic rests on a plausible number rather than a
-  // published one, and docs/verify.md says so.
-  const bool any_verified = std::any_of(
-      species.begin(), species.end(),
-      [](const SpeciesDefinition& definition) { return definition.reference_weight_verified; });
-  EXPECT_FALSE(any_verified)
-      << "a species now claims a verified reference weight; if that is right, cite it in "
-         "docs/verify.md and update this test to match";
 }
 
 // A dairy cow in this model is a dry cow, because lactation is not implemented.

@@ -12,26 +12,26 @@ description = "A mature ewe at maintenance; the major grazing mob on a breeding 
 
 [energy]
 # K, TMC Eq. 13. CSIRO (2007) and Nicol and Brookes (2007) both give 1.0 for
-# sheep - the only species factor the two sources agree on.
-species_factor = 1.0
+# sheep - the one species factor the two sources agree on, and the one the
+# OVERSEER ME review leaves alone in its Recommendation 6.
+species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
 
 # S, TMC Eq. 14: 1.0 for females and castrated males.
-sex_factor = 1.0
+sex_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
 
-# PLACEHOLDER - verify against a published mature weight for a New Zealand
-# breed. SRW drives the energy value of gain (TMC Eq. 45), so this number
-# changes how fast the model says an animal grows. 65 kg is a plausible mature
-# Romney ewe and nothing more than that.
-standard_reference_weight_kg = 65.0
-reference_weight_verified = false
+# SRW. No source: the OVERSEER chapter that carries breed characteristics has
+# not been retrieved, and Beef + Lamb NZ's feeding tables give liveweight
+# classes rather than breed mature weights - which their own guidance says must
+# not be read as one. SRW drives the energy value of gain (TMC Eq. 45), so a
+# growth rate resting on this number is not quotable.
+standard_reference_weight_kg = { value = 65.0, status = "verify" }
 
-# SpGraze, TMC Eq. 20. The manual gives 0.0025 for dairy and beef and does not
-# state a sheep value in the chapter read; this uses the same figure, which is
-# an assumption rather than a citation.
-grazing_coefficient = 0.0025
+# SpGraze, TMC Eq. 20. The manual gives 0.0025 for dairy and beef and states no
+# sheep value in the chapter read, so this is the cattle figure carried across.
+grazing_coefficient = { value = 0.0025, status = "placeholder" }
 
 # k1, TMC Eq. 44: 16.5 for large lean cattle breeds, 20.3 otherwise.
-gain_energy_ceiling_mj_per_kg = 20.3
+gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 60.0

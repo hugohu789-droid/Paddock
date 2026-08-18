@@ -44,6 +44,91 @@ FarmDefinition parse(std::string_view text) {
   return parse_farm(text, "test.toml");
 }
 
+// A farm may state the area it really is, and cite it. The shape stays
+// invented - only real geometry fixes that - but the size is often published,
+// and the size is the half that changes results, because everything this model
+// computes is per hectare.
+//
+// LURDF is the case this was written for. Its file said 1800 by 1400 metres,
+// which is 252 ha against a real 72, so every per-hectare figure taken off it
+// was out by three and a half times while the file looked perfectly tidy.
+TEST(FarmConfigTest, AFarmMayStateAndCiteTheAreaItReallyIs) {
+  const FarmDefinition farm = parse(R"(
+[farm]
+name = "example"
+region = "Canterbury"
+
+[location]
+centre_easting = 1557252.0
+centre_northing = 5167862.0
+latitude_degrees = -43.641
+
+[boundary]
+kind = "synthetic"
+extent_width_m = 900.0
+extent_height_m = 800.0
+area_hectares = 72.0
+area_source = "Somebody who would know, and said where."
+paddock_hectares = 2.5
+)");
+
+  EXPECT_NEAR(farm.area_hectares, 72.0, 1e-9);
+  EXPECT_FALSE(farm.area_source.empty());
+  // Verification, not a pin: 900 m by 800 m is 720 000 m2, which is 72 ha.
+  EXPECT_NEAR(farm.boundary_hectares(), 72.0, 1e-9);
+  EXPECT_TRUE(farm.validation_error().empty()) << farm.validation_error();
+}
+
+// The point of holding the two together. A cited area beside a rectangle that
+// is not that area is worse than no citation at all: it reads as though the
+// source vouches for the extent, and it does not.
+TEST(FarmConfigTest, AnExtentThatDoesNotMatchTheCitedAreaIsRejected) {
+  // These are the numbers LURDF's file actually carried: an 1800 by 1400 metre
+  // rectangle, which is 252 ha, on a farm of 72.
+  EXPECT_THROW(static_cast<void>(parse(R"(
+[farm]
+name = "example"
+region = "Canterbury"
+
+[location]
+centre_easting = 1557252.0
+centre_northing = 5167862.0
+latitude_degrees = -43.641
+
+[boundary]
+kind = "synthetic"
+extent_width_m = 1800.0
+extent_height_m = 1400.0
+area_hectares = 72.0
+area_source = "Somebody who would know, and said where."
+paddock_hectares = 2.5
+)")),
+               ConfigError);
+}
+
+// A citation with nothing to cite. Cheap to catch, and it would otherwise sit
+// in a file looking like evidence.
+TEST(FarmConfigTest, ASourceForAnAreaThatWasNeverStatedIsRejected) {
+  EXPECT_THROW(static_cast<void>(parse(R"(
+[farm]
+name = "example"
+region = "Canterbury"
+
+[location]
+centre_easting = 1557252.0
+centre_northing = 5167862.0
+latitude_degrees = -43.641
+
+[boundary]
+kind = "synthetic"
+extent_width_m = 900.0
+extent_height_m = 800.0
+area_source = "Somebody who would know, and said where."
+paddock_hectares = 2.5
+)")),
+               ConfigError);
+}
+
 TEST(FarmConfigTest, ASyntheticFarmGeneratesPaddocksCoveringItsExtent) {
   const FarmDefinition farm = parse(kSyntheticFarm);
 

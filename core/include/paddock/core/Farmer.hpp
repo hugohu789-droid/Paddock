@@ -4,6 +4,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <string>
 #include <vector>
 
 #include <paddock/core/Farm.hpp>
@@ -19,6 +21,12 @@ namespace paddock::core {
 /// One mob moved, or not moved when it should have been.
 struct MobMove {
   std::size_t mob = 0;
+
+  /// True when the mob was moved because it ran out of feed rather than because
+  /// its graze length was up. On a farm with enough paddocks this is rare; on
+  /// one without, it is most of them.
+  bool moved_early = false;
+
   std::size_t from = 0;
   std::size_t to = 0;
 
@@ -39,6 +47,74 @@ struct MobMove {
   /// keep its own rules.
   bool spell_was_short = false;
 };
+
+/// What a farmer is trying to do, and what they will not let happen.
+///
+/// A calendar says what the management is meant to be. A policy says what the
+/// farmer does when the season does not cooperate - which is most of the time,
+/// and is the part a fixed calendar cannot express.
+struct ManagementPolicy {
+  /// The farm's mean cover is not to be grazed below this. Below it the farmer
+  /// buys feed instead of asking the pasture for more, because a sward taken
+  /// too low stops growing and takes months to come back.
+  ///
+  /// PLACEHOLDER. New Zealand extension material talks about residuals in
+  /// terms a farmer can see - a sward height, a cover after grazing - and this
+  /// project has no sourced figure for the level at which a farmer should start
+  /// feeding out. See docs/verify.md.
+  double minimum_cover_kg_dm_per_ha = 1600.0;
+
+  /// What the stock are meant to be doing, kg per head per day. **Stock are
+  /// sold by the kilogram**, so holding weight is the floor rather than the
+  /// goal: a farmer feeding to zero gain is feeding to lose money slowly.
+  double target_liveweight_gain_kg_per_day = 0.0;
+
+  /// Rotation parameters, when the farmer chooses to rotate.
+  int maximum_graze_days = 3;
+  int minimum_spell_days = 35;
+
+  /// Cover at or above which rotating is affordable.
+  ///
+  /// Rotation concentrates stock onto one paddock, which only works if that
+  /// paddock can carry them. When the farm is short, spreading out is what a
+  /// farmer does - which is set stocking, and is why the source calls it the
+  /// system for lambing when demand is highest.
+  double rotation_cover_threshold_kg_dm_per_ha = 2200.0;
+
+  /// The energy in the feed the farmer buys, MJ ME/kg DM. Baleage and hay sit
+  /// below pasture; this is a decent baleage. PLACEHOLDER.
+  double supplement_me_mj_per_kg_dm = 10.0;
+
+  /// Whether the farmer may buy feed at all. A farm run without it will let
+  /// stock lose condition, which is a legitimate thing to model and to compare
+  /// against.
+  bool may_buy_feed = true;
+
+  [[nodiscard]] std::string validation_error() const;
+};
+
+/// One purchase, on one day.
+///
+/// Recorded rather than accumulated, because "when did this farm need feed"
+/// answers a different question from "how much did it need", and a report has
+/// to answer both.
+struct FeedPurchase {
+  Date date;
+  std::size_t mob = 0;
+  std::string mob_name;
+  double kg_dm = 0.0;
+
+  /// Why the farmer bought it, in the terms the decision was made in.
+  enum class Reason : std::uint8_t {
+    /// The paddock could not meet the mob's demand.
+    PaddockShort,
+    /// The farm's cover was at the floor, so grazing harder was not an option.
+    ProtectingCover,
+  };
+  Reason reason = Reason::PaddockShort;
+};
+
+[[nodiscard]] std::string to_string(FeedPurchase::Reason reason);
 
 /// Moves mobs according to a grazing calendar.
 ///
@@ -65,16 +141,56 @@ class Farmer {
     /// was occupied. The other half of the shuffle: the grazing lengthens
     /// instead.
     int grazings_extended = 0;
+
+    /// What the farmer decided to buy today, and why.
+    std::vector<FeedPurchase> purchases;
+
+    /// The system the farmer settled on, when they are choosing rather than
+    /// following a calendar.
+    GrazingSystem chosen_system = GrazingSystem::SetStocking;
   };
 
   /// Decides and applies today's moves. Call before Farm::step, so a mob that
   /// moves eats on the paddock it moved to.
+  ///
+  /// `went_short` names the mobs that could not get what they needed yesterday,
+  /// which is what makes a farmer move early. Smith and Dawson's rule is "do
+  /// not graze a pasture for more than three days" - a maximum, not a fixed
+  /// period - and a mob standing on ground it has already eaten while other
+  /// paddocks carry feed is not a farm anybody runs. Pass an empty set on the
+  /// first day, or when the caller is not tracking it.
+  Day decide(Farm& farm, const Date& date, const std::vector<bool>& went_short);
+
+  /// As above, for a caller that does not track shortfalls. Moves only on the
+  /// graze-length rule.
   Day decide(Farm& farm, const Date& date);
 
   [[nodiscard]] const GrazingCalendar& calendar() const noexcept { return calendar_; }
 
+  /// Decides today without a calendar: which system to run, and what to buy.
+  ///
+  /// The two things this farmer will not do are let the sward be grazed out and
+  /// let the stock go hungry, and when the pasture cannot deliver both it buys
+  /// feed rather than choosing between them. Everything else - which system,
+  /// which paddock, how much to feed out - follows from the state of the farm
+  /// on the day.
+  ///
+  /// `diet` describes the pasture; the supplement's energy comes from the
+  /// policy. Returns the decisions, and fills `supplement_kg_dm` with what to
+  /// hand to each mob, ready to pass to Farm::step.
+  Day manage(Farm& farm, const Date& date, const DietQuality& diet,
+             const std::vector<bool>& went_short, std::vector<double>& supplement_kg_dm);
+
+  [[nodiscard]] const ManagementPolicy& policy() const noexcept { return policy_; }
+
+  void set_policy(ManagementPolicy policy);
+
  private:
+  /// Which system the farm can afford today.
+  [[nodiscard]] GrazingSystem system_for(const Farm& farm) const;
+
   GrazingCalendar calendar_;
+  ManagementPolicy policy_;
 };
 
 }  // namespace paddock::core

@@ -113,7 +113,12 @@ if(PADDOCK_BUILD_CONFIG)
   file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
 
   add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
-                                          validation/SeasonalGrowthTest.cpp)
+                                          validation/GrazingSystemComparisonTest.cpp
+                                          validation/ManagedFarmTest.cpp
+                                          validation/ScenarioReportTest.cpp
+                                          validation/LivestockCalibrationTest.cpp
+                                          validation/SeasonalGrowthTest.cpp
+                                          validation/TerrainReachesTheModelTest.cpp)
 
   target_link_libraries(paddock_validation_tests PRIVATE Paddock::config GTest::gtest_main
                                                          Paddock::project_options)
@@ -138,6 +143,27 @@ if(PADDOCK_BUILD_VIZ)
                                                   Paddock::project_options)
 
   gtest_discover_tests(paddock_viz_tests PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
+endif()
+
+# Where the map puts things, which is the other way a map view can be
+# measurably wrong and needs VTK to check. Still no display: MapScene builds its
+# data on construction and fills it in show(), and only wants a render window
+# when somebody wants pixels.
+if(PADDOCK_BUILD_GUI)
+  add_executable(paddock_map_scene_tests viz/MapSceneTest.cpp)
+
+  target_link_libraries(paddock_map_scene_tests PRIVATE Paddock::viz_vtk GTest::gtest_main
+                                                        Paddock::project_options)
+
+  vtk_module_autoinit(TARGETS paddock_map_scene_tests MODULES ${VTK_LIBRARIES})
+
+  # PRE_TEST, not the default POST_BUILD: discovery runs the binary, and on
+  # Windows this one cannot start until Qt's and VTK's DLLs are on PATH, which
+  # is a thing about running it rather than about building it. Deferring
+  # discovery to test time keeps `cmake --build` from failing on a machine that
+  # can compile the map perfectly well.
+  gtest_discover_tests(paddock_map_scene_tests DISCOVERY_MODE PRE_TEST
+                       PROPERTIES LABELS "unit\;fast" DISCOVERY_TIMEOUT 120)
 endif()
 
 # Whether this machine's GDAL and PROJ can do NZTM at all. Labelled "gis"

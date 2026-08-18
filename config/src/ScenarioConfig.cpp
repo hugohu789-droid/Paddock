@@ -233,6 +233,43 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
     bundle.grid = spec;
   }
 
+  // The ground. Absent means flat, which is what every bundle written before
+  // this section existed was, and keeps their results exactly as they were.
+  if (const toml::table* terrain = root["terrain"].as_table(); terrain != nullptr) {
+    const std::string terrain_kind = detail::require_string(*terrain, "kind", manifest_path);
+    if (terrain_kind == "flat") {
+      detail::reject_unknown_keys(*terrain, {"kind"}, manifest_path,
+                                  "[terrain] with kind = \"flat\"");
+      bundle.terrain.kind = TerrainSpec::Kind::Flat;
+    } else if (terrain_kind == "synthetic") {
+      detail::reject_unknown_keys(*terrain,
+                                  {"kind", "base_elevation_m", "gradient_east", "gradient_north",
+                                   "undulation_amplitude_m", "undulation_wavelength_m"},
+                                  manifest_path, "[terrain] with kind = \"synthetic\"");
+      bundle.terrain.kind = TerrainSpec::Kind::Synthetic;
+      core::SyntheticSurface& surface = bundle.terrain.surface;
+      surface.base_elevation_m = detail::optional_double(*terrain, "base_elevation_m",
+                                                         surface.base_elevation_m, manifest_path);
+      surface.gradient_east =
+          detail::optional_double(*terrain, "gradient_east", surface.gradient_east, manifest_path);
+      surface.gradient_north = detail::optional_double(*terrain, "gradient_north",
+                                                       surface.gradient_north, manifest_path);
+      surface.undulation_amplitude_m = detail::optional_double(
+          *terrain, "undulation_amplitude_m", surface.undulation_amplitude_m, manifest_path);
+      surface.undulation_wavelength_m = detail::optional_double(
+          *terrain, "undulation_wavelength_m", surface.undulation_wavelength_m, manifest_path);
+      if (surface.undulation_wavelength_m <= 0.0) {
+        detail::throw_in(*terrain, manifest_path,
+                         "'undulation_wavelength_m' must be positive; a wavelength of zero is not "
+                         "a flat surface, it is a division by zero");
+      }
+    } else {
+      detail::throw_in(
+          *terrain, manifest_path,
+          "unknown terrain kind '" + terrain_kind + "'. Known kinds are: flat, synthetic");
+    }
+  }
+
   // The stock, if any. A species is referenced the way every other input is:
   // by relative path with its hash recorded, so a bundle stays reproducible and
   // can still share data/species/ rather than copying it.
@@ -398,8 +435,42 @@ core::Raster<core::SoilWaterParameters> ScenarioBundle::make_soil_raster() const
   return soils;
 }
 
+std::optional<core::Raster<double>> ScenarioBundle::make_elevation() const {
+  if (terrain.is_flat()) {
+    return std::nullopt;
+  }
+  if (!grid.has_value()) {
+    throw std::runtime_error("scenario '" + name +
+                             "' describes terrain but has no [grid] section to sample it over");
+  }
+  const GridSpec& spec = *grid;
+  const double width_m = static_cast<double>(spec.cols) * spec.cell_size_m;
+  const double height_m = static_cast<double>(spec.rows) * spec.cell_size_m;
+
+  core::BoundingBox area = core::BoundingBox::empty();
+  area.expand_to_include(core::Point2D{spec.origin_easting, spec.origin_northing - height_m});
+  area.expand_to_include(core::Point2D{spec.origin_easting + width_m, spec.origin_northing});
+
+  return core::SyntheticElevationSource(terrain.surface).fetch(area, spec.cell_size_m);
+}
+
+std::optional<core::Topography> ScenarioBundle::make_topography() const {
+  const std::optional<core::Raster<double>> elevation = make_elevation();
+  if (!elevation.has_value()) {
+    return std::nullopt;
+  }
+  return core::topography_of(*elevation);
+}
+
 core::FarmletGrid ScenarioBundle::make_grid() const {
-  return {make_soil_raster(), sward, initial_state, latitude_degrees};
+  core::FarmletGrid built(make_soil_raster(), sward, initial_state, latitude_degrees);
+  // Radiation by slope and aspect, which is what makes a south face grow less
+  // than the north face of the same hill. Left alone on flat ground, where the
+  // ratio is one everywhere and computing it would only cost time.
+  if (const std::optional<core::Topography> ground = make_topography(); ground.has_value()) {
+    built.set_terrain(*ground);
+  }
+  return built;
 }
 
 std::vector<core::Paddock> ScenarioBundle::make_paddocks() const {
@@ -442,6 +513,14 @@ core::Farm ScenarioBundle::make_farm() const {
   core::PaddockMask mask(shape, paddocks);
 
   core::Farm farm(make_grid(), std::move(mask), std::move(paddocks));
+
+  // What it costs a mob to walk the paddock it is grazing, TMC Eq. 23. Without
+  // this the farm is a terrace whatever its terrain section says, and the two
+  // halves of the terrain model would disagree: the grass would know it was on
+  // a hill and the animals would not.
+  if (const std::optional<core::Topography> ground = make_topography(); ground.has_value()) {
+    farm.set_slopes(ground->slope_degrees);
+  }
 
   for (const MobSpec& spec_mob : mobs) {
     core::Mob mob;

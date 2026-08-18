@@ -1,0 +1,13 @@
+# Commonly used calf weaning weights by breed.
+#
+# Source: DairyNZ, "Weaning", https://www.dairynz.co.nz/animal/calves/weaning/,
+# read 2026-08-18.
+#
+# The caveat matters more than the numbers, and the page states it plainly:
+# "Although no specific weaning weight has been defined by research, the type of
+# rearing system will affect the target weaning weight." These are industry
+# practice, not research thresholds, and the interpretation column says so.
+breed,weaning_weight_kg,interpretation,status,source_id
+jersey,70,common_industry_practice,direct,dairynz_weaning
+jersey_friesian_cross,80,common_industry_practice,direct,dairynz_weaning
+friesian,90,common_industry_practice,direct,dairynz_weaning

@@ -1,0 +1,18 @@
+# Dairy heifer liveweight targets as a fraction of mature liveweight.
+#
+# Source: DairyNZ, "Liveweight targets", read 2026-08-18. All eight anchors are
+# on the page, and the kilogram table behind them is self-consistent with the
+# percentages (420 kg mature at 3 months = 84 kg = 20%).
+#
+# The page cautions that individual heifers fall either side of the target and
+# that variation within a mob is natural. These are targets, not a growth curve;
+# no curve has been fitted to them here.
+age_months,fraction_mature_weight,status,source_id
+3,0.20,direct,dairynz_liveweight_targets
+6,0.30,direct,dairynz_liveweight_targets
+9,0.40,direct,dairynz_liveweight_targets
+12,0.50,direct,dairynz_liveweight_targets
+15,0.60,direct,dairynz_liveweight_targets
+19,0.80,direct,dairynz_liveweight_targets
+22,0.90,direct,dairynz_liveweight_targets
+84,1.00,direct,dairynz_liveweight_targets

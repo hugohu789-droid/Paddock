@@ -1,0 +1,43 @@
+# ME requirements of wether and ram lambs (MJ ME/d).
+#
+# Source: Beef + Lamb New Zealand, "Making every mating count", Appendix 3.2.
+# https://beeflambnz.com/sites/default/files/2026-06/Making-every-mating-count.pdf
+# Read 2026-08-18; SHA-256 in sources.toml.
+#
+# See blnz_mature_ewe_me.csv on what these tables measure.
+liveweight_kg,liveweight_gain_g_per_day,me_mj_per_day,status,source_id
+20,0,6.5,direct,blnz_mating
+25,0,8.0,direct,blnz_mating
+30,0,9.0,direct,blnz_mating
+35,0,10.0,direct,blnz_mating
+40,0,11.0,direct,blnz_mating
+20,50,8.0,direct,blnz_mating
+25,50,9.5,direct,blnz_mating
+30,50,11.0,direct,blnz_mating
+35,50,12.0,direct,blnz_mating
+40,50,13.5,direct,blnz_mating
+20,100,9.5,direct,blnz_mating
+25,100,11.0,direct,blnz_mating
+30,100,13.0,direct,blnz_mating
+35,100,14.5,direct,blnz_mating
+40,100,16.0,direct,blnz_mating
+20,150,11.0,direct,blnz_mating
+25,150,13.0,direct,blnz_mating
+30,150,15.0,direct,blnz_mating
+35,150,16.5,direct,blnz_mating
+40,150,18.5,direct,blnz_mating
+20,200,12.5,direct,blnz_mating
+25,200,14.5,direct,blnz_mating
+30,200,17.0,direct,blnz_mating
+35,200,19.0,direct,blnz_mating
+40,200,21.0,direct,blnz_mating
+20,250,14.0,direct,blnz_mating
+25,250,16.5,direct,blnz_mating
+30,250,19.0,direct,blnz_mating
+35,250,21.0,direct,blnz_mating
+40,250,23.5,direct,blnz_mating
+20,300,15.5,direct,blnz_mating
+25,300,18.0,direct,blnz_mating
+30,300,21.0,direct,blnz_mating
+35,300,23.0,direct,blnz_mating
+40,300,26.0,direct,blnz_mating

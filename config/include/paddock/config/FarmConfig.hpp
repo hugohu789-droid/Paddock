@@ -92,6 +92,20 @@ struct FarmDefinition {
   double extent_height_m = 0.0;
   double synthetic_paddock_hectares = 0.0;
 
+  /// The farm's real area, when it is known from a source, and where that came
+  /// from. Zero and empty when it is not known.
+  ///
+  /// A synthetic boundary invents the *shape*, and there is no way around that
+  /// short of real geometry. The *size* is a different matter: it is often
+  /// published, and it is the half that changes results, because everything
+  /// this model computes is per hectare. So a farm may state its area and cite
+  /// it, and validation then holds the invented rectangle to it - see
+  /// validation_error(), which refuses an extent that does not match the area
+  /// claimed. Without that check the two would be free to drift apart, and the
+  /// citation would end up vouching for a number it had nothing to do with.
+  double area_hectares = 0.0;
+  std::string area_source;
+
   /// The farm's total area where it is known independently of the boundaries -
   /// a published effective hectares, say. Compared against the boundaries when
   /// both are available, which is a real check rather than a restatement.

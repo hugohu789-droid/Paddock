@@ -179,6 +179,11 @@ GrazingConditions Farm::conditions_on(const std::vector<std::size_t>& held, cons
 }
 
 FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetLedger* ledger) {
+  return step(weather, diet, {}, ledger);
+}
+
+FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
+                   const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger) {
   // Growth first: a mob eats what is standing when it walks in, which includes
   // what grew that morning.
   grid_.step(weather, ledger);
@@ -234,7 +239,18 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetL
     const EnergyRequirement need =
         daily_energy_requirement(farm_mob.mob.animal, wanting, diet, ground);
 
-    mob_day.grazing.demand_kg_dm = need.intake_kg_dm * static_cast<double>(farm_mob.mob.head);
+    const auto mob_index = static_cast<std::size_t>(&farm_mob - mobs_.data());
+    const double supplement =
+        mob_index < supplement_kg_dm.size() ? std::max(0.0, supplement_kg_dm[mob_index]) : 0.0;
+
+    const double appetite = need.intake_kg_dm * static_cast<double>(farm_mob.mob.head);
+
+    // **Bought feed substitutes for pasture; it does not add to it.** A mob fed
+    // out in the morning grazes less, which is the whole point of feeding out -
+    // it spares the sward. Adding the two instead sent a ewe from 55 kg to 101
+    // over a year, which is not a thing sheep do.
+    mob_day.supplement_kg_dm = std::min(supplement, appetite);
+    mob_day.grazing.demand_kg_dm = appetite - mob_day.supplement_kg_dm;
 
     // What each cell has to give, and what the paddock has in total.
     const double cell_hectares = mask_.cell_area_hectares();
@@ -293,9 +309,29 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetL
       }
     }
 
+    if (mob_day.supplement_kg_dm > 0.0) {
+      mob_day.grazing.intake_per_head_kg_dm +=
+          mob_day.supplement_kg_dm / static_cast<double>(farm_mob.mob.head);
+
+      if (ledger != nullptr) {
+        // Bought feed arrives from off the farm and is eaten the same day, so
+        // it is both an inflow and an outflow. Recording only the first would
+        // have dry matter accumulating in a sward it never touched; recording
+        // neither would hide how much of this farm came out of a truck.
+        //
+        // The scratch ledger is folded by one over the cell count, and the farm
+        // mean of S kilograms is S / (cells * cell area), so what goes in is
+        // S / cell area.
+        const double per_hectare = mob_day.supplement_kg_dm / mask_.cell_area_hectares();
+        grazing_scratch_.record_inflow(Budget::DryMatter, "bought_feed", per_hectare);
+        grazing_scratch_.record_outflow(Budget::DryMatter, "bought_feed_eaten", per_hectare);
+      }
+    }
+
     mob_day.response = advance_one_day(farm_mob.mob, mob_day.grazing, diet, ground);
 
     day.total_eaten_kg_dm += mob_day.grazing.eaten_kg_dm;
+    day.total_supplement_kg_dm += mob_day.supplement_kg_dm;
     day.total_nitrogen_removed_kg += mob_day.grazing.nitrogen_removed_kg;
     day.any_mob_short = day.any_mob_short || mob_day.grazing.feed_limited;
 

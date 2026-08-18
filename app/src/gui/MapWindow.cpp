@@ -3,19 +3,29 @@
 
 #include "MapWindow.hpp"
 
+#include <QApplication>
+#include <QDockWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <algorithm>
+#include <cstddef>
+#include <exception>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkNew.h>
+#include <vtkPNGWriter.h>
 #include <vtkRenderWindow.h>
+#include <vtkWindowToImageFilter.h>
 
+#include <paddock/config/ScenarioReport.hpp>
 #include <paddock/core/FarmletGrid.hpp>
 #include <paddock/core/Weather.hpp>
+
+#include "ReportDialog.hpp"
 
 namespace paddock::app {
 
@@ -25,6 +35,19 @@ namespace {
 /// daily steps, which is fast enough to see a season turn and slow enough to
 /// watch a drought arrive.
 constexpr int kFrameInterval = 30;
+
+/// The metabolisable energy and digestibility of the pasture on offer.
+///
+/// Fixed rather than exposed on the panel because this model does not track
+/// diet quality through the season, and a box a user could set would promise a
+/// precision that is not there. It is the pair the validation tests run at.
+/// See docs/verify.md.
+constexpr double kPastureMe = 10.5;
+constexpr double kPastureDigestibility = 75.0;
+
+/// What grazed_on returns for a day the run does not have, and for a run with
+/// no stock in it. A reference has to refer to something.
+const std::vector<std::size_t> kNothingGrazed;
 
 struct FieldStyle {
   const char* label;
@@ -54,7 +77,9 @@ FieldStyle style_of(MapWindow::Field field) {
 
 }  // namespace
 
-MapWindow::MapWindow(const config::ScenarioBundle& bundle, QWidget* parent) : QMainWindow(parent) {
+MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bundle_directory,
+                     std::string data_directory, QWidget* parent)
+    : QMainWindow(parent), data_directory_(std::move(data_directory)) {
   setWindowTitle(QString::fromStdString("Paddock - " + bundle.name));
 
   view_ = new QVTKOpenGLNativeWidget(this);
@@ -95,25 +120,251 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, QWidget* parent) : QM
   central->setLayout(layout);
   setCentralWidget(central);
 
+  // The setup panel docks rather than opening as a dialog, so the map stays
+  // visible while a run is being set up. A farm is chosen by looking at it.
+  setup_ = new SetupPanel(data_directory_, this);
+  auto* dock = new QDockWidget("Run a scenario", this);
+  dock->setWidget(setup_);
+  dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+  addDockWidget(Qt::LeftDockWidgetArea, dock);
+
   timer_ = new QTimer(this);
   timer_->setInterval(kFrameInterval);
-  run_scenario(bundle);
 
-  timeline_->setRange(0, static_cast<int>(dates_.empty() ? 0 : dates_.size() - 1));
   connect(timeline_, &QSlider::valueChanged, this, &MapWindow::show_day);
   connect(field_box_, &QComboBox::currentIndexChanged, this, &MapWindow::change_field);
   connect(scale_box_, &QComboBox::currentIndexChanged, this, &MapWindow::change_scale);
   connect(play_button_, &QPushButton::clicked, this, &MapWindow::toggle_play);
   connect(timer_, &QTimer::timeout, this, &MapWindow::advance_frame);
+  connect(setup_, &SetupPanel::runRequested, this, &MapWindow::start_run);
+  connect(setup_, &SetupPanel::reportRequested, this, &MapWindow::open_report);
+
+  // Open on the bundle named on the command line, configured as that bundle
+  // configures itself. Pressing Run without touching anything therefore
+  // reproduces the scenario as written, which is what makes the panel safe to
+  // explore from: the user can always get back to the published run.
+  const int head = bundle.mobs.empty() ? 0 : bundle.mobs.front().head;
+  const double liveweight = bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg;
+  setup_->adopt_bundle(bundle_directory, head, liveweight);
+
+  resize(1400, 860);
+  start_run();
+  scene_.reset_camera();
+}
+
+void MapWindow::start_run() {
+  const SetupPanel::Choices choices = setup_->choices();
+  if (choices.scenario_directory.empty()) {
+    return;
+  }
+
+  timer_->stop();
+  play_button_->setText("Play");
+  setup_->set_running(true);
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+
+  try {
+    config::ScenarioBundle bundle = config::load_scenario(choices.scenario_directory);
+    if (!bundle.grid.has_value()) {
+      throw std::runtime_error("This scenario has no [grid] section, so there is no map to draw.");
+    }
+
+    // The panel edits the stock and nothing else. Everything the bundle hashes
+    // - weather, soil, sward - is left exactly as loaded, so a run started here
+    // is still the bundle's run with a different mob on it.
+    if (!bundle.mobs.empty()) {
+      config::MobSpec& mob = bundle.mobs.front();
+      mob.head = choices.head;
+      mob.liveweight_kg = choices.liveweight_kg;
+      if (choices.species != nullptr) {
+        mob.animal = choices.species->energy;
+        mob.age_days = choices.species->typical_age_days;
+      }
+    }
+
+    // The ground the run is over. Like the stock, it is a thing a farmer picks
+    // and not a thing the bundle hashes.
+    bundle.terrain = choices.terrain;
+
+    clear_series();
+    last_run_had_stock_ = !bundle.mobs.empty();
+    if (last_run_had_stock_) {
+      simulate_managed(bundle, choices.policy);
+    } else {
+      simulate_pasture_only(bundle);
+    }
+
+    last_policy_ = choices.policy;
+    last_bundle_ = bundle;
+    adopt_series();
+    if (last_run_.has_value()) {
+      setup_->show_results(*last_run_, last_run_had_stock_);
+    }
+  } catch (const std::exception& error) {
+    // A failed run must not leave half a year on the timeline. Everything the
+    // view draws from is cleared, so what is on screen is either a whole run or
+    // nothing at all.
+    clear_series();
+    last_run_.reset();
+    adopt_series();
+    setup_->show_failure(QString::fromUtf8(error.what()));
+  }
+
+  QApplication::restoreOverrideCursor();
+  setup_->set_running(false);
+}
+
+void MapWindow::open_report() {
+  if (!last_run_.has_value() || !last_bundle_.has_value() || !last_run_had_stock_) {
+    return;
+  }
+  config::ReportOptions options;
+  options.farm_name = last_bundle_->name;
+  options.policy = &last_policy_;
+
+  auto* dialog = new ReportDialog(
+      QString::fromStdString(config::render_report(*last_bundle_, *last_run_, options)),
+      QString::fromStdString(last_bundle_->name + "-report.md"), this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->show();
+}
+
+bool MapWindow::save_screenshot(const std::string& path) {
+  vtkRenderWindow* window = view_->renderWindow();
+  if (window == nullptr) {
+    return false;
+  }
+  window->Render();
+
+  vtkNew<vtkWindowToImageFilter> capture;
+  capture->SetInput(window);
+  // The back buffer, because the front one may already have been composited
+  // with whatever is in front of the window.
+  capture->ReadFrontBufferOff();
+  capture->Update();
+
+  vtkNew<vtkPNGWriter> writer;
+  writer->SetFileName(path.c_str());
+  writer->SetInputConnection(capture->GetOutputPort());
+  writer->Write();
+  return writer->GetErrorCode() == 0;
+}
+
+void MapWindow::clear_series() {
+  cover_.clear();
+  soil_water_.clear();
+  water_stress_.clear();
+  legume_fraction_.clear();
+  dates_.clear();
+  mean_cover_.clear();
+  whole_run_ranges_.clear();
+  boundaries_.clear();
+  grazed_each_day_.clear();
+}
+
+const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
+  return day < grazed_each_day_.size() ? grazed_each_day_[day] : kNothingGrazed;
+}
+
+void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date) {
+  cover_.push_back(grid.cover_kg_dm());
+  soil_water_.push_back(grid.soil_water_mm());
+  water_stress_.push_back(grid.water_stress());
+  legume_fraction_.push_back(grid.legume_fraction());
+  dates_.push_back(date);
+  mean_cover_.push_back(grid.mean_cover_kg_dm());
+}
+
+void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
+                                 const core::ManagementPolicy& policy) {
+  core::DietQuality diet;
+  diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
+  diet.digestibility_percent = kPastureDigestibility;
+
+  last_run_ = config::run_managed_scenario(
+      bundle, policy, diet, bundle.name, [this](const core::Farm& farm, const core::FarmDay& day) {
+        keep_day(farm.grid(), day.date.to_iso_string());
+
+        // The fences do not move, so they are taken once, on the first day.
+        if (boundaries_.empty()) {
+          boundaries_.reserve(farm.paddocks().size());
+          for (const core::Paddock& paddock : farm.paddocks()) {
+            boundaries_.push_back(paddock.boundary);
+          }
+        }
+
+        // Where the stock were. Taken from the farm rather than from the day's
+        // MobDay, which carries one index per mob: a set stocked mob has the
+        // run of every paddock, and only the farm knows the whole list.
+        std::vector<std::size_t> grazed;
+        for (const core::FarmMob& mob : farm.mobs()) {
+          grazed.insert(grazed.end(), mob.paddocks.begin(), mob.paddocks.end());
+        }
+        std::sort(grazed.begin(), grazed.end());
+        grazed.erase(std::unique(grazed.begin(), grazed.end()), grazed.end());
+        grazed_each_day_.push_back(std::move(grazed));
+      });
+}
+
+void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle) {
+  core::FarmletGrid grid = bundle.make_grid();
+  const core::WeatherSeries weather = bundle.weather->fetch(bundle.range);
+
+  config::RunSummary summary;
+  summary.label = bundle.name;
+  grid.set_opening_stocks(summary.ledger);
+
+  const std::size_t days = weather.records.size();
+  cover_.reserve(days);
+  soil_water_.reserve(days);
+  water_stress_.reserve(days);
+  legume_fraction_.reserve(days);
+  dates_.reserve(days);
+  mean_cover_.reserve(days);
+
+  for (const core::DailyWeather& day : weather.records) {
+    grid.step(day, &summary.ledger);
+    keep_day(grid, day.date.to_iso_string());
+    summary.dates.push_back(day.date);
+    summary.cover_kg_dm_per_ha.push_back(grid.mean_cover_kg_dm());
+  }
+
+  summary.closing_cover_kg_dm = grid.mean_cover_kg_dm();
+  summary.closing_nitrogen_kg = grid.mean_total_nitrogen_kg();
+  summary.closing_water_mm = grid.mean_soil_water_mm();
+  last_run_ = std::move(summary);
+}
+
+void MapWindow::adopt_series() {
+  for (const Field field :
+       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction}) {
+    double lowest = std::numeric_limits<double>::max();
+    double highest = std::numeric_limits<double>::lowest();
+    for (const core::Raster<double>& frame : series_of(field)) {
+      const std::pair<double, double> range = viz::ColourScale::range_of(frame);
+      lowest = std::min(lowest, range.first);
+      highest = std::max(highest, range.second);
+    }
+    whole_run_ranges_.emplace_back(lowest, highest);
+  }
+
+  timeline_->setRange(0, static_cast<int>(dates_.empty() ? 0 : dates_.size() - 1));
+
+  if (boundaries_.empty()) {
+    scene_.clear_boundaries();
+  } else {
+    scene_.set_boundaries(boundaries_);
+  }
+
   // The exact extent goes in the title, where it can be read once. Axis labels
   // are for orientation; seven-digit coordinates repeated across the bottom of
   // a 1.2 km map are not.
-  if (!cover_.empty()) {
+  if (!cover_.empty() && last_bundle_.has_value()) {
     const core::GeoTransform& transform = cover_.front().transform();
     const double width = static_cast<double>(cover_.front().cols()) * transform.cell_size;
     const double height = static_cast<double>(cover_.front().rows()) * transform.cell_size;
     setWindowTitle(QString("Paddock - %1   |   %2-%3 E, %4-%5 N   |   %6 x %7 km, %8 ha")
-                       .arg(QString::fromStdString(bundle.name))
+                       .arg(QString::fromStdString(last_bundle_->name))
                        .arg(transform.origin_easting, 0, 'f', 0)
                        .arg(transform.origin_easting + width, 0, 'f', 0)
                        .arg(transform.origin_northing - height, 0, 'f', 0)
@@ -128,43 +379,6 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, QWidget* parent) : QM
   current_day_ = most_varied_day();
   timeline_->setValue(current_day_);
   refresh();
-  scene_.reset_camera();
-  resize(1200, 800);
-}
-
-void MapWindow::run_scenario(const config::ScenarioBundle& bundle) {
-  core::FarmletGrid grid = bundle.make_grid();
-  const core::WeatherSeries weather = bundle.weather->fetch(bundle.range);
-
-  const std::size_t days = weather.records.size();
-  cover_.reserve(days);
-  soil_water_.reserve(days);
-  water_stress_.reserve(days);
-  legume_fraction_.reserve(days);
-  dates_.reserve(days);
-  mean_cover_.reserve(days);
-
-  for (const core::DailyWeather& day : weather.records) {
-    grid.step(day);
-    cover_.push_back(grid.cover_kg_dm());
-    soil_water_.push_back(grid.soil_water_mm());
-    water_stress_.push_back(grid.water_stress());
-    legume_fraction_.push_back(grid.legume_fraction());
-    dates_.push_back(day.date.to_iso_string());
-    mean_cover_.push_back(grid.mean_cover_kg_dm());
-  }
-
-  for (const Field field :
-       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction}) {
-    double lowest = std::numeric_limits<double>::max();
-    double highest = std::numeric_limits<double>::lowest();
-    for (const core::Raster<double>& frame : series_of(field)) {
-      const std::pair<double, double> range = viz::ColourScale::range_of(frame);
-      lowest = std::min(lowest, range.first);
-      highest = std::max(highest, range.second);
-    }
-    whole_run_ranges_.emplace_back(lowest, highest);
-  }
 }
 
 const std::vector<core::Raster<double>>& MapWindow::series_of(Field field) const {
@@ -251,6 +465,7 @@ void MapWindow::refresh() {
   }
 
   scene_.show(raster, viz::ColourScale(style.ramp, lowest, highest), legend);
+  scene_.show_grazed(grazed_on(day));
   // The day number is here so that a playing timeline is visibly playing even
   // on a field whose colours barely move: legume fraction shifts by about a
   // ten-thousandth from one day to the next.

@@ -175,6 +175,13 @@ jobs:
       - name: Work out what to lint
         id: scope
         run: |
+          # This pattern is wider than the compile database behind it. The
+          # ci-tidy preset builds with the GUI off, so app/src/gui and
+          # viz/src/MapScene.cpp are not in it and are linted by the map-view
+          # job instead, where Qt and VTK are already installed. Naming them
+          # here is harmless - run-clang-tidy only visits what the database
+          # holds - and the alternative, a pattern that lies the other way,
+          # would leave them looking covered.
           full='^.*/(core|config|app|gis|viz|ai|tests)/.*\.cpp$'
 
           if [ "${{ github.event_name }}" != "pull_request" ]; then
@@ -387,14 +394,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Qt6, VTK and a virtual display
+      # The largest install in the workflow, and it got larger when clang-tidy
+      # arrived: clang-tools-19 pulls a JRE behind it. This job has thirty
+      # minutes, so it can afford to wait out a slow mirror rather than have an
+      # attempt killed mid-fetch.
+      - name: Install Qt6, VTK, clang-tidy and a virtual display
+        env:
+          CI_APT_TIMEOUT: 900
         run: |
-          scripts/ci-apt-install.sh ninja-build qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          scripts/ci-apt-install.sh ninja-build qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri \
+            clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
 
+      # Built with clang rather than the default gcc, so the compile database
+      # matches the clang-tidy that reads it below - the same reason the
+      # ci-tidy preset takes its compiler from CC/CXX. GCC coverage is the
+      # Linux (gcc) job's business, not this one's.
       - name: Configure and build
+        env:
+          CC: clang-19
+          CXX: clang++-19
         run: |
           cmake --preset ci-gui
           cmake --build --preset ci-gui
+
+      # The clang-tidy job cannot see any of this. Its compile database is built
+      # with the GUI off, so every file under app/src/gui and viz/src/MapScene
+      # has been outside the lint gate since the map view was added - which is
+      # not theoretical: turning it on found five errors, including a narrowing
+      # conversion and two parameters copied for every call.
+      #
+      # It runs here rather than there because Qt and VTK are already installed
+      # in this job and installing them in the other one would cost more than
+      # this whole job takes.
+      - name: clang-tidy over the GUI
+        run: |
+          run-clang-tidy-${LLVM_VERSION} -p build/ci-gui -quiet -j "$(nproc)" \
+            '^.*/(app/src/gui|viz/src|tests/viz)/.*\.cpp$'
+
+      # Where the map puts things, which a rendered frame does not check: the
+      # field was once drawn half a cell south-west of the ground it described
+      # and looked entirely reasonable.
+      - name: Map placement
+        run: |
+          xvfb-run -a ctest --test-dir build/ci-gui -R MapSceneTest --output-on-failure
 
       # Rendering needs a GL context even for a 2D image, so the smoke test runs
       # under a virtual display. It steps the whole scenario, builds every day's
@@ -403,3 +449,15 @@ jobs:
       - name: Render the map headlessly
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-baseline --smoke
+
+      # And that the fences land on the field rather than beside it. A PNG is
+      # the only way to check that without a person at the screen, and it is
+      # kept so a reviewer can look at what the run actually drew.
+      - name: Draw a grazed day
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-grazed             --screenshot grazed-day.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: map-grazed-day
+          path: grazed-day.png

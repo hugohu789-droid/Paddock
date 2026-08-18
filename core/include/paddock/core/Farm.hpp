@@ -70,6 +70,12 @@ struct MobDay {
   std::size_t paddock = 0;
   GrazingDay grazing;
   LiveweightResponse response;
+
+  /// Bought feed fed out to this mob today, kg of dry matter. It comes from
+  /// off the farm, so it enters the dry matter budget as an inflow rather than
+  /// appearing from nowhere - and a run that needed a lot of it is a run whose
+  /// pasture did not carry the stock, which is the thing worth reporting.
+  double supplement_kg_dm = 0.0;
 };
 
 /// What one day did to the farm.
@@ -79,6 +85,9 @@ struct FarmDay {
 
   double total_eaten_kg_dm = 0.0;
   double total_nitrogen_removed_kg = 0.0;
+
+  /// Bought feed across all mobs today.
+  double total_supplement_kg_dm = 0.0;
 
   /// True when any mob went short. The signal a feed budget is not working.
   bool any_mob_short = false;
@@ -130,6 +139,15 @@ class Farm {
   /// grid uses: per-hectare means over the whole farm, so the dry matter and
   /// nitrogen budgets close against `mean_cover_kg_dm` and
   /// `mean_total_nitrogen_kg` exactly as they did before there were animals.
+  /// `supplement_kg_dm` is bought feed to hand out, one entry per mob, in the
+  /// order mobs were added. Empty means none. It **substitutes** for grazing
+  /// rather than adding to it: a mob has an appetite, what it is handed comes
+  /// out of that appetite, and it grazes for the rest. Fed on top instead, a
+  /// 55 kg ewe reached 101 kg in a year, because supplement was buying gain
+  /// the animal had no appetite to eat.
+  FarmDay step(const DailyWeather& weather, const DietQuality& diet,
+               const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger = nullptr);
+
   FarmDay step(const DailyWeather& weather, const DietQuality& diet,
                BudgetLedger* ledger = nullptr);
 

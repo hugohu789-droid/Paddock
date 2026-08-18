@@ -1,0 +1,184 @@
+# Where every livestock parameter in this project comes from.
+#
+# Each source below was fetched and read before anything was recorded against
+# it. That matters more than it sounds: the brief this library was built from
+# was accurate on almost everything, and wrong on one attribution that would
+# have put a contested number into the model as settled fact. See the
+# verification notes at the end of each entry, and docs/verify.md.
+#
+# `retrieved` is the day the source was read. PDFs carry the SHA-256 of the file
+# that was read, on the same principle the scenario bundles use: a citation is
+# only traceable if the document it points into is the one somebody opened.
+
+[source.dairynz_liveweight_targets]
+organisation = "DairyNZ"
+title = "Liveweight targets"
+url = "https://www.dairynz.co.nz/animal/heifers/lw-targets/"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+notes = """
+Breed mature liveweight ranges for 6-8 year old cows, attributed on the page to
+New Zealand Dairy Statistics (2024-25), and weight-for-age targets as a fraction
+of mature weight.
+
+Verified: all eight age anchors are on the page (3, 6, 9, 12, 15, 19, 22 months
+and 6-8 years). A first reading returned only three of them; asking again by
+name returned all eight with the kilogram table behind them, and the kilograms
+are self-consistent with the percentages. Worth remembering that one summary of
+a page is not a reading of it.
+"""
+
+[source.dairynz_weaning]
+organisation = "DairyNZ"
+title = "Weaning"
+url = "https://www.dairynz.co.nz/animal/calves/weaning/"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+notes = """
+Commonly used weaning weights: Jersey 70 kg, Friesian x Jersey 80 kg, Friesian
+90 kg.
+
+Verified, including the caveat that matters more than the numbers: "Although no
+specific weaning weight has been defined by research, the type of rearing system
+will affect the target weaning weight." These are industry practice, not
+research thresholds, and must not be recorded as the latter. The page gives no
+weaning age.
+"""
+
+[source.dairynz_lactating_cow]
+organisation = "DairyNZ"
+title = "Lactating cow"
+url = "https://www.dairynz.co.nz/animal/nutrition/lactating-cow/"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+notes = """
+Maintenance ME by liveweight, milksolids ME by diet and breed, pregnancy ME,
+liveweight-change ME, and walking ME by contour.
+
+Verified, and it is the strongest validation this project has for cattle: the
+maintenance table is stated as calculated at 11.0 MJ ME/kg DM, and the equations
+already implemented in core reproduce it to within 2% across 300-600 kg. See
+docs/verify.md.
+
+The page also carries a walking ME table by contour - flat 2.0, rolling 3.0,
+hilly/steep 6.0 MJ ME/km - which the brief did not mention and which is a New
+Zealand alternative to the OVERSEER movement equations.
+"""
+
+[source.blnz_mating]
+organisation = "Beef + Lamb New Zealand"
+title = "Making every mating count"
+url = "https://beeflambnz.com/sites/default/files/2026-06/Making-every-mating-count.pdf"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+sha256 = "8cb91a0f69f0515a176d8348a6507bf4d1ae8760e33ba6347eda97617a5c39af"
+notes = """
+Appendix Three: feed requirements of sheep. Mature ewe maintenance and gain,
+wether and ram lambs, ewe hoggets, lactation by litter size and week, and
+pregnancy.
+
+Verified point by point. Two things the brief omitted are in the source and are
+recorded here: the lamb pasture requirement row of Appendix 3.4, and note (2),
+"For triplets or quads add 1.0, 2.0 and 4.0 MJ ME/d for weeks 3, 6 and 9".
+
+Its sheep tables follow Geenty and Rattray (1987), which Table 2.2 and Table 4.2
+both say outright. That is a different framework from the Nicol and Brookes
+tables in blnz_feed_planning, and the two differ by about 2 MJ/day at every
+shared ewe weight. Neither corrects the other.
+
+One correction to what was recorded here earlier: the pregnancy value at two
+weeks before term is 3.8, not 0.8. The table appears twice in this document and
+the appendix extraction lost a digit; the body table has it right, and the
+series is monotonic after all.
+"""
+
+[source.blnz_feed_planning]
+organisation = "Beef + Lamb New Zealand"
+title = "A guide to feed planning for sheep farmers"
+url = "https://beeflambnz.com/sites/default/files/2026-06/Guide-to-feed-planning-for-sheep-farmers.pdf"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+model_family = "Nicol and Brookes (2007)"
+sha256 = "21cd4ac1b2c4020d70ee95e432000887688501497b163ef92dab074587f580ce"
+notes = """
+The second Beef + Lamb sheep feeding guide, and the one that resolved what
+looked like a 26% hole in this project's maintenance model.
+
+Verified. Its Appendix 1.2 gives 8.0 MJ ME/day for a 50 kg ewe at maintenance
+and states "Source 1.2-1.6: A.M. Nicol and I.M. Brookes (2007) Pasture and
+Supplements for Grazing Animals". The implemented equations give 7.71 - 3.6%
+apart, not 26%.
+
+The two publications carry the same worked example in the same words with
+different answers: "the daily ME requirement to maintain weight for a 50 kg ewe
+grazing mixed length leafy pasture with an ME content of 10.8 would be 8 MJME/d"
+here, and 10 in Making every mating count. Two frameworks, one publisher.
+"""
+
+[source.blnz_heifer_mating]
+organisation = "Beef + Lamb New Zealand"
+title = "Nutrition critical factor in heifer mating decision"
+url = "https://beeflambnz.com/news/nutrition-critical-factor-heifer-mating-decision"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+notes = """
+"Replacement heifers should weigh at least 300kg LW or 60% of their mature cow
+liveweight before mating at 15 months is considered."
+
+Verified, and verified for what it does NOT say: the page gives no mature
+liveweight for any beef breed. The 300 kg applies to Angus and Hereford, with
+heavier weights for beef-dairy cross and exotic breeds. A 500 kg mature weight
+obtained as 300 / 0.60 is arithmetic, not an Angus or Hereford figure.
+"""
+
+[source.tmc_me_review]
+organisation = "AgResearch, for OVERSEER"
+title = "Assessment of the OVERSEER metabolisable energy requirements model"
+url = "https://assets.ctfassets.net/bo1h2c9cbxaf/1Tr5agQ07Dy6XGjn8OqD5H/fcd46d7888cd4f57b519a4fd71a48ed4/Metabolic_Energy_Requirements_Review_.pdf"
+retrieved = "2026-08-18"
+source_type = "review"
+verified = true
+sha256 = "2794cad8354ff94b8153cae26999d340472592b75a7911aab8f9bbf76c7961ae"
+notes = """
+Independent technical review of OVERSEER's ME model.
+
+**Verified, and it corrects a mis-attribution.** The review quotes OVERSEER's
+Equation 13 with base 0.28 and K of 1.4, 1.4, 1.0, 1.4, 1.7, 1.25 for dairy,
+dairy replacements, sheep, beef, deer and dairy goats - and then recommends
+changing two of them. Recommendation 6: "Modify the value of Kantype in the
+BASAL equation to be 1.0 for sheep, 1.3 for British cattle breeds and 1.5 for
+beef and dairy cattle of dairy origin."
+
+So the K table is `direct` as a record of what OVERSEER uses, and must not be
+recorded as a value this review endorses. The review also observes that
+OVERSEER's equation "is cited as derived from Nicol and Brookes (2007), but uses
+the K values" of a different source - which is the same disagreement already
+recorded in docs/verify.md, now with an independent reviewer taking a side.
+
+Recommendation 9 gives a route for the cold-stress term this model lacks: CSIRO
+(2007) equations, NIWA monthly climate, and Cottle and Pacheco (2016) for fleece
+depth.
+
+One detail the implementation does not yet capture: the review states lwt in
+Equation 13 is "the live weight excluding conceptus and, for sheep, fleece".
+"""
+
+[source.tmc_animal_me]
+organisation = "AgResearch, for OVERSEER Limited"
+title = "Animal metabolisable energy requirements (Technical Manual, engine v6.3.0)"
+url = "https://assets.ctfassets.net/bo1h2c9cbxaf/7eDPxk2KcUN3oMpe25Xd76/8e0b6c4b1c338e4301fc0ed38fda6d0f/TMC_Animal_Metabolisable_Energy_Requirements_v6.3_June_2018.pdf"
+retrieved = "2026-08-18"
+source_type = "primary"
+verified = true
+sha256 = "f83171454056ecdd9e8e801e3958b9cbc387109c195dbebf0b34ebee7ffa016a"
+notes = """
+The equation set core/AnimalEnergy.cpp implements. Read in full earlier; see
+docs/verify.md for the equation-by-equation record and for the two readings that
+are this project's rather than the manual's.
+"""

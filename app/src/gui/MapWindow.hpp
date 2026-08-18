@@ -11,13 +11,18 @@
 #include <QTimer>
 #include <QVTKOpenGLNativeWidget.h>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <paddock/config/ScenarioConfig.hpp>
+#include <paddock/config/ScenarioRun.hpp>
+#include <paddock/core/Farmer.hpp>
 #include <paddock/core/Raster.hpp>
 #include <paddock/viz/MapScene.hpp>
+
+#include "SetupPanel.hpp"
 
 namespace paddock::app {
 
@@ -50,11 +55,24 @@ class MapWindow : public QMainWindow {
   /// almost one colour, which is the honest picture.
   enum class ScaleMode : int { WholeRun = 0, ThisDay, Natural };
 
-  explicit MapWindow(const config::ScenarioBundle& bundle, QWidget* parent = nullptr);
+  /// `data_directory` is the repository's `data/`, which the setup panel scans
+  /// for the scenarios and species it offers. `bundle` is the one to open on,
+  /// and it is passed already loaded so that a bundle which will not load fails
+  /// on the command line rather than inside a window.
+  MapWindow(const config::ScenarioBundle& bundle, const std::string& bundle_directory,
+            std::string data_directory, QWidget* parent = nullptr);
 
   /// Renders one frame and returns. Used by the CI smoke test, which has no one
   /// to click anything.
   void render_once();
+
+  /// Writes the current frame to a PNG.
+  ///
+  /// A map is a claim about what the model did, and a claim nobody looks at is
+  /// not checked. This is how the map gets checked without a person at the
+  /// screen: render a day, write it out, look at it. Returns false if the file
+  /// could not be written.
+  bool save_screenshot(const std::string& path);
 
   [[nodiscard]] std::size_t day_count() const noexcept { return dates_.size(); }
 
@@ -68,6 +86,9 @@ class MapWindow : public QMainWindow {
   [[nodiscard]] int most_varied_day() const;
 
  private slots:
+  /// Runs what the setup panel is asking for, and shows it.
+  void start_run();
+  void open_report();
   void show_day(int day);
   void change_field(int field);
   void change_scale(int mode);
@@ -75,7 +96,26 @@ class MapWindow : public QMainWindow {
   void advance_frame();
 
  private:
-  void run_scenario(const config::ScenarioBundle& bundle);
+  /// Steps the bundle with its stock on it, under `policy`, keeping every day's
+  /// rasters as it goes.
+  void simulate_managed(const config::ScenarioBundle& bundle, const core::ManagementPolicy& policy);
+
+  /// Steps the pasture alone, for a bundle that carries no stock. Both paths
+  /// exist because `canterbury-baseline` has no mobs and is still worth looking
+  /// at; only this one can be taken for such a bundle, and a managed run of it
+  /// would have no mob to report on.
+  void simulate_pasture_only(const config::ScenarioBundle& bundle);
+
+  /// Empties the per-day series, so a second run does not append to the first.
+  void clear_series();
+
+  /// Whole-run colour ranges and the timeline, once a run has been captured.
+  void adopt_series();
+
+  void keep_day(const core::FarmletGrid& grid, const std::string& date);
+
+  /// Which paddocks had stock on them on `day`, or empty for a run without.
+  [[nodiscard]] const std::vector<std::size_t>& grazed_on(std::size_t day) const;
   void refresh();
   [[nodiscard]] const std::vector<core::Raster<double>>& series_of(Field field) const;
 
@@ -87,6 +127,7 @@ class MapWindow : public QMainWindow {
   [[nodiscard]] std::pair<double, double> whole_run_range(Field field) const;
 
   QVTKOpenGLNativeWidget* view_ = nullptr;
+  SetupPanel* setup_ = nullptr;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;
@@ -103,9 +144,27 @@ class MapWindow : public QMainWindow {
   std::vector<core::Raster<double>> water_stress_;
   std::vector<core::Raster<double>> legume_fraction_;
   std::vector<std::string> dates_;
+
+  /// The fences, and where the stock were behind them.
+  ///
+  /// The boundaries are fixed for a run and the grazed set is not, so they are
+  /// kept apart: one is handed to the scene once, the other every frame. Under
+  /// set stocking the day's list is every paddock on the farm, which is exactly
+  /// what set stocking looks like and is worth being able to see.
+  std::vector<core::Polygon> boundaries_;
+  std::vector<std::vector<std::size_t>> grazed_each_day_;
   /// Indexed by Field.
   std::vector<std::pair<double, double>> whole_run_ranges_;
   std::vector<double> mean_cover_;
+
+  /// The last run, kept so the report can be written from the same numbers the
+  /// map is drawing rather than from a second run that might differ.
+  std::optional<config::RunSummary> last_run_;
+  std::optional<config::ScenarioBundle> last_bundle_;
+  core::ManagementPolicy last_policy_;
+  bool last_run_had_stock_ = false;
+
+  std::string data_directory_;
 
   int current_day_ = 0;
   Field field_ = Field::Cover;

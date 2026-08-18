@@ -40,7 +40,15 @@ if(PADDOCK_BUILD_GUI)
                RenderingOpenGL2
                GUISupportQt)
 
-  add_executable(paddock-gui src/gui/main.cpp src/gui/MapWindow.cpp src/gui/MapWindow.hpp)
+  add_executable(
+    paddock-gui
+    src/gui/main.cpp
+    src/gui/MapWindow.cpp
+    src/gui/MapWindow.hpp
+    src/gui/ReportDialog.cpp
+    src/gui/ReportDialog.hpp
+    src/gui/SetupPanel.cpp
+    src/gui/SetupPanel.hpp)
 
   set_target_properties(paddock-gui PROPERTIES AUTOMOC ON)
 

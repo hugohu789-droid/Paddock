@@ -150,12 +150,15 @@ FarmDefinition read(const toml::table& root, const std::string& path) {
   switch (definition.boundary_source) {
     case BoundarySource::Synthetic: {
       detail::reject_unknown_keys(boundary,
-                                  {"kind", "extent_width_m", "extent_height_m", "paddock_hectares"},
+                                  {"kind", "extent_width_m", "extent_height_m", "paddock_hectares",
+                                   "area_hectares", "area_source"},
                                   path, "[boundary] with kind = \"synthetic\"");
       definition.extent_width_m = detail::require_double(boundary, "extent_width_m", path);
       definition.extent_height_m = detail::require_double(boundary, "extent_height_m", path);
       definition.synthetic_paddock_hectares =
           detail::optional_double(boundary, "paddock_hectares", 2.5, path);
+      definition.area_hectares = detail::optional_double(boundary, "area_hectares", 0.0, path);
+      definition.area_source = detail::optional_string(boundary, "area_source", "");
       break;
     }
     case BoundarySource::Inline: {
@@ -245,6 +248,21 @@ std::string FarmDefinition::validation_error() const {
       }
       if (synthetic_paddock_hectares <= 0.0) {
         return "farm '" + name + "' needs a positive 'paddock_hectares'";
+      }
+      if (area_hectares > 0.0) {
+        const double rectangle_hectares = extent_width_m * extent_height_m / 10000.0;
+        // A tenth of a hectare. Tight enough that a wrong extent cannot hide
+        // behind it, loose enough that a farm may state a round area and use
+        // round metres for the rectangle.
+        if (std::abs(rectangle_hectares - area_hectares) > 0.1) {
+          return "farm '" + name + "' says it is " + std::to_string(area_hectares) +
+                 " ha but its extent covers " + std::to_string(rectangle_hectares) +
+                 " ha. The area is cited and the rectangle is invented, so it is the "
+                 "rectangle that is wrong";
+        }
+      }
+      if (!area_source.empty() && area_hectares <= 0.0) {
+        return "farm '" + name + "' cites a source for its area without stating one";
       }
       break;
     case BoundarySource::Inline:

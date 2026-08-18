@@ -354,6 +354,112 @@ the agronomic point fall out on its own - under set stocking every paddock is
 grazed every day, so none of them rests, which is why the source says the system
 grows less.
 
+### Calibrating against New Zealand industry sources
+
+Six sources were fetched and read before anything was recorded against them, and
+`data/calibration/livestock/sources.toml` holds the manifest with hashes. Three
+findings came out of doing that rather than taking the numbers on trust.
+
+**Cattle maintenance validates to 2%.** DairyNZ's *Lactating cow* page gives
+maintenance ME by liveweight, stated as calculated at 11.0 MJ ME/kg DM. The
+equations already in `core/AnimalEnergy.cpp` reproduce it across the whole
+published range:
+
+| Liveweight | DairyNZ | This model | Difference |
+|---|---|---|---|
+| 300 kg | 40 | 39.7 | −0.8% |
+| 400 kg | 50 | 49.2 | −1.5% |
+| 500 kg | 59 | 58.2 | −1.4% |
+| 600 kg | 68 | 66.7 | −1.9% |
+
+This is the cattle validation this file had been missing, and it is stronger
+than the Simpson sheep check because it spans a range rather than a point.
+
+**But only with the age factor set to one**, and that question is now answered:
+the age term does apply to adult cattle. The OVERSEER ME review works an example
+for a 500 kg animal at four years using it —
+`MEm = ((0.36 W^0.75)/km) * exp(-0.00008 A)` — and discusses its effect for
+animals of six years and more. So the 17% between the model and DairyNZ at
+500 kg is a difference between a mechanistic framework and a practical table,
+not evidence that the age term belongs only to growing stock.
+
+**The floor is a different matter, and the two OVERSEER documents contradict
+each other about it.** The technical manual states "Agefactor had a minimum
+value of 0.84 (Freer et al., 2006)". The review asks why "the lower bound on
+AgeFactor was not used as in the Freer et al. (2010) expression", notes that
+CSIRO (2007) and Nicol and Brookes (2007) place no lower bound, and says the
+omission "may allow ME requirements to drop too low for animals older than 6
+years".
+
+This implementation has the floor, which matches what the manual documents and
+what the review argues for. It should not be described as what the reviewed
+OVERSEER code does, because the review says that code lacks it. Open item 11 is
+now about which variant to carry, not about whether the term applies.
+
+**Sheep: the earlier 26% was a comparison against the wrong table.**
+
+Beef + Lamb NZ publish two sheep maintenance tables, from two frameworks, in two
+documents, and carry the same worked example in the same words with different
+answers:
+
+| Publication | Framework | 50 kg ewe at maintenance |
+|---|---|---|
+| A guide to feed planning for sheep farmers, Appendix 1.2 | Nicol and Brookes (2007) | 8.0 MJ ME/day |
+| Making every mating count, Appendix 3.1 and Table 2.2 | Geenty and Rattray (1987) | 10.0 MJ ME/day |
+
+The equations here descend from Nicol and Brookes by way of the OVERSEER manual,
+so the first is the comparator. Against it the model is 1.9% low at 45 kg, not
+26%.
+
+**But the agreement is not clean, and what is left is more interesting than
+either number.** The deviation grows with weight:
+
+| Ewe | Nicol and Brookes | This model | Difference |
+|---|---|---|---|
+| 45 kg | 7.0 | 6.87 | −1.9% |
+| 50 kg | 8.0 | 7.43 | −7.1% |
+| 60 kg | 10.0 | 8.52 | −14.8% |
+| 70 kg | 11.0 | 9.56 | −13.0% |
+
+An earlier note here read an exponent out of that and said the table was steeper
+in liveweight than W^0.75. **That was over-reading a rounded table.** Its steps
+are 1.0, 1.0, 1.0, 0.5, 0.5 MJ - rounded to the half-megajoule, with a clear
+change of slope at 60 kg. Fitting a power law gives 1.24 over 45-60 kg, 0.62
+over 60-70, and 1.02 overall, which is three different answers from six rounded
+points and means none of them.
+
+What is left is a better question. The ME review quotes the Nicol and Brookes
+maintenance equation in full:
+
+    MEm = K.S.M (0.28 W^0.75 exp(-0.03A))/km + 0.1 MEp + MEgraze + Ecold
+
+It carries **MEgraze** and **Ecold**, and this implementation has neither in its
+maintenance figure - grazing cost is computed separately and cold is not
+modelled at all. A published table of requirements for *grazing* ewes would
+include them, and grazing cost scales with liveweight rather than with W^0.75,
+which would put a model without it increasingly below the table as the animal
+gets heavier. That matches the direction of what is seen. It is a hypothesis
+with an equation behind it rather than a measurement, and testing it needs the
+chapter itself.
+
+The Geenty and Rattray table stays, as a separate framework rather than an
+error. What its practical grazing allowance is made of needs the 1987 chapter,
+which has not been read.
+
+**One attribution in the brief was wrong, and it mattered.** The OVERSEER ME
+review was cited for K = 1.4 for beef cattle. The review does quote OVERSEER's
+values — 1.4, 1.4, 1.0, 1.4, 1.7, 1.25 — but its Recommendation 6 is to *change*
+them: "Modify the value of Kantype in the BASAL equation to be 1.0 for sheep,
+1.3 for British cattle breeds and 1.5 for beef and dairy cattle of dairy
+origin." It also notes that OVERSEER's equation "is cited as derived from Nicol
+and Brookes (2007), but uses the K values" of another source. So the K table is
+a record of what OVERSEER does, not a value that review endorses — and the
+disagreement recorded above now has an independent reviewer on the 1.3 side.
+
+The same review gives a route for the cold-stress term this model lacks
+(Recommendation 9): CSIRO (2007) equations, NIWA monthly climate, and Cottle and
+Pacheco (2016) for fleece depth.
+
 ### What is still not sourced
 
 - **Nicol & Brookes (2007)** itself — NZ Society of Animal Production Occasional
@@ -398,6 +504,31 @@ The suites here fall into three kinds, and the comments say which:
   midwinter slope ratios of about 2.00 and 0.06, the 0.9 floor on a midsummer
   tilt, and the 0.1 ha bound on rasterisation error are all of this kind.
 
+## What this model may be quoted for
+
+The evidence is uneven, so this says plainly which outputs carry weight today
+and which do not. It is the short version; the sections above are the working.
+
+| Output | Standing | Why |
+|---|---|---|
+| Conservation of dry matter, water and nitrogen | **Sound** | A property of the bookkeeping, not of any parameter. Closes to 1e-9 over a grazed year |
+| Deterministic replay | **Sound** | Same reason |
+| Comparison between grazing systems | **Sound** | Both arms carry the same stock and the same parameters, so an error in a parameter cancels |
+| Direction of a seasonal or terrain effect | **Sound** | Checked against Gillingham's field trial for slope and aspect |
+| Cattle maintenance requirement | **Sound to about 2%** | Reproduces DairyNZ across 300-600 kg |
+| Sheep maintenance requirement | **Low by 2% to 15%** | Against Nicol and Brookes, growing with liveweight. Open item 12 |
+| **Carrying capacity for sheep** | **Overstated, by up to 17%** | Follows directly from the line above: a 60 kg ewe is modelled as needing 8.5 MJ where the published table says 10.0, so a farm looks able to carry more stock than it can |
+| **Absolute liveweight gain** | **Not quotable** | Standard reference weight is `verify` on every species definition, and it drives the energy value of gain |
+| Anything involving a milking cow | **Not modelled** | Lactation is absent; a "dairy cow" here is a dry cow |
+| Nitrogen over more than a season | **Wrong in a known direction** | Dung and urine are not returned, so a long run strips the farm |
+
+The sheep figure is the one to watch, and it is an **approximation carried
+deliberately** rather than an unknown: the size and sign are measured, a test
+holds them inside 16%, and open item 12 names the chapter that would settle it.
+Work that compares scenarios is unaffected. Work that answers "how many ewes
+will this farm carry" is not, and should not be published from this model until
+item 12 closes.
+
 ## Open items
 
 These are gaps in *evidence*. What is scheduled to be *built*, and in what
@@ -414,10 +545,16 @@ work and which do not.
 | 6 | Nitrogen leaching: regulatory thresholds | M4 | Current Regional Council rules | open |
 | 7 | LINZ, NIWA and Manaaki Whenua licence terms and access methods; Open-Meteo and VCSN terms; the OVERSEER technical manual's no-promotion clause | M2-M3 | Dataset and document licences | open |
 
-| 8 | Farm boundaries and centroids for the three example farms | M3 | LINZ NZ Primary Parcels, via `scripts/linz-snapshot.py` | open - all three ship with generated boundaries and locality coordinates, marked `location_verified = false` |
+| 8 | Farm boundaries and centroids for the three example farms | M3 | LINZ NZ Primary Parcels, via `scripts/linz-snapshot.py` | **narrowed - the fetch works, the selection does not.** A real 6 km square of NZ Primary Parcels around Lincoln has been pulled from the LINZ Data Service (`layer-50772`, 5943 parcels, EPSG:2193 easting-first as returned, SHA-256 `b1ce4586d4b114506587b86bdda15981061a80ad021d46bc9063d172df2a3e1f`). Which of those parcels are the farm is open: see item 15. All three farms still ship with generated boundaries marked `location_verified = false` |
 | 9 | Where stock choose to graze on a paddock of varying slope: utilisation by slope class | M3, task #24 | Lambert and Gillingham on stock camps and nutrient transfer | open - Gillingham et al. (1998) gives pasture *production* by slope and aspect, but not the animals' *distribution* over it. The energy cost of walking a slope is sourced (TMC Eq. 23); the preference that follows from it is not |
 
 | 10 | Grazing selectivity: how strongly stock prefer clover over grass, and how that differs between set stocking and rotation | M3, task #24 | NZ grazing behaviour literature | open - the direction is stated by Smith and Dawson (1976), the magnitude is not |
+
+| ~~11~~ | ~~Which age-factor variant to carry~~ | M3 | — | **decided: carry the 0.84 floor.** It is what the manual documents and what the review argues for, so both sources agree on the outcome even while disagreeing about what the reviewed code does. Applicability to adult cattle was settled first: the review works a 500 kg four-year-old through the age term |
+| 12 | Whether Nicol and Brookes' published ewe maintenance includes MEgraze and Ecold, which this model's maintenance figure does not | M3 | Nicol and Brookes (2007), *Pasture and supplements for grazing animals*, NZSAP Occasional Publication No. 14 - **listed on nzsap.org**, so obtainable | narrowed - the model is 1.9% low at 45 kg and 14.8% at 60 kg; the review quotes their equation as carrying both terms |
+| 13 | What the Geenty and Rattray (1987) practical grazing allowance is made of | M3 | Geenty & Rattray, "The energy requirements of grazing sheep and cattle", NZSAP Occasional Publication No. 10, pp. 39-53 | **blocked.** NZSAP host Occasional Publications 11 to 16 and not 10, a literature search returns the citation but no figures, and the OVERSEER ME review does not cite it. Papers that do are paywalled. It runs about 2 MJ/day above Nicol and Brookes at every shared ewe weight and nothing read so far says what that covers |
+| 14 | Whether OVERSEER uses lwt^0.75 or lwt^0.73 | M4 | TMC Eq. 13 against the ME review's section 12 | open - the manual says 0.75 in six places; the review reports `W^0.73 (Wheeler 2016b, Appendix 2)`. This implementation follows the manual. Another manual-against-implementation difference, like the age factor floor |
+| 15 | Which LINZ parcels are LURDF | M3 | An authoritative statement of the farm's location or boundary, from Lincoln University or a survey plan | **blocked, and deliberately not guessed.** LINZ's open cadastre carries no owner, so the snapshot cannot say whose land a parcel is. Forty-seven parcels of over 15 ha are centred within the fetched square and several are near the sourced 72 ha. Choosing one because its area is close would produce a farm boundary that looks surveyed and is invented, which is worse than the honest rectangle now in `data/farms/lincoln-research-farms.toml`. What is sourced is the area (72 ha, Lincoln University) and the road (Weedons Road); what is missing is a position accurate enough to name parcels |
 
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.
@@ -440,4 +577,5 @@ they are parameters.
 | E6 | FAO-56 says Eq. 52 (Hargreaves) should be checked against Penman-Monteith in each new region before it is trusted. Paddock uses it because CliFlo stations near a farm reliably report temperature and often nothing else; the regional check against a station that does report humidity and wind is outstanding, and belongs with the T3 validation gate. | M2, with T3 |
 | E8 | **No unfertilised Canterbury reference series.** T3 validates the seasonal *distribution* against Woodlands, the only site on DairyNZ's sheet with no nitrogen fertiliser - but Woodlands is Southland (46.4 S), not Canterbury (43.5 S). The Canterbury sites are the right climate and the wrong management (154-330 kg N/ha). Neither is both. A proper target is an unfertilised Canterbury trial such as the Winchmore dryland series; until then the magnitude comparison carries this caveat. | M3 |
 | E7 | **The pasture growth parameters are fixtures, not a calibration.** Radiation use efficiency, extinction coefficient, specific leaf area, senescence and residual are the right shape and order of magnitude, but the published ranges are wide and often whole-plant (RUE near 2 g DM/MJ usually includes roots; this model grows only what an animal eats). **T3 now measures the gap rather than assuming it.** Over twenty simulated years the model produces 9.8 t DM/ha/yr against 11.0 t measured at the unfertilised Woodlands site and 16.3 t at fertilised Lincoln, and its seasonal curve correlates 0.97 with the unfertilised site and 0.91 with the fertilised one. The shape is right; the magnitude is 11% low against the closest-managed site. No growth figure from this model should be quoted until the parameters themselves are sourced. | M2 shape done, magnitude M3 |
+| E9 | **The terrain model had never run.** `Farm::set_slopes` had no callers anywhere in the repository and `FarmletGrid::set_terrain` had callers only in tests, so two sourced pieces of the model - the energy cost of walking a slope (TMC Eq. 23) and the radiation a slope receives (Gillingham et al.) - never fired in a single scenario the project shipped. Every farm ran flat, and no report said so. A `[terrain]` section now reaches both, the shipped bundles stay flat so their baselines hold, and the report states which. What is still missing is real ground: the only surface available is a formula, chosen because its derivatives are known and the topography code can therefore be checked against something other than itself. See `tests/validation/TerrainReachesTheModelTest.cpp`, which asserts direction and reachability and never magnitude | M3 |
 | E5 | The CliFlo column mappings in `scripts/cliflo-snapshot.py` are guesses until checked against a real export of each datatype. The script prints the headings it found and accepts `--column HEADING=field`, so a wrong guess is visible rather than silent. | M2, on first real download |
