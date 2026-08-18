@@ -142,11 +142,18 @@ TEST(LivestockCalibrationTest, TheAgeFactorIsWhatSeparatesTheModelFromDairyNz) {
 // away - but the agreement is not clean, and the shape of what is left is more
 // interesting than either number.
 //
-// The model is 1.9% below at 45 kg and 14.8% below at 60 kg. It is not an
-// offset: across 45 to 70 kg the published table rises by a factor of 1.571
-// while metabolic weight rises by 1.393, so the table is steeper in liveweight
-// than W^0.75 is. Something other than a level difference separates them, and
-// the exponent is the obvious suspect.
+// The model is 1.9% below at 45 kg and 14.8% below at 60 kg, so it is not a flat
+// offset either. Do not read an exponent out of that: the published steps are
+// 1.0, 1.0, 1.0, 0.5, 0.5 MJ, rounded to the half-megajoule and kinking at
+// 60 kg, and fitting a power law to six such points gives 1.24, 0.62 or 1.02
+// depending which end you use.
+//
+// The likelier explanation has an equation behind it. The ME review quotes the
+// Nicol and Brookes maintenance as
+//   MEm = K.S.M (0.28 W^0.75 exp(-0.03A))/km + 0.1 MEp + MEgraze + Ecold
+// and this figure carries neither MEgraze nor Ecold. Grazing cost scales with
+// liveweight rather than W^0.75, which would open the gap as the animal gets
+// heavier - which is the direction seen. Open item 12.
 TEST(LivestockCalibrationTest, TheModelRunsBelowNicolAndBrookesAndDivergesWithWeight) {
   const test::CalibrationTable table(table_path("blnz_nicol_brookes_2007_ewe_me.csv"));
 
@@ -185,10 +192,10 @@ TEST(LivestockCalibrationTest, TheModelRunsBelowNicolAndBrookesAndDivergesWithWe
   EXPECT_LT(lightest, 0.04) << "close at the light end";
   EXPECT_GT(heaviest, 0.10) << "and much further apart at 60 kg";
 
-  // The published table climbs faster with liveweight than metabolic weight
-  // does, which is what says the difference is structural.
-  EXPECT_NEAR(11.0 / 7.0, 1.571, 0.001);
-  EXPECT_NEAR(std::pow(70.0 / 45.0, 0.75), 1.393, 0.001);
+  // The published table is rounded and kinked rather than smooth, which is why
+  // no exponent is asserted here. Recording the steps keeps that visible.
+  EXPECT_DOUBLE_EQ(8.0 - 7.0, 1.0);
+  EXPECT_DOUBLE_EQ(10.5 - 10.0, 0.5) << "the step halves at 60 kg";
 
   GTEST_LOG_(INFO) << "below Nicol and Brookes by " << (100.0 * lightest) << "% at 45 kg and "
                    << (100.0 * heaviest) << "% at 60 kg; worst " << (100.0 * worst) << "%";

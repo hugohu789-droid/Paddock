@@ -421,10 +421,26 @@ either number.** The deviation grows with weight:
 | 60 kg | 10.0 | 8.52 | −14.8% |
 | 70 kg | 11.0 | 9.56 | −13.0% |
 
-Across 45 to 70 kg the published table rises by a factor of 1.571 while metabolic
-weight rises by 1.393. **The table is steeper in liveweight than W^0.75 is**, so
-what separates them is structural rather than a level. That is open item 12 now,
-and it is a sharper question than the one it replaces.
+An earlier note here read an exponent out of that and said the table was steeper
+in liveweight than W^0.75. **That was over-reading a rounded table.** Its steps
+are 1.0, 1.0, 1.0, 0.5, 0.5 MJ - rounded to the half-megajoule, with a clear
+change of slope at 60 kg. Fitting a power law gives 1.24 over 45-60 kg, 0.62
+over 60-70, and 1.02 overall, which is three different answers from six rounded
+points and means none of them.
+
+What is left is a better question. The ME review quotes the Nicol and Brookes
+maintenance equation in full:
+
+    MEm = K.S.M (0.28 W^0.75 exp(-0.03A))/km + 0.1 MEp + MEgraze + Ecold
+
+It carries **MEgraze** and **Ecold**, and this implementation has neither in its
+maintenance figure - grazing cost is computed separately and cold is not
+modelled at all. A published table of requirements for *grazing* ewes would
+include them, and grazing cost scales with liveweight rather than with W^0.75,
+which would put a model without it increasingly below the table as the animal
+gets heavier. That matches the direction of what is seen. It is a hypothesis
+with an equation behind it rather than a measurement, and testing it needs the
+chapter itself.
 
 The Geenty and Rattray table stays, as a separate framework rather than an
 error. What its practical grazing allowance is made of needs the 1987 chapter,
@@ -509,9 +525,10 @@ work and which do not.
 
 | 10 | Grazing selectivity: how strongly stock prefer clover over grass, and how that differs between set stocking and rotation | M3, task #24 | NZ grazing behaviour literature | open - the direction is stated by Smith and Dawson (1976), the magnitude is not |
 
-| 11 | Which age-factor variant to carry: with the 0.84 floor the manual documents, or without it as the reviewed OVERSEER code apparently runs | M3 | TMC Eq. 17 against the ME review's section 4.1.5 | narrowed - **applicability to adult cattle is settled**; the manual and its own review disagree about the floor |
-| 12 | Why Nicol and Brookes' ewe maintenance rises faster with liveweight than W^0.75 does | M3 | Nicol and Brookes (2007), *Pasture and supplements for grazing animals* | narrowed - the model is 1.9% low at 45 kg and 14.8% at 60 kg, so the difference is in the exponent rather than the level |
-| 13 | What the Geenty and Rattray (1987) practical grazing allowance is made of | M3 | Geenty & Rattray, "The energy requirements of grazing sheep and cattle", NZSAP Occasional Publication No. 10, pp. 39-53 | open - it runs about 2 MJ/day above Nicol and Brookes at every shared ewe weight, and nothing read so far says what that covers |
+| ~~11~~ | ~~Which age-factor variant to carry~~ | M3 | — | **decided: carry the 0.84 floor.** It is what the manual documents and what the review argues for, so both sources agree on the outcome even while disagreeing about what the reviewed code does. Applicability to adult cattle was settled first: the review works a 500 kg four-year-old through the age term |
+| 12 | Whether Nicol and Brookes' published ewe maintenance includes MEgraze and Ecold, which this model's maintenance figure does not | M3 | Nicol and Brookes (2007), *Pasture and supplements for grazing animals*, NZSAP Occasional Publication No. 14 - **listed on nzsap.org**, so obtainable | narrowed - the model is 1.9% low at 45 kg and 14.8% at 60 kg; the review quotes their equation as carrying both terms |
+| 13 | What the Geenty and Rattray (1987) practical grazing allowance is made of | M3 | Geenty & Rattray, "The energy requirements of grazing sheep and cattle", NZSAP Occasional Publication No. 10, pp. 39-53 | **blocked.** NZSAP host Occasional Publications 11 to 16 and not 10, a literature search returns the citation but no figures, and the OVERSEER ME review does not cite it. Papers that do are paywalled. It runs about 2 MJ/day above Nicol and Brookes at every shared ewe weight and nothing read so far says what that covers |
+| 14 | Whether OVERSEER uses lwt^0.75 or lwt^0.73 | M4 | TMC Eq. 13 against the ME review's section 12 | open - the manual says 0.75 in six places; the review reports `W^0.73 (Wheeler 2016b, Appendix 2)`. This implementation follows the manual. Another manual-against-implementation difference, like the age factor floor |
 
 Item 7 also gates the repository licence and what may be redistributed with a
 release, so it is worth settling before M2 rather than at M5.

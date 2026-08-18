@@ -148,8 +148,28 @@ struct GrazingConditions {
 
 /// Agefactor, TMC Eq. 17: exp(-0.00008 a) with a in days, floored at 0.84.
 ///
-/// Freer et al. (2006). The manual records this as differing from Nicol and
-/// Brookes' and CSIRO's year-based forms by about 0.14% on average.
+/// **The floor is a decision, not a default**, and the two OVERSEER documents
+/// disagree about it. The technical manual states "Agefactor had a minimum
+/// value of 0.84 (Freer et al., 2006)". Its independent review asks why "the
+/// lower bound on AgeFactor was not used as in the Freer et al. (2010)
+/// expression", notes that CSIRO (2007) and Nicol and Brookes (2007) place no
+/// lower bound, and says the omission "may allow ME requirements to drop too
+/// low for animals older than 6 years".
+///
+/// This project carries the floor. It is what the manual documents and what the
+/// review argues for, so the two agree on the outcome even while disagreeing
+/// about what the code does. It must not be described as the behaviour of the
+/// reviewed OVERSEER implementation, which the review says lacks it.
+///
+/// The floor binds from about 2179 days, so **every animal older than roughly
+/// six years takes the same discount** - worth knowing before reading anything
+/// into a mature animal's age.
+///
+/// The age term applies to adult stock, not only to growing ones: the review
+/// works a 500 kg animal at four years through
+/// `MEm = ((0.36 W^0.75)/km) exp(-0.00008 A)`. The manual also records the
+/// day-based form as differing from Nicol and Brookes' and CSIRO's year-based
+/// ones by about 0.14% on average.
 [[nodiscard]] double age_factor(double age_days) noexcept;
 
 /// NEbasal, TMC Eq. 13: 0.28 K S M Agefactor lwt^0.75, attributed to Nicol and
