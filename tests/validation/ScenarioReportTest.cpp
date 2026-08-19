@@ -78,7 +78,7 @@ TEST(ScenarioReportTest, TheEvidenceCaveatsTravelWithTheNumbers) {
   const std::string report = render_report(bundle, run);
 
   EXPECT_TRUE(contains(report, "What this report may be relied on for"));
-  EXPECT_TRUE(contains(report, "Overstated by up to 17%"))
+  EXPECT_TRUE(contains(report, "Overstated by about 18%"))
       << "the sheep carrying capacity caveat is missing";
   EXPECT_TRUE(contains(report, "Not quotable"))
       << "the report does not say absolute liveweight gain cannot be quoted";

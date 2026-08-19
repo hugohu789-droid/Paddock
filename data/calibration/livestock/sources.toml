@@ -182,3 +182,87 @@ The equation set core/AnimalEnergy.cpp implements. Read in full earlier; see
 docs/verify.md for the equation-by-equation record and for the two readings that
 are this project's rather than the manual's.
 """
+
+[source.adjabui_model_comparison]
+organisation = "Massey University, published in Livestock Science"
+title = "A comparison of three nutritional models for estimating total metabolisable energy requirements for a ewe, beef breeding cow, lamb, and a calf/yearling in New Zealand's pasture-only system"
+authors = "Adjabui, J.A.; Morel, P.H.C.; Morris, S.T.; Kenyon, P.R.; Tozer, P.R."
+citation = "Livestock Science 299 (2025) 105766"
+retrieved = "2026-08-19"
+source_type = "primary"
+verified = true
+notes = """
+Read in full. It puts Nicol and Brookes (2017), CSIRO (2007) and New Zealand's
+Agricultural Inventory Model (MPI 2022) through one stated set of assumptions,
+which is the comparison this project could not make for itself.
+
+It settles what open item 12 was blocked on. Their Eq. 2 writes the Nicol and
+Brookes maintenance as the basal term over km PLUS MEgraze, MEmove and
+MEactivity - the published figure is grazing-inclusive. This project had been
+subtracting a bare basal term from it and reporting the difference as a
+shortfall of 2% to 15%.
+
+It also decides which figure to measure against. Their discussion records that
+CSIRO accounts for chewing and ruminating inside km, that Nicol and Brookes add
+those costs separately on top of the same km, and that AgResearch (2016) asked
+the authors to correct the resulting double count. This model uses km the CSIRO
+way, so CSIRO is the comparator and Nicol and Brookes is reported beside it.
+
+Assumptions worth having, their Table 1: ewe 60 kg, four years, standard
+reference weight 65 kg; beef cow 600 kg, six years, SRW 600 kg; pasture mass
+3.5 t DM/ha; terrain 1.5; feed gross energy 18.45 MJ.
+
+Daily maintenance, ewe neither pregnant nor lactating: CSIRO 9.0, Nicol and
+Brookes 9.7, AIM 9.9 MJ ME/d. Annual totals for a 60 kg ewe: 3329, 3437, 3706.
+
+Coefficients it states, which this project needed: the movement coefficient is
+0.0025 for both Nicol and Brookes and CSIRO and 0.006 for AIM - so the 0.0025
+carried here as a placeholder "the cattle figure carried across" is the right
+number for sheep after all. The eating coefficient C differs: 0.02 for Nicol
+and Brookes, 0.05 for AIM. Maximum stock density SD is 40 sheep or 5 cattle per
+hectare, which makes their SR/SD a dimensionless ratio - worth checking against
+how this project reads TSR/SD in TMC Eq. 21, where it passes hectares per
+animal.
+
+Two things it does NOT settle. It never mentions cold stress, so whether Ecold
+sits inside the published maintenance is still unknown. And it does not cite
+Geenty and Rattray (1987), so open item 13 gets nothing from it.
+
+One incidental correction: its reference list carries BOTH a 2007 and a 2017
+entry for the Nicol and Brookes chapter, same title, same pages 151-172, so
+both printings exist and neither year is a mistake.
+
+All three models use liveweight^0.75 in the basal term. That is what the
+OVERSEER manual states and what this project follows; it is not evidence about
+what OVERSEER itself computes, which is open item 14.
+"""
+
+[source.geenty_countrywide_feeding]
+organisation = "Country-Wide (farming magazine)"
+title = "Feeding options for sheep and cattle"
+authors = "Geenty, K.G."
+url = "https://country-wide.co.nz/feeding-options-for-sheep-and-cattle/"
+retrieved = "2026-08-19"
+source_type = "practitioner"
+verified = true
+notes = """
+**Practitioner guidance, not research, and recorded as such.** A farming
+magazine article giving feed allowances a farmer can act on.
+
+It is here because of who wrote it: Ken Geenty is the Geenty of Geenty and
+Rattray (1987), the paper open item 13 cannot obtain. He gives 12 MJ ME/day for
+a 60 kg ewe at maintenance, against Nicol and Brookes' 9.7 and CSIRO's 9.0.
+That 2.3 MJ is the same gap docs/verify.md records for the 1987 paper - the
+same author, thirty-eight years later, still about 2 MJ above.
+
+What it suggests, and it is a suggestion rather than a finding: the Geenty
+figure is a **feed allowance** rather than a physiological requirement -
+what to hand out, including what the animal walks off, treads in and does not
+eat. That would explain a difference that is systematic rather than noisy. It
+does not establish it, because the article gives no breakdown, so open item 13
+stays open.
+
+Nothing in this project should take 12 MJ as a requirement. It is recorded so
+the next person to reach open item 13 knows the gap is reproducible and knows
+what to test for.
+"""

@@ -316,8 +316,11 @@ void write_evidence_notes(std::ostringstream& out, const ScenarioBundle& bundle)
   out << "| Comparisons between managements | **Sound** — both arms carry the same parameters, "
          "so an error in one cancels |\n";
   out << "| Cattle maintenance | **Sound to about 2%** against DairyNZ across 300–600 kg |\n";
-  out << "| Sheep maintenance | **Low by 2% to 15%** against Nicol and Brookes |\n";
-  out << "| Carrying capacity for sheep | **Overstated by up to 17%** — follows from the line "
+  out << "| Sheep maintenance | **Low by about 15%** against CSIRO, and 21% against Nicol and "
+         "Brookes. The basal term agrees to under 1%; the gap is the cost of grazing, walking "
+         "and activity. CSIRO is the closer comparison because it accounts for chewing inside "
+         "the same efficiency term this model does |\n";
+  out << "| Carrying capacity for sheep | **Overstated by about 18%** — follows from the line "
          "above |\n";
   out << "| Absolute liveweight gain | **Not quotable** — standard reference weight is "
          "unverified on every species |\n";

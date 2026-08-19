@@ -106,6 +106,7 @@ a specific output wrong today.
 
 | # | Item | What is wrong without it |
 |---|---|---|
+| B-welfare | Check a run against the Code of Welfare | MPI's Code of Welfare for Sheep and Beef Cattle sets a minimum standard rather than an energy figure: adult sheep are to be kept at body condition score 3 to 4 at all times. This model tracks liveweight against a standard reference weight, which is what a condition score is scaled on, so a run could say **"this breached the welfare code on 14 days"** instead of "the stock lost condition". Needs a sourced mapping from liveweight-over-SRW to condition score, which the code itself does not give |
 | B10 | Lactation | There is no way to represent a cow in milk. A "dairy cow" in the model is a dry cow and eats about half what a milking one does |
 | B11 | Dung and urine return | Eaten nitrogen leaves the modelled system. The budget closes, but a multi-year run strips the farm of nitrogen in a direction a real farm does not |
 | B12 | Pregnancy | No cost of carrying a calf or lamb, so late-gestation demand is absent |
