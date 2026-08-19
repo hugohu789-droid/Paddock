@@ -85,9 +85,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ninja (Linux)
+      # **Ninja ships with the runner image** - 1.13.2 on ubuntu-24.04, and
+      # CMake 3.31.6 with it - so this normally reaches apt for nothing at all.
+      # Installing a tool that is already there is not free: it is the step
+      # that has failed most often here, because it is the one that has to
+      # reach Canonical's mirrors, and those stop answering from time to time.
+      #
+      # Guarded rather than deleted. An image that stops shipping Ninja should
+      # make CI slower, not broken.
+      - name: Ninja (Linux)
         if: runner.os == 'Linux'
-        run: scripts/ci-apt-install.sh ninja-build
+        run: command -v ninja || scripts/ci-apt-install.sh ninja-build
 
       - name: Install Ninja (macOS)
         if: runner.os == 'macOS'
@@ -124,8 +132,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ninja
-        run: scripts/ci-apt-install.sh ninja-build
+      # **Ninja ships with the runner image** - 1.13.2 on ubuntu-24.04, and
+      # CMake 3.31.6 with it - so this normally reaches apt for nothing at all.
+      # Installing a tool that is already there is not free: it is the step
+      # that has failed most often here, because it is the one that has to
+      # reach Canonical's mirrors, and those stop answering from time to time.
+      #
+      # Guarded rather than deleted. An image that stops shipping Ninja should
+      # make CI slower, not broken.
+      - name: Ninja
+        run: command -v ninja || scripts/ci-apt-install.sh ninja-build
 
       - name: Configure, build and test
         env:
@@ -153,7 +169,8 @@ jobs:
             | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
-          scripts/ci-apt-install.sh ninja-build clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
+          command -v ninja || scripts/ci-apt-install.sh ninja-build
+          scripts/ci-apt-install.sh clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
 
       - name: Generate the compile database
         env:
@@ -230,8 +247,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ninja
-        run: scripts/ci-apt-install.sh ninja-build
+      # **Ninja ships with the runner image** - 1.13.2 on ubuntu-24.04, and
+      # CMake 3.31.6 with it - so this normally reaches apt for nothing at all.
+      # Installing a tool that is already there is not free: it is the step
+      # that has failed most often here, because it is the one that has to
+      # reach Canonical's mirrors, and those stop answering from time to time.
+      #
+      # Guarded rather than deleted. An image that stops shipping Ninja should
+      # make CI slower, not broken.
+      - name: Ninja
+        run: command -v ninja || scripts/ci-apt-install.sh ninja-build
 
       - name: Configure and build
         run: |
@@ -276,9 +301,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GDAL, PROJ and Ninja (Linux)
+      - name: Install GDAL and PROJ (Linux)
         if: runner.os == 'Linux'
-        run: scripts/ci-apt-install.sh ninja-build libgdal-dev libproj-dev
+        run: |
+          command -v ninja || scripts/ci-apt-install.sh ninja-build
+          scripts/ci-apt-install.sh libgdal-dev libproj-dev
 
       - name: Install GDAL, PROJ and Ninja (macOS)
         if: runner.os == 'macOS'
@@ -406,7 +433,8 @@ jobs:
             | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
-          scripts/ci-apt-install.sh ninja-build qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri \
+          command -v ninja || scripts/ci-apt-install.sh ninja-build
+          scripts/ci-apt-install.sh qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri \
             clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
 
       # Built with clang rather than the default gcc, so the compile database
