@@ -8,6 +8,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QGroupBox>
+#include <QScrollArea>
 #include <QStringList>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -178,6 +179,63 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   stock_form->addRow("Opening weight", liveweight_box_);
   stock_group->setLayout(stock_form);
 
+  // ------------------------------------------------------------- irrigation
+  //
+  // **Put to a person as water remaining, not as depletion.** A farmer says a
+  // paddock is at 40%, not that it is 60% depleted; they are the same number
+  // read from opposite ends, and the model's end is the wrong one to make
+  // somebody do arithmetic in.
+  irrigate_box_ = new QCheckBox("Irrigate when the ground gets dry", this);
+  irrigate_box_->setChecked(false);
+  irrigate_box_->setToolTip(
+      "Off is a rain-fed farm, which is what every bundle ships as and what "
+      "every baseline was recorded on.");
+
+  irrigation_trigger_box_ = new QDoubleSpinBox(this);
+  irrigation_trigger_box_->setRange(5.0, 95.0);
+  irrigation_trigger_box_->setDecimals(0);
+  irrigation_trigger_box_->setSuffix("% of available water left");
+  irrigation_trigger_box_->setValue(50.0);
+  irrigation_trigger_box_->setToolTip(
+      "Start watering when the profile falls to this. FAO-56 Table 22 puts the "
+      "point where grazed pasture starts to be held back at about 40% left, so "
+      "starting above that keeps growth off the limit and spends more water.");
+
+  irrigation_target_box_ = new QDoubleSpinBox(this);
+  irrigation_target_box_->setRange(10.0, 100.0);
+  irrigation_target_box_->setDecimals(0);
+  irrigation_target_box_->setSuffix("% of available water");
+  irrigation_target_box_->setValue(85.0);
+  irrigation_target_box_->setToolTip(
+      "Refill to this and stop. Filling to 100% wastes the next rain: a full "
+      "profile has nowhere to put it and it drains, taking nitrogen with it.");
+
+  irrigation_maximum_box_ = new QDoubleSpinBox(this);
+  irrigation_maximum_box_->setRange(1.0, 100.0);
+  irrigation_maximum_box_->setDecimals(0);
+  irrigation_maximum_box_->setSuffix(" mm at a time");
+  irrigation_maximum_box_->setValue(25.0);
+
+  irrigation_efficiency_box_ = new QDoubleSpinBox(this);
+  irrigation_efficiency_box_->setRange(30.0, 100.0);
+  irrigation_efficiency_box_->setDecimals(0);
+  irrigation_efficiency_box_->setSuffix("% reaches the root zone");
+  irrigation_efficiency_box_->setValue(100.0);
+  irrigation_efficiency_box_->setToolTip(
+      "What survives wind drift, evaporation and uneven spread. 100% means no "
+      "loss is modelled, which is the default because this project has no "
+      "source for a New Zealand system - a figure in the eighties is what is "
+      "usually quoted, and it belongs here only when somebody can cite it.");
+
+  auto* irrigation_group = new QGroupBox("Irrigation", this);
+  auto* irrigation_form = new QFormLayout;
+  irrigation_form->addRow(irrigate_box_);
+  irrigation_form->addRow("Water below", irrigation_trigger_box_);
+  irrigation_form->addRow("Refill to", irrigation_target_box_);
+  irrigation_form->addRow("Most at once", irrigation_maximum_box_);
+  irrigation_form->addRow("Reaches the ground", irrigation_efficiency_box_);
+  irrigation_group->setLayout(irrigation_form);
+
   auto* management_group = new QGroupBox("Management", this);
   auto* management_form = new QFormLayout;
   management_form->addRow("Grazing", preference_box_);
@@ -204,12 +262,30 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   layout->addWidget(farm_group);
   layout->addWidget(stock_group);
   layout->addWidget(management_group);
+  layout->addWidget(irrigation_group);
   layout->addLayout(buttons);
   layout->addWidget(problem_label_);
   layout->addWidget(results_group);
   layout->addStretch(1);
-  setLayout(layout);
-  setMinimumWidth(340);
+
+  // **The panel scrolls.** It grew past the height of a window when irrigation
+  // joined it, and a QFormLayout given less room than it needs does not clip
+  // tidily - it squeezes the rows into each other until the labels overlap the
+  // fields, which looks like a rendering fault rather than a full panel.
+  auto* inner = new QWidget(this);
+  inner->setLayout(layout);
+
+  auto* scroll = new QScrollArea(this);
+  scroll->setWidget(inner);
+  scroll->setWidgetResizable(true);
+  scroll->setFrameShape(QFrame::NoFrame);
+  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+  auto* outer = new QVBoxLayout;
+  outer->setContentsMargins(0, 0, 0, 0);
+  outer->addWidget(scroll);
+  setLayout(outer);
+  setMinimumWidth(360);
 
   populate(data_directory);
 
@@ -297,6 +373,15 @@ SetupPanel::Choices SetupPanel::choices() const {
   chosen.policy.minimum_cover_kg_dm_per_ha = cover_floor_box_->value();
   chosen.policy.rotation_cover_threshold_kg_dm_per_ha = rotation_box_->value();
   chosen.policy.target_liveweight_gain_kg_per_day = target_gain_box_->value();
+
+  // The panel asks for water remaining; the model works in depletion. One
+  // subtraction, in one place, rather than a percentage that means different
+  // things in different files.
+  chosen.irrigation.enabled = irrigate_box_->isChecked();
+  chosen.irrigation.trigger_depletion_fraction = 1.0 - (irrigation_trigger_box_->value() / 100.0);
+  chosen.irrigation.target_depletion_fraction = 1.0 - (irrigation_target_box_->value() / 100.0);
+  chosen.irrigation.maximum_application_mm = irrigation_maximum_box_->value();
+  chosen.irrigation_system.application_efficiency = irrigation_efficiency_box_->value() / 100.0;
   chosen.policy.maximum_graze_days = graze_days_box_->value();
   chosen.policy.minimum_spell_days = spell_days_box_->value();
   chosen.policy.supplement_me_mj_per_kg_dm = supplement_me_box_->value();
@@ -393,6 +478,11 @@ void SetupPanel::show_measured_ground(bool measured) {
   refresh_readiness();
 }
 
+void SetupPanel::select_irrigation(bool on) {
+  irrigate_box_->setChecked(on);
+  refresh_readiness();
+}
+
 void SetupPanel::select_ground(int index) {
   if (index >= 0 && index < terrain_box_->count()) {
     terrain_box_->setCurrentIndex(index);
@@ -417,6 +507,24 @@ QString SetupPanel::problem() const {
                "the cover being protected. Put the floor below the threshold.")
         .arg(number(cover_floor_box_->value()))
         .arg(number(rotation_box_->value()));
+  }
+  if (const QString irrigation = problem_with_irrigation(); !irrigation.isEmpty()) {
+    return irrigation;
+  }
+  return {};
+}
+
+QString SetupPanel::problem_with_irrigation() const {
+  if (!irrigate_box_->isChecked()) {
+    return {};
+  }
+  if (irrigation_target_box_->value() <= irrigation_trigger_box_->value()) {
+    return QString(
+               "Irrigation would refill to %1%, which is at or below the %2% it starts at - so "
+               "every watering would leave the ground drier than the rule wanted it. Refill to "
+               "more than the trigger.")
+        .arg(number(irrigation_target_box_->value()))
+        .arg(number(irrigation_trigger_box_->value()));
   }
   return {};
 }
@@ -473,6 +581,7 @@ void SetupPanel::set_running(bool running) {
   species_box_->setEnabled(!running);
   head_box_->setEnabled(!running);
   liveweight_box_->setEnabled(!running);
+  irrigate_box_->setEnabled(!running);
   cover_floor_box_->setEnabled(!running);
   rotation_box_->setEnabled(!running);
   target_gain_box_->setEnabled(!running);
@@ -484,12 +593,29 @@ void SetupPanel::set_running(bool running) {
   may_buy_box_->setEnabled(!running);
 }
 
-void SetupPanel::show_results(const config::RunSummary& run, bool has_stock) {
+void SetupPanel::show_results(const config::RunSummary& run, bool has_stock,
+                              const core::IrrigationTally& irrigation, double hectares) {
   QString text =
       QString("<b>%1 days</b> simulated.<br>").arg(static_cast<qulonglong>(run.dates.size()));
   text += QString("Cover %1 to %2, mean %3 kg DM/ha.<br>")
               .arg(number(run.lowest_cover_kg_dm_per_ha()),
                    number(run.highest_cover_kg_dm_per_ha()), number(run.mean_cover_kg_dm_per_ha()));
+
+  // The water, when any was put on. A rain-fed run says nothing rather than
+  // saying zero four times: a farm that does not irrigate has no irrigation
+  // figures, and printing them as zeroes only teaches a reader to skip them.
+  if (irrigation.events > 0) {
+    text += QString("Irrigated %1 mm over %2 events, %3 mm a time.<br>")
+                .arg(number(irrigation.effective_mm, 0), QString::number(irrigation.events),
+                     number(irrigation.mean_event_mm(), 1));
+    if (hectares > 0.0) {
+      text += QString("Water pumped %1 ML over %2 ha.<br>")
+                  .arg(number(irrigation.pumped_megalitres(hectares), 1), number(hectares, 0));
+    }
+    if (irrigation.applied_mm > irrigation.effective_mm + 0.05) {
+      text += QString("Put out %1 mm to deliver it.<br>").arg(number(irrigation.applied_mm, 0));
+    }
+  }
 
   if (has_stock) {
     text += QString("Liveweight %1 to %2 kg, a change of %3 kg.<br>")

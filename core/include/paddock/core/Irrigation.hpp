@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace paddock::core {
 
@@ -147,6 +149,45 @@ struct IrrigationTally {
 
   /// The same in megalitres, which is the unit a consent is written in.
   [[nodiscard]] double pumped_megalitres(double hectares) const noexcept;
+};
+
+/// Runs an irrigation rule over a whole farm, day after day.
+///
+/// **This is where the per-cell memory lives, and it lives outside the grid on
+/// purpose.** Deciding needs to know how long since each piece of ground was
+/// last watered, and if that were kept in `FarmletGrid` then the grid would
+/// hold a management state - and running the same farm under two rules would
+/// mean two grids rather than two schedules.
+class IrrigationSchedule {
+ public:
+  IrrigationSchedule(IrrigationPolicy policy, IrrigationSystem system, std::size_t cells);
+
+  /// Decides today's water for every cell, given how dry each one is.
+  ///
+  /// Returns one depth per cell in the same order, ready to hand to
+  /// `FarmletGrid::step`. Nothing is applied here.
+  [[nodiscard]] const std::vector<double>& decide(const std::vector<double>& depletion_mm,
+                                                  double total_available_water_mm);
+
+  /// The water put on today, averaged over the farm, mm.
+  [[nodiscard]] double last_mean_mm() const noexcept { return last_mean_mm_; }
+
+  /// How many cells were watered today.
+  [[nodiscard]] std::size_t last_cells_watered() const noexcept { return last_cells_watered_; }
+
+  /// What the season has come to, as a mean over the farm.
+  [[nodiscard]] const IrrigationTally& tally() const noexcept { return tally_; }
+
+  [[nodiscard]] const IrrigationPolicy& policy() const noexcept { return policy_; }
+
+ private:
+  IrrigationPolicy policy_;
+  IrrigationSystem system_;
+  std::vector<int> days_since_last_;
+  std::vector<double> applied_mm_;
+  IrrigationTally tally_;
+  double last_mean_mm_ = 0.0;
+  std::size_t last_cells_watered_ = 0;
 };
 
 }  // namespace paddock::core

@@ -61,8 +61,13 @@ class Farmlet {
   /// evapotranspiration that dries the soil, and the light the sward
   /// intercepts. Aspect is not a growth coefficient here; it is radiation, and
   /// the seasonal reversal Ballantrae measured is left to emerge from the two.
+  /// `irrigation_mm` is water put on deliberately, and it is a number handed
+  /// in rather than a decision made here. Nothing in this class knows what an
+  /// irrigation policy is: the soil reports how dry it is, somebody else
+  /// decides, and the water arrives as a quantity - which is what keeps a
+  /// management rule out of the biology.
   DailyRecord step(const DailyWeather& weather, double radiation_ratio = 1.0,
-                   BudgetLedger* ledger = nullptr);
+                   BudgetLedger* ledger = nullptr, double irrigation_mm = 0.0);
 
   [[nodiscard]] const SoilWaterBucket& soil() const noexcept { return soil_; }
 

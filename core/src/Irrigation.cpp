@@ -101,4 +101,59 @@ double IrrigationTally::pumped_megalitres(double hectares) const noexcept {
   return pumped_m3(hectares) / 1000.0;
 }
 
+IrrigationSchedule::IrrigationSchedule(IrrigationPolicy policy, IrrigationSystem system,
+                                       std::size_t cells)
+    : policy_(policy),
+      system_(system),
+      // Never watered, so the return interval does not hold the first day back.
+      days_since_last_(cells, 9999),
+      applied_mm_(cells, 0.0) {}
+
+const std::vector<double>& IrrigationSchedule::decide(const std::vector<double>& depletion_mm,
+                                                      double total_available_water_mm) {
+  applied_mm_.assign(days_since_last_.size(), 0.0);
+  last_mean_mm_ = 0.0;
+  last_cells_watered_ = 0;
+  if (days_since_last_.empty()) {
+    return applied_mm_;
+  }
+
+  double total_effective_mm = 0.0;
+  double total_applied_mm = 0.0;
+  double total_pumped_m3_per_ha = 0.0;
+
+  for (std::size_t cell = 0; cell < days_since_last_.size(); ++cell) {
+    const double dry = cell < depletion_mm.size() ? depletion_mm[cell] : 0.0;
+    const IrrigationDecision decision =
+        decide_irrigation(dry, total_available_water_mm, days_since_last_[cell], policy_, system_);
+    if (decision.irrigate) {
+      applied_mm_[cell] = decision.effective_mm;
+      days_since_last_[cell] = 0;
+      ++last_cells_watered_;
+      total_effective_mm += decision.effective_mm;
+      total_applied_mm += decision.applied_mm;
+      total_pumped_m3_per_ha += decision.pumped_m3_per_ha;
+    } else {
+      days_since_last_[cell] += 1;
+    }
+  }
+
+  // **The tally is a mean over the farm, not a sum over the cells.** Every
+  // depth here is millimetres on one hectare of ground, so adding them across
+  // a hundred cells would count the same millimetre a hundred times. A farm
+  // that watered half its cells by 25 mm put on 12.5 mm.
+  const auto cells = static_cast<double>(days_since_last_.size());
+  last_mean_mm_ = total_effective_mm / cells;
+
+  if (last_cells_watered_ > 0) {
+    IrrigationDecision farm_day;
+    farm_day.irrigate = true;
+    farm_day.effective_mm = last_mean_mm_;
+    farm_day.applied_mm = total_applied_mm / cells;
+    farm_day.pumped_m3_per_ha = total_pumped_m3_per_ha / cells;
+    tally_.record(farm_day);
+  }
+  return applied_mm_;
+}
+
 }  // namespace paddock::core

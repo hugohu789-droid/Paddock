@@ -478,6 +478,13 @@ jobs:
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-baseline --smoke
 
+      # Irrigation reaches the farm, which only the panel can turn on - so
+      # without this the one control that changes how much water a farm uses is
+      # reachable by a person clicking and by nothing else.
+      - name: Water a farm
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate | grep -q "paddock-gui: irrigated "
+
       # The sun and the sky, which a screenshot of the render window cannot
       # show: the weather line lives in a label around it, and a farm that
       # falls six metres in a kilometre looks much the same under any sun.

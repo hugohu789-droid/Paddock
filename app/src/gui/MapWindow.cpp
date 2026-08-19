@@ -290,9 +290,9 @@ void MapWindow::start_run() {
     elevation_ = bundle.make_elevation();
     last_run_had_stock_ = !bundle.mobs.empty();
     if (last_run_had_stock_) {
-      simulate_managed(bundle, choices.policy);
+      simulate_managed(bundle, choices.policy, choices.irrigation, choices.irrigation_system);
     } else {
-      simulate_pasture_only(bundle);
+      simulate_pasture_only(bundle, choices.irrigation, choices.irrigation_system);
     }
 
     last_policy_ = choices.policy;
@@ -316,10 +316,17 @@ void MapWindow::start_run() {
     }
     if (last_run_.has_value()) {
       weather_ = last_run_->weather;
+      irrigation_mm_ = last_run_->irrigation_mm;
+      irrigation_tally_ = last_run_->irrigation;
     }
     adopt_series();
     if (last_run_.has_value()) {
-      setup_->show_results(*last_run_, last_run_had_stock_);
+      const double hectares = bundle.grid.has_value()
+                                  ? static_cast<double>(bundle.grid->cols * bundle.grid->rows) *
+                                        bundle.grid->cell_size_m * bundle.grid->cell_size_m /
+                                        10000.0
+                                  : 0.0;
+      setup_->show_results(*last_run_, last_run_had_stock_, irrigation_tally_, hectares);
     }
   } catch (const std::exception& error) {
     // A failed run must not leave half a year on the timeline. Everything the
@@ -393,8 +400,9 @@ bool MapWindow::save_screenshot(const std::string& path) {
   return writer->GetErrorCode() == 0;
 }
 
-void MapWindow::show_configuration(int ground, bool terrain, int heights) {
+void MapWindow::show_configuration(int ground, bool terrain, int heights, bool irrigate) {
   setup_->select_ground(ground);
+  setup_->select_irrigation(irrigate);
   start_run();
   if (terrain) {
     view_box_->setCurrentIndex(1);
@@ -435,6 +443,8 @@ void MapWindow::change_exaggeration(int index) {
 void MapWindow::clear_series() {
   weather_.clear();
   slope_.clear();
+  irrigation_mm_.clear();
+  irrigation_tally_ = {};
   cover_.clear();
   soil_water_.clear();
   water_stress_.clear();
@@ -467,13 +477,16 @@ void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date)
 }
 
 void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
-                                 const core::ManagementPolicy& policy) {
+                                 const core::ManagementPolicy& policy,
+                                 const core::IrrigationPolicy& irrigation,
+                                 const core::IrrigationSystem& system) {
   core::DietQuality diet;
   diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
   diet.digestibility_percent = kPastureDigestibility;
 
   last_run_ = config::run_managed_scenario(
-      bundle, policy, diet, bundle.name, [this](const core::Farm& farm, const core::FarmDay& day) {
+      bundle, policy, diet, bundle.name,
+      [this](const core::Farm& farm, const core::FarmDay& day) {
         keep_day(farm.grid(), day.date.to_iso_string());
 
         // The fences do not move, so they are taken once, on the first day.
@@ -536,10 +549,13 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
           }
           stock_summary_ = summary;
         }
-      });
+      },
+      irrigation, system);
 }
 
-void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle) {
+void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle,
+                                      const core::IrrigationPolicy& irrigation,
+                                      const core::IrrigationSystem& system) {
   core::FarmletGrid grid = bundle.make_grid();
   const core::WeatherSeries weather = bundle.weather->fetch(bundle.range);
 
@@ -555,14 +571,25 @@ void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle) {
   dates_.reserve(days);
   mean_cover_.reserve(days);
 
+  // The schedule holds the per-cell memory of when each piece of ground was
+  // last watered. It reads the grid's dryness and decides; the grid applies
+  // what it is handed and decides nothing.
+  core::IrrigationSchedule schedule(irrigation, system, grid.cell_count());
+  irrigation_mm_.reserve(days);
+
   for (const core::DailyWeather& day : weather.records) {
-    grid.step(day, &summary.ledger);
+    const core::Raster<double> dryness = grid.depletion_mm();
+    const std::vector<double>& water =
+        schedule.decide(dryness.values(), grid.total_available_water_mm());
+    irrigation_mm_.push_back(schedule.last_mean_mm());
+    grid.step(day, &summary.ledger, water);
     keep_day(grid, day.date.to_iso_string());
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(grid.mean_cover_kg_dm());
   }
 
+  irrigation_tally_ = schedule.tally();
   summary.closing_cover_kg_dm = grid.mean_cover_kg_dm();
   summary.closing_nitrogen_kg = grid.mean_total_nitrogen_kg();
   summary.closing_water_mm = grid.mean_soil_water_mm();
@@ -911,6 +938,13 @@ void MapWindow::show_weather(std::size_t day, double clearness) {
 
   // Rain is the day's total. There is no intensity and no time of day in the
   // series, so "wet" is as much as can be said about when.
+  // Beside the rain, because the two are the same quantity arriving two ways
+  // and the point of showing them together is to let somebody weigh one
+  // against the other.
+  const double watered_mm = day < irrigation_mm_.size() ? irrigation_mm_[day] : 0.0;
+  const QString irrigation =
+      watered_mm >= 0.05 ? QString("%1 mm").arg(watered_mm, 0, 'f', 1) : QString("none");
+
   const QString rain = today.rainfall_mm >= 0.05
                            ? QString("%1 mm").arg(today.rainfall_mm, 0, 'f', 1)
                            : QString("dry");
@@ -920,6 +954,7 @@ void MapWindow::show_weather(std::size_t day, double clearness) {
 
   weather_label_->setText(
       QString("<b>%1</b> &nbsp;&nbsp; %2 &nbsp;&nbsp; rain <b>%3</b> &nbsp;&nbsp; "
+              "irrigation <b>%11</b> &nbsp;&nbsp; "
               "%4 to %5 &deg;C &nbsp;&nbsp; sun %6 MJ/m&sup2; "
               "(%7 of what the sky could give) &nbsp;&nbsp; "
               "sun %8&deg; up, bearing %9&deg; at 14:00 solar time &nbsp;&nbsp; "
@@ -933,11 +968,13 @@ void MapWindow::show_weather(std::size_t day, double clearness) {
           .arg(QString("%1%").arg(clearness * 100.0, 0, 'f', 0))
           .arg(sun.elevation_degrees, 0, 'f', 0)
           .arg(sun.azimuth_degrees, 0, 'f', 0)
-          .arg(today.wind_speed_m_per_s, 0, 'f', 1));
+          .arg(today.wind_speed_m_per_s, 0, 'f', 1)
+          .arg(irrigation));
 
   weather_line_ = QString(
                       "%1  %2, rain %3, %4 to %5 C, sun %6 MJ/m2 (%7 of the sky's), sun %8 deg up "
-                      "bearing %9 deg at 14:00 solar, wind %10 m/s (recorded, not modelled)")
+                      "bearing %9 deg at 14:00 solar, wind %10 m/s (recorded, not modelled), "
+                      "irrigation %11")
                       .arg(QString::fromStdString(today.date.to_iso_string()))
                       .arg(sky)
                       .arg(rain)
@@ -948,6 +985,7 @@ void MapWindow::show_weather(std::size_t day, double clearness) {
                       .arg(sun.elevation_degrees, 0, 'f', 0)
                       .arg(sun.azimuth_degrees, 0, 'f', 0)
                       .arg(today.wind_speed_m_per_s, 0, 'f', 1)
+                      .arg(irrigation)
                       .toStdString();
 }
 

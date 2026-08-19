@@ -57,7 +57,23 @@ class FarmletGrid {
   /// folded in once per day, scaled by one over the number of cells. The farm
   /// ledger therefore holds per-hectare means, which is the only unit that
   /// makes sense for a depth in millimetres and a cover in kg DM/ha at once.
-  void step(const DailyWeather& weather, BudgetLedger* ledger = nullptr);
+  /// `irrigation_mm` is water put on deliberately, one entry per cell in row
+  /// order, or empty for none.
+  ///
+  /// Handed in rather than worked out here, and that is the whole arrangement:
+  /// the grid reports how dry each cell is, an irrigation rule reads that and
+  /// decides, and the water comes back as a quantity. A grid that decided for
+  /// itself would be a management policy hiding inside the biology, and there
+  /// would be no way to run the same farm under a different rule.
+  void step(const DailyWeather& weather, BudgetLedger* ledger = nullptr,
+            const std::vector<double>& irrigation_mm = {});
+
+  /// The root zone depletion of every cell, mm. What an irrigation rule reads.
+  [[nodiscard]] Raster<double> depletion_mm() const;
+
+  /// The total available water each cell holds, mm. The other half of what a
+  /// depletion means.
+  [[nodiscard]] double total_available_water_mm() const noexcept;
 
   /// Opening stocks for the three budget lines, as per-hectare means.
   void set_opening_stocks(BudgetLedger& ledger) const;

@@ -17,6 +17,7 @@
 #include <paddock/config/ScenarioRun.hpp>
 #include <paddock/config/SpeciesConfig.hpp>
 #include <paddock/core/Farmer.hpp>
+#include <paddock/core/Irrigation.hpp>
 
 namespace paddock::app {
 
@@ -53,6 +54,11 @@ class SetupPanel : public QWidget {
     /// every baseline was recorded on; the others are invented surfaces, and
     /// the panel says so rather than offering them as places.
     config::TerrainSpec terrain;
+
+    /// When to water and how far to refill, and what the plant can deliver.
+    /// Off by default, so a rain-fed run is what you get without asking.
+    core::IrrigationPolicy irrigation;
+    core::IrrigationSystem irrigation_system;
   };
 
   /// Scans `data_directory` for scenario bundles and species definitions. A
@@ -94,6 +100,12 @@ class SetupPanel : public QWidget {
   /// can check.
   void select_ground(int index);
 
+  /// Turns irrigation on for the headless path.
+  ///
+  /// The panel is the only place a run can be told to irrigate, and a feature
+  /// that only a person clicking can reach is a feature nothing can check.
+  void select_irrigation(bool on);
+
   /// Why this configuration cannot be run, or empty if it can.
   ///
   /// Only genuine contradictions are errors. A stocking rate that looks high is
@@ -102,6 +114,13 @@ class SetupPanel : public QWidget {
   /// declining to ask it.
   [[nodiscard]] QString problem() const;
 
+ private:
+  /// The one way the irrigation rule can contradict itself: refilling to less
+  /// than the level it starts at, which would leave every watering short of
+  /// where the rule said it wanted the ground.
+  [[nodiscard]] QString problem_with_irrigation() const;
+
+ public:
   /// What is worth saying before the run rather than after: chiefly that the
   /// chosen stock rest on parameters that are not published, which decides
   /// whether any number out of the run may be quoted.
@@ -111,7 +130,8 @@ class SetupPanel : public QWidget {
 
   /// Fills the results section. `has_stock` false means the bundle models
   /// pasture alone, so the stock lines are omitted rather than shown as zeroes.
-  void show_results(const config::RunSummary& run, bool has_stock);
+  void show_results(const config::RunSummary& run, bool has_stock,
+                    const core::IrrigationTally& irrigation = {}, double hectares = 0.0);
 
   void show_failure(const QString& message);
 
@@ -151,6 +171,18 @@ class SetupPanel : public QWidget {
 
   QComboBox* scenario_box_ = nullptr;
   QComboBox* terrain_box_ = nullptr;
+
+  /// Irrigation, as few controls as the thing needs to be understood.
+  ///
+  /// The trigger and the target are put to a person as "how much water is
+  /// left" rather than as depletion, because that is the way a farmer says it
+  /// - a paddock is at 40% rather than 60% depleted - and the two are the same
+  /// number read from opposite ends.
+  QCheckBox* irrigate_box_ = nullptr;
+  QDoubleSpinBox* irrigation_trigger_box_ = nullptr;
+  QDoubleSpinBox* irrigation_target_box_ = nullptr;
+  QDoubleSpinBox* irrigation_maximum_box_ = nullptr;
+  QDoubleSpinBox* irrigation_efficiency_box_ = nullptr;
   QComboBox* species_box_ = nullptr;
   QSpinBox* head_box_ = nullptr;
   QDoubleSpinBox* liveweight_box_ = nullptr;

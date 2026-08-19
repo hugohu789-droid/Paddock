@@ -74,7 +74,9 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
 
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label,
-                                const DayObserver& each_day) {
+                                const DayObserver& each_day,
+                                const core::IrrigationPolicy& irrigation,
+                                const core::IrrigationSystem& system) {
   core::Farm farm = bundle.make_farm();
 
   // The bundle's own calendar, when it has one.
@@ -102,6 +104,11 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   std::vector<bool> went_short(farm.mobs().size(), false);
   std::vector<double> supplement;
 
+  // The schedule reads how dry the ground is and decides; the farm applies
+  // what it is handed. Neither knows about the other's job.
+  core::IrrigationSchedule schedule(irrigation, system, farm.grid().cell_count());
+  summary.irrigation_mm.reserve(weather.records.size());
+
   for (const core::DailyWeather& day : weather.records) {
     const core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
 
@@ -112,7 +119,12 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.purchases.insert(summary.purchases.end(), decisions.purchases.begin(),
                              decisions.purchases.end());
 
-    const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger);
+    const core::Raster<double> dryness = farm.grid().depletion_mm();
+    const std::vector<double>& water =
+        schedule.decide(dryness.values(), farm.grid().total_available_water_mm());
+    summary.irrigation_mm.push_back(schedule.last_mean_mm());
+
+    const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger, water);
     if (farm_day.any_mob_short) {
       ++summary.days_short;
     }
@@ -132,6 +144,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     }
   }
 
+  summary.irrigation = schedule.tally();
   summary.closing_cover_kg_dm = farm.grid().mean_cover_kg_dm();
   summary.closing_nitrogen_kg = farm.grid().mean_total_nitrogen_kg();
   summary.closing_water_mm = farm.grid().mean_soil_water_mm();

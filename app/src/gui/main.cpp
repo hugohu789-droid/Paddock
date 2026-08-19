@@ -88,6 +88,7 @@ void print_usage() {
             << "  --then BUNDLE  After the first frame, open BUNDLE as choosing it in the\n"
             << "                 panel would, and check the camera followed it onto the\n"
                "                 new farm. Exits non-zero if it did not\n"
+            << "  --irrigate     Turn irrigation on, as the panel would\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
             << "                 on screen, because exaggeration makes every slope look\n"
             << "                 steeper than it is\n";
@@ -166,10 +167,11 @@ int main(int argc, char** argv) {
                                    data_directory.absolutePath().toStdString());
     window.show();
 
+    const bool irrigate = std::find(args.begin(), args.end(), "--irrigate") != args.end();
     const auto ground_flag = std::find(args.begin(), args.end(), "--ground");
     const bool terrain = std::find(args.begin(), args.end(), "--terrain") != args.end();
     const bool heights_given = std::find(args.begin(), args.end(), "--heights") != args.end();
-    if (ground_flag != args.end() || terrain || heights_given) {
+    if (ground_flag != args.end() || terrain || heights_given || irrigate) {
       int ground = 0;
       if (ground_flag != args.end() && std::next(ground_flag) != args.end()) {
         ground = std::stoi(std::string(*std::next(ground_flag)));
@@ -179,7 +181,7 @@ int main(int argc, char** argv) {
       if (heights_flag != args.end() && std::next(heights_flag) != args.end()) {
         heights = std::stoi(std::string(*std::next(heights_flag)));
       }
-      window.show_configuration(ground, terrain, heights);
+      window.show_configuration(ground, terrain, heights, irrigate);
     }
 
     if (smoke) {
@@ -201,6 +203,10 @@ int main(int argc, char** argv) {
         const std::pair<double, double> slope =
             window.field_range(paddock::app::MapWindow::Field::Slope);
         std::cout << "paddock-gui: slope " << slope.first << " to " << slope.second << " degrees\n";
+      }
+      if (const paddock::core::IrrigationTally& water = window.irrigation(); water.events > 0) {
+        std::cout << "paddock-gui: irrigated " << water.effective_mm << " mm over " << water.events
+                  << " events, " << water.mean_event_mm() << " mm a time" << '\n';
       }
       if (const std::string& weather = window.weather_line(); !weather.empty()) {
         std::cout << "paddock-gui: weather " << weather << '\n';

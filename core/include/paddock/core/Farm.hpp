@@ -154,8 +154,13 @@ class Farm {
   /// out of that appetite, and it grazes for the rest. Fed on top instead, a
   /// 55 kg ewe reached 101 kg in a year, because supplement was buying gain
   /// the animal had no appetite to eat.
+  /// `irrigation_mm` is water put on deliberately, one entry per grid cell, or
+  /// empty for none. Handed in for the same reason the supplement is: the farm
+  /// carries out a decision somebody else made, and running the same farm
+  /// under a different rule must not mean building a different farm.
   FarmDay step(const DailyWeather& weather, const DietQuality& diet,
-               const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger = nullptr);
+               const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger = nullptr,
+               const std::vector<double>& irrigation_mm = {});
 
   FarmDay step(const DailyWeather& weather, const DietQuality& diet,
                BudgetLedger* ledger = nullptr);

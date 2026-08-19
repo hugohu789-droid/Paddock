@@ -24,9 +24,10 @@ void Farmlet::set_opening_stocks(BudgetLedger& ledger) const {
   ledger.set_opening_stock(Budget::Nitrogen, sward_.total_nitrogen_kg());
 }
 
-DailyRecord Farmlet::step(const DailyWeather& weather, double radiation_ratio,
-                          BudgetLedger* ledger) {
-  const SoilWaterFluxes water = soil_.step(weather, latitude_degrees_, radiation_ratio, ledger);
+DailyRecord Farmlet::step(const DailyWeather& weather, double radiation_ratio, BudgetLedger* ledger,
+                          double irrigation_mm) {
+  const SoilWaterFluxes water =
+      soil_.step(weather, latitude_degrees_, radiation_ratio, ledger, irrigation_mm);
 
   // The second place radiation enters: the light the sward intercepts. Scaling
   // the measured horizontal figure onto this cell's slope is the transfer Allen

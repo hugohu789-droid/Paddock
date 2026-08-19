@@ -73,7 +73,7 @@ class MapWindow : public QMainWindow {
   /// path. `ground` indexes the panel's ground list; `terrain` asks for the
   /// three-dimensional view, which is ignored when the run was over flat
   /// ground because there would be nothing to draw.
-  void show_configuration(int ground, bool terrain, int heights = 1);
+  void show_configuration(int ground, bool terrain, int heights = 1, bool irrigate = false);
 
   /// Why the last run failed, or empty if it did not.
   ///
@@ -173,13 +173,17 @@ class MapWindow : public QMainWindow {
  private:
   /// Steps the bundle with its stock on it, under `policy`, keeping every day's
   /// rasters as it goes.
-  void simulate_managed(const config::ScenarioBundle& bundle, const core::ManagementPolicy& policy);
+  void simulate_managed(const config::ScenarioBundle& bundle, const core::ManagementPolicy& policy,
+                        const core::IrrigationPolicy& irrigation,
+                        const core::IrrigationSystem& system);
 
   /// Steps the pasture alone, for a bundle that carries no stock. Both paths
   /// exist because `canterbury-baseline` has no mobs and is still worth looking
   /// at; only this one can be taken for such a bundle, and a managed run of it
   /// would have no mob to report on.
-  void simulate_pasture_only(const config::ScenarioBundle& bundle);
+  void simulate_pasture_only(const config::ScenarioBundle& bundle,
+                             const core::IrrigationPolicy& irrigation,
+                             const core::IrrigationSystem& system);
 
   /// Empties the per-day series, so a second run does not append to the first.
   void clear_series();
@@ -206,6 +210,12 @@ class MapWindow : public QMainWindow {
   /// without this the one part of the weather work a person can read is the
   /// part nothing can check.
   [[nodiscard]] const std::string& weather_line() const noexcept { return weather_line_; }
+
+  /// What the run watered over the year. Reported by the headless path because
+  /// a screenshot cannot show a season's water.
+  [[nodiscard]] const core::IrrigationTally& irrigation() const noexcept {
+    return irrigation_tally_;
+  }
 
  private:
   [[nodiscard]] const std::vector<core::Raster<double>>& series_of(Field field) const;
@@ -299,6 +309,11 @@ class MapWindow : public QMainWindow {
   /// the radiation a face receives (Gillingham et al.). A quantity that
   /// changes the answer and cannot be seen is worth a colour ramp of its own.
   std::vector<core::Raster<double>> slope_;
+
+  /// What the run watered, day by day, as a mean over the farm in mm, and what
+  /// the year came to. Empty when nothing was irrigated.
+  std::vector<double> irrigation_mm_;
+  core::IrrigationTally irrigation_tally_;
   std::vector<std::string> dates_;
 
   /// The weather each day was run on, kept so the view can say what the day

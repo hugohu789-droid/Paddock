@@ -190,10 +190,11 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetL
 }
 
 FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
-                   const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger) {
+                   const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger,
+                   const std::vector<double>& irrigation_mm) {
   // Growth first: a mob eats what is standing when it walks in, which includes
   // what grew that morning.
-  grid_.step(weather, ledger);
+  grid_.step(weather, ledger, irrigation_mm);
 
   FarmDay day;
   day.date = weather.date;

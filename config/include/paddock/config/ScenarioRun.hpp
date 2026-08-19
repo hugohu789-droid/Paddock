@@ -12,6 +12,7 @@
 #include <paddock/core/BudgetLedger.hpp>
 #include <paddock/core/Farmer.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
+#include <paddock/core/Irrigation.hpp>
 #include <paddock/core/Weather.hpp>
 
 /// Running a scenario, and keeping enough of what happened to say something
@@ -43,6 +44,15 @@ struct RunSummary {
   /// the day rather than somebody's summary of it. The alternative, a vector
   /// per variable, means editing this struct every time one more is wanted.
   std::vector<core::DailyWeather> weather;
+
+  /// The water put on each day, as a mean over the farm in mm, and what the
+  /// year came to.
+  ///
+  /// In the summary rather than worked out where it is printed, so that two
+  /// ways of reporting one run cannot disagree about how much water it used -
+  /// which is the roadmap's point about metrics belonging to the core.
+  std::vector<double> irrigation_mm;
+  core::IrrigationTally irrigation;
 
   double eaten_kg_dm = 0.0;
 
@@ -143,7 +153,9 @@ using DayObserver = std::function<void(const core::Farm&, const core::FarmDay&)>
 [[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
                                               const core::ManagementPolicy& policy,
                                               const core::DietQuality& diet, std::string label,
-                                              const DayObserver& each_day);
+                                              const DayObserver& each_day,
+                                              const core::IrrigationPolicy& irrigation = {},
+                                              const core::IrrigationSystem& system = {});
 
 /// A calendar that runs one system for the whole of `run`, for comparing a
 /// system against another rather than against a mixed year.
