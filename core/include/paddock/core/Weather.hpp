@@ -47,7 +47,11 @@ struct DateRange {
 /// Where a series came from, carried with the data so that a scenario bundle
 /// can record it and a reviewer can check it.
 struct Provenance {
-  std::string source_name;   ///< "synthetic" or "cliflo_snapshot"
+  /// "synthetic", or "weather_snapshot" for a replayed daily table. The reader
+  /// does not care who produced the table - CliFlo and Open-Meteo both land
+  /// here - so the name says what it is rather than where it came from. Which
+  /// supplier it was is in `dataset`.
+  std::string source_name;
   std::string dataset;       ///< Site or agent identifier
   std::string content_hash;  ///< SHA-256 of the snapshot, or of the generator's parameters
   std::string licence;

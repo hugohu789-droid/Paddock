@@ -1,0 +1,26 @@
+{
+  "source": "Open-Meteo historical weather API (ERA5 reanalysis)",
+  "url": "https://archive-api.open-meteo.com/v1/archive",
+  "requested": {
+    "longitude": 172.44386,
+    "latitude": -43.64954,
+    "start": "2023-07-01",
+    "end": "2024-06-30",
+    "timezone": "Pacific/Auckland"
+  },
+  "answered_for": {
+    "longitude": 172.40964,
+    "latitude": -43.620388,
+    "elevation_m": 15.0,
+    "timezone": "Pacific/Auckland",
+    "utc_offset_seconds": 43200
+  },
+  "measurement": "reanalysis, not observation",
+  "wind_height_m": 10,
+  "wind_statistic": "daily maximum, not daily mean",
+  "days": 366,
+  "licence": "CC-BY-4.0",
+  "attribution": "Weather data by Open-Meteo.com (https://open-meteo.com), licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5).",
+  "fetched_utc": "2026-08-19T07:24:33.878991+00:00",
+  "sha256": "86bfba5bffdef1879dd2aeb44f915d5a4623e1a47cd12c9e2c4089ecc137d6b4"
+}

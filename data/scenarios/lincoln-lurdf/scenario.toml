@@ -32,9 +32,42 @@ end_date = "2024-06-30"
 latitude_degrees = -43.641
 
 [weather]
-kind = "synthetic"
-path = "weather.toml"
-sha256 = "b59bc98a348677638770e004a1050a9f55f1fd93b5b2346fa4079151588dcb33"
+# The weather that actually happened over this farm year, not a generator.
+#
+# 1 July 2023 to 30 June 2024, the run's own dates, fetched with
+#
+#   scripts/open-meteo-snapshot.py --lon 172.44386 --lat -43.64954 \
+#       --start 2023-07-01 --end 2024-06-30 \
+#       --out data/scenarios/lincoln-lurdf/weather-2023.csv
+#
+# **Committed, unlike the elevation.** data/snapshots/ is gitignored because
+# bulk datasets are not committed and because NIWA's terms forbid passing their
+# data on. Neither applies here: this is 13 kB, and Open-Meteo is CC BY 4.0,
+# which permits redistribution. So it lives with the bundle like weather.toml
+# did, and a fresh clone runs this farm on the weather it really had.
+#
+# **Reanalysis, not observation.** ERA5 is a model's estimate of the weather,
+# on a grid cell tens of kilometres across - it answered for -43.6204,
+# 172.4096 at 15 m, about 4 km from the farm. It is the right source for a farm
+# with no station on it, and the wrong one for checking a station that has one.
+# The full record is in weather-2023.csv.provenance.json.
+#
+# What it looks like, against Lincoln's published normals: 652 mm of rain over
+# the year against a normal near 630, a mean of 12.2 C against about 11.5, and
+# January at 18.3 C against July at 7.5. The strongest check is physical - the
+# highest clearness index Rs/Ra in the year is 0.75, the textbook clear-sky
+# value, and never above 1.0, so the series never reports more sun than the sky
+# at this latitude can deliver.
+#
+# Wind is carried and **nothing in the model reads it** - see docs/verify.md
+# E12. It is a daily maximum at 10 m, not a mean at the 2 m most agronomic
+# equations expect, which is another reason not to feed it to one yet.
+kind = "snapshot"
+path = "weather-2023.csv"
+sha256 = "86bfba5bffdef1879dd2aeb44f915d5a4623e1a47cd12c9e2c4089ecc137d6b4"
+dataset = "Open-Meteo historical weather API (ERA5 reanalysis)"
+licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5)."
+
 
 [soil]
 path = "soil.toml"

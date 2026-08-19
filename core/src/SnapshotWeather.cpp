@@ -234,7 +234,7 @@ SourceDescription SnapshotWeatherSource::describe() const {
       records_.empty() ? "no data loaded"
                        : covered.first.to_iso_string() + " to " + covered.last.to_iso_string();
   return SourceDescription{
-      "cliflo_snapshot:" + (options_.dataset.empty() ? options_.path : options_.dataset),
+      "weather_snapshot:" + (options_.dataset.empty() ? options_.path : options_.dataset),
       options_.licence.empty() ? "unrecorded - check the source's terms before redistributing"
                                : options_.licence,
       span, "static snapshot; refresh by re-running the fetch script"};
@@ -282,7 +282,7 @@ WeatherSeries SnapshotWeatherSource::fetch(const DateRange& range) const {
 
   WeatherSeries series;
   series.provenance =
-      Provenance{"cliflo_snapshot", options_.dataset, content_hash_, options_.licence};
+      Provenance{"weather_snapshot", options_.dataset, content_hash_, options_.licence};
   series.records.assign(records_.begin() + static_cast<std::ptrdiff_t>(offset),
                         records_.begin() + static_cast<std::ptrdiff_t>(offset + count));
   return series;
