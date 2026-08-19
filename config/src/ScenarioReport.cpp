@@ -105,7 +105,11 @@ void write_what_was_simulated(std::ostringstream& out, const ScenarioBundle& bun
   // at all: what a slope costs an animal to walk, and what radiation a slope
   // receives. A reader cannot tell from any other number in this report.
   if (bundle.terrain.is_flat()) {
-    out << "| Ground | modelled flat |\n";
+    out << "| Ground | modelled flat";
+    if (!options.ground_caveat.empty()) {
+      out << " — " << options.ground_caveat;
+    }
+    out << " |\n";
   } else {
     out << "| Ground | synthetic surface, falling "
         << fixed(bundle.terrain.surface.gradient_east * 100.0, 1) << "% east and "

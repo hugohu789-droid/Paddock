@@ -46,8 +46,12 @@ With Qt6 and a VTK built against Qt6 (see [docs/setup.md](docs/setup.md)):
 
 ```bash
 cmake --preset gui && cmake --build --preset gui
-./build/gui/bin/paddock-gui data/scenarios/canterbury-baseline
+./build/gui/bin/paddock-gui
 ```
+
+Named with no bundle it opens `data/scenarios/lincoln-lurdf`, found by walking
+up from the working directory and from the executable. Name a directory to open
+a different one.
 
 Pasture cover, soil water, water stress or legume fraction across the farm, with
 a colour scale fixed over the whole run and a timeline you can play. The soil
@@ -77,6 +81,13 @@ python scripts/nz-elevation-snapshot.py --lon 172.470 --lat -43.641 \
   --collection canterbury/selwyn_2023 --out data/snapshots/lincoln-dem-1m.tiff
 ./build/desktop/bin/paddock-gui data/scenarios/lincoln-lurdf --terrain
 ```
+
+The three-dimensional view opens on any farm. Without measured ground it draws
+the farm flat and says so - under the map, in the report's Ground row, and on
+stdout when it is run headless - because a flat picture of real ground and a
+flat picture of absent ground look identical, and mean opposite things. A
+snapshot that is present but hashes to something else is refused outright:
+that is not this farm's ground.
 
 That is Lincoln University's research dairy farm on 2023 LiDAR at 1 m, and it
 looks almost flat because it is: the ground falls 6.2 m across 900 m, which is

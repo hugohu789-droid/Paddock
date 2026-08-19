@@ -189,7 +189,7 @@ void MapWindow::start_run() {
   last_failure_.clear();
   try {
     config::ScenarioBundle bundle = config::load_scenario(choices.scenario_directory);
-    attach_elevation(bundle, choices.scenario_directory);
+    no_ground_reason_ = attach_elevation(bundle, choices.scenario_directory);
     if (!bundle.grid.has_value()) {
       throw std::runtime_error("This scenario has no [grid] section, so there is no map to draw.");
     }
@@ -256,6 +256,7 @@ void MapWindow::open_report() {
   config::ReportOptions options;
   options.farm_name = last_bundle_->name;
   options.policy = &last_policy_;
+  options.ground_caveat = no_ground_reason_;
 
   auto* dialog = new ReportDialog(
       QString::fromStdString(config::render_report(*last_bundle_, *last_run_, options)),
@@ -318,7 +319,7 @@ void MapWindow::show_configuration(int ground, bool terrain, int heights) {
 }
 
 void MapWindow::change_view(int index) {
-  const bool terrain = index == 1 && elevation_.has_value();
+  const bool terrain = index == 1;
   if (terrain == showing_terrain_) {
     return;
   }
@@ -489,15 +490,13 @@ void MapWindow::adopt_series() {
     terrain_.set_boundaries(boundaries_);
   }
 
-  const bool have_ground = elevation_.has_value();
-  view_box_->setEnabled(have_ground);
-  view_box_->setToolTip(have_ground
-                            ? QString()
-                            : QString("This run was over flat ground, so there is no terrain to "
-                                      "draw. Choose a ground other than Flat and run again."));
-  if (!have_ground && showing_terrain_) {
-    view_box_->setCurrentIndex(0);
-  }
+  // The terrain view is offered whatever the run was over. A farm with no
+  // elevation is drawn as the flat thing it is, and the line under the map says
+  // why - more use than a disabled control explained in a tooltip nobody hovers.
+  view_box_->setToolTip(
+      elevation_.has_value()
+          ? QString("The ground this run was over.")
+          : QString("This run has no measured ground, so the terrain view draws it flat."));
 
   // The exact extent goes in the title, where it can be read once. Axis labels
   // are for orientation; seven-digit coordinates repeated across the bottom of
@@ -608,8 +607,15 @@ void MapWindow::refresh() {
   }
 
   const viz::ColourScale colours(style.ramp, lowest, highest);
-  if (showing_terrain_ && elevation_.has_value()) {
-    terrain_.show(raster, *elevation_, colours, legend);
+  if (showing_terrain_) {
+    // A run with no elevation is draped on a level surface of its own shape.
+    // Zero rather than an invented datum: a made-up height is a number somebody
+    // could read off the view and believe.
+    if (!elevation_.has_value()) {
+      flat_ground_ = core::Raster<double>(raster.cols(), raster.rows(), raster.transform(), 0.0);
+    }
+    const core::Raster<double>& ground = elevation_.has_value() ? *elevation_ : flat_ground_;
+    terrain_.show(raster, ground, colours, legend);
     terrain_.show_grazed(grazed_on(day));
     terrain_.show_mobs(mobs_on(day));
   } else {
@@ -632,16 +638,26 @@ void MapWindow::refresh() {
   const double spread = today.second - today.first;
   const QString stock =
       stock_summary_.empty() ? QString("no stock") : QString::fromStdString(stock_summary_);
+
+  // Why the ground looks the way it does, when it is not what the scenario
+  // asked for. This is the "quietly" that a farm running flat must not be.
+  QString ground_note;
+  if (!no_ground_reason_.empty()) {
+    ground_note = "   |   " + QString::fromStdString(no_ground_reason_);
+  } else if (showing_terrain_ && !elevation_.has_value()) {
+    ground_note = "   |   drawn flat: this run was not over any terrain";
+  }
   summary_label_->setText(
       QString("%5   |   Mean pasture cover %1 kg DM/ha over %2 cells   |   %3 across the farm "
-              "today: %4")
+              "today: %4%6")
           .arg(mean_cover_[day], 0, 'f', 0)
           .arg(raster.size())
           .arg(style.label)
           .arg(spread > 0.0
                    ? QString("%1 to %2").arg(today.first, 0, 'f', 1).arg(today.second, 0, 'f', 1)
                    : QString("uniform (%1)").arg(today.first, 0, 'f', 1))
-          .arg(stock));
+          .arg(stock)
+          .arg(ground_note));
   view_->renderWindow()->Render();
 }
 

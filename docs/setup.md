@@ -100,7 +100,7 @@ Qt6**:
 ```bash
 cmake --preset gui -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x/gcc_64;/path/to/vtk"
 cmake --build --preset gui
-./build/gui/bin/paddock-gui data/scenarios/canterbury-baseline
+./build/gui/bin/paddock-gui  # or name a bundle: data/scenarios/canterbury-baseline
 ```
 
 Two things worth knowing before you spend an afternoon on them:
@@ -115,7 +115,7 @@ Two things worth knowing before you spend an afternoon on them:
   check failure and no message. For a Debug GUI build, point
   `CMAKE_PREFIX_PATH` at a Debug VTK.
 
-`paddock-gui <bundle> --smoke` renders one frame and exits, which is what CI
+`paddock-gui [bundle] --smoke` renders one frame and exits, which is what CI
 runs under `xvfb-run`.
 
 ## The geospatial stack

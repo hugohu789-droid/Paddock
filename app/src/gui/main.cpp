@@ -8,16 +8,19 @@
 // links Qt or VTK at all.
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDir>
 #include <QSurfaceFormat>
 #include <QVTKOpenGLNativeWidget.h>
 #include <algorithm>
 #include <cstdio>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <paddock/config/ScenarioConfig.hpp>
@@ -26,9 +29,53 @@
 
 namespace {
 
+/// The scenario the application opens on when it is given none. Lincoln
+/// University's Research Dairy Farm is the one bundle in this repository built
+/// from a real farm's published area and stocking, with a real LINZ elevation
+/// snapshot behind it, so it is the one worth showing first.
+constexpr const char* kDefaultBundle = "data/scenarios/lincoln-lurdf";
+
+/// Find the default bundle without being told where the repository is.
+///
+/// **Why a search rather than a fixed path.** The executable is run three ways -
+/// from the build directory by a developer, from the repository root by CI, and
+/// from wherever a shortcut points - and none of them share a working directory.
+/// Walking up from both the working directory and the executable covers all
+/// three without an install step or an environment variable to forget. Returns
+/// empty when nothing is found, and the caller says so rather than opening
+/// something arbitrary.
+std::string find_default_bundle() {
+  std::vector<std::filesystem::path> starts;
+  std::error_code error;
+  const std::filesystem::path working = std::filesystem::current_path(error);
+  if (!error) {
+    starts.push_back(working);
+  }
+  const QString executable = QCoreApplication::applicationDirPath();
+  if (!executable.isEmpty()) {
+    starts.emplace_back(executable.toStdString());
+  }
+
+  for (const std::filesystem::path& start : starts) {
+    for (std::filesystem::path directory = start; !directory.empty();
+         directory = directory.parent_path()) {
+      const std::filesystem::path candidate = directory / kDefaultBundle;
+      if (std::filesystem::is_directory(candidate, error)) {
+        return candidate.string();
+      }
+      if (!directory.has_relative_path()) {
+        break;  // At the root, where parent_path() would spin.
+      }
+    }
+  }
+  return {};
+}
+
 void print_usage() {
-  std::cout << "paddock-gui <bundle> [--smoke] [--screenshot FILE]\n\n"
-            << "  <bundle>       A scenario bundle directory with a [grid] section\n"
+  std::cout << "paddock-gui [bundle] [--smoke] [--screenshot FILE]\n\n"
+            << "  [bundle]       A scenario bundle directory with a [grid] section.\n"
+            << "                 Defaults to " << kDefaultBundle << ", found by\n"
+            << "                 walking up from here and from the executable\n"
             << "  --smoke        Render one frame and exit; used by CI, which has\n"
             << "                 no one to click anything\n"
             << "  --screenshot   Write that frame to a PNG and exit. Implies --smoke,\n"
@@ -60,9 +107,9 @@ void report_fatal(const char* message) noexcept {
 int main(int argc, char** argv) {
   try {
     const std::vector<std::string_view> args(argv + 1, argv + argc);
-    if (args.empty() || args.front() == "--help" || args.front() == "-h") {
+    if (!args.empty() && (args.front() == "--help" || args.front() == "-h")) {
       print_usage();
-      return args.empty() ? 2 : 0;
+      return 0;
     }
 
     const auto screenshot_flag = std::find(args.begin(), args.end(), "--screenshot");
@@ -82,8 +129,21 @@ int main(int argc, char** argv) {
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
     const QApplication application(argc, argv);
 
-    const paddock::config::ScenarioBundle bundle =
-        paddock::config::load_scenario(std::string(args.front()));
+    // A leading flag means no bundle was named, so the default stands in.
+    std::string bundle_path;
+    if (!args.empty() && args.front().substr(0, 2) != "--") {
+      bundle_path = std::string(args.front());
+    } else {
+      bundle_path = find_default_bundle();
+      if (bundle_path.empty()) {
+        std::cerr << "paddock-gui: no scenario named, and " << kDefaultBundle
+                  << " is not above this directory or the executable. Name a bundle "
+                     "directory, or run from the repository.\n";
+        return 2;
+      }
+    }
+
+    const paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(bundle_path);
     if (!bundle.grid.has_value()) {
       std::cerr << "paddock-gui: scenario '" << bundle.name
                 << "' has no [grid] section, so there is no map to draw. Add one, or use "
@@ -94,7 +154,7 @@ int main(int argc, char** argv) {
     // it looks in is the data directory the named bundle sits under:
     // data/scenarios/<bundle> means data/. Derived rather than asked for, so
     // the command line stays what it was and CI keeps working.
-    const QDir bundle_directory(QString::fromStdString(std::string(args.front())));
+    const QDir bundle_directory(QString::fromStdString(bundle_path));
     QDir data_directory(bundle_directory);
     data_directory.cdUp();
     data_directory.cdUp();
@@ -132,6 +192,9 @@ int main(int argc, char** argv) {
                   << " m above sea level\n";
       } else {
         std::cout << "paddock-gui: ground modelled flat\n";
+      }
+      if (const std::string& reason = window.no_ground_reason(); !reason.empty()) {
+        std::cout << "paddock-gui: " << reason << '\n';
       }
       const auto panel_flag = std::find(args.begin(), args.end(), "--panel-shot");
       if (panel_flag != args.end() && std::next(panel_flag) != args.end()) {

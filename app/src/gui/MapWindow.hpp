@@ -89,6 +89,12 @@ class MapWindow : public QMainWindow {
   /// both are nearly level, and two numbers separate them.
   [[nodiscard]] std::optional<std::pair<double, double>> ground_range() const;
 
+  /// Why this run has no measured ground when its scenario names some, or
+  /// empty. Exposed so that the headless path says it as well as the window:
+  /// a screenshot of flat ground looks the same whether the farm is flat or
+  /// the snapshot was never fetched.
+  [[nodiscard]] const std::string& no_ground_reason() const noexcept { return no_ground_reason_; }
+
   /// Writes the setup panel to a PNG.
   ///
   /// The map has had a way to be looked at without a person since it was drawn,
@@ -189,6 +195,14 @@ class MapWindow : public QMainWindow {
   std::optional<core::Raster<double>> elevation_;
 
   bool showing_terrain_ = false;
+
+  /// Why this run has no measured ground, when it was supposed to. Empty when
+  /// it has some, and when it never asked for any.
+  std::string no_ground_reason_;
+
+  /// A level surface for a run that has no elevation, kept because the scene
+  /// holds a reference to what it is shown.
+  core::Raster<double> flat_ground_;
 
   /// One entry per simulated day, per field.
   std::vector<core::Raster<double>> cover_;

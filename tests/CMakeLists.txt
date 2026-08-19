@@ -172,11 +172,19 @@ endif()
 # built, and a developer without it should not see failures.
 if(PADDOCK_BUILD_GIS)
   add_executable(
-    paddock_gis_tests gis/EnvironmentTest.cpp gis/GeoPackageParcelsTest.cpp
-                      gis/GeoTiffElevationTest.cpp gis/ProjectionTest.cpp)
+    paddock_gis_tests gis/AttachElevationTest.cpp gis/EnvironmentTest.cpp
+                      gis/GeoPackageParcelsTest.cpp gis/GeoTiffElevationTest.cpp
+                      gis/ProjectionTest.cpp)
 
-  target_link_libraries(paddock_gis_tests PRIVATE Paddock::gis GTest::gtest_main
+  # config as well as gis: AttachElevationTest covers the application's wiring
+  # between the two, which is the only place that knows about both.
+  target_link_libraries(paddock_gis_tests PRIVATE Paddock::gis Paddock::config GTest::gtest_main
                                                   Paddock::project_options)
+
+  # The header under test is compiled by the application with the geospatial
+  # stack present. Testing its other branch would be testing a different
+  # function.
+  target_compile_definitions(paddock_gis_tests PRIVATE PADDOCK_WITH_GIS)
 
   # PROJ_DATA comes from where gis/CMakeLists.txt found proj.db. Without it the
   # suite passes on a distribution-packaged PROJ and fails on a vcpkg one, for a
