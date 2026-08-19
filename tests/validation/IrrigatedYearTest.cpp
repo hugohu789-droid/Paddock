@@ -128,7 +128,7 @@ TEST(IrrigatedYearTest, IrrigationBuysGrowthAndTheWaterIsCounted) {
 TEST(IrrigatedYearTest, MoreWaterReturnsLessAndLessExtraGrass) {
   const ScenarioBundle bundle = load_scenario(bundle_path());
 
-  core::IrrigationPolicy moderate = irrigating();
+  const core::IrrigationPolicy moderate = irrigating();
   core::IrrigationPolicy generous = irrigating();
   // Water earlier and refill closer to full: more water, on the same farm.
   generous.trigger_depletion_fraction = 0.25;

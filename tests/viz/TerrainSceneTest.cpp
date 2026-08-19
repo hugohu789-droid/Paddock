@@ -278,7 +278,7 @@ TEST(TerrainSceneTest, TheCloudMovesToTheNewFarmButNotBetweenDays) {
   elsewhere.origin_northing = kOriginNorthing + 10000.0;
   elsewhere.cell_size = kCellSize;
   const core::Raster<double> field(8, 6, elsewhere, 2500.0);
-  core::Raster<double> ground(8, 6, elsewhere, 100.0);
+  const core::Raster<double> ground(8, 6, elsewhere, 100.0);
   scene.show(field, ground, ColourScale(Ramp::PastureGreen, 0.0, 5000.0), "cover");
   scene.show_sky(-43.64, 355, 14.0, 0.25, 6.0);
   const auto moved = cloud_centre();
