@@ -288,6 +288,54 @@ TEST(TerrainSceneTest, TheCloudMovesToTheNewFarmButNotBetweenDays) {
   EXPECT_NEAR(moved.second - first.second, 10000.0, 1.0);
 }
 
+// The tilt control puts the camera where it was asked to, and keeps the
+// bearing the mouse left it on.
+TEST(TerrainSceneTest, TheTiltGoesWhereItIsAsked) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.reset_camera();
+
+  for (const double wanted : {15.0, 40.0, 75.0}) {
+    scene.look_from_above(wanted);
+    EXPECT_NEAR(scene.view_elevation_degrees(), wanted, 0.01) << "asked for " << wanted;
+  }
+}
+
+// **It cannot reach straight down.** At 90 degrees the view up and the view
+// direction line up, the camera basis collapses and the window goes black -
+// this scene has drawn one before, and a slider that could reach it would be a
+// control whose end stop is a fault.
+TEST(TerrainSceneTest, TheTiltCannotCollapseTheCamera) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.reset_camera();
+
+  scene.look_from_above(90.0);
+  EXPECT_LT(scene.view_elevation_degrees(), 89.0);
+
+  scene.look_from_above(-30.0);
+  EXPECT_GT(scene.view_elevation_degrees(), 0.0) << "and never from under the ground";
+}
+
+// **The compass must not change how the farm is framed.** The letters sit
+// outside the paddocks so they do not cover them, and a prop outside the farm
+// that counts towards the bounds makes the camera pull back every time the
+// view is reset - a farm drawn smaller so that the letter N fits.
+TEST(TerrainSceneTest, TheCompassDoesNotChangeWhatTheCameraFrames) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  std::array<double, 6> bounds{};
+  scene.renderer()->ComputeVisiblePropBounds(bounds.data());
+
+  // Still the surface's own extent: points sit at cell centres, so 7 x 5 cells.
+  EXPECT_NEAR(bounds[1] - bounds[0], 7.0 * kCellSize, 1e-6);
+  EXPECT_NEAR(bounds[3] - bounds[2], 5.0 * kCellSize, 1e-6);
+}
+
 // **The cloud can be taken away.** A density field is translucent by
 // construction, and anything translucent between the camera and the paddocks
 // shifts a colour the reader is meant to match against the legend. Turning the

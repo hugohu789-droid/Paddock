@@ -332,6 +332,8 @@ void TerrainScene::rebuild_surface() {
     sky_top_ = (highest_m_ * exaggeration_) + (std::max(sky_width_, sky_height_) * 0.85);
   }
 
+  place_compass();
+
   surface_->SetDimensions(cols, rows, 1);
   surface_->SetPoints(points);
   surface_->GetPointData()->SetScalars(scalars);
@@ -598,6 +600,108 @@ void TerrainScene::build_cloud_density() {
   cloud_built_span_ = std::max(sky_width_, sky_height_);
   cloud_built_top_ = sky_top_;
   cloud_built_ = true;
+}
+
+void TerrainScene::place_compass() {
+  // At the four edges of the farm, a little outside it and a little above, so
+  // the letters do not sit on the paddocks they are labelling.
+  const double span = std::max(sky_width_, sky_height_);
+  const double out = span * 0.10;
+  const double up = (highest_m_ * exaggeration_) + (span * 0.06);
+
+  const std::array<std::pair<const char*, std::array<double, 3>>, 4> marks{{
+      {"N", {sky_east_, sky_north_ + (sky_height_ / 2.0) + out, up}},
+      {"S", {sky_east_, sky_north_ - (sky_height_ / 2.0) - out, up}},
+      {"E", {sky_east_ + (sky_width_ / 2.0) + out, sky_north_, up}},
+      {"W", {sky_east_ - (sky_width_ / 2.0) - out, sky_north_, up}},
+  }};
+
+  if (compass_.size() != marks.size()) {
+    compass_.clear();
+    compass_.resize(marks.size());
+    for (auto& mark : compass_) {
+      // A billboard, so the letter faces the camera from wherever the scene
+      // has been spun to. A flat label would turn edge-on and vanish at the
+      // exact moment somebody had lost their bearings.
+      // A billboard text actor draws at a fixed size in pixels, not in metres,
+      // so this number is read against the window rather than against the farm
+      // - and a letter that is legible in a small window is a smudge in a large
+      // one. Bright and opaque, because the one moment this is read is the
+      // moment somebody has spun the scene and cannot tell which way is up.
+      mark->GetTextProperty()->SetFontSize(34);
+      mark->GetTextProperty()->SetJustificationToCentered();
+      mark->GetTextProperty()->SetColor(0.88, 0.91, 0.96);
+      mark->GetTextProperty()->SetOpacity(1.0);
+
+      // **A label must not change how the camera frames the farm.** These sit
+      // outside the paddocks on purpose, and left in the bounds they push the
+      // view out every time the scene is reset - a farm drawn smaller so that
+      // the letter N fits. UseBounds is what VTK has for exactly this.
+      mark->UseBoundsOff();
+      renderer_->AddActor(mark);
+    }
+  }
+
+  for (std::size_t i = 0; i < marks.size(); ++i) {
+    compass_[i]->SetInput(marks[i].first);
+    compass_[i]->SetPosition(marks[i].second[0], marks[i].second[1], marks[i].second[2]);
+    // **North is the one that matters, and it is marked twice over.** Bold
+    // alone is a weak signal at this size, and telling four grey letters apart
+    // is the whole job: a warm colour on one of them is read before any of them
+    // is read as a letter.
+    const bool north = (i == 0);
+    compass_[i]->GetTextProperty()->SetBold(north ? 1 : 0);
+    if (north) {
+      compass_[i]->GetTextProperty()->SetColor(1.0, 0.78, 0.40);
+    }
+  }
+}
+
+void TerrainScene::look_from_above(double degrees) {
+  vtkCamera* camera = renderer_->GetActiveCamera();
+  if (camera == nullptr) {
+    return;
+  }
+  std::array<double, 3> focus{};
+  camera->GetFocalPoint(focus.data());
+  std::array<double, 3> at{};
+  camera->GetPosition(at.data());
+
+  const double east = at[0] - focus[0];
+  const double north = at[1] - focus[1];
+  const double up = at[2] - focus[2];
+  const double distance = std::sqrt((east * east) + (north * north) + (up * up));
+  if (distance <= 0.0) {
+    return;
+  }
+
+  // Keep the bearing the mouse left it on; change only how high the camera is.
+  const double flat = std::hypot(east, north);
+  const double bearing = flat > 0.0 ? std::atan2(east, north) : 0.0;
+
+  // Clamped short of straight down and short of the horizon: at 90 degrees the
+  // view up and the view direction line up and the camera basis collapses,
+  // which is a black window - this scene has drawn one before.
+  const double tilt = std::clamp(degrees, 5.0, 85.0) * kDegreesToRadians;
+  camera->SetPosition(focus[0] + (distance * std::cos(tilt) * std::sin(bearing)),
+                      focus[1] + (distance * std::cos(tilt) * std::cos(bearing)),
+                      focus[2] + (distance * std::sin(tilt)));
+  camera->SetViewUp(0.0, 0.0, 1.0);
+  renderer_->ResetCameraClippingRange();
+}
+
+double TerrainScene::view_elevation_degrees() const {
+  vtkCamera* camera = renderer_->GetActiveCamera();
+  if (camera == nullptr) {
+    return 45.0;
+  }
+  std::array<double, 3> focus{};
+  camera->GetFocalPoint(focus.data());
+  std::array<double, 3> at{};
+  camera->GetPosition(at.data());
+  const double flat = std::hypot(at[0] - focus[0], at[1] - focus[1]);
+  const double up = at[2] - focus[2];
+  return flat > 0.0 ? std::atan2(up, flat) / kDegreesToRadians : 89.0;
 }
 
 void TerrainScene::show_weather(bool visible) {

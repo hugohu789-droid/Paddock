@@ -195,9 +195,30 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   controls->addWidget(timeline_, 1);
   controls->addWidget(date_label_);
 
+  tilt_slider_ = new QSlider(Qt::Vertical, this);
+  tilt_slider_->setRange(5, 85);
+  tilt_slider_->setValue(40);
+  tilt_slider_->setToolTip(
+      "How far above the horizon the view looks from.\n\n"
+      "Low is a photograph from the gate and shows the shape of the ground; high is closer "
+      "to a map and shows the whole farm. It cannot reach straight down, where the camera "
+      "has nothing to keep it upright.");
+  connect(tilt_slider_, &QSlider::valueChanged, this, [this](int degrees) {
+    if (!showing_terrain_) {
+      return;
+    }
+    terrain_.look_from_above(degrees);
+    view_->renderWindow()->Render();
+  });
+
+  // The scene and its tilt sit side by side; the weather line spans both.
+  auto* scene_row = new QHBoxLayout;
+  scene_row->addWidget(view_, 1);
+  scene_row->addWidget(tilt_slider_);
+
   auto* layout = new QVBoxLayout;
   layout->addWidget(weather_label_);
-  layout->addWidget(view_, 1);
+  layout->addLayout(scene_row, 1);
   layout->addLayout(controls);
   layout->addWidget(summary_label_);
 
@@ -435,6 +456,7 @@ void MapWindow::change_view(int index) {
   }
   showing_terrain_ = terrain;
   height_box_->setEnabled(terrain);
+  tilt_slider_->setEnabled(terrain);
 
   vtkRenderWindow* window = view_->renderWindow();
   if (window != nullptr) {
@@ -444,6 +466,7 @@ void MapWindow::change_view(int index) {
   refresh();
   if (showing_terrain_) {
     terrain_.reset_camera();
+    terrain_.look_from_above(tilt_slider_->value());
   } else {
     scene_.reset_camera();
   }

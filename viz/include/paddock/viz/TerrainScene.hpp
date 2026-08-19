@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 #include <vtkActor.h>
+#include <vtkBillboardTextActor3D.h>
 #include <vtkColorTransferFunction.h>
 #include <vtkImageData.h>
 #include <vtkLight.h>
@@ -121,6 +122,17 @@ class TerrainScene {
   /// again. Neither answer serves both jobs, so both are offered.
   void show_weather(bool visible);
 
+  /// Tilt the camera to look down at this many degrees above the horizon,
+  /// keeping where it is looking and how far away it is.
+  ///
+  /// Rotating with the mouse is free, which is what makes it easy to end up
+  /// under the ground or edge-on to it. This is the one axis somebody wants to
+  /// adjust deliberately - how much of the farm is in view against how much of
+  /// its shape - so it gets a control that always lands somewhere sensible.
+  void look_from_above(double degrees);
+
+  [[nodiscard]] double view_elevation_degrees() const;
+
   [[nodiscard]] bool weather_shown() const noexcept { return weather_shown_; }
 
   void set_vertical_exaggeration(double factor);
@@ -192,6 +204,16 @@ class TerrainScene {
   /// The sky. A second light from overhead standing in for the light that
   /// arrives from every direction rather than from the sun.
   vtkNew<vtkLight> sky_;
+
+  /// N, S, E and W, standing at the edges of the farm.
+  ///
+  /// The scene can be spun freely and a rectangle of paddocks looks much the
+  /// same from any side, so after a drag or two there is nothing in the
+  /// picture that says which way is north - and north is not decoration here:
+  /// it is why one face of a slope grows more grass than the other.
+  std::vector<vtkNew<vtkBillboardTextActor3D>> compass_;
+
+  void place_compass();
 
   /// The weather drawn over the farm: the sun, a sheet of cloud, falling rain,
   /// and a mark for the wind's strength. All of them are glyphs, all of them

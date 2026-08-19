@@ -253,6 +253,15 @@ class MapWindow : public QMainWindow {
   /// was like. Neither serves both jobs, so it is a control rather than a
   /// decision made for somebody.
   QCheckBox* weather_box_ = nullptr;
+
+  /// How far above the horizon the three-dimensional view looks from.
+  ///
+  /// Beside the scene rather than under it, because it belongs to the picture
+  /// and not to the run. Dragging with the mouse can put the camera anywhere,
+  /// including under the ground; this is the one axis worth adjusting on
+  /// purpose - how much of the farm is in view against how much of its shape -
+  /// and it always lands somewhere the farm is visible from.
+  QSlider* tilt_slider_ = nullptr;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;
