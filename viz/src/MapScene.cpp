@@ -42,7 +42,10 @@ constexpr double kFenceOpacity = 0.45;
 /// thing standing in a paddock, and zooming in should make it larger the way
 /// the paddock does. Forty metres is small against a 150 m paddock and visible
 /// on a 1.2 km farm.
-constexpr double kMarkerSizeM = 40.0;
+// One animal, not one mob. At 8 m across a sheep is far larger than life -
+// a real one is about a metre - but a marker has to be findable on a farm
+// drawn a kilometre wide, and a flock of them reads as a flock.
+constexpr double kMarkerSizeM = 8.0;
 
 /// Builds one polydata of closed rings from the polygons at `indices`.
 void build_rings(const std::vector<core::Polygon>& boundaries,
@@ -180,7 +183,7 @@ MapScene::MapScene() {
 
 void MapScene::show_mobs(const std::vector<MobMarker>& markers) {
   for (std::size_t i = 0; i < marker_kinds().size() && i < mob_shapes_.size(); ++i) {
-    build_mob_markers(markers, marker_kinds()[i], kMarkerSizeM, {}, mob_shapes_[i]);
+    build_mob_markers(markers, marker_kinds()[i], kMarkerSizeM, {}, boundaries_, mob_shapes_[i]);
   }
 }
 

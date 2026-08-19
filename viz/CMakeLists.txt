@@ -23,6 +23,8 @@ if(PADDOCK_BUILD_GUI)
     VTK REQUIRED
     COMPONENTS CommonCore
                CommonDataModel
+               FiltersCore
+               FiltersGeometry
                ImagingCore
                IOImage
                InteractionStyle

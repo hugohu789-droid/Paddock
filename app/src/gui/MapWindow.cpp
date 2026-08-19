@@ -162,6 +162,17 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   connect(height_box_, &QComboBox::currentIndexChanged, this, &MapWindow::change_exaggeration);
   connect(setup_, &SetupPanel::runRequested, this, &MapWindow::start_run);
   connect(setup_, &SetupPanel::reportRequested, this, &MapWindow::open_report);
+  connect(setup_, &SetupPanel::scenarioChanged, this, [this](const QString& directory) {
+    // Choosing a farm runs it. Anything thrown here has to be caught rather
+    // than escaping through the signal, where it would end the process instead
+    // of appearing in the panel.
+    try {
+      open_scenario(directory.toStdString());
+    } catch (const std::exception& error) {
+      last_failure_ = error.what();
+      setup_->show_failure(QString::fromUtf8(error.what()));
+    }
+  });
 
   // Open on the bundle named on the command line, configured as that bundle
   // configures itself. Pressing Run without touching anything therefore
@@ -215,9 +226,11 @@ void MapWindow::start_run() {
     // a preference to be overridden. The panel offers formulae; a snapshot is a
     // survey, and swapping one for the other would quietly replace the ground
     // with an invention.
-    if (bundle.terrain.kind != config::TerrainSpec::Kind::Snapshot) {
+    const bool measured_ground = bundle.terrain.kind == config::TerrainSpec::Kind::Snapshot;
+    if (!measured_ground) {
       bundle.terrain = choices.terrain;
     }
+    setup_->show_measured_ground(measured_ground);
 
     clear_series();
     // The ground this run is over, taken once. Empty for flat, which the
@@ -414,6 +427,13 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
         // which is what set stocking looks like; a rotating one gets one mark.
         std::vector<viz::MobMarker> markers;
         for (const core::FarmMob& mob : farm.mobs()) {
+          // How many of the mob to draw in each paddock it has the run of.
+          // Split evenly, with the remainder going to the first paddocks, and
+          // it is an illustration: nothing in the model says how a set stocked
+          // mob distributes itself. marker.head stays the whole mob, because
+          // that is the number the model actually knows.
+          const auto occupied = static_cast<int>(mob.paddocks.size());
+          int drawn = 0;
           for (const std::size_t paddock : mob.paddocks) {
             if (paddock >= farm.paddocks().size()) {
               continue;
@@ -422,6 +442,11 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
             marker.at = farm.paddocks()[paddock].boundary.centroid();
             marker.kind = mob.mob.animal.kind;
             marker.head = mob.mob.head;
+            marker.paddock = paddock;
+            marker.head_here = occupied > 0 ? (mob.mob.head / occupied) +
+                                                  (drawn < (mob.mob.head % occupied) ? 1 : 0)
+                                            : 0;
+            ++drawn;
             markers.push_back(marker);
           }
         }
@@ -732,8 +757,8 @@ void MapWindow::refresh() {
     ground_note = "   |   drawn flat: this run was not over any terrain";
   }
   summary_label_->setText(
-      QString("%5   |   Mean pasture cover %1 kg DM/ha over %2 cells   |   %3 across the farm "
-              "today: %4%6")
+      QString("%5   |   Mean pasture cover %1 kg DM/ha over %2 cells of %7 m (%8 ha each)   |   "
+              "%3 across the farm today: %4%6")
           .arg(mean_cover_[day], 0, 'f', 0)
           .arg(raster.size())
           .arg(style.label)
@@ -741,7 +766,9 @@ void MapWindow::refresh() {
                    ? QString("%1 to %2").arg(today.first, 0, 'f', 1).arg(today.second, 0, 'f', 1)
                    : QString("uniform (%1)").arg(today.first, 0, 'f', 1))
           .arg(stock)
-          .arg(ground_note));
+          .arg(ground_note)
+          .arg(raster.transform().cell_size, 0, 'f', 0)
+          .arg(raster.transform().cell_size * raster.transform().cell_size / 10000.0, 0, 'f', 4));
   view_->renderWindow()->Render();
 }
 
@@ -768,6 +795,10 @@ void MapWindow::toggle_play() {
     play_button_->setText("Play");
     return;
   }
+  // At the end of the year, Play starts it again rather than doing nothing.
+  if (!dates_.empty() && current_day_ >= static_cast<int>(dates_.size()) - 1) {
+    timeline_->setValue(0);
+  }
   timer_->start();
   play_button_->setText("Pause");
 }
@@ -776,7 +807,16 @@ void MapWindow::advance_frame() {
   if (dates_.empty()) {
     return;
   }
-  const int next = (current_day_ + 1) % static_cast<int>(dates_.size());
+  // The year ends. Looping back to July made a run of the farm look like
+  // something with no beginning and no end, and made it easy to watch the same
+  // spring twice without noticing it was the same spring. Pressing Play again
+  // starts the year over.
+  const int next = current_day_ + 1;
+  if (next >= static_cast<int>(dates_.size())) {
+    timer_->stop();
+    play_button_->setText("Play");
+    return;
+  }
   timeline_->setValue(next);
 }
 

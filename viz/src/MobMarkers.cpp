@@ -4,6 +4,8 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <random>
 #include <vector>
 #include <vtkCellArray.h>
 #include <vtkPoints.h>
@@ -79,6 +81,47 @@ std::array<double, 3> colour_of(core::AnimalKind kind) {
   }
 }
 
+std::vector<core::Point2D> scatter_within(const core::Polygon& paddock, std::size_t paddock_index,
+                                          int head, core::AnimalKind kind) {
+  std::vector<core::Point2D> placed;
+  if (head <= 0 || paddock.vertices().size() < 3) {
+    return placed;
+  }
+
+  core::BoundingBox area = core::BoundingBox::empty();
+  for (const core::Point2D& vertex : paddock.vertices()) {
+    area.expand_to_include(vertex);
+  }
+  if (area.width() <= 0.0 || area.height() <= 0.0) {
+    return placed;
+  }
+
+  // Seeded from the paddock and the species, and not from the date. Stock that
+  // stay where they are between one day and the next are drawn where they were:
+  // the model does not move them within a paddock, so neither does this. A
+  // date in the seed would make them jitter every frame and look like motion
+  // the model had computed.
+  std::mt19937_64 generator((static_cast<std::uint64_t>(paddock_index) << 8U) ^
+                            static_cast<std::uint64_t>(kind) ^ 0x9E3779B97F4A7C15ULL);
+  std::uniform_real_distribution<double> across(area.min_easting, area.max_easting);
+  std::uniform_real_distribution<double> along(area.min_northing, area.max_northing);
+
+  // Rejection sampling against the real boundary, so no animal stands outside
+  // its own fence. Capped so an awkward polygon cannot spin here for ever; a
+  // paddock is a farm subdivision and its area is a decent share of its box, so
+  // the cap is not normally approached.
+  const int attempts_allowed = head * 64;
+  placed.reserve(static_cast<std::size_t>(head));
+  for (int attempt = 0;
+       attempt < attempts_allowed && placed.size() < static_cast<std::size_t>(head); ++attempt) {
+    const core::Point2D candidate{across(generator), along(generator)};
+    if (paddock.contains(candidate)) {
+      placed.push_back(candidate);
+    }
+  }
+  return placed;
+}
+
 const std::vector<core::AnimalKind>& marker_kinds() {
   static const std::vector<core::AnimalKind> kinds{core::AnimalKind::Sheep,
                                                    core::AnimalKind::Cattle, core::AnimalKind::Deer,
@@ -87,18 +130,19 @@ const std::vector<core::AnimalKind>& marker_kinds() {
 }
 
 void build_mob_markers(const std::vector<MobMarker>& markers, core::AnimalKind kind, double size_m,
-                       const std::function<double(core::Point2D)>& height, vtkPolyData* into) {
+                       const std::function<double(core::Point2D)>& height,
+                       const std::vector<core::Polygon>& paddocks, vtkPolyData* into) {
   if (into == nullptr) {
     return;
   }
   vtkNew<vtkPoints> points;
   vtkNew<vtkCellArray> polygons;
 
-  for (const MobMarker& marker : markers) {
-    if (marker.kind != kind) {
-      continue;
-    }
-    const std::vector<core::Point2D> outline = outline_of(kind, marker.at, size_m);
+  // One shape per animal, spread over the paddock it is on. Falls back to the
+  // single mark at marker.at when there is no boundary to spread over - a farm
+  // with no paddock polygons still has to show that its stock are somewhere.
+  const auto draw_at = [&](core::Point2D where) {
+    const std::vector<core::Point2D> outline = outline_of(kind, where, size_m);
     const vtkIdType first = points->GetNumberOfPoints();
     for (const core::Point2D& point : outline) {
       points->InsertNextPoint(point.easting, point.northing, height ? height(point) : 0.0);
@@ -107,6 +151,27 @@ void build_mob_markers(const std::vector<MobMarker>& markers, core::AnimalKind k
     for (std::size_t i = 0; i < outline.size(); ++i) {
       polygons->InsertCellPoint(first + static_cast<vtkIdType>(i));
     }
+  };
+
+  for (const MobMarker& marker : markers) {
+    if (marker.kind != kind) {
+      continue;
+    }
+    if (marker.head_here > 0 && marker.paddock < paddocks.size()) {
+      const std::vector<core::Point2D> animals =
+          scatter_within(paddocks[marker.paddock], marker.paddock, marker.head_here, kind);
+      if (!animals.empty()) {
+        for (const core::Point2D& animal : animals) {
+          draw_at(animal);
+        }
+        continue;
+      }
+    }
+    // Nothing to spread over: one mark for the whole mob, at the size asked
+    // for. Not enlarged to stand for the mob - a caller that asks for a size
+    // gets that size, and a mark that silently drew at five times it would make
+    // the scale on the map a thing you cannot trust.
+    draw_at(marker.at);
   }
 
   into->SetPoints(points);

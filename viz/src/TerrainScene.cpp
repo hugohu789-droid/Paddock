@@ -16,7 +16,10 @@
 #include <vtkDoubleArray.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkPolyDataNormals.h>
 #include <vtkProperty.h>
+#include <vtkStructuredGridGeometryFilter.h>
 #include <vtkTextProperty.h>
 
 #include <paddock/viz/ColourTable.hpp>
@@ -41,7 +44,10 @@ constexpr float kGrazedFenceWidth = 4.0F;
 constexpr double kFenceOpacity = 0.5;
 
 /// The same marker size the flat map uses, so a mob is the same size in both.
-constexpr double kMarkerSizeM = 40.0;
+// One animal, not one mob. At 8 m across a sheep is far larger than life -
+// a real one is about a metre - but a marker has to be findable on a farm
+// drawn a kilometre wide, and a flock of them reads as a flock.
+constexpr double kMarkerSizeM = 8.0;
 
 }  // namespace
 
@@ -111,7 +117,7 @@ void TerrainScene::rebuild_mobs() {
     return (height_at(point) + kFenceLift) * exaggeration_;
   };
   for (std::size_t i = 0; i < marker_kinds().size() && i < mob_shapes_.size(); ++i) {
-    build_mob_markers(mobs_, marker_kinds()[i], kMarkerSizeM, height, mob_shapes_[i]);
+    build_mob_markers(mobs_, marker_kinds()[i], kMarkerSizeM, height, boundaries_, mob_shapes_[i]);
   }
 }
 
@@ -220,13 +226,37 @@ void TerrainScene::rebuild_surface() {
   surface_->GetPointData()->SetScalars(scalars);
   surface_->Modified();
 
-  vtkNew<vtkDataSetMapper> mapper;
-  mapper->SetInputData(surface_);
+  // Normals averaged at the shared points, so the ground is lit as one surface
+  // rather than as a field of facets.
+  //
+  // Without them every quad is lit by its own flat normal, and adjacent cells
+  // that differ by a few centimetres take visibly different shades. On a farm
+  // whose whole relief is six metres in a kilometre, and drawn at five times
+  // vertical exaggeration, that reads as a rough, crumpled paddock. The ground
+  // is not being changed here - the points are exactly where they were - only
+  // how the light is worked out across them.
+  //
+  // Splitting is off: a crease sharp enough to split would be an artefact of
+  // sampling at this resolution rather than a real edge in the ground.
+  vtkNew<vtkStructuredGridGeometryFilter> geometry;
+  geometry->SetInputData(surface_);
+
+  vtkNew<vtkPolyDataNormals> normals;
+  normals->SetInputConnection(geometry->GetOutputPort());
+  normals->ComputePointNormalsOn();
+  normals->ComputeCellNormalsOff();
+  normals->SplittingOff();
+  normals->ConsistencyOn();
+  normals->AutoOrientNormalsOn();
+
+  vtkNew<vtkPolyDataMapper> mapper;
+  mapper->SetInputConnection(normals->GetOutputPort());
   mapper->SetLookupTable(lookup_);
   mapper->SetScalarRange(lookup_->GetTableRange());
   mapper->SetScalarModeToUsePointData();
   mapper->SetColorModeToMapScalars();
   surface_actor_->SetMapper(mapper);
+  surface_actor_->GetProperty()->SetInterpolationToGouraud();
 }
 
 void TerrainScene::rebuild_fences() {

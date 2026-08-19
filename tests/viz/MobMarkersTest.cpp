@@ -21,6 +21,16 @@ namespace {
 
 constexpr double kSize = 40.0;
 
+/// No boundaries to spread over, so a mark stands for its whole mob. Most of
+/// this file is about which shape a species gets, which the fallback draws too.
+const std::vector<core::Polygon> kNoPaddocks;
+
+/// A square paddock, as a thing to scatter inside.
+core::Polygon square_paddock(double west, double south, double side) {
+  return core::Polygon(
+      {{west, south}, {west + side, south}, {west + side, south + side}, {west, south + side}});
+}
+
 MobMarker at(double easting, double northing, core::AnimalKind kind, int head = 100) {
   MobMarker marker;
   marker.at = {easting, northing};
@@ -32,7 +42,7 @@ MobMarker at(double easting, double northing, core::AnimalKind kind, int head = 
 vtkIdType corners_of(core::AnimalKind kind) {
   const std::vector<MobMarker> markers{at(1000.0, 2000.0, kind)};
   vtkNew<vtkPolyData> shape;
-  build_mob_markers(markers, kind, kSize, {}, shape);
+  build_mob_markers(markers, kind, kSize, {}, kNoPaddocks, shape);
   if (shape->GetNumberOfPolys() != 1) {
     return -1;
   }
@@ -88,9 +98,9 @@ TEST(MobMarkersTest, ALayerTakesOnlyItsOwnKind) {
   vtkNew<vtkPolyData> sheep;
   vtkNew<vtkPolyData> cattle;
   vtkNew<vtkPolyData> deer;
-  build_mob_markers(mixed, core::AnimalKind::Sheep, kSize, {}, sheep);
-  build_mob_markers(mixed, core::AnimalKind::Cattle, kSize, {}, cattle);
-  build_mob_markers(mixed, core::AnimalKind::Deer, kSize, {}, deer);
+  build_mob_markers(mixed, core::AnimalKind::Sheep, kSize, {}, kNoPaddocks, sheep);
+  build_mob_markers(mixed, core::AnimalKind::Cattle, kSize, {}, kNoPaddocks, cattle);
+  build_mob_markers(mixed, core::AnimalKind::Deer, kSize, {}, kNoPaddocks, deer);
 
   EXPECT_EQ(sheep->GetNumberOfPolys(), 2);
   EXPECT_EQ(cattle->GetNumberOfPolys(), 1);
@@ -102,7 +112,7 @@ TEST(MobMarkersTest, ALayerTakesOnlyItsOwnKind) {
 TEST(MobMarkersTest, AMarkIsTheSizeItWasAskedForOnTheGround) {
   const std::vector<MobMarker> markers{at(1000.0, 2000.0, core::AnimalKind::Cattle)};
   vtkNew<vtkPolyData> shape;
-  build_mob_markers(markers, core::AnimalKind::Cattle, kSize, {}, shape);
+  build_mob_markers(markers, core::AnimalKind::Cattle, kSize, {}, kNoPaddocks, shape);
 
   std::array<double, 6> bounds{};
   shape->GetBounds(bounds.data());
@@ -119,7 +129,7 @@ TEST(MobMarkersTest, AMarkStandsOnTheGroundItIsGiven) {
   const std::vector<MobMarker> markers{at(1000.0, 2000.0, core::AnimalKind::Sheep)};
 
   vtkNew<vtkPolyData> flat;
-  build_mob_markers(markers, core::AnimalKind::Sheep, kSize, {}, flat);
+  build_mob_markers(markers, core::AnimalKind::Sheep, kSize, {}, kNoPaddocks, flat);
   std::array<double, 6> flat_bounds{};
   flat->GetBounds(flat_bounds.data());
   EXPECT_DOUBLE_EQ(flat_bounds[4], 0.0);
@@ -127,7 +137,8 @@ TEST(MobMarkersTest, AMarkStandsOnTheGroundItIsGiven) {
 
   vtkNew<vtkPolyData> raised;
   build_mob_markers(
-      markers, core::AnimalKind::Sheep, kSize, [](core::Point2D) { return 37.5; }, raised);
+      markers, core::AnimalKind::Sheep, kSize, [](core::Point2D) { return 37.5; }, kNoPaddocks,
+      raised);
   std::array<double, 6> raised_bounds{};
   raised->GetBounds(raised_bounds.data());
   EXPECT_DOUBLE_EQ(raised_bounds[4], 37.5);
@@ -135,4 +146,90 @@ TEST(MobMarkersTest, AMarkStandsOnTheGroundItIsGiven) {
 }
 
 }  // namespace
+
+// Every animal inside its own fence.
+//
+// A dot outside the boundary is a sheep in the neighbour's crop, and it would
+// be the map claiming something about where stock are that is not merely
+// unmodelled but wrong.
+TEST(MobMarkersTest, EveryAnimalIsInsideItsPaddock) {
+  const core::Polygon paddock = square_paddock(1000.0, 2000.0, 200.0);
+
+  const std::vector<core::Point2D> animals =
+      scatter_within(paddock, 3, 200, core::AnimalKind::Sheep);
+
+  ASSERT_EQ(animals.size(), 200U) << "every animal has to be placed, not most of them";
+  for (const core::Point2D& animal : animals) {
+    EXPECT_TRUE(paddock.contains(animal)) << "at " << animal.easting << ", " << animal.northing;
+  }
+}
+
+// The same farm on the same day draws the same picture.
+//
+// Positions are illustrative, and an illustration that reshuffles itself every
+// frame reads as movement - which is the one thing this must not suggest, since
+// the model computes no movement at all.
+TEST(MobMarkersTest, TheSameMobIsScatteredTheSameWayEveryTime) {
+  const core::Polygon paddock = square_paddock(1000.0, 2000.0, 200.0);
+
+  const std::vector<core::Point2D> first = scatter_within(paddock, 3, 50, core::AnimalKind::Sheep);
+  const std::vector<core::Point2D> again = scatter_within(paddock, 3, 50, core::AnimalKind::Sheep);
+
+  ASSERT_EQ(first.size(), again.size());
+  for (std::size_t i = 0; i < first.size(); ++i) {
+    EXPECT_DOUBLE_EQ(first[i].easting, again[i].easting) << "animal " << i;
+    EXPECT_DOUBLE_EQ(first[i].northing, again[i].northing) << "animal " << i;
+  }
+}
+
+// Two paddocks are not the same paddock, and two species in one paddock are not
+// standing on each other.
+TEST(MobMarkersTest, DifferentPaddocksAndSpeciesAreScatteredDifferently) {
+  const core::Polygon paddock = square_paddock(1000.0, 2000.0, 200.0);
+
+  const std::vector<core::Point2D> here = scatter_within(paddock, 3, 20, core::AnimalKind::Sheep);
+  const std::vector<core::Point2D> elsewhere =
+      scatter_within(paddock, 4, 20, core::AnimalKind::Sheep);
+  const std::vector<core::Point2D> cattle =
+      scatter_within(paddock, 3, 20, core::AnimalKind::Cattle);
+
+  ASSERT_EQ(here.size(), 20U);
+  EXPECT_NE(here.front().easting, elsewhere.front().easting);
+  EXPECT_NE(here.front().easting, cattle.front().easting);
+}
+
+// One shape per animal reaches the geometry, not one per mob.
+TEST(MobMarkersTest, AMobOfManyDrawsManyShapes) {
+  const core::Polygon paddock = square_paddock(1000.0, 2000.0, 200.0);
+  const std::vector<core::Polygon> paddocks{paddock};
+
+  MobMarker marker;
+  marker.at = paddock.centroid();
+  marker.kind = core::AnimalKind::Sheep;
+  marker.head = 40;
+  marker.paddock = 0;
+  marker.head_here = 40;
+
+  vtkNew<vtkPolyData> shape;
+  build_mob_markers({marker}, core::AnimalKind::Sheep, kSize, {}, paddocks, shape);
+
+  EXPECT_EQ(shape->GetNumberOfPolys(), 40);
+}
+
+// And a mark with no boundary behind it still draws, because a farm without
+// paddock polygons still has stock somewhere.
+TEST(MobMarkersTest, WithoutABoundaryTheMobIsStillOneMark) {
+  MobMarker marker;
+  marker.at = {1000.0, 2000.0};
+  marker.kind = core::AnimalKind::Sheep;
+  marker.head = 40;
+  marker.head_here = 40;
+  marker.paddock = 7;  // Out of range of the empty list below.
+
+  vtkNew<vtkPolyData> shape;
+  build_mob_markers({marker}, core::AnimalKind::Sheep, kSize, {}, kNoPaddocks, shape);
+
+  EXPECT_EQ(shape->GetNumberOfPolys(), 1);
+}
+
 }  // namespace paddock::viz

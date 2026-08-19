@@ -29,10 +29,35 @@ struct MobMarker {
   /// the run of, so dividing the number by the paddocks would be inventing a
   /// distribution to make a label look precise.
   int head = 0;
+
+  /// Which paddock of the boundaries the scene was given this mark stands on,
+  /// and how many animals to draw inside it.
+  ///
+  /// **These positions are illustrative and the model has none.** A mob belongs
+  /// to a paddock; no animal in this model has a coordinate, and nothing
+  /// computes where one stands or how far it walks - see docs/verify.md E10,
+  /// where the activity term is recorded as fed by nothing. Drawing one dot per
+  /// animal says how many there are and where they may be, which is what the
+  /// model knows. It does not say where any of them is.
+  ///
+  /// The scatter is deterministic: the same paddock and the same mob always
+  /// produce the same arrangement, so the picture does not shimmer while a
+  /// timeline plays and two runs of the same scenario draw the same farm.
+  std::size_t paddock = 0;
+  int head_here = 0;
 };
 
 /// The colour a kind is drawn in, as red, green and blue from 0 to 1.
 [[nodiscard]] std::array<double, 3> colour_of(core::AnimalKind kind);
+
+/// Where the animals of one mark are drawn, inside the paddock it stands on.
+///
+/// Exposed so it can be tested without a render window: that every point lands
+/// inside the paddock, and that the same mark always gives the same points, are
+/// the two things worth holding to.
+[[nodiscard]] std::vector<core::Point2D> scatter_within(const core::Polygon& paddock,
+                                                        std::size_t paddock_index, int head,
+                                                        core::AnimalKind kind);
 
 /// Builds the markers of one kind into `into`, as filled polygons lying in the
 /// ground plane.
@@ -47,7 +72,8 @@ struct MobMarker {
 /// `height` gives the ground height at a point, for a scene that has terrain.
 /// A flat scene passes one that returns a constant.
 void build_mob_markers(const std::vector<MobMarker>& markers, core::AnimalKind kind, double size_m,
-                       const std::function<double(core::Point2D)>& height, vtkPolyData* into);
+                       const std::function<double(core::Point2D)>& height,
+                       const std::vector<core::Polygon>& paddocks, vtkPolyData* into);
 
 /// Every kind a marker can be, so a caller can build one layer per kind without
 /// naming them and getting the list wrong when one is added.

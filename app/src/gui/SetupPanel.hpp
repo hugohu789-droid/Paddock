@@ -79,6 +79,16 @@ class SetupPanel : public QWidget {
                     const core::ManagementPolicy* policy = nullptr,
                     const core::AnimalClassParameters* animal = nullptr);
 
+  /// Say whether the farm on screen brought its own measured ground.
+  ///
+  /// A bundle that names an elevation snapshot has its ground settled: a survey
+  /// is not a preference, and MapWindow::start_run will not let the formulae in
+  /// this list overwrite one. The control was still enabled and still offering
+  /// them, and the caveat below still announced an invented surface while a
+  /// LiDAR tile was on screen - a control that does nothing, explaining
+  /// something that is not happening.
+  void show_measured_ground(bool measured);
+
   /// Chooses the ground by its position in the list, for the screenshot path.
   /// A view of terrain that only a person clicking can reach is a view nothing
   /// can check.
@@ -109,8 +119,30 @@ class SetupPanel : public QWidget {
   void runRequested();
   void reportRequested();
 
+  /// A different farm was chosen, with the directory it lives in.
+  ///
+  /// Separate from runRequested because choosing a farm is not the same as
+  /// pressing Run on this one: the new farm brings its own stock and its own
+  /// rules, and re-running with the form still showing the last farm's numbers
+  /// would put one farm's mob on another farm's ground. The window reloads the
+  /// bundle and then runs it.
+  ///
+  /// Not emitted while adopt_bundle is filling the form, which sets this box
+  /// itself and would otherwise start a run from inside the setting of it.
+  void scenarioChanged(const QString& directory);
+
  private slots:
   void refresh_readiness();
+
+ private:
+  /// Whether the chosen scenario supplies its own measured ground.
+  bool measured_ground_ = false;
+
+  /// True while adopt_bundle is filling the form from a bundle, so that the
+  /// boxes it sets do not read as a person choosing something.
+  bool adopting_ = false;
+
+ private slots:
 
  private:
   void populate(const std::string& data_directory);

@@ -12,6 +12,7 @@
 #include <QVBoxLayout>
 #include <algorithm>
 #include <exception>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -218,6 +219,12 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   connect(rotation_box_, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
   connect(species_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(scenario_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
+  connect(scenario_box_, &QComboBox::currentIndexChanged, this, [this](int index) {
+    if (adopting_ || index < 0) {
+      return;
+    }
+    emit scenarioChanged(scenario_box_->itemData(index).toString());
+  });
   connect(terrain_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(graze_days_box_, &QSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
   connect(spell_days_box_, &QSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
@@ -331,6 +338,12 @@ SetupPanel::Choices SetupPanel::choices() const {
 void SetupPanel::adopt_bundle(const std::string& directory, int head, double liveweight_kg,
                               const core::ManagementPolicy* policy,
                               const core::AnimalClassParameters* animal) {
+  // Everything this sets is the bundle talking, not a person choosing. Cleared
+  // on the way out however that happens, so a throw part way through filling
+  // the form cannot leave the panel permanently deaf to the person using it.
+  adopting_ = true;
+  const auto done = std::shared_ptr<void>(nullptr, [this](void*) { adopting_ = false; });
+
   const int index = scenario_box_->findData(QString::fromStdString(directory));
   if (index >= 0) {
     scenario_box_->setCurrentIndex(index);
@@ -367,6 +380,17 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
       floor_purchase_box_->setCurrentIndex(floor);
     }
   }
+}
+
+void SetupPanel::show_measured_ground(bool measured) {
+  measured_ground_ = measured;
+  terrain_box_->setEnabled(!measured);
+  terrain_box_->setToolTip(
+      measured ? QString("This farm is drawn on its own measured ground, so these formulae do not "
+                         "apply to it.")
+               : QString("The shape of the ground to run over. Every one of these is invented; a "
+                         "farm with a survey behind it uses that instead."));
+  refresh_readiness();
 }
 
 void SetupPanel::select_ground(int index) {
@@ -413,7 +437,10 @@ QString SetupPanel::caveat() const {
     }
   }
 
-  if (terrain_box_->currentData().toInt() != 0) {
+  if (measured_ground_) {
+    notes << "This farm brings its own measured ground, so it is drawn on that and the Ground "
+             "list above does not apply. What is on screen is a survey, not a formula.";
+  } else if (terrain_box_->currentData().toInt() != 0) {
     notes << "The ground is an invented surface. What it shows is what slope does, not what any "
              "particular hill does.";
   }
