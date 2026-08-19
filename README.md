@@ -66,6 +66,25 @@ What the panel does *not* let you edit is anything the bundle hashes - weather,
 soil, sward. Those are what make a bundle reproducible, and a form that let them
 be retyped would quietly take that away.
 
+The map draws the fences too, and picks out the paddocks carrying stock that
+day. There is a second view that draws the same farm on the ground it sits on,
+with the fences draped over it - and for one farm that ground is measured
+rather than invented:
+
+```bash
+cmake --preset desktop && cmake --build --preset desktop
+python scripts/nz-elevation-snapshot.py --lon 172.470 --lat -43.641 \
+  --collection canterbury/selwyn_2023 --out data/snapshots/lincoln-dem-1m.tiff
+./build/desktop/bin/paddock-gui data/scenarios/lincoln-lurdf --terrain
+```
+
+That is Lincoln University's research dairy farm on 2023 LiDAR at 1 m, and it
+looks almost flat because it is: the ground falls 6.2 m across 900 m, which is
+what the Canterbury Plains do. The height control stretches it and says by how
+much, because exaggeration makes every slope look steeper than it is. The
+`desktop` preset is the one that has both the map and GDAL; see
+[docs/setup.md](docs/setup.md).
+
 ## What it is
 
 Paddock models a New Zealand pastoral farm as a coupled system: terrain and soil

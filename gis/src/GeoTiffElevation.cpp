@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cpl_conv.h>
 #include <cstddef>
+#include <filesystem>
 #include <gdal_priv.h>
 #include <memory>
 #include <stdexcept>
@@ -74,8 +75,14 @@ GeoTiffElevationSource::GeoTiffElevationSource(std::string path) : path_(std::mo
 core::SourceDescription GeoTiffElevationSource::describe() const {
   return core::SourceDescription{
       "LINZ elevation snapshot (GeoTIFF)",
-      "Sourced from the LINZ Data Service and licensed for re-use under the Creative Commons "
-      "Attribution 4.0 International licence.",
+      // Not the Data Service: LINZ publishes elevation as open data, and this
+      // is where these files come from. Each capture also names its own
+      // licensor - Environment Canterbury for the Canterbury LiDAR - so the
+      // attribution a report actually owes is the one written beside the file,
+      // and this line says where to find it rather than guessing at it.
+      "Creative Commons Attribution 4.0 International. LINZ elevation is open data; the licensor "
+      "and the survey dates differ by capture and are recorded in the .provenance.json written "
+      "beside the snapshot.",
       "Whatever the file covers: " + path_,
       "Fixed. A snapshot does not change; re-fetch with scripts/nz-elevation-snapshot.py to "
       "update it."};
@@ -90,11 +97,22 @@ core::ConnectionStatus GeoTiffElevationSource::test_connection() const {
 
   const DatasetHandle dataset = open_read_only(path_);
   if (!dataset) {
+    // A file that is missing and a file that cannot be decoded both fail to
+    // open, and telling a person to fetch a snapshot they already have sends
+    // them the wrong way entirely. It happened: LINZ compresses its 1 m
+    // elevation with LERC, a libtiff without that codec refuses the file, and
+    // the only report was "fetch one".
+    if (!std::filesystem::exists(path_)) {
+      return core::ConnectionStatus::unavailable(
+          path_ +
+          " is not there. Snapshots are not committed - fetch one with "
+          "scripts/nz-elevation-snapshot.py, or point the scenario at a file that exists.");
+    }
     return core::ConnectionStatus::unavailable(
-        "Cannot open " + path_ +
-        ". Snapshots are not committed - fetch one with scripts/nz-elevation-snapshot.py, or point "
-        "the "
-        "scenario at a file that exists.");
+        path_ +
+        " is there and GDAL will not open it. The usual cause is a compression this build cannot "
+        "decode: LINZ elevation is LERC compressed, which needs libtiff built with that codec - "
+        "see the gis feature in vcpkg.json. GDAL states the reason it refused on stderr.");
   }
 
   if (dataset->GetRasterCount() < 1) {
