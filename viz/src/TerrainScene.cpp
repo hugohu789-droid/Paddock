@@ -125,12 +125,14 @@ TerrainScene::TerrainScene() {
   cloud_property->SetColor(cloud_colour_);
   cloud_property->SetScalarOpacity(cloud_opacity_);
   cloud_property->SetInterpolationTypeToLinear();
-  // Lit, so the top of the cloud is brighter than its underside, which is what
-  // separates a cloud from a puff of smoke.
-  cloud_property->ShadeOn();
-  cloud_property->SetAmbient(0.55);
-  cloud_property->SetDiffuse(0.65);
-  cloud_property->SetSpecular(0.0);
+  // **Unshaded, and the colour transfer function is what makes it read as a
+  // volume.** Volume shading works from the gradient of the density, and the
+  // gradient of a noise field points every which way: every sample picked up
+  // its own facet of shadow and the cloud came out nearly black whatever
+  // colour it was given. The light and dark of a cloud is already in the
+  // colour ramp - pale at the thin edges, darker through the core - and that
+  // is a quantity, not a lighting accident.
+  cloud_property->ShadeOff();
 
   cloud_volume_->SetMapper(cloud_mapper);
   cloud_volume_->SetProperty(cloud_property);
@@ -327,7 +329,7 @@ void TerrainScene::rebuild_surface() {
     // translucent cloud between the camera and the paddocks and tinted them.
     // That is the same fault the weather was moved out of the lighting to
     // avoid, arriving through a different door.
-    sky_top_ = (highest_m_ * exaggeration_) + (std::max(sky_width_, sky_height_) * 0.60);
+    sky_top_ = (highest_m_ * exaggeration_) + (std::max(sky_width_, sky_height_) * 0.85);
   }
 
   surface_->SetDimensions(cols, rows, 1);
@@ -682,11 +684,29 @@ void TerrainScene::show_sky(double latitude_degrees, int day_of_year, double sol
     cloud_opacity_->AddPoint(peak, 0.16 + (0.30 * layer.coverage));
     cloud_opacity_->AddPoint(1.0, 0.22 + (0.38 * layer.coverage));
 
-    // Greyer as it thickens, because a heavy cloud is grey from underneath.
-    const double grey = 0.97 - (0.30 * layer.coverage);
+    // **White to grey, and rain is most of what decides it.**
+    //
+    // A fair-weather cumulus is white; a cloud that is raining is grey to
+    // black from below, and that is not a mood - it is optical depth. Water
+    // deep enough to fall out of a cloud is deep enough to stop the light
+    // getting through it. So the day's rainfall darkens it hardest, and how
+    // much of the sky it covers darkens it a little more.
+    //
+    // A dry overcast day therefore stays pale, which is what a high sheet of
+    // cloud looks like, and 8 mm of rain gives the dark base of a shower.
+    const double wet = std::clamp(rainfall_mm / 12.0, 0.0, 1.0);
+    const double dark = std::clamp((0.62 * wet) + (0.24 * layer.coverage), 0.0, 1.0);
+    const double top = 1.0 - (0.45 * dark);
+    const double base = 1.0 - (0.72 * dark);
+
+    // Lighter where the cloud is thin and darker in its core, which is the
+    // other half of what makes a cloud read as a volume rather than a lump of
+    // one colour.
     cloud_colour_->RemoveAllPoints();
-    cloud_colour_->AddRGBPoint(0.0, grey, grey, std::min(1.0, grey + 0.03));
-    cloud_colour_->AddRGBPoint(1.0, grey, grey, std::min(1.0, grey + 0.03));
+    cloud_colour_->AddRGBPoint(0.0, top, top, std::min(1.0, top + 0.02));
+    cloud_colour_->AddRGBPoint(0.55, (top + base) / 2.0, (top + base) / 2.0,
+                               std::min(1.0, ((top + base) / 2.0) + 0.02));
+    cloud_colour_->AddRGBPoint(1.0, base, base, std::min(1.0, base + 0.03));
 
     cloud_volume_->SetVisibility(weather_shown_ && layer.coverage > 0.02 ? 1 : 0);
   }

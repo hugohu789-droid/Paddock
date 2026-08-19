@@ -14,8 +14,10 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include <vtkColorTransferFunction.h>
 #include <vtkIdList.h>
 #include <vtkVolume.h>
+#include <vtkVolumeProperty.h>
 
 #include <paddock/core/Geometry.hpp>
 #include <paddock/core/Raster.hpp>
@@ -210,6 +212,37 @@ TEST(TerrainSceneTest, CloudThickensAsTheDayDulls) {
 
   EXPECT_GT(dull, clear) << "clear " << clear << ", overcast " << dull;
   EXPECT_GT(clear, 0.0) << "even a clear day has some cloud in it";
+}
+
+// A cloud that is raining is grey; one that is not is white.
+//
+// That is optical depth rather than mood: water deep enough to fall out of a
+// cloud is deep enough to stop the light getting through it. So rain darkens
+// it hardest, and cover darkens it a little more.
+TEST(TerrainSceneTest, RainDarkensTheCloudAndDryCloudStaysPale) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  const auto core_brightness = [&scene]() {
+    std::array<double, 3> colour{};
+    scene.cloud()->GetProperty()->GetRGBTransferFunction()->GetColor(1.0, colour.data());
+    return colour[0];
+  };
+
+  // The same overcast sky, once dry and once wet.
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 0.0);
+  const double dry = core_brightness();
+
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 12.0);
+  const double wet = core_brightness();
+
+  EXPECT_LT(wet, dry) << "dry overcast " << dry << ", raining " << wet;
+  EXPECT_GT(dry, 0.6) << "a dry sheet of cloud is pale, not grey: " << dry;
+
+  // And a clear dry day is paler still.
+  scene.show_sky(-43.64, 355, 14.0, 0.75, 0.0);
+  EXPECT_GT(core_brightness(), dry);
 }
 
 // **The cloud can be taken away.** A density field is translucent by

@@ -815,10 +815,6 @@ void MapWindow::refresh() {
                                                latitude_degrees_, weather_[day].date.day_of_year()))
                    : 0.0;
   if (have_weather) {
-    terrain_.light_the_ground();
-    terrain_.show_sky(latitude_degrees_, weather_[day].date.day_of_year(), kSolarHourShown,
-                      clearness, weather_[day].rainfall_mm, weather_[day].wind_speed_m_per_s,
-                      weather_[day].uv_index);
   }
   show_weather(day, clearness);
 
@@ -832,6 +828,14 @@ void MapWindow::refresh() {
     }
     const core::Raster<double>& ground = elevation_.has_value() ? *elevation_ : flat_ground_;
     terrain_.show(raster, ground, colours, legend);
+    // **After the surface, not before.** The sky hangs off the farm's extent,
+    // which show() is what works out - so called first it drew nothing, and the
+    // camera, which frames whatever is visible, framed the farm alone and left
+    // the weather to hang off the top of the picture.
+    terrain_.light_the_ground();
+    terrain_.show_sky(latitude_degrees_, weather_[day].date.day_of_year(), kSolarHourShown,
+                      clearness, weather_[day].rainfall_mm, weather_[day].wind_speed_m_per_s,
+                      weather_[day].uv_index);
     terrain_.show_grazed(grazed_on(day));
     terrain_.show_mobs(mobs_on(day));
   } else {
