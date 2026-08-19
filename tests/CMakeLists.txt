@@ -14,7 +14,7 @@ add_executable(
   unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
   unit/GrazingCalendarTest.cpp
-  unit/GrazingTest.cpp
+  unit/GrazingTest.cpp unit/IrrigationTest.cpp
   unit/LiveweightResponseTest.cpp
   unit/PaddockMaskTest.cpp
   unit/PastureTest.cpp
@@ -113,6 +113,7 @@ if(PADDOCK_BUILD_CONFIG)
   file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
 
   add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
+                                          validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp
                                           validation/ManagedFarmTest.cpp
                                           validation/ScenarioReportTest.cpp

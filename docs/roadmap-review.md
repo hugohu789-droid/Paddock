@@ -115,7 +115,7 @@ PR #27 carries the weather integration §4 and §33 ask for: real daily weather
 from Open-Meteo, the terrain the growth model runs on, and the day's conditions
 on screen. Merge before opening new scope, as §33 says.
 
-### Stage 1 — irrigation decision layer
+### Stage 1 — irrigation decision layer — **done**
 
 The smallest extension that satisfies §42.
 
@@ -131,6 +131,28 @@ The smallest extension that satisfies §42.
 
 Done when the same farm runs with irrigation off and on, and the water budget
 closes in both.
+
+**What it came to**, on Lincoln's real 2023-24 weather, one hectare, no stock:
+
+| | rain-fed | irrigated |
+| --- | --- | --- |
+| Growth | 11.27 t DM/ha | 15.66 t DM/ha |
+| Days short of water | 195 | 0 |
+| Water applied | 0 mm | 325 mm in 13 events |
+| Pumped over 79 ha | 0 | 257 ML |
+
+Additional dry matter 4.39 t/ha, water productivity **1.35 kg DM per m3**.
+
+Diminishing returns fall out of it rather than being asserted: watering earlier
+and refilling closer to full costs another 69 mm and returns **zero** extra
+growth, because the first 325 mm had already taken the stressed days to none.
+
+**None of those absolute figures is quotable.** The sward parameters are
+placeholders, so what this run establishes is the shape - direction, cost, and
+where the returns stop - and Stage 3 is what would make the numbers mean
+anything. It is worth noting, and not worth reading anything into, that the
+roadmap's illustrative table guessed 9.8 to 15.4 t DM/ha on 355 mm at 1.58 kg
+DM per m3: close, and a coincidence of magnitude is not evidence.
 
 ### Stage 2 — rain-fed versus irrigated
 
