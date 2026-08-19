@@ -41,7 +41,7 @@ class MapWindow : public QMainWindow {
   /// Which field the map is showing. Each carries its own units and its own
   /// colour ramp, because a stress coefficient and a pasture cover are not
   /// comparable quantities and should not share a scale.
-  enum class Field : int { Cover = 0, SoilWater, WaterStress, LegumeFraction };
+  enum class Field : int { Cover = 0, SoilWater, WaterStress, LegumeFraction, Slope };
 
   /// What the colour scale spans.
   ///
@@ -121,6 +121,16 @@ class MapWindow : public QMainWindow {
   /// that sizes the window makes the map jump wider and narrower while it
   /// plays.
   void show_day_for_check(int day) { show_day(day); }
+
+  /// The range of a field over the run, for the headless path.
+  ///
+  /// Slope is the reason this exists: it is the one field a picture cannot
+  /// show - on ground this flat the shading difference is under three per cent
+  /// of brightness - so the only way to say how steep a farm is, is to print
+  /// the number.
+  [[nodiscard]] std::pair<double, double> field_range(Field field) const {
+    return whole_run_range(field);
+  }
 
   /// Open a different farm, exactly as choosing it in the panel would.
   ///
@@ -267,6 +277,18 @@ class MapWindow : public QMainWindow {
   std::vector<core::Raster<double>> soil_water_;
   std::vector<core::Raster<double>> water_stress_;
   std::vector<core::Raster<double>> legume_fraction_;
+
+  /// The slope of each cell, in degrees. One frame, not one per day: the
+  /// ground does not move.
+  ///
+  /// It is here because it is invisible in the picture and it drives two
+  /// sourced pieces of the model. On a farm falling six metres in a kilometre
+  /// the shading difference between the steepest and the flattest cell is
+  /// under three per cent of brightness, so no amount of lighting will show
+  /// it - but that same slope sets the energy cost of walking (TMC Eq. 23) and
+  /// the radiation a face receives (Gillingham et al.). A quantity that
+  /// changes the answer and cannot be seen is worth a colour ramp of its own.
+  std::vector<core::Raster<double>> slope_;
   std::vector<std::string> dates_;
 
   /// The weather each day was run on, kept so the view can say what the day

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace paddock::core {
 
 /// Solar geometry from FAO Irrigation and Drainage Paper 56 (Allen, Pereira,
@@ -99,7 +101,7 @@ struct SunPosition {
                                      double extraterrestrial_mj_per_m2) noexcept;
 
 /// What the sky was doing, as far as the radiation can say.
-enum class SkyCondition { Clear, PartlyCloudy, Overcast };
+enum class SkyCondition : std::uint8_t { Clear, PartlyCloudy, Overcast };
 
 /// Reads a clearness index as a sky.
 ///

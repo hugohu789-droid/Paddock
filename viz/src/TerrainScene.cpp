@@ -388,7 +388,24 @@ void TerrainScene::light_for(double latitude_degrees, int day_of_year, double so
   const double lit = std::clamp(
       (clearness - kOvercastClearness) / (kClearClearness - kOvercastClearness), 0.0, 1.0);
 
-  sun_->SetIntensity(0.45 + (0.55 * lit));
+  sun_->SetIntensity(0.75 + (0.45 * lit));
+
+  // **Ambient rises as the sun falls behind cloud, and that is not a fudge to
+  // keep the picture bright.** The clearness index IS the split between direct
+  // and diffuse radiation - that is what FAO-56 Eq. 35's Angstrom relation
+  // describes - so an overcast sky delivers most of its light from every
+  // direction at once and a clear one delivers it from the sun. Modelling that
+  // as one directional light and nothing else made shaded ground read as
+  // black, which is both ugly and wrong: under cloud there is barely a shaded
+  // side at all.
+  //
+  // The consequence worth stating: relief is easiest to see on a clear day and
+  // nearly flat on an overcast one, which is what a paddock looks like.
+  if (surface_actor_->GetProperty() != nullptr) {
+    const double ambient = 0.55 - (0.25 * lit);
+    surface_actor_->GetProperty()->SetAmbient(ambient);
+    surface_actor_->GetProperty()->SetDiffuse(1.0 - ambient);
+  }
 
   // Warm and low under a clear sky, flat and grey under cloud - which is what
   // the light itself does, not a filter over the picture.

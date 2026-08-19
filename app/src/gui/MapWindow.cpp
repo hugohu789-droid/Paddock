@@ -76,6 +76,8 @@ FieldStyle style_of(MapWindow::Field field) {
       return {"Water stress", "Water stress (1 = unstressed)", viz::Ramp::Viridis, true, 0.0, 1.0};
     case MapWindow::Field::LegumeFraction:
       return {"Legume fraction", "Legume share of green DM", viz::Ramp::Viridis, true, 0.0, 1.0};
+    case MapWindow::Field::Slope:
+      return {"Slope", "Slope (degrees)", viz::Ramp::Viridis, false, 0.0, 0.0};
     case MapWindow::Field::Cover:
     default:
       return {
@@ -97,7 +99,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
 
   field_box_ = new QComboBox(this);
   for (const MapWindow::Field field :
-       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction}) {
+       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction, Field::Slope}) {
     field_box_->addItem(style_of(field).label, static_cast<int>(field));
   }
 
@@ -145,6 +147,15 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   height_box_->addItem("Heights true to scale", 1);
   height_box_->addItem("Heights x2", 2);
   height_box_->addItem("Heights x5", 5);
+  // The shipped farms are on the Canterbury Plains and their steepest cell is
+  // under one and a half degrees. Lit at a true scale, the brightest and
+  // darkest ground on them differ by about 1.6% - invisible, and no choice of
+  // sun angle changes that, because the ground and not the light is what is
+  // flat. These two are what make relief visible on them at all, and the
+  // factor stays in the label because a farm drawn twenty times too steep must
+  // never be mistaken for one that is.
+  height_box_->addItem("Heights x10", 10);
+  height_box_->addItem("Heights x20", 20);
   height_box_->setEnabled(false);
 
   auto* controls = new QHBoxLayout;
@@ -274,6 +285,22 @@ void MapWindow::start_run() {
     last_policy_ = choices.policy;
     last_bundle_ = bundle;
     latitude_degrees_ = bundle.latitude_degrees;
+
+    // The slope of the ground the run was over, taken once. Flat ground has no
+    // topography, and a farm with none gets a raster of zeros rather than a
+    // missing field: "every slope here is zero" is the true answer, and a menu
+    // whose entries come and go with the scenario is a menu people stop
+    // trusting.
+    if (const std::optional<core::Topography> ground = bundle.make_topography();
+        ground.has_value()) {
+      slope_.push_back(ground->slope_degrees);
+    } else if (bundle.grid.has_value()) {
+      core::GeoTransform transform;
+      transform.origin_easting = bundle.grid->origin_easting;
+      transform.origin_northing = bundle.grid->origin_northing;
+      transform.cell_size = bundle.grid->cell_size_m;
+      slope_.emplace_back(bundle.grid->cols, bundle.grid->rows, transform, 0.0);
+    }
     if (last_run_.has_value()) {
       weather_ = last_run_->weather;
     }
@@ -394,6 +421,7 @@ void MapWindow::change_exaggeration(int index) {
 
 void MapWindow::clear_series() {
   weather_.clear();
+  slope_.clear();
   cover_.clear();
   soil_water_.clear();
   water_stress_.clear();
@@ -589,7 +617,7 @@ bool MapWindow::farm_moved(const core::Raster<double>& raster) const {
 
 void MapWindow::adopt_series() {
   for (const Field field :
-       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction}) {
+       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction, Field::Slope}) {
     double lowest = std::numeric_limits<double>::max();
     double highest = std::numeric_limits<double>::lowest();
     for (const core::Raster<double>& frame : series_of(field)) {
@@ -667,6 +695,8 @@ void MapWindow::adopt_series() {
 
 const std::vector<core::Raster<double>>& MapWindow::series_of(Field field) const {
   switch (field) {
+    case Field::Slope:
+      return slope_;
     case Field::SoilWater:
       return soil_water_;
     case Field::WaterStress:
@@ -685,6 +715,9 @@ std::pair<double, double> MapWindow::whole_run_range(Field field) const {
 
 int MapWindow::most_varied_day() const {
   const std::vector<core::Raster<double>>& series = series_of(field_);
+  if (series.size() < 2) {
+    return 0;  // Nothing varies over a single frame.
+  }
   int best_day = 0;
   double best_spread = -1.0;
   for (std::size_t day = 0; day < series.size(); ++day) {
@@ -706,7 +739,12 @@ void MapWindow::refresh() {
       static_cast<std::size_t>(std::clamp(current_day_, 0, static_cast<int>(dates_.size()) - 1));
 
   const std::vector<core::Raster<double>>& series = series_of(field_);
-  const core::Raster<double>& raster = series[day];
+  if (series.empty()) {
+    return;
+  }
+  // Slope has one frame and the rest have one per day, because the ground does
+  // not move and the pasture does.
+  const core::Raster<double>& raster = series[std::min(day, series.size() - 1)];
   const FieldStyle style = style_of(field_);
 
   const std::pair<double, double> today = viz::ColourScale::range_of(raster);

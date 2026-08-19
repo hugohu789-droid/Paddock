@@ -196,6 +196,12 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "paddock-gui: ground modelled flat\n";
       }
+      // How steep the farm is, which the picture cannot say.
+      {
+        const std::pair<double, double> slope =
+            window.field_range(paddock::app::MapWindow::Field::Slope);
+        std::cout << "paddock-gui: slope " << slope.first << " to " << slope.second << " degrees\n";
+      }
       if (const std::string& weather = window.weather_line(); !weather.empty()) {
         std::cout << "paddock-gui: weather " << weather << '\n';
       }
