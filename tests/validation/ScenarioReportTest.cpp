@@ -47,7 +47,12 @@ TEST(ScenarioReportTest, ItReportsEveryPurchaseWithItsDate) {
   const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "managed");
   ASSERT_FALSE(run.purchases.empty());
 
-  const std::string report = render_report(bundle, run, {"Canterbury demonstration", nullptr});
+  // Named rather than positional: a braced list here breaks every time
+  // ReportOptions grows a field, which is a rebuild failure that says nothing
+  // about this test.
+  ReportOptions options;
+  options.farm_name = "Canterbury demonstration";
+  const std::string report = render_report(bundle, run, options);
 
   EXPECT_TRUE(contains(report, "## Bought feed"));
   EXPECT_TRUE(contains(report, "kg DM"));
