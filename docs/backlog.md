@@ -141,6 +141,7 @@ what lets a farmer write one without touching TOML.
 | ~~B18~~ | ~~Grazing calendar in TOML~~ | **Was already done, and the entry was stale**: B6 put `[[grazing_period]]` in the manifest, and the parser reads every field the calendar type has. The same gap was real one object over - `ManagementPolicy` existed only as a function argument, so a managed run could be reproduced only by somebody who also had the code that started it. A `[management]` section closes that, and B7's editor would write both |
 | B19 | Open-Meteo weather adapter | Default source, agreed earlier; VCSN as an option with its licence unverified |
 | B20 | Ship `proj.db` with the Windows package | Otherwise a packaged build cannot do NZTM |
+| B21a | **A redistribution policy beside every licence** | Citing a source and shipping it are different permissions, and only the first is tracked today. NIWA's DataHub licence forbids passing data to third parties and S-map is CC BY-NC-ND, so a reproducibility bundle that zipped everything a run touched would be unlawful for both - while LINZ elevation and Open-Meteo, both CC BY 4.0, may travel. A source needs to record whether it may be committed, shipped with a release, or only cached locally by whoever holds the licence. The hash can always be recorded; the bytes cannot always be handed on |
 | B21 | Dataset and document licences | Open item 7. Gates what may be redistributed with a release, and now also covers the OVERSEER manual's no-promotion clause |
 
 ## How to read the sizes

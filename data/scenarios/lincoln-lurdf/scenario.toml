@@ -9,7 +9,7 @@
 #
 # **The ground is real and nearly flat, and both halves of that matter.** Over
 # the whole 4.8 by 7.2 km LiDAR tile the elevation runs from 0.4 m to 26.1 m
-# above sea level, mean 7.0 m; over these 72 hectares it moves by a couple of
+# above sea level, mean 7.0 m; over these 80 hectares it moves by a couple of
 # metres. Drawn true to scale the farm looks flat because it is flat: this is
 # the Canterbury Plains. A viewer wanting to see the shape of it has to
 # exaggerate the heights, and the view says by how much when it does.
@@ -21,7 +21,7 @@
 
 [scenario]
 name = "lincoln_lurdf"
-description = "LURDF's 72 hectares on measured LiDAR ground, with placeholder weather, soil and sward."
+description = "LURDF's 79 hectares on measured LiDAR ground, with placeholder weather, soil and sward."
 engine_version = "0.1.0"
 master_seed = 20230323
 
@@ -51,24 +51,30 @@ legume_kg_dm_per_ha = 600.0
 soil_mineral_nitrogen_kg_per_ha = 60.0
 
 [grid]
-# 36 x 32 cells at 25 m is 900 by 800 m, which is 72.0 hectares - the area
-# Lincoln University publishes for LURDF, and the same rectangle
-# data/farms/lincoln-research-farms.toml carries.
+# 40 x 32 cells at 25 m is 1000 by 800 m, which is 80.0 hectares against
+# LURDF's published 79. The overshoot is one row of cells, 1.3%, and it is here
+# because 79 hectares is not a whole number of 625 m2 cells in any farm-shaped
+# rectangle: 79 is prime, so the only exact tilings are strips.
 #
-# The origin is that rectangle's north-west corner, taken from the farm's centre
-# at 1557252.3158 E, 5167862.7895 N. It sits inside the LiDAR tile with room to
+# An earlier version of this file used 900 by 800, 72 ha, having taken "72 ha
+# under irrigation" from Lincoln University's page as the size of the farm. It
+# is the area under the pivots. The farm is 79 ha, and this model does not
+# represent irrigation at all.
+#
+# The origin is the farm rectangle's north-west corner, taken from the centre at
+# 1557252.3158 E, 5167862.7895 N. It sits inside the LiDAR tile with room to
 # spare: the tile runs 1554400-1559200 E and 5161200-5168400 N, so this farm has
 # 137 m of margin at its nearest edge, the northern one.
-cols = 36
+cols = 40
 rows = 32
 cell_size_m = 25.0
 available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
 available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
-origin_easting = 1556802.3158
+origin_easting = 1556752.3158
 origin_northing = 5168262.7895
 
-# 72 ha at 2 ha gives 36 paddocks of 2.0 ha: 6 across and 6 down at 150 m
-# square, which divides this block exactly for once.
+# 80 ha at 2 ha gives 40 paddocks of 2.0 ha: 8 across and 5 down at 125 by
+# 160 m, which divides this block exactly.
 paddock_hectares = 2.0
 
 [terrain]
@@ -99,12 +105,13 @@ sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
 sha256 = "3fa4fe61da611bd49fd64541acaf839c48b9da654912ff7e656d723e16d0adc2"
-head = 375
+head = 417
 paddock = 0
-# 375 ewes on 72 hectares is 5.2 a hectare, the same stocking rate
-# canterbury-grazed settles at, scaled to this farm's area. It is a rate this
+# 417 ewes on 80 hectares is 5.2 a hectare, the same stocking rate
+# canterbury-grazed settles at, scaled to this block's area. It is a rate this
 # model reports rather than one taken from anywhere, and LURDF is a dairy farm
-# in any case - the stock here demonstrate the loop, not the enterprise.
+# carrying about 200 head in any case - the stock here demonstrate the loop,
+# not the enterprise.
 liveweight_kg = 55.0
 age_days = 1500.0
 
