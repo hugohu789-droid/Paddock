@@ -77,9 +77,21 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
                                 const DayObserver& each_day) {
   core::Farm farm = bundle.make_farm();
 
-  // The calendar is not used by a managing farmer; one is needed to construct
-  // it, so it gets a harmless one.
-  core::Farmer farmer(whole_run_calendar(bundle.range, core::GrazingSystem::SetStocking, 0, 0));
+  // The bundle's own calendar, when it has one.
+  //
+  // This used to be a harmless placeholder, on the grounds that a managing
+  // farmer decides from cover and never reads a calendar. That stopped being
+  // true when the farmer gained a preference: `FollowCalendar` reads exactly
+  // this, and given the placeholder it would have followed a plan nobody wrote
+  // - set stocking for the whole year - while the manifest's own
+  // [[grazing_period]] sat unread beside it.
+  //
+  // Inert for every other preference, which is why the change costs nothing:
+  // manage() builds its own one-day calendar when it rotates and does not touch
+  // this one otherwise.
+  core::Farmer farmer(bundle.grazing.empty()
+                          ? whole_run_calendar(bundle.range, core::GrazingSystem::SetStocking, 0, 0)
+                          : bundle.grazing);
   farmer.set_policy(policy);
 
   RunSummary summary;

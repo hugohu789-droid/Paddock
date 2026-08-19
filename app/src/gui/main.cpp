@@ -74,8 +74,9 @@ int main(int argc, char** argv) {
       }
       screenshot = std::string(*std::next(screenshot_flag));
     }
-    const bool smoke =
-        !screenshot.empty() || std::find(args.begin(), args.end(), "--smoke") != args.end();
+    const bool smoke = !screenshot.empty() ||
+                       std::find(args.begin(), args.end(), "--panel-shot") != args.end() ||
+                       std::find(args.begin(), args.end(), "--smoke") != args.end();
     // Must be set before the QApplication exists, or the widget and the render
     // window disagree about the surface they share.
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
@@ -131,6 +132,15 @@ int main(int argc, char** argv) {
                   << " m above sea level\n";
       } else {
         std::cout << "paddock-gui: ground modelled flat\n";
+      }
+      const auto panel_flag = std::find(args.begin(), args.end(), "--panel-shot");
+      if (panel_flag != args.end() && std::next(panel_flag) != args.end()) {
+        const std::string panel_path(*std::next(panel_flag));
+        if (!window.save_panel_screenshot(panel_path)) {
+          std::cerr << "paddock-gui: could not write " << panel_path << '\n';
+          return 1;
+        }
+        std::cout << "paddock-gui: wrote " << panel_path << '\n';
       }
       if (!screenshot.empty()) {
         if (!window.save_screenshot(screenshot)) {

@@ -89,6 +89,14 @@ class MapWindow : public QMainWindow {
   /// both are nearly level, and two numbers separate them.
   [[nodiscard]] std::optional<std::pair<double, double>> ground_range() const;
 
+  /// Writes the setup panel to a PNG.
+  ///
+  /// The map has had a way to be looked at without a person since it was drawn,
+  /// and the panel is just as much a deliverable: a form of nine rows can be
+  /// perfectly wired and unreadable. Pure Qt widgets, so an ordinary grab
+  /// captures them.
+  bool save_panel_screenshot(const std::string& path);
+
   /// Writes the current frame to a PNG.
   ///
   /// A map is a claim about what the model did, and a claim nobody looks at is

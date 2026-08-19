@@ -133,6 +133,13 @@ void write_what_was_simulated(std::ostringstream& out, const ScenarioBundle& bun
     out << "| Target gain | " << fixed(policy.target_liveweight_gain_kg_per_day, 3)
         << " kg per head per day |\n";
     out << "| May buy feed | " << (policy.may_buy_feed ? "yes" : "no") << " |\n";
+    // Which system the farmer ran, and what they bought at the floor. Both
+    // change the answer, and a reader comparing two reports has no other way to
+    // tell which farm was run how.
+    out << "| Grazing | " << core::to_string(policy.preference) << " |\n";
+    if (policy.may_buy_feed) {
+      out << "| At the cover floor | " << core::to_string(policy.floor_purchase) << " |\n";
+    }
   } else {
     out << "| Management | a fixed calendar of " << bundle.grazing.periods().size()
         << " periods |\n";

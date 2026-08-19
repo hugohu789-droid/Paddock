@@ -21,8 +21,10 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <paddock/config/ScenarioRun.hpp>
 
@@ -87,6 +89,107 @@ TEST(ManagedFarmTest, ABundleWithNoRulesRefusesToBeRunByAFarmer) {
 
   EXPECT_THROW(static_cast<void>(run_managed_scenario(bundle, pasture_diet(), "no policy")),
                std::runtime_error);
+}
+
+namespace {
+
+int days_rotating(const RunSummary& run) {
+  return static_cast<int>(std::count(run.system_each_day.begin(), run.system_each_day.end(),
+                                     core::GrazingSystem::Rotational));
+}
+
+RunSummary run_preferring(core::GrazingPreference preference, std::string label) {
+  core::ManagementPolicy policy = default_policy();
+  policy.preference = preference;
+  return run(1400, policy, std::move(label));
+}
+
+}  // namespace
+
+// A farmer told never to rotate never does, whatever the cover says.
+//
+// Smith and Dawson (1976) name set stocking for lambing, when demand is highest
+// and the whole farm is wanted at once. A farm may be run that way all year,
+// and the model should be able to show what it costs rather than quietly
+// deciding otherwise.
+TEST(ManagedFarmTest, AFarmerWhoNeverRotatesNeverDoes) {
+  const RunSummary year =
+      run_preferring(core::GrazingPreference::AlwaysSetStock, "always set stocked");
+
+  EXPECT_EQ(days_rotating(year), 0);
+  EXPECT_EQ(year.moves, 0) << "set stocking gives the mob the whole farm, so there is nothing to "
+                              "move it between";
+}
+
+// And one who prefers to rotate does it on days the cover rule would not have.
+TEST(ManagedFarmTest, AFarmerWhoPrefersRotationRotatesMoreThanTheCoverRuleWould) {
+  const RunSummary by_cover = run_preferring(core::GrazingPreference::ByCover, "by cover");
+  const RunSummary preferring =
+      run_preferring(core::GrazingPreference::PreferRotation, "prefer rotation");
+
+  EXPECT_GT(days_rotating(preferring), days_rotating(by_cover));
+
+  GTEST_LOG_(INFO) << "days rotating: by cover " << days_rotating(by_cover) << ", preferring "
+                   << days_rotating(preferring) << " of " << by_cover.dates.size();
+}
+
+// The scenario's own calendar, which a managed run used to ignore completely.
+//
+// canterbury-grazed sets stock from 20 August to 28 October for lambing and
+// rotates the rest of the year. A farmer told to follow it should show exactly
+// that shape, and one deciding from cover should not.
+TEST(ManagedFarmTest, AFarmerCanFollowTheScenariosOwnCalendar) {
+  const RunSummary following =
+      run_preferring(core::GrazingPreference::FollowCalendar, "following the calendar");
+  ASSERT_EQ(following.dates.size(), following.system_each_day.size());
+
+  const core::Date lambing{2023, 9, 15};
+  const core::Date summer{2024, 2, 15};
+  core::GrazingSystem on_lambing = core::GrazingSystem::Rotational;
+  core::GrazingSystem in_summer = core::GrazingSystem::SetStocking;
+  for (std::size_t day = 0; day < following.dates.size(); ++day) {
+    if (following.dates[day] == lambing) {
+      on_lambing = following.system_each_day[day];
+    }
+    if (following.dates[day] == summer) {
+      in_summer = following.system_each_day[day];
+    }
+  }
+
+  EXPECT_EQ(on_lambing, core::GrazingSystem::SetStocking)
+      << "the calendar sets stock over lambing and the farmer did not";
+  EXPECT_EQ(in_summer, core::GrazingSystem::Rotational)
+      << "the calendar rotates through the dry season and the farmer did not";
+}
+
+// At the floor, what the farmer buys.
+//
+// Buying the whole demand asks the pasture for nothing, so the sward is left to
+// grow back. Grazing down to the line buys only the difference, so cover sits
+// at the floor instead of climbing away from it. Less feed, less grass: the
+// trade a farmer actually makes.
+TEST(ManagedFarmTest, GrazingDownToTheFloorBuysLessFeedAndLeavesLessGrass) {
+  core::ManagementPolicy whole = default_policy();
+  whole.floor_purchase = core::FloorPurchase::WholeDemand;
+  core::ManagementPolicy holding = default_policy();
+  holding.floor_purchase = core::FloorPurchase::HoldAtFloor;
+
+  const RunSummary bought_the_lot = run(1400, whole, "whole demand");
+  const RunSummary grazed_to_the_line = run(1400, holding, "hold at the floor");
+
+  EXPECT_LT(grazed_to_the_line.bought_feed_kg_dm(), bought_the_lot.bought_feed_kg_dm());
+  EXPECT_LT(grazed_to_the_line.mean_cover_kg_dm_per_ha(), bought_the_lot.mean_cover_kg_dm_per_ha());
+
+  // Neither may take the sward through the floor. That is the whole point of
+  // the floor, and it is the assertion that would catch a rule that grazed too
+  // far in the name of buying less.
+  EXPECT_GT(grazed_to_the_line.lowest_cover_kg_dm_per_ha(), 1000.0)
+      << "cover reached " << grazed_to_the_line.lowest_cover_kg_dm_per_ha() << " kg DM/ha";
+
+  GTEST_LOG_(INFO) << "bought: whole demand " << bought_the_lot.bought_feed_kg_dm()
+                   << " kg DM, holding at the floor " << grazed_to_the_line.bought_feed_kg_dm()
+                   << " kg DM; mean cover " << bought_the_lot.mean_cover_kg_dm_per_ha() << " and "
+                   << grazed_to_the_line.mean_cover_kg_dm_per_ha() << " kg DM/ha";
 }
 
 // The two things the farmer is not allowed to let happen. At a stocking rate the

@@ -28,6 +28,7 @@ namespace {
 /// are the ones the model is exercised at, so a demonstration opens on a
 /// configuration that is known to behave rather than on one nobody has run.
 constexpr double kDefaultCoverFloor = 1600.0;
+constexpr double kDefaultTargetGain = 0.0;
 constexpr double kDefaultRotationThreshold = 2200.0;
 constexpr int kDefaultMaximumGrazeDays = 3;
 constexpr int kDefaultMinimumSpellDays = 35;
@@ -85,6 +86,66 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   rotation_box_->setSuffix(" kg DM/ha");
   rotation_box_->setValue(kDefaultRotationThreshold);
 
+  // What the stock are meant to be doing. Zero is holding weight, which is the
+  // floor rather than the goal: stock are sold by the kilogram, so a farmer
+  // feeding to no gain is feeding to lose money slowly. Negative is allowed
+  // because wintering a dry ewe down is a real decision.
+  target_gain_box_ = new QDoubleSpinBox(this);
+  target_gain_box_->setRange(-0.5, 2.0);
+  target_gain_box_->setDecimals(3);
+  target_gain_box_->setSingleStep(0.025);
+  target_gain_box_->setSuffix(" kg/head/day");
+  target_gain_box_->setValue(kDefaultTargetGain);
+
+  graze_days_box_ = new QSpinBox(this);
+  graze_days_box_->setRange(1, 60);
+  graze_days_box_->setSuffix(" days");
+  graze_days_box_->setValue(kDefaultMaximumGrazeDays);
+  graze_days_box_->setToolTip(
+      "How long the mob stays on one paddock under rotation. Smith and Dawson (1976): do not "
+      "graze a pasture for more than three days with the major grazing mob.");
+
+  spell_days_box_ = new QSpinBox(this);
+  spell_days_box_->setRange(1, 200);
+  spell_days_box_->setSuffix(" days");
+  spell_days_box_->setValue(kDefaultMinimumSpellDays);
+  spell_days_box_->setToolTip(
+      "The rest a paddock gets before it is grazed again. Whether the farm has enough paddocks to "
+      "hold this is a different question, and the one that separates a rotation from a shuffle.");
+
+  supplement_me_box_ = new QDoubleSpinBox(this);
+  supplement_me_box_->setRange(1.0, 14.0);
+  supplement_me_box_->setDecimals(1);
+  supplement_me_box_->setSingleStep(0.5);
+  supplement_me_box_->setSuffix(" MJ ME/kg DM");
+  supplement_me_box_->setValue(kDefaultSupplementMe);
+  supplement_me_box_->setToolTip(
+      "The energy in the feed the farmer buys, which decides how much of it a given shortfall "
+      "takes. Baleage and hay sit below pasture.");
+
+  // Which system to run. The first is what the model did before there was a
+  // choice; the last reads the scenario's own [[grazing_period]], which a
+  // managed run ignored entirely until now.
+  preference_box_ = new QComboBox(this);
+  preference_box_->addItem("Rotate when the cover can afford it",
+                           static_cast<int>(core::GrazingPreference::ByCover));
+  preference_box_->addItem("Rotate wherever possible",
+                           static_cast<int>(core::GrazingPreference::PreferRotation));
+  preference_box_->addItem("Set stock all year",
+                           static_cast<int>(core::GrazingPreference::AlwaysSetStock));
+  preference_box_->addItem("Follow the scenario's calendar",
+                           static_cast<int>(core::GrazingPreference::FollowCalendar));
+
+  floor_purchase_box_ = new QComboBox(this);
+  floor_purchase_box_->addItem("Buy the whole demand",
+                               static_cast<int>(core::FloorPurchase::WholeDemand));
+  floor_purchase_box_->addItem("Graze to the floor, buy the rest",
+                               static_cast<int>(core::FloorPurchase::HoldAtFloor));
+  floor_purchase_box_->setToolTip(
+      "At the floor, how much of the mob's demand the farmer buys. Buying the lot asks the "
+      "pasture for nothing, so cover climbs away from the floor. Grazing down to the line buys "
+      "less feed and leaves less grass, which is the trade a farmer actually makes.");
+
   may_buy_box_ = new QCheckBox("Buy feed when the farm cannot carry the stock", this);
   may_buy_box_->setChecked(true);
   may_buy_box_->setToolTip(
@@ -118,9 +179,15 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
 
   auto* management_group = new QGroupBox("Management", this);
   auto* management_form = new QFormLayout;
+  management_form->addRow("Grazing", preference_box_);
   management_form->addRow("Do not graze below", cover_floor_box_);
   management_form->addRow("Rotate above", rotation_box_);
+  management_form->addRow("Graze a paddock for", graze_days_box_);
+  management_form->addRow("Then rest it for", spell_days_box_);
+  management_form->addRow("Target gain", target_gain_box_);
   management_form->addRow(may_buy_box_);
+  management_form->addRow("At the floor", floor_purchase_box_);
+  management_form->addRow("Bought feed energy", supplement_me_box_);
   management_group->setLayout(management_form);
 
   auto* buttons = new QVBoxLayout;
@@ -152,6 +219,8 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   connect(species_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(scenario_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(terrain_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
+  connect(graze_days_box_, &QSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
+  connect(spell_days_box_, &QSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
   refresh_readiness();
 }
 
@@ -220,11 +289,15 @@ SetupPanel::Choices SetupPanel::choices() const {
 
   chosen.policy.minimum_cover_kg_dm_per_ha = cover_floor_box_->value();
   chosen.policy.rotation_cover_threshold_kg_dm_per_ha = rotation_box_->value();
-  chosen.policy.target_liveweight_gain_kg_per_day = 0.0;
-  chosen.policy.maximum_graze_days = kDefaultMaximumGrazeDays;
-  chosen.policy.minimum_spell_days = kDefaultMinimumSpellDays;
-  chosen.policy.supplement_me_mj_per_kg_dm = kDefaultSupplementMe;
+  chosen.policy.target_liveweight_gain_kg_per_day = target_gain_box_->value();
+  chosen.policy.maximum_graze_days = graze_days_box_->value();
+  chosen.policy.minimum_spell_days = spell_days_box_->value();
+  chosen.policy.supplement_me_mj_per_kg_dm = supplement_me_box_->value();
   chosen.policy.may_buy_feed = may_buy_box_->isChecked();
+  chosen.policy.preference =
+      static_cast<core::GrazingPreference>(preference_box_->currentData().toInt());
+  chosen.policy.floor_purchase =
+      static_cast<core::FloorPurchase>(floor_purchase_box_->currentData().toInt());
 
   // Gradients as a rise per metre travelled. A tenth is a 10% grade, which is
   // 5.7 degrees - rolling rather than steep, and about as much as a farm bike
@@ -270,7 +343,19 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
   if (policy != nullptr) {
     cover_floor_box_->setValue(policy->minimum_cover_kg_dm_per_ha);
     rotation_box_->setValue(policy->rotation_cover_threshold_kg_dm_per_ha);
+    target_gain_box_->setValue(policy->target_liveweight_gain_kg_per_day);
+    graze_days_box_->setValue(policy->maximum_graze_days);
+    spell_days_box_->setValue(policy->minimum_spell_days);
+    supplement_me_box_->setValue(policy->supplement_me_mj_per_kg_dm);
     may_buy_box_->setChecked(policy->may_buy_feed);
+    const int preference = preference_box_->findData(static_cast<int>(policy->preference));
+    if (preference >= 0) {
+      preference_box_->setCurrentIndex(preference);
+    }
+    const int floor = floor_purchase_box_->findData(static_cast<int>(policy->floor_purchase));
+    if (floor >= 0) {
+      floor_purchase_box_->setCurrentIndex(floor);
+    }
   }
 }
 
@@ -283,6 +368,13 @@ void SetupPanel::select_ground(int index) {
 QString SetupPanel::problem() const {
   if (scenario_box_->count() == 0) {
     return "There is no scenario to run.";
+  }
+  if (spell_days_box_->value() <= graze_days_box_->value()) {
+    return QString(
+               "A paddock is grazed for %1 days and rested for %2, so it would be grazed "
+               "again before the rest was over. That is not a rotation.")
+        .arg(graze_days_box_->value())
+        .arg(spell_days_box_->value());
   }
   if (cover_floor_box_->value() >= rotation_box_->value()) {
     return QString(
@@ -346,6 +438,12 @@ void SetupPanel::set_running(bool running) {
   liveweight_box_->setEnabled(!running);
   cover_floor_box_->setEnabled(!running);
   rotation_box_->setEnabled(!running);
+  target_gain_box_->setEnabled(!running);
+  graze_days_box_->setEnabled(!running);
+  spell_days_box_->setEnabled(!running);
+  supplement_me_box_->setEnabled(!running);
+  preference_box_->setEnabled(!running);
+  floor_purchase_box_->setEnabled(!running);
   may_buy_box_->setEnabled(!running);
 }
 

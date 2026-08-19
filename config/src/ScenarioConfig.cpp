@@ -80,6 +80,39 @@ BundleInput read_input(const toml::table& root, std::string_view section,
                           manifest_path, contents);
 }
 
+core::GrazingPreference grazing_preference_of(const std::string& text, const toml::table& where,
+                                              const std::string& path) {
+  if (text == "by_cover") {
+    return core::GrazingPreference::ByCover;
+  }
+  if (text == "prefer_rotation") {
+    return core::GrazingPreference::PreferRotation;
+  }
+  if (text == "always_set_stock") {
+    return core::GrazingPreference::AlwaysSetStock;
+  }
+  if (text == "follow_calendar") {
+    return core::GrazingPreference::FollowCalendar;
+  }
+  detail::throw_in(where, path,
+                   "unknown 'prefer' value '" + text +
+                       "'. Known values are: by_cover, prefer_rotation, always_set_stock, "
+                       "follow_calendar");
+}
+
+core::FloorPurchase floor_purchase_of(const std::string& text, const toml::table& where,
+                                      const std::string& path) {
+  if (text == "whole_demand") {
+    return core::FloorPurchase::WholeDemand;
+  }
+  if (text == "hold_at_floor") {
+    return core::FloorPurchase::HoldAtFloor;
+  }
+  detail::throw_in(
+      where, path,
+      "unknown 'at_the_floor' value '" + text + "'. Known values are: whole_demand, hold_at_floor");
+}
+
 core::GrazingSystem grazing_system_of(const std::string& name, const toml::table& table,
                                       const std::string& path) {
   if (name == "set_stocking") {
@@ -284,7 +317,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
         *management,
         {"minimum_cover_kg_dm_per_ha", "rotation_cover_threshold_kg_dm_per_ha",
          "target_liveweight_gain_kg_per_day", "maximum_graze_days", "minimum_spell_days",
-         "supplement_me_mj_per_kg_dm", "may_buy_feed"},
+         "supplement_me_mj_per_kg_dm", "may_buy_feed", "prefer", "at_the_floor"},
         manifest_path, "[management]");
 
     core::ManagementPolicy policy;
@@ -306,6 +339,11 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                                 policy.supplement_me_mj_per_kg_dm, manifest_path);
     policy.may_buy_feed =
         detail::optional_bool(*management, "may_buy_feed", policy.may_buy_feed, manifest_path);
+    policy.preference = grazing_preference_of(
+        detail::optional_string(*management, "prefer", "by_cover"), *management, manifest_path);
+    policy.floor_purchase =
+        floor_purchase_of(detail::optional_string(*management, "at_the_floor", "whole_demand"),
+                          *management, manifest_path);
 
     // The one contradiction worth refusing rather than running. A floor at or
     // above the threshold tells the farmer to start rotating only once the

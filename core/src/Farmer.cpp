@@ -23,6 +23,30 @@ std::string to_string(FeedPurchase::Reason reason) {
   return "unknown";
 }
 
+std::string to_string(GrazingPreference preference) {
+  switch (preference) {
+    case GrazingPreference::ByCover:
+      return "rotate when the cover can afford it";
+    case GrazingPreference::PreferRotation:
+      return "rotate wherever possible";
+    case GrazingPreference::AlwaysSetStock:
+      return "set stock all year";
+    case GrazingPreference::FollowCalendar:
+      return "follow the scenario's calendar";
+  }
+  return "unknown";
+}
+
+std::string to_string(FloorPurchase purchase) {
+  switch (purchase) {
+    case FloorPurchase::WholeDemand:
+      return "buy the whole demand and let the sward recover";
+    case FloorPurchase::HoldAtFloor:
+      return "graze down to the floor and buy the rest";
+  }
+  return "unknown";
+}
+
 std::string ManagementPolicy::validation_error() const {
   if (minimum_cover_kg_dm_per_ha <= 0.0) {
     return "the cover floor must be positive";
@@ -48,27 +72,50 @@ void Farmer::set_policy(ManagementPolicy policy) {
   policy_ = policy;
 }
 
-GrazingSystem Farmer::system_for(const Farm& farm) const {
-  // Rotation concentrates stock onto one paddock, so it needs a farm carrying
-  // enough to make that paddock worth standing on. When the farm is short, a
-  // farmer spreads out instead - which is set stocking, and is why the source
-  // names it for lambing, when demand is at its highest.
+double Farmer::mean_cover(const Farm& farm) {
   double total = 0.0;
   for (std::size_t paddock = 0; paddock < farm.paddocks().size(); ++paddock) {
     total += farm.paddock_cover_kg_dm_per_ha(paddock);
   }
-  const double mean =
-      farm.paddocks().empty() ? 0.0 : total / static_cast<double>(farm.paddocks().size());
+  return farm.paddocks().empty() ? 0.0 : total / static_cast<double>(farm.paddocks().size());
+}
 
-  return mean >= policy_.rotation_cover_threshold_kg_dm_per_ha ? GrazingSystem::Rotational
-                                                               : GrazingSystem::SetStocking;
+GrazingSystem Farmer::system_for(const Farm& farm, const Date& date) const {
+  const double mean = mean_cover(farm);
+
+  switch (policy_.preference) {
+    case GrazingPreference::AlwaysSetStock:
+      return GrazingSystem::SetStocking;
+
+    case GrazingPreference::PreferRotation:
+      // Held to while the sward can stand it. At the floor even a determined
+      // rotator spreads out, because concentrating stock on ground that is
+      // already at the line is how a sward gets taken below it.
+      return mean > policy_.minimum_cover_kg_dm_per_ha ? GrazingSystem::Rotational
+                                                       : GrazingSystem::SetStocking;
+
+    case GrazingPreference::FollowCalendar:
+      // The plan the scenario wrote down. It is a plan and not a promise: what
+      // the farmer will not allow still applies, and the feed buying below is
+      // what keeps it from becoming one.
+      return calendar_.empty() ? GrazingSystem::SetStocking : calendar_.rule_on(date).system;
+
+    case GrazingPreference::ByCover:
+    default:
+      // Rotation concentrates stock onto one paddock, so it needs a farm
+      // carrying enough to make that paddock worth standing on. When the farm
+      // is short, a farmer spreads out instead - which is set stocking, and is
+      // why the source names it for lambing, when demand is at its highest.
+      return mean >= policy_.rotation_cover_threshold_kg_dm_per_ha ? GrazingSystem::Rotational
+                                                                   : GrazingSystem::SetStocking;
+  }
 }
 
 Farmer::Day Farmer::manage(Farm& farm, const Date& date, const DietQuality& diet,
                            const std::vector<bool>& went_short,
                            std::vector<double>& supplement_kg_dm) {
   Day day;
-  day.chosen_system = system_for(farm);
+  day.chosen_system = system_for(farm, date);
 
   // Put the stock where the chosen system wants them. Under set stocking that
   // is the whole farm; under rotation it is one paddock each, moved on the
@@ -97,12 +144,7 @@ Farmer::Day Farmer::manage(Farm& farm, const Date& date, const DietQuality& diet
     return day;
   }
 
-  double farm_cover = 0.0;
-  for (std::size_t paddock = 0; paddock < farm.paddocks().size(); ++paddock) {
-    farm_cover += farm.paddock_cover_kg_dm_per_ha(paddock);
-  }
-  farm_cover =
-      farm.paddocks().empty() ? 0.0 : farm_cover / static_cast<double>(farm.paddocks().size());
+  const double farm_cover = mean_cover(farm);
   const bool at_the_floor = farm_cover <= policy_.minimum_cover_kg_dm_per_ha;
 
   for (std::size_t index = 0; index < farm.mobs().size(); ++index) {
@@ -127,12 +169,31 @@ Farmer::Day Farmer::manage(Farm& farm, const Date& date, const DietQuality& diet
       available_kg_dm += farm.paddock_offer_kg_dm(paddock);
     }
 
-    // At the floor the farmer stops asking the pasture for anything and feeds
-    // the mob entirely. Because bought feed substitutes for grazing rather than
-    // adding to it, buying the whole demand is what takes the grazing pressure
-    // off - which is the point of doing it.
+    // At the floor, how much the farmer still lets the mob take.
+    //
+    // WholeDemand asks the pasture for nothing, so the sward is left to grow
+    // back: bought feed substitutes for grazing rather than adding to it, and
+    // buying the lot is what takes the pressure off.
+    //
+    // HoldAtFloor lets the stock graze down to the line and buys the rest, so
+    // cover sits there instead of climbing away from it. What is left above the
+    // line is the cover over the floor across the paddocks the mob is on - and
+    // never more than the sward would have offered anyway, because the residual
+    // the plants keep is not the farmer's to spend.
     if (at_the_floor) {
-      available_kg_dm = 0.0;
+      if (policy_.floor_purchase == FloorPurchase::WholeDemand) {
+        available_kg_dm = 0.0;
+      } else {
+        double above_the_floor_kg_dm = 0.0;
+        for (const std::size_t paddock : farm_mob.paddocks) {
+          const double over =
+              farm.paddock_cover_kg_dm_per_ha(paddock) - policy_.minimum_cover_kg_dm_per_ha;
+          if (over > 0.0) {
+            above_the_floor_kg_dm += over * farm.paddocks()[paddock].area_hectares();
+          }
+        }
+        available_kg_dm = std::min(available_kg_dm, above_the_floor_kg_dm);
+      }
     }
 
     const double shortfall_kg_dm = demand_kg_dm - available_kg_dm;

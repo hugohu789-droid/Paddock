@@ -273,6 +273,13 @@ std::optional<std::pair<double, double>> MapWindow::ground_range() const {
   return std::make_pair(lowest, highest);
 }
 
+bool MapWindow::save_panel_screenshot(const std::string& path) {
+  if (setup_ == nullptr) {
+    return false;
+  }
+  return setup_->grab().save(QString::fromStdString(path), "PNG");
+}
+
 bool MapWindow::save_screenshot(const std::string& path) {
   vtkRenderWindow* window = view_->renderWindow();
   if (window == nullptr) {

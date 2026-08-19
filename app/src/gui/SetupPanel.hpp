@@ -123,6 +123,12 @@ class SetupPanel : public QWidget {
   QDoubleSpinBox* liveweight_box_ = nullptr;
   QDoubleSpinBox* cover_floor_box_ = nullptr;
   QDoubleSpinBox* rotation_box_ = nullptr;
+  QDoubleSpinBox* target_gain_box_ = nullptr;
+  QSpinBox* graze_days_box_ = nullptr;
+  QSpinBox* spell_days_box_ = nullptr;
+  QDoubleSpinBox* supplement_me_box_ = nullptr;
+  QComboBox* preference_box_ = nullptr;
+  QComboBox* floor_purchase_box_ = nullptr;
   QCheckBox* may_buy_box_ = nullptr;
   QPushButton* run_button_ = nullptr;
   QPushButton* report_button_ = nullptr;
