@@ -106,6 +106,37 @@ TEST(ScenarioBundleTest, TheShippedBundleLoadsWithItsHashesIntact) {
   }
 }
 
+// A manifest may say its ground is a file, and this is the test that says the
+// section is reachable at all.
+//
+// It was not. `[terrain]` was parsed and never added to the manifest's list of
+// permitted top-level keys, so every bundle carrying one was refused with
+// "unknown key 'terrain'" - and nothing caught it, because the tests that
+// exercised terrain all set it on a bundle in memory and never parsed one from
+// a file. A feature reachable only from a test is a feature nobody has.
+TEST(ScenarioBundleTest, ABundleMayTakeItsGroundFromASnapshot) {
+  const ScenarioBundle bundle =
+      load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/lincoln-lurdf");
+
+  EXPECT_EQ(bundle.terrain.kind, TerrainSpec::Kind::Snapshot);
+  EXPECT_FALSE(bundle.terrain.is_flat());
+  EXPECT_EQ(bundle.terrain.elevation_path, "../../snapshots/lincoln-dem-1m.tiff");
+  EXPECT_EQ(bundle.terrain.elevation_sha256.size(), 64U);
+
+  // Loading names the file and does not open it: the snapshot is tens of
+  // megabytes, is not committed, and most commands never touch it.
+  EXPECT_EQ(bundle.elevation, nullptr);
+}
+
+// The other kinds, which the same allow-list has to admit.
+TEST(ScenarioBundleTest, TheShippedBundlesSayTheirGroundIsFlat) {
+  for (const char* name : {"canterbury-baseline", "canterbury-grazed"}) {
+    const ScenarioBundle bundle =
+        load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
+    EXPECT_TRUE(bundle.terrain.is_flat()) << name;
+  }
+}
+
 TEST(ScenarioBundleTest, TheBundleRunsAndItsBudgetsClose) {
   const ScenarioBundle bundle = load_scenario(shipped_bundle());
   core::Farmlet farmlet = bundle.make_farmlet();

@@ -33,7 +33,14 @@ void print_usage() {
             << "                 no one to click anything\n"
             << "  --screenshot   Write that frame to a PNG and exit. Implies --smoke,\n"
             << "                 and is how the map gets looked at without a person\n"
-            << "                 at the screen\n";
+            << "                 at the screen\n"
+            << "  --ground N     Run over the panel's Nth ground: 0 flat, 1 facing\n"
+            << "                 north, 2 facing south, 3 rolling\n"
+            << "  --terrain      Show the three-dimensional view rather than the\n"
+            << "                 flat map\n"
+            << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
+            << "                 on screen, because exaggeration makes every slope look\n"
+            << "                 steeper than it is\n";
 }
 
 /// Failure reporting that cannot itself fail, for the handlers in main. A throw
@@ -95,10 +102,36 @@ int main(int argc, char** argv) {
                                    data_directory.absolutePath().toStdString());
     window.show();
 
+    const auto ground_flag = std::find(args.begin(), args.end(), "--ground");
+    const bool terrain = std::find(args.begin(), args.end(), "--terrain") != args.end();
+    const bool heights_given = std::find(args.begin(), args.end(), "--heights") != args.end();
+    if (ground_flag != args.end() || terrain || heights_given) {
+      int ground = 0;
+      if (ground_flag != args.end() && std::next(ground_flag) != args.end()) {
+        ground = std::stoi(std::string(*std::next(ground_flag)));
+      }
+      int heights = 1;
+      const auto heights_flag = std::find(args.begin(), args.end(), "--heights");
+      if (heights_flag != args.end() && std::next(heights_flag) != args.end()) {
+        heights = std::stoi(std::string(*std::next(heights_flag)));
+      }
+      window.show_configuration(ground, terrain, heights);
+    }
+
     if (smoke) {
+      if (const std::string& failure = window.last_failure(); !failure.empty()) {
+        std::cerr << "paddock-gui: " << failure << '\n';
+        return 1;
+      }
       window.render_once();
       std::cout << "paddock-gui: rendered " << window.day_count() << " days of " << bundle.name
                 << '\n';
+      if (const auto ground = window.ground_range(); ground.has_value()) {
+        std::cout << "paddock-gui: ground " << ground->first << " to " << ground->second
+                  << " m above sea level\n";
+      } else {
+        std::cout << "paddock-gui: ground modelled flat\n";
+      }
       if (!screenshot.empty()) {
         if (!window.save_screenshot(screenshot)) {
           std::cerr << "paddock-gui: could not write " << screenshot << '\n';

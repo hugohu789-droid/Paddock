@@ -22,9 +22,15 @@
       ]
     },
     "gis": {
-      "description": "Geospatial input/output: DEM, cadastre, waterways (M3)",
+      "description": "Geospatial input/output: DEM, cadastre, waterways (M3). libtiff carries the LERC codec because that is what LINZ compresses its 1 m elevation with; without it GDAL reports 'LERC compression support is not configured' and the tile will not open at all. The codec belongs to tiff rather than to gdal - gdal's own lerc feature is for its standalone LERC and MRF drivers, and does not reach TIFF compression.",
       "dependencies": [
         "gdal",
+        {
+          "name": "tiff",
+          "features": [
+            "lerc"
+          ]
+        },
         "proj",
         "geos"
       ]

@@ -71,6 +71,11 @@ class SetupPanel : public QWidget {
   /// and having two places that can fail at it would mean two ways of saying so.
   void adopt_bundle(const std::string& directory, int head, double liveweight_kg);
 
+  /// Chooses the ground by its position in the list, for the screenshot path.
+  /// A view of terrain that only a person clicking can reach is a view nothing
+  /// can check.
+  void select_ground(int index);
+
   /// Why this configuration cannot be run, or empty if it can.
   ///
   /// Only genuine contradictions are errors. A stocking rate that looks high is

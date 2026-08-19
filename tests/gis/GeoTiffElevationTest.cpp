@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -211,18 +212,48 @@ TEST(GeoTiffElevationTest, AMissingFileIsReportedWithSomethingToDoAboutIt) {
 
   EXPECT_FALSE(status.ok);
   EXPECT_NE(status.message.find("no/such/dem.tif"), std::string::npos) << status.message;
-  EXPECT_NE(status.message.find("linz-snapshot.py"), std::string::npos) << status.message;
+  EXPECT_NE(status.message.find("nz-elevation-snapshot.py"), std::string::npos) << status.message;
 }
 
 // The licence is not decoration: LINZ data is CC BY 4.0 and attribution is a
 // condition of using it, so it travels with the source.
-TEST(GeoTiffElevationTest, TheDescriptionCarriesTheLinzAttribution) {
+//
+// What it must NOT do is name a licensor, because this class does not know one.
+// LINZ elevation is open data whose licensor differs by capture - Environment
+// Canterbury for the Canterbury LiDAR - and the file that knows is the
+// provenance written beside the snapshot.
+TEST(GeoTiffElevationTest, TheDescriptionCarriesTheLicenceAndPointsAtTheProvenance) {
   const GeoTiffElevationSource source("anything.tif");
 
   const core::SourceDescription description = source.describe();
 
-  EXPECT_NE(description.licence.find("LINZ Data Service"), std::string::npos);
   EXPECT_NE(description.licence.find("Creative Commons Attribution 4.0"), std::string::npos);
+  EXPECT_NE(description.licence.find("provenance.json"), std::string::npos)
+      << "the description should say where the capture's own licensor is recorded";
+}
+
+// A file that is missing and a file that cannot be decoded both fail to open,
+// and they need different answers. Telling somebody to fetch a snapshot they
+// already have sends them the wrong way, which is exactly what happened when
+// the first LINZ tile turned out to be LERC compressed.
+TEST(GeoTiffElevationTest, AFileThatIsThereAndUnreadableIsNotReportedAsMissing) {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "paddock-not-a-geotiff.tif";
+  {
+    std::ofstream file(path, std::ios::binary);
+    file << "this is not a GeoTIFF";
+  }
+
+  const GeoTiffElevationSource source(path.string());
+  const core::ConnectionStatus status = source.test_connection();
+  std::filesystem::remove(path);
+
+  EXPECT_FALSE(status.ok);
+  EXPECT_EQ(status.message.find("is not there"), std::string::npos)
+      << "a file that exists was reported as missing: " << status.message;
+  EXPECT_NE(status.message.find("will not open"), std::string::npos) << status.message;
+  EXPECT_NE(status.message.find("LERC"), std::string::npos)
+      << "the message should name the compression that caused this in practice";
 }
 
 }  // namespace

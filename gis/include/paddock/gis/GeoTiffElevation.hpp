@@ -15,7 +15,7 @@ namespace paddock::gis {
 /// Elevation read from a local GeoTIFF, typically a LINZ DEM snapshot.
 ///
 /// The file adapter of the three CLAUDE.md asks for. It holds no credential and
-/// makes no network call: fetching is a separate step (scripts/linz-snapshot.py)
+/// makes no network call: fetching is a separate step (scripts/nz-elevation-snapshot.py)
 /// that writes the file and records its hash, so a simulation reads only what is
 /// already on disk. See docs/adr/0012-linz-sources.md.
 ///

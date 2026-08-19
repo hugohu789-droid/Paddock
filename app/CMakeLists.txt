@@ -55,6 +55,14 @@ if(PADDOCK_BUILD_GUI)
   target_link_libraries(paddock-gui PRIVATE Paddock::config Paddock::viz_vtk Qt6::Widgets
                                             ${VTK_LIBRARIES} Paddock::project_options)
 
+  # A build with the geospatial stack can draw a farm on measured ground; one
+  # without still runs, and refuses a scenario whose terrain is a file rather
+  # than quietly flattening it.
+  if(PADDOCK_BUILD_GIS)
+    target_link_libraries(paddock-gui PRIVATE Paddock::gis)
+    target_compile_definitions(paddock-gui PRIVATE PADDOCK_WITH_GIS)
+  endif()
+
   # VTK's factories are registered by generated code; without this the render
   # window has no OpenGL implementation and the map is a blank rectangle.
   vtk_module_autoinit(TARGETS paddock-gui MODULES ${VTK_LIBRARIES})

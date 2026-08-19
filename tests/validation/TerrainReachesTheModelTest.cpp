@@ -24,7 +24,9 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 #include <paddock/config/ScenarioRun.hpp>
@@ -151,6 +153,64 @@ TEST(TerrainReachesTheModelTest, TheSameFarmOnASlopeIsNotTheTerraceItUsedToBe) {
 
   GTEST_LOG_(INFO) << "bought feed: flat " << flat.bought_feed_kg_dm() << " kg DM, south slope "
                    << steep.bought_feed_kg_dm() << " kg DM";
+}
+
+// A bundle may take its ground from a file instead of a formula.
+//
+// config records the reference and never opens it: reading a GeoTIFF needs
+// GDAL, GDAL lives in gis/, and config must not depend on it. So the manifest
+// names the file and whoever can read it supplies the source - the same shape
+// as `weather`, and the same shape `[boundary] kind = "geopackage"` already
+// uses for a cadastre.
+TEST(TerrainReachesTheModelTest, ASnapshotBundleRecordsTheFileWithoutOpeningIt) {
+  ScenarioBundle bundle = load_scenario(bundle_path());
+  bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
+  bundle.terrain.elevation_path = "../../snapshots/lincoln-dem-1m.tiff";
+  bundle.terrain.elevation_sha256 = "not checked here";
+
+  EXPECT_FALSE(bundle.terrain.is_flat());
+  EXPECT_EQ(bundle.elevation, nullptr) << "loading a bundle must not open its elevation file";
+}
+
+// And a bundle that names a file nobody can read must say so rather than run.
+//
+// The failure this refuses is the quiet one: a farm that asked for hills,
+// found no reader, and went round the year as a terrace with every report
+// saying the ground was a snapshot.
+TEST(TerrainReachesTheModelTest, ASnapshotWithNoReaderRefusesToRunFlat) {
+  ScenarioBundle bundle = load_scenario(bundle_path());
+  bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
+  bundle.terrain.elevation_path = "../../snapshots/lincoln-dem-1m.tiff";
+  bundle.terrain.elevation_sha256 = "not checked here";
+
+  EXPECT_THROW(static_cast<void>(bundle.make_elevation()), std::runtime_error);
+}
+
+// The seam itself, exercised without GDAL. A synthetic source stands in for the
+// GeoTIFF reader: what is checked is that a supplied source is asked for the
+// grid's own extent and resolution, which is the part config is responsible for
+// and the part that would put a farm on the wrong ground if it were wrong.
+TEST(TerrainReachesTheModelTest, ASuppliedSourceIsSampledOverTheGrid) {
+  ScenarioBundle bundle = load_scenario(bundle_path());
+  bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
+  bundle.terrain.elevation_path = "stand-in";
+  bundle.terrain.elevation_sha256 = "stand-in";
+
+  core::SyntheticSurface surface;
+  surface.gradient_east = 0.0;
+  surface.gradient_north = -0.10;
+  surface.undulation_amplitude_m = 0.0;
+  bundle.elevation = std::make_shared<core::SyntheticElevationSource>(surface);
+
+  const std::optional<core::Raster<double>> ground = bundle.make_elevation();
+  if (!bundle.grid.has_value() || !ground.has_value()) {
+    FAIL() << "a bundle with a supplied elevation source returned no ground";
+  }
+  const GridSpec& spec = *bundle.grid;
+  EXPECT_EQ(ground->cols(), spec.cols);
+  EXPECT_EQ(ground->rows(), spec.rows);
+  EXPECT_DOUBLE_EQ(ground->transform().cell_size, spec.cell_size_m);
+  EXPECT_DOUBLE_EQ(ground->transform().origin_easting, spec.origin_easting);
 }
 
 // Conservation does not care what shape the ground is. If a slope could make

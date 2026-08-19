@@ -52,6 +52,17 @@
       }
     },
     {
+      "name": "desktop",
+      "inherits": "release",
+      "displayName": "Desktop: map, terrain and the geospatial stack",
+      "description": "The GUI with GDAL behind it, so a scenario whose terrain is a LiDAR snapshot can be drawn on the ground it names.",
+      "cacheVariables": {
+        "PADDOCK_BUILD_GUI": "ON",
+        "PADDOCK_BUILD_GIS": "ON",
+        "VCPKG_MANIFEST_FEATURES": "tests;gis"
+      }
+    },
+    {
       "name": "ci-gui",
       "inherits": "ci-core",
       "displayName": "CI: Qt6 + VTK map view (Ubuntu 26.04)",
@@ -129,6 +140,10 @@
     {
       "name": "ci-gis",
       "configurePreset": "ci-gis"
+    },
+    {
+      "name": "desktop",
+      "configurePreset": "desktop"
     }
   ],
   "testPresets": [

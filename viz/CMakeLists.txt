@@ -31,7 +31,7 @@ if(PADDOCK_BUILD_GUI)
                RenderingOpenGL2
                GUISupportQt)
 
-  add_library(paddock_viz_vtk STATIC src/MapScene.cpp)
+  add_library(paddock_viz_vtk STATIC src/ColourTable.cpp src/MapScene.cpp src/TerrainScene.cpp)
   add_library(Paddock::viz_vtk ALIAS paddock_viz_vtk)
 
   target_link_libraries(paddock_viz_vtk PUBLIC Paddock::viz ${VTK_LIBRARIES})

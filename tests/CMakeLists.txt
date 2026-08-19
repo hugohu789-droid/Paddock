@@ -150,7 +150,7 @@ endif()
 # data on construction and fills it in show(), and only wants a render window
 # when somebody wants pixels.
 if(PADDOCK_BUILD_GUI)
-  add_executable(paddock_map_scene_tests viz/MapSceneTest.cpp)
+  add_executable(paddock_map_scene_tests viz/MapSceneTest.cpp viz/TerrainSceneTest.cpp)
 
   target_link_libraries(paddock_map_scene_tests PRIVATE Paddock::viz_vtk GTest::gtest_main
                                                         Paddock::project_options)

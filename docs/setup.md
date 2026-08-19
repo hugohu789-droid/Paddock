@@ -151,7 +151,7 @@ running the three commands above before merging anything that touches `gis/`.
 There is a `GIS Windows (vcpkg, on request)` job in the Actions tab for when
 that is not enough. See [ADR 0011](adr/0011-gdal-and-proj.md).
 
-Three things worth knowing before you spend an afternoon on them:
+Four things worth knowing before you spend an afternoon on them:
 
 - **GDAL 3.0 and PROJ 6.0 are floors, and configuration fails below them.**
   Ubuntu 24.04 ships GDAL 3.8.4, Ubuntu 26.04 ships 3.12.2; anything older than
@@ -183,6 +183,71 @@ Three things worth knowing before you spend an afternoon on them:
   the (easting, northing) most New Zealand data is written in, unless the
   traditional order is requested. This produces a farm in the wrong place
   rather than an error.
+- **LINZ elevation is LERC compressed, and libtiff needs that codec.** Without
+  it GDAL will not open a 1 m DEM tile at all:
+
+  ```
+  Warning 1: ...: LERC compression support is not configured
+  ERROR 1: ...: Cannot open TIFF file due to missing codec LERC.
+  ```
+
+  The codec belongs to **tiff**, not to gdal. `gdal[lerc]` enables GDAL's own
+  LERC and MRF drivers and does not reach TIFF compression, which is a wrong
+  turn worth not repeating. The `gis` feature in `vcpkg.json` asks for
+  `tiff[lerc]`; on Linux and macOS the distribution's libtiff already carries
+  it. Adding the feature to an existing vcpkg install rebuilds GDAL and its
+  dependents, which took 46 minutes here:
+
+  ```bash
+  vcpkg install "tiff[core,lerc]:x64-windows" --recurse
+  ```
+
+## Both at once: the terrain view
+
+A scenario whose `[terrain]` is a LiDAR snapshot needs the GUI to draw it and
+GDAL to read it, and no preset had both until `desktop`:
+
+```bash
+cmake --preset desktop -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x;/path/to/vtk"
+cmake --build --preset desktop
+./build/desktop/bin/paddock-gui data/scenarios/lincoln-lurdf --terrain
+```
+
+On Windows, add the same two flags the `gis` section explains - the vcpkg
+toolchain file and `-DVCPKG_MANIFEST_MODE=OFF` - so the build takes GDAL from
+an install that already exists rather than rebuilding it into `build/desktop`.
+The preset cannot carry them because they name paths that belong to a machine
+rather than to the project.
+
+A build without the geospatial stack still runs `lincoln-lurdf` up to the point
+where it needs the ground, and then refuses it by name. That is deliberate: a
+farm quietly running flat when its manifest says otherwise is the failure worth
+preventing.
+
+The scenario needs the elevation snapshot, which is not committed:
+
+```bash
+python scripts/nz-elevation-snapshot.py --lon 172.470 --lat -43.641 \
+  --collection canterbury/selwyn_2023 --out data/snapshots/lincoln-dem-1m.tiff
+```
+
+That needs no API key - LINZ publishes elevation as open data. The bundle
+records the tile's SHA-256 and the application checks it before reading, so a
+different capture is refused rather than quietly substituted.
+
+Two flags exist for looking at this without a person at the screen, and both
+are also how it gets checked:
+
+```bash
+paddock-gui <bundle> --terrain --heights 5 --screenshot ground.png
+```
+
+`--heights` stretches the terrain, and the factor stays on screen because
+exaggeration makes every slope look steeper than it is. It is worth having on
+LURDF: the ground there falls 6.2 m across 900 m, which drawn true to scale
+looks flat, because the Canterbury Plains are. The smoke run prints the
+elevation range for the same reason - real ground and a formula look identical
+when both are level, and two numbers tell them apart.
 
 ## The gates
 
