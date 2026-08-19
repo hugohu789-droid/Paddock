@@ -10,6 +10,7 @@
 #include <vtkCellArray.h>
 #include <vtkPoints.h>
 
+#include <paddock/core/Distributions.hpp>
 #include <paddock/viz/MobMarkers.hpp>
 
 namespace paddock::viz {
@@ -103,8 +104,6 @@ std::vector<core::Point2D> scatter_within(const core::Polygon& paddock, std::siz
   // the model had computed.
   std::mt19937_64 generator((static_cast<std::uint64_t>(paddock_index) << 8U) ^
                             static_cast<std::uint64_t>(kind) ^ 0x9E3779B97F4A7C15ULL);
-  std::uniform_real_distribution<double> across(area.min_easting, area.max_easting);
-  std::uniform_real_distribution<double> along(area.min_northing, area.max_northing);
 
   // Rejection sampling against the real boundary, so no animal stands outside
   // its own fence. Capped so an awkward polygon cannot spin here for ever; a
@@ -114,7 +113,13 @@ std::vector<core::Point2D> scatter_within(const core::Polygon& paddock, std::siz
   placed.reserve(static_cast<std::size_t>(head));
   for (int attempt = 0;
        attempt < attempts_allowed && placed.size() < static_cast<std::size_t>(head); ++attempt) {
-    const core::Point2D candidate{across(generator), along(generator)};
+    // core::uniform rather than the standard library's uniform deviate: those
+    // are not specified to give the same sequence across implementations (ADR
+    // 0007), so the same flock would stand in different places on Windows and
+    // on Linux. "Deterministic" has to mean across machines, or a screenshot
+    // taken on one is not a picture of what another draws.
+    const core::Point2D candidate{core::uniform(generator, area.min_easting, area.max_easting),
+                                  core::uniform(generator, area.min_northing, area.max_northing)};
     if (paddock.contains(candidate)) {
       placed.push_back(candidate);
     }
