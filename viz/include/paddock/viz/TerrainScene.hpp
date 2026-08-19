@@ -211,7 +211,23 @@ class TerrainScene {
   vtkNew<vtkVolume> cloud_volume_;
   vtkNew<vtkPiecewiseFunction> cloud_opacity_;
   vtkNew<vtkColorTransferFunction> cloud_colour_;
+  /// The farm the density field was built over.
+  ///
+  /// **"Built once" means once per farm, not once per session.** Not rebuilding
+  /// it between days is the point - the series carries no cloud field, so cloud
+  /// that rearranged itself overnight would be showing weather nobody recorded.
+  /// Not rebuilding it between FARMS was a bug: the sun, the rain and the wind
+  /// are placed every frame and moved to the new farm, while the cloud stayed
+  /// over the old one, which for the two shipped farms is thirteen kilometres
+  /// away.
+  double cloud_built_east_ = 0.0;
+  double cloud_built_north_ = 0.0;
+  double cloud_built_span_ = 0.0;
+  double cloud_built_top_ = 0.0;
   bool cloud_built_ = false;
+
+  /// Whether the density field was built over the farm now being drawn.
+  [[nodiscard]] bool cloud_matches_farm() const noexcept;
 
   /// Builds the density field. Called once, on the first day drawn.
   void build_cloud_density();

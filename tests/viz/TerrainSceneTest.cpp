@@ -245,6 +245,49 @@ TEST(TerrainSceneTest, RainDarkensTheCloudAndDryCloudStaysPale) {
   EXPECT_GT(core_brightness(), dry);
 }
 
+// **The cloud follows the farm, and stays put between days.**
+//
+// Both halves matter and they pull opposite ways. The density field is built
+// once so that cloud does not rearrange itself overnight - the series carries
+// no cloud field, and cloud that wandered would be showing weather nobody
+// recorded. But "once" has to mean once per farm: the sun, the rain and the
+// wind are placed every frame, so a cloud that never moved was left over the
+// previous farm, which for the two shipped farms is thirteen kilometres away.
+TEST(TerrainSceneTest, TheCloudMovesToTheNewFarmButNotBetweenDays) {
+  TerrainScene scene;
+  const auto cloud_centre = [&scene]() {
+    std::array<double, 6> bounds{};
+    scene.cloud()->GetBounds(bounds.data());
+    return std::make_pair((bounds[0] + bounds[1]) / 2.0, (bounds[2] + bounds[3]) / 2.0);
+  };
+
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 6.0);
+  const auto first = cloud_centre();
+
+  // A different day on the same farm: the cloud must not budge.
+  scene.show_sky(-43.64, 172, 14.0, 0.30, 2.0);
+  const auto same_farm = cloud_centre();
+  EXPECT_DOUBLE_EQ(first.first, same_farm.first);
+  EXPECT_DOUBLE_EQ(first.second, same_farm.second);
+
+  // A farm ten kilometres away: the cloud has to come with it.
+  core::GeoTransform elsewhere;
+  elsewhere.origin_easting = kOriginEasting + 10000.0;
+  elsewhere.origin_northing = kOriginNorthing + 10000.0;
+  elsewhere.cell_size = kCellSize;
+  const core::Raster<double> field(8, 6, elsewhere, 2500.0);
+  core::Raster<double> ground(8, 6, elsewhere, 100.0);
+  scene.show(field, ground, ColourScale(Ramp::PastureGreen, 0.0, 5000.0), "cover");
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 6.0);
+  const auto moved = cloud_centre();
+
+  EXPECT_NEAR(moved.first - first.first, 10000.0, 1.0)
+      << "the cloud stayed over the farm that was there before";
+  EXPECT_NEAR(moved.second - first.second, 10000.0, 1.0);
+}
+
 // **The cloud can be taken away.** A density field is translucent by
 // construction, and anything translucent between the camera and the paddocks
 // shifts a colour the reader is meant to match against the legend. Turning the

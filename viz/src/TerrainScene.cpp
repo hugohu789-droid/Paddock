@@ -512,6 +512,18 @@ void append_ball(const std::array<double, 3>& centre, double radius, int resolut
 
 }  // namespace
 
+bool TerrainScene::cloud_matches_farm() const noexcept {
+  if (!cloud_built_) {
+    return false;
+  }
+  // Exact comparison. These are read from the manifest and passed through
+  // rather than computed, so two farms are the same farm when their extents
+  // are the same numbers - and a tolerance here would only invent a distance
+  // below which one farm's cloud may hang over another's.
+  return cloud_built_east_ == sky_east_ && cloud_built_north_ == sky_north_ &&
+         cloud_built_span_ == std::max(sky_width_, sky_height_) && cloud_built_top_ == sky_top_;
+}
+
 void TerrainScene::build_cloud_density() {
   // 128 x 128 x 64 voxels over the sky above the farm - a million of them,
   // which is plenty for a farm and cheap enough to build once.
@@ -581,6 +593,10 @@ void TerrainScene::build_cloud_density() {
     }
   }
   cloud_density_->Modified();
+  cloud_built_east_ = sky_east_;
+  cloud_built_north_ = sky_north_;
+  cloud_built_span_ = std::max(sky_width_, sky_height_);
+  cloud_built_top_ = sky_top_;
   cloud_built_ = true;
 }
 
@@ -669,7 +685,7 @@ void TerrainScene::show_sky(double latitude_degrees, int day_of_year, double sol
   // lumpy - is a drawing choice and says so in CloudLayer.
   const CloudLayer layer{std::clamp((0.75 - clearness) / 0.5, 0.0, 1.0), cloud_height, span * 0.22};
   {
-    if (!cloud_built_) {
+    if (!cloud_matches_farm()) {
       build_cloud_density();
     }
 
