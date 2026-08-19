@@ -25,6 +25,7 @@
 #include <paddock/core/FarmletGrid.hpp>
 #include <paddock/core/Weather.hpp>
 
+#include "../AttachElevation.hpp"
 #include "ReportDialog.hpp"
 
 namespace paddock::app {
@@ -180,8 +181,10 @@ void MapWindow::start_run() {
   setup_->set_running(true);
   QApplication::setOverrideCursor(Qt::WaitCursor);
 
+  last_failure_.clear();
   try {
     config::ScenarioBundle bundle = config::load_scenario(choices.scenario_directory);
+    attach_elevation(bundle, choices.scenario_directory);
     if (!bundle.grid.has_value()) {
       throw std::runtime_error("This scenario has no [grid] section, so there is no map to draw.");
     }
@@ -199,9 +202,14 @@ void MapWindow::start_run() {
       }
     }
 
-    // The ground the run is over. Like the stock, it is a thing a farmer picks
-    // and not a thing the bundle hashes.
-    bundle.terrain = choices.terrain;
+    // The ground the run is over. Like the stock, it is a thing a farmer picks -
+    // except when the bundle names a measured surface of its own, which is not
+    // a preference to be overridden. The panel offers formulae; a snapshot is a
+    // survey, and swapping one for the other would quietly replace the ground
+    // with an invention.
+    if (bundle.terrain.kind != config::TerrainSpec::Kind::Snapshot) {
+      bundle.terrain = choices.terrain;
+    }
 
     clear_series();
     // The ground this run is over, taken once. Empty for flat, which is what
@@ -228,6 +236,7 @@ void MapWindow::start_run() {
     clear_series();
     last_run_.reset();
     adopt_series();
+    last_failure_ = error.what();
     setup_->show_failure(QString::fromUtf8(error.what()));
   }
 
@@ -248,6 +257,19 @@ void MapWindow::open_report() {
       QString::fromStdString(last_bundle_->name + "-report.md"), this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->show();
+}
+
+std::optional<std::pair<double, double>> MapWindow::ground_range() const {
+  if (!elevation_.has_value() || elevation_->empty()) {
+    return std::nullopt;
+  }
+  double lowest = std::numeric_limits<double>::max();
+  double highest = std::numeric_limits<double>::lowest();
+  for (const double height : elevation_->values()) {
+    lowest = std::min(lowest, height);
+    highest = std::max(highest, height);
+  }
+  return std::make_pair(lowest, highest);
 }
 
 bool MapWindow::save_screenshot(const std::string& path) {
@@ -271,11 +293,15 @@ bool MapWindow::save_screenshot(const std::string& path) {
   return writer->GetErrorCode() == 0;
 }
 
-void MapWindow::show_configuration(int ground, bool terrain) {
+void MapWindow::show_configuration(int ground, bool terrain, int heights) {
   setup_->select_ground(ground);
   start_run();
   if (terrain) {
     view_box_->setCurrentIndex(1);
+  }
+  const int index = height_box_->findData(heights);
+  if (index >= 0) {
+    height_box_->setCurrentIndex(index);
   }
 }
 

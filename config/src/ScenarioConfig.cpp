@@ -117,7 +117,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
   const toml::table root = detail::parse_file(manifest_path);
   detail::reject_unknown_keys(root,
                               {"scenario", "run", "weather", "soil", "sward", "initial_state",
-                               "grid", "mob", "grazing_period"},
+                               "grid", "terrain", "mob", "grazing_period"},
                               manifest_path, "the manifest");
 
   const toml::table& scenario = detail::require_table(root, "scenario", manifest_path);

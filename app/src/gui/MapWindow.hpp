@@ -71,7 +71,23 @@ class MapWindow : public QMainWindow {
   /// path. `ground` indexes the panel's ground list; `terrain` asks for the
   /// three-dimensional view, which is ignored when the run was over flat
   /// ground because there would be nothing to draw.
-  void show_configuration(int ground, bool terrain);
+  void show_configuration(int ground, bool terrain, int heights = 1);
+
+  /// Why the last run failed, or empty if it did not.
+  ///
+  /// The panel shows this to a person. A headless run has no person, and used
+  /// to report a failed run as "rendered 0 days" followed by VTK complaining
+  /// about an empty pipeline - which says that something went wrong and
+  /// nothing about what.
+  [[nodiscard]] const std::string& last_failure() const noexcept { return last_failure_; }
+
+  /// The elevation range of the ground the last run was over, in metres, or
+  /// empty when it was over flat ground.
+  ///
+  /// Reported by the smoke run because a picture cannot show it. Ground drawn
+  /// from a LiDAR snapshot and ground drawn from a formula look identical when
+  /// both are nearly level, and two numbers separate them.
+  [[nodiscard]] std::optional<std::pair<double, double>> ground_range() const;
 
   /// Writes the current frame to a PNG.
   ///
@@ -188,6 +204,7 @@ class MapWindow : public QMainWindow {
   std::optional<config::ScenarioBundle> last_bundle_;
   core::ManagementPolicy last_policy_;
   bool last_run_had_stock_ = false;
+  std::string last_failure_;
 
   std::string data_directory_;
 
