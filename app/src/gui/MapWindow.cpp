@@ -26,6 +26,7 @@
 
 #include <paddock/config/ScenarioReport.hpp>
 #include <paddock/core/FarmletGrid.hpp>
+#include <paddock/core/Solar.hpp>
 #include <paddock/core/Weather.hpp>
 
 #include "../AttachElevation.hpp"
@@ -111,6 +112,9 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   date_label_->setMinimumWidth(200);
   summary_label_ = new QLabel(this);
 
+  weather_label_ = new QLabel(this);
+  weather_label_->setTextFormat(Qt::RichText);
+
   view_box_ = new QComboBox(this);
   view_box_->addItem("Flat map", 0);
   view_box_->addItem("Terrain", 1);
@@ -134,6 +138,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   controls->addWidget(date_label_);
 
   auto* layout = new QVBoxLayout;
+  layout->addWidget(weather_label_);
   layout->addWidget(view_, 1);
   layout->addLayout(controls);
   layout->addWidget(summary_label_);
@@ -246,6 +251,10 @@ void MapWindow::start_run() {
 
     last_policy_ = choices.policy;
     last_bundle_ = bundle;
+    latitude_degrees_ = bundle.latitude_degrees;
+    if (last_run_.has_value()) {
+      weather_ = last_run_->weather;
+    }
     adopt_series();
     if (last_run_.has_value()) {
       setup_->show_results(*last_run_, last_run_had_stock_);
@@ -362,6 +371,7 @@ void MapWindow::change_exaggeration(int index) {
 }
 
 void MapWindow::clear_series() {
+  weather_.clear();
   cover_.clear();
   soil_water_.clear();
   water_stress_.clear();
@@ -486,6 +496,7 @@ void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle) {
     grid.step(day, &summary.ledger);
     keep_day(grid, day.date.to_iso_string());
     summary.dates.push_back(day.date);
+    summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(grid.mean_cover_kg_dm());
   }
 
@@ -715,6 +726,27 @@ void MapWindow::refresh() {
       break;
   }
 
+  // The day's sky, and the sun that lit it.
+  //
+  // 14:00 solar time, every day. The model has no hours - a DailyWeather is a
+  // day's totals - so a single hour has to stand for the whole of it, and this
+  // one earns the job: over New Zealand the sun is above the horizon at 2 pm on
+  // every day of the year (17.5 degrees at midwinter, 58.2 at midsummer for
+  // Lincoln), and it sits in the north-west rather than due north, so the
+  // ground has a lit side and a shaded one. At solar noon the sun is exactly
+  // north and the relief flattens out.
+  const bool have_weather = day < weather_.size();
+  const double clearness =
+      have_weather ? core::clearness_index(weather_[day].solar_radiation_mj_per_m2,
+                                           core::extraterrestrial_radiation_mj(
+                                               latitude_degrees_, weather_[day].date.day_of_year()))
+                   : 0.0;
+  if (have_weather) {
+    terrain_.light_for(latitude_degrees_, weather_[day].date.day_of_year(), kSolarHourShown,
+                       clearness);
+  }
+  show_weather(day, clearness);
+
   const viz::ColourScale colours(style.ramp, lowest, highest);
   if (showing_terrain_) {
     // A run with no elevation is draped on a level surface of its own shape.
@@ -775,6 +807,69 @@ void MapWindow::refresh() {
 void MapWindow::show_day(int day) {
   current_day_ = day;
   refresh();
+}
+
+void MapWindow::show_weather(std::size_t day, double clearness) {
+  if (day >= weather_.size()) {
+    weather_line_ = "this run kept no daily weather to show";
+    weather_label_->setText("<b>Weather</b> &nbsp; this run kept no daily weather to show");
+    return;
+  }
+  const core::DailyWeather& today = weather_[day];
+
+  const auto describe = [](core::SkyCondition condition) -> const char* {
+    switch (condition) {
+      case core::SkyCondition::Clear:
+        return "clear";
+      case core::SkyCondition::PartlyCloudy:
+        return "partly cloudy";
+      case core::SkyCondition::Overcast:
+        return "overcast";
+    }
+    return "clear";
+  };
+  const char* sky = describe(core::sky_from_clearness(clearness));
+
+  // Rain is the day's total. There is no intensity and no time of day in the
+  // series, so "wet" is as much as can be said about when.
+  const QString rain = today.rainfall_mm >= 0.05
+                           ? QString("%1 mm").arg(today.rainfall_mm, 0, 'f', 1)
+                           : QString("dry");
+
+  const core::SunPosition sun =
+      core::sun_position(latitude_degrees_, today.date.day_of_year(), kSolarHourShown);
+
+  weather_label_->setText(
+      QString("<b>%1</b> &nbsp;&nbsp; %2 &nbsp;&nbsp; rain <b>%3</b> &nbsp;&nbsp; "
+              "%4 to %5 &deg;C &nbsp;&nbsp; sun %6 MJ/m&sup2; "
+              "(%7 of what the sky could give) &nbsp;&nbsp; "
+              "sun %8&deg; up, bearing %9&deg; at 14:00 solar time &nbsp;&nbsp; "
+              "<span style='color:#888'>wind %10 m/s - recorded, not modelled</span>")
+          .arg(QString::fromStdString(today.date.to_iso_string()))
+          .arg(sky)
+          .arg(rain)
+          .arg(today.min_air_temperature_c, 0, 'f', 1)
+          .arg(today.max_air_temperature_c, 0, 'f', 1)
+          .arg(today.solar_radiation_mj_per_m2, 0, 'f', 1)
+          .arg(QString("%1%").arg(clearness * 100.0, 0, 'f', 0))
+          .arg(sun.elevation_degrees, 0, 'f', 0)
+          .arg(sun.azimuth_degrees, 0, 'f', 0)
+          .arg(today.wind_speed_m_per_s, 0, 'f', 1));
+
+  weather_line_ = QString(
+                      "%1  %2, rain %3, %4 to %5 C, sun %6 MJ/m2 (%7 of the sky's), sun %8 deg up "
+                      "bearing %9 deg at 14:00 solar, wind %10 m/s (recorded, not modelled)")
+                      .arg(QString::fromStdString(today.date.to_iso_string()))
+                      .arg(sky)
+                      .arg(rain)
+                      .arg(today.min_air_temperature_c, 0, 'f', 1)
+                      .arg(today.max_air_temperature_c, 0, 'f', 1)
+                      .arg(today.solar_radiation_mj_per_m2, 0, 'f', 1)
+                      .arg(QString("%1%").arg(clearness * 100.0, 0, 'f', 0))
+                      .arg(sun.elevation_degrees, 0, 'f', 0)
+                      .arg(sun.azimuth_degrees, 0, 'f', 0)
+                      .arg(today.wind_speed_m_per_s, 0, 'f', 1)
+                      .toStdString();
 }
 
 void MapWindow::change_scale(int mode) {

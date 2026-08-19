@@ -12,6 +12,7 @@
 #include <paddock/core/BudgetLedger.hpp>
 #include <paddock/core/Farmer.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
+#include <paddock/core/Weather.hpp>
 
 /// Running a scenario, and keeping enough of what happened to say something
 /// about it afterwards.
@@ -33,6 +34,15 @@ struct RunSummary {
   std::vector<double> cover_kg_dm_per_ha;
   std::vector<double> liveweight_kg;
   std::vector<int> paddock_of_first_mob;
+
+  /// The weather each day was run on.
+  ///
+  /// Kept whole rather than reduced to the two or three numbers a chart wants.
+  /// It is what the run was actually driven by, it is small - a year is 366
+  /// records - and a view that wants to say what a day was like should read
+  /// the day rather than somebody's summary of it. The alternative, a vector
+  /// per variable, means editing this struct every time one more is wanted.
+  std::vector<core::DailyWeather> weather;
 
   double eaten_kg_dm = 0.0;
 

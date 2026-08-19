@@ -176,6 +176,19 @@ class MapWindow : public QMainWindow {
   /// The stock as they stood on `day`, one marker per paddock a mob occupied.
   [[nodiscard]] const std::vector<viz::MobMarker>& mobs_on(std::size_t day) const;
   void refresh();
+
+  /// Fills the line above the map with the day's weather.
+  void show_weather(std::size_t day, double clearness);
+
+ public:
+  /// The same weather line in plain text, for the headless path.
+  ///
+  /// A screenshot captures the render window and not the labels around it, so
+  /// without this the one part of the weather work a person can read is the
+  /// part nothing can check.
+  [[nodiscard]] const std::string& weather_line() const noexcept { return weather_line_; }
+
+ private:
   [[nodiscard]] const std::vector<core::Raster<double>>& series_of(Field field) const;
 
   /// The whole-run range of a field, computed once when the run is loaded.
@@ -195,6 +208,10 @@ class MapWindow : public QMainWindow {
   QPushButton* play_button_ = nullptr;
   QLabel* date_label_ = nullptr;
   QLabel* summary_label_ = nullptr;
+
+  /// The day's weather, above the map rather than below it: it is the thing
+  /// driving what the map shows, so it reads first.
+  QLabel* weather_label_ = nullptr;
   QTimer* timer_ = nullptr;
 
   viz::MapScene scene_;
@@ -243,6 +260,26 @@ class MapWindow : public QMainWindow {
   std::vector<core::Raster<double>> water_stress_;
   std::vector<core::Raster<double>> legume_fraction_;
   std::vector<std::string> dates_;
+
+  /// The weather each day was run on, kept so the view can say what the day
+  /// was like and light the ground with that day's sun.
+  std::vector<core::DailyWeather> weather_;
+
+  /// The latitude the run was over, which the sun's position depends on.
+  double latitude_degrees_ = 0.0;
+
+  /// The hour the sun is drawn at, in SOLAR time.
+  ///
+  /// The model has no hours - a weather record is a day - so one hour has to
+  /// stand for the day. Two in the afternoon is above the horizon on every day
+  /// of a New Zealand year and sits north-west rather than due north, which is
+  /// what gives the ground a lit side and a shaded one; solar noon puts the sun
+  /// exactly north and flattens the relief. Solar time and not the clock:
+  /// Lincoln's solar noon is about half an hour after 12:00 NZST.
+  static constexpr double kSolarHourShown = 14.0;
+
+  /// The weather line as plain text, kept as it is built.
+  std::string weather_line_;
 
   /// The fences, and where the stock were behind them.
   ///

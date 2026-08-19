@@ -450,6 +450,13 @@ jobs:
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-baseline --smoke
 
+      # The sun and the sky, which a screenshot of the render window cannot
+      # show: the weather line lives in a label around it, and a farm that
+      # falls six metres in a kilometre looks much the same under any sun.
+      - name: Say what the weather was
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             | grep -q "paddock-gui: weather "
+
       # Changing farms, which no single frame can check: the two bundles below
       # are thirteen kilometres apart, so a camera left on the first one shows
       # an empty window - which looks exactly like a broken pipeline and is

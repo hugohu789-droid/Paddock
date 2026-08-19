@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -139,4 +140,70 @@ TEST(TerrainSceneTest, MismatchedShapesAreRefused) {
 }
 
 }  // namespace
+
+// The sun moves with the date, and the light follows it.
+//
+// A screenshot cannot check this: a farm on the Canterbury Plains falls six
+// metres in a kilometre, so midwinter and midsummer light look much the same
+// on it, and a light that never moved would look entirely plausible.
+TEST(TerrainSceneTest, TheLightMovesWithTheDate) {
+  TerrainScene scene;
+  constexpr double kLincoln = -43.64;
+
+  scene.light_for(kLincoln, 172, 14.0, 0.75);  // Midwinter
+  std::array<double, 3> midwinter{};
+  scene.sun()->GetPosition(midwinter.data());
+
+  scene.light_for(kLincoln, 355, 14.0, 0.75);  // Midsummer
+  std::array<double, 3> midsummer{};
+  scene.sun()->GetPosition(midsummer.data());
+
+  // Higher in summer, which is the whole of what a season is.
+  EXPECT_GT(midsummer[2], midwinter[2])
+      << "midwinter z " << midwinter[2] << ", midsummer z " << midsummer[2];
+
+  // And in the northern sky both times, because this is New Zealand. A light
+  // put south of the farm would shade every face the model grows most grass
+  // on.
+  EXPECT_GT(midwinter[1], 0.0) << "midwinter sun should be north of the farm";
+  EXPECT_GT(midsummer[1], 0.0) << "midsummer sun should be north of the farm";
+
+  // West of north at two in the afternoon, both times.
+  EXPECT_LT(midwinter[0], 0.0) << "afternoon sun should be west";
+  EXPECT_LT(midsummer[0], 0.0) << "afternoon sun should be west";
+}
+
+// A dull day is dimmer than a bright one, by the radiation that actually
+// differed.
+TEST(TerrainSceneTest, CloudDimsTheLightItCameFrom) {
+  TerrainScene scene;
+  constexpr double kLincoln = -43.64;
+
+  scene.light_for(kLincoln, 355, 14.0, 0.75);
+  const double clear = scene.sun()->GetIntensity();
+
+  scene.light_for(kLincoln, 355, 14.0, 0.25);
+  const double overcast = scene.sun()->GetIntensity();
+
+  EXPECT_GT(clear, overcast) << "clear " << clear << ", overcast " << overcast;
+  EXPECT_GT(overcast, 0.0) << "an overcast day is not a night";
+}
+
+// The sun stays where the date puts it whatever the cloud, because cloud is
+// not a position.
+TEST(TerrainSceneTest, CloudDoesNotMoveTheSun) {
+  TerrainScene scene;
+  scene.light_for(-43.64, 355, 14.0, 0.75);
+  std::array<double, 3> bright{};
+  scene.sun()->GetPosition(bright.data());
+
+  scene.light_for(-43.64, 355, 14.0, 0.20);
+  std::array<double, 3> dull{};
+  scene.sun()->GetPosition(dull.data());
+
+  EXPECT_DOUBLE_EQ(bright[0], dull[0]);
+  EXPECT_DOUBLE_EQ(bright[1], dull[1]);
+  EXPECT_DOUBLE_EQ(bright[2], dull[2]);
+}
+
 }  // namespace paddock::viz

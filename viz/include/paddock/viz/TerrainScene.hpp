@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 #include <vtkActor.h>
+#include <vtkLight.h>
 #include <vtkLookupTable.h>
 #include <vtkNew.h>
 #include <vtkPolyData.h>
@@ -63,9 +64,32 @@ class TerrainScene {
   /// view exists to show is invisible. Exaggeration is the usual answer and it
   /// makes every slope look steeper than it is, so the factor is reported
   /// rather than quietly applied, and one is the default.
+  /// Light the ground with the sun of a particular day, and colour the sky by
+  /// how much of that sun reached the ground.
+  ///
+  /// **Everything here is a number the run was driven by.** The sun's position
+  /// is FAO-56 geometry from the date and the latitude - the same declination
+  /// the growth model integrates radiation over - so a face drawn in sunlight
+  /// is the face the model grew more grass on. The sky comes from the
+  /// clearness index Rs/Ra of the day's own measured radiation. Nothing is
+  /// drawn from nothing: there are no cloud shapes, because the series carries
+  /// no cloud, and no wind in the picture, because the series carries a speed
+  /// and no direction.
+  ///
+  /// The hour is the caller's, and it is solar time. Passing a wall clock hour
+  /// would put the sun in the wrong part of the sky by half an hour of
+  /// rotation at this longitude.
+  void light_for(double latitude_degrees, int day_of_year, double solar_hour,
+                 double clearness_index);
+
   void set_vertical_exaggeration(double factor);
 
   [[nodiscard]] double vertical_exaggeration() const noexcept { return exaggeration_; }
+
+  /// The scene's sun. Exposed so that where it is and how bright it is can be
+  /// checked without a render window: a light that never moved would look
+  /// entirely plausible on ground that falls six metres in a kilometre.
+  [[nodiscard]] vtkLight* sun() const noexcept { return sun_; }
 
   /// Looks at the farm from the north-west and above, the angle a farm is
   /// usually photographed from.
@@ -100,6 +124,10 @@ class TerrainScene {
   std::vector<std::size_t> grazed_;
 
   vtkNew<vtkStructuredGrid> surface_;
+
+  /// The sun. One directional light standing in for a body 150 million km
+  /// away, which is what a directional light is for.
+  vtkNew<vtkLight> sun_;
   vtkNew<vtkLookupTable> lookup_;
   vtkNew<vtkPolyDataMapper> surface_mapper_;
   vtkNew<vtkActor> surface_actor_;

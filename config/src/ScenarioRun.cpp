@@ -122,6 +122,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
     summary.dates.push_back(day.date);
+    summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);
     summary.paddock_of_first_mob.push_back(static_cast<int>(farm.mobs().front().paddocks.front()));
@@ -185,6 +186,7 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
     summary.dates.push_back(day.date);
+    summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);
     summary.paddock_of_first_mob.push_back(static_cast<int>(farm.mobs().front().paddocks.front()));

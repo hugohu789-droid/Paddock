@@ -77,4 +77,77 @@ TEST(SolarTest, EquivalentEvaporationUsesThePublishedFactor) {
 }
 
 }  // namespace
+
+// Where the sun is over Lincoln at 14:00 solar time.
+//
+// The figures were worked out independently of this code, from FAO-56 Eq. 24
+// and the standard hour-angle relations, before it was written - so they are a
+// check against the source rather than a recording of what the function
+// happens to return.
+TEST(SolarTest, TheSunOverLincolnAtTwoInTheAfternoon) {
+  constexpr double kLincoln = -43.64;
+
+  const SunPosition midwinter = sun_position(kLincoln, 172, 14.0);
+  EXPECT_NEAR(midwinter.elevation_degrees, 17.5, 0.2);
+  EXPECT_NEAR(midwinter.azimuth_degrees, 331.2, 0.5);
+
+  const SunPosition midsummer = sun_position(kLincoln, 355, 14.0);
+  EXPECT_NEAR(midsummer.elevation_degrees, 58.2, 0.2);
+  EXPECT_NEAR(midsummer.azimuth_degrees, 299.6, 0.5);
+
+  const SunPosition equinox = sun_position(kLincoln, 264, 14.0);
+  EXPECT_NEAR(equinox.elevation_degrees, 39.1, 0.2);
+  EXPECT_NEAR(equinox.azimuth_degrees, 319.9, 0.5);
+}
+
+// At solar noon the sun is due north from New Zealand, by definition of solar
+// noon and of being south of the tropics. This is the case that catches an
+// azimuth convention written back to front.
+TEST(SolarTest, AtSolarNoonTheSunIsDueNorthFromNewZealand) {
+  for (const int day : {1, 80, 172, 264, 355}) {
+    const SunPosition noon = sun_position(-43.64, day, 12.0);
+    EXPECT_NEAR(noon.azimuth_degrees, 0.0, 0.01) << "day " << day;
+    EXPECT_TRUE(noon.is_up()) << "day " << day;
+  }
+}
+
+// Morning is east of north, afternoon is west of it. Reversed, every hill in
+// the three-dimensional view would be lit from the wrong side and still look
+// entirely plausible.
+TEST(SolarTest, TheSunMovesEastToWestThroughTheDay) {
+  const SunPosition morning = sun_position(-43.64, 264, 9.0);
+  const SunPosition afternoon = sun_position(-43.64, 264, 15.0);
+
+  EXPECT_LT(morning.azimuth_degrees, 90.0) << "morning sun should be east of north";
+  EXPECT_GT(afternoon.azimuth_degrees, 270.0) << "afternoon sun should be west of north";
+}
+
+// The sun sets. A view that drew a light below the horizon would light the
+// underside of the ground.
+TEST(SolarTest, TheSunIsDownAtMidnightAndUpAtMidday) {
+  EXPECT_FALSE(sun_position(-43.64, 172, 0.0).is_up());
+  EXPECT_TRUE(sun_position(-43.64, 172, 12.0).is_up());
+}
+
+// The clearness index against what the sky can deliver.
+TEST(SolarTest, ClearnessIsMeasuredAgainstWhatTheSkyCouldDeliver) {
+  const double ra = extraterrestrial_radiation_mj(-43.64, 355);
+  ASSERT_GT(ra, 0.0);
+
+  EXPECT_DOUBLE_EQ(clearness_index(ra, ra), 1.0);
+  EXPECT_DOUBLE_EQ(clearness_index(0.0, ra), 0.0);
+  EXPECT_DOUBLE_EQ(clearness_index(-5.0, ra), 0.0) << "negative radiation is not less than none";
+  EXPECT_DOUBLE_EQ(clearness_index(10.0, 0.0), 0.0) << "a polar night divides by nothing";
+}
+
+// And that the reading of it lands where FAO-56 Eq. 35's coefficients put it:
+// 0.75 is full sunshine, 0.25 is none of it direct.
+TEST(SolarTest, ASkyIsReadFromTheAngstromEndpoints) {
+  EXPECT_EQ(sky_from_clearness(0.75), SkyCondition::Clear);
+  EXPECT_EQ(sky_from_clearness(0.70), SkyCondition::Clear);
+  EXPECT_EQ(sky_from_clearness(0.50), SkyCondition::PartlyCloudy);
+  EXPECT_EQ(sky_from_clearness(0.25), SkyCondition::Overcast);
+  EXPECT_EQ(sky_from_clearness(0.10), SkyCondition::Overcast);
+}
+
 }  // namespace paddock::core

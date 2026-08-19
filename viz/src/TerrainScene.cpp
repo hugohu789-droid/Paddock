@@ -22,6 +22,7 @@
 #include <vtkStructuredGridGeometryFilter.h>
 #include <vtkTextProperty.h>
 
+#include <paddock/core/Solar.hpp>
 #include <paddock/viz/ColourTable.hpp>
 #include <paddock/viz/MobMarkers.hpp>
 #include <paddock/viz/TerrainScene.hpp>
@@ -49,10 +50,21 @@ constexpr double kFenceOpacity = 0.5;
 // drawn a kilometre wide, and a flock of them reads as a flock.
 constexpr double kMarkerSizeM = 8.0;
 
+constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
+
 }  // namespace
 
 TerrainScene::TerrainScene() {
   renderer_->SetBackground(0.10, 0.11, 0.13);
+
+  // The scene's own light, replacing the headlight VTK would otherwise supply.
+  // A headlight sits at the camera and lights whatever you look at from where
+  // you look at it, which is exactly the wrong thing here: it hides the shape
+  // of the ground, and it cannot say anything about the sun.
+  sun_->SetLightTypeToSceneLight();
+  sun_->SetPositional(0);
+  renderer_->AddLight(sun_);
+  renderer_->SetAutomaticLightCreation(0);
 
   surface_mapper_->SetLookupTable(lookup_);
   surface_mapper_->SetScalarModeToUsePointData();
@@ -339,6 +351,69 @@ void TerrainScene::clear_boundaries() {
   boundaries_.clear();
   grazed_.clear();
   rebuild_fences();
+}
+
+void TerrainScene::light_for(double latitude_degrees, int day_of_year, double solar_hour,
+                             double clearness_index) {
+  const core::SunPosition sun = core::sun_position(latitude_degrees, day_of_year, solar_hour);
+
+  // A direction on the unit sphere, from the compass bearing and the height.
+  // VTK's y is north and its x is east, matching the ground coordinates this
+  // scene draws in.
+  const double elevation = sun.elevation_degrees * kDegreesToRadians;
+  const double azimuth = sun.azimuth_degrees * kDegreesToRadians;
+  const double horizontal = std::cos(elevation);
+  const double east = horizontal * std::sin(azimuth);
+  const double north = horizontal * std::cos(azimuth);
+  const double up = std::sin(elevation);
+
+  // The light shines from the sun towards the focal point, so the light's
+  // position is out along the sun's direction. Distance is arbitrary for a
+  // directional light and only has to be outside the scene.
+  constexpr double kFarAway = 100000.0;
+  sun_->SetFocalPoint(0.0, 0.0, 0.0);
+  sun_->SetPosition(east * kFarAway, north * kFarAway, std::max(up, 0.05) * kFarAway);
+
+  // How much of the sun got through, and what that leaves the sky looking
+  // like. The intensities are a drawing choice; the number driving them is
+  // not. Clear is not full brightness, because a surface lit at 1.0 with no
+  // ambient reads as white paper rather than as a paddock.
+  const double clearness = std::clamp(clearness_index, 0.0, 1.0);
+  const core::SkyCondition sky = core::sky_from_clearness(clearness);
+
+  // Between the Angstrom endpoints, so a dull day is dimmer than a bright one
+  // by the ratio the radiation actually differed by.
+  constexpr double kOvercastClearness = 0.25;
+  constexpr double kClearClearness = 0.75;
+  const double lit = std::clamp(
+      (clearness - kOvercastClearness) / (kClearClearness - kOvercastClearness), 0.0, 1.0);
+
+  sun_->SetIntensity(0.45 + (0.55 * lit));
+
+  // Warm and low under a clear sky, flat and grey under cloud - which is what
+  // the light itself does, not a filter over the picture.
+  sun_->SetColor(1.0 - (0.10 * (1.0 - lit)), 0.98 - (0.06 * (1.0 - lit)),
+                 0.92 + (0.06 * (1.0 - lit)));
+
+  switch (sky) {
+    case core::SkyCondition::Clear:
+      renderer_->SetBackground(0.09, 0.13, 0.20);
+      break;
+    case core::SkyCondition::PartlyCloudy:
+      renderer_->SetBackground(0.13, 0.15, 0.18);
+      break;
+    case core::SkyCondition::Overcast:
+      renderer_->SetBackground(0.17, 0.18, 0.19);
+      break;
+  }
+
+  // Below the horizon there is no sun to light anything with. It cannot happen
+  // at 14:00 solar time anywhere in New Zealand - the lowest is about 17
+  // degrees at midwinter - but this scene does not know it will only ever be
+  // asked about that hour.
+  if (!sun.is_up()) {
+    sun_->SetIntensity(0.15);
+  }
 }
 
 void TerrainScene::set_vertical_exaggeration(double factor) {

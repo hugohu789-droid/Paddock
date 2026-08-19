@@ -50,6 +50,62 @@ double extraterrestrial_radiation_mj(double latitude_degrees, int day_of_year) n
           (std::cos(latitude) * std::cos(declination) * std::sin(hour_angle)));
 }
 
+SunPosition sun_position(double latitude_degrees, int day_of_year, double solar_hour) noexcept {
+  const double latitude = to_radians(latitude_degrees);
+  const double declination = solar_declination(day_of_year);
+
+  // Hour angle: 15 degrees an hour, zero at solar noon, negative in the
+  // morning (FAO-56 Eq. 31 uses the same convention).
+  const double hour_angle = (kPi / 12.0) * (solar_hour - 12.0);
+
+  const double sin_latitude = std::sin(latitude);
+  const double cos_latitude = std::cos(latitude);
+  const double sin_declination = std::sin(declination);
+  const double cos_declination = std::cos(declination);
+  const double cos_hour = std::cos(hour_angle);
+
+  const double sin_elevation = std::clamp(
+      (sin_latitude * sin_declination) + (cos_latitude * cos_declination * cos_hour), -1.0, 1.0);
+
+  SunPosition position;
+  position.elevation_degrees = std::asin(sin_elevation) * 180.0 / kPi;
+
+  // Bearing clockwise from north. atan2 of the horizontal components keeps it
+  // continuous through noon, where the naive arccos form flips sign and puts
+  // the afternoon sun in the morning sky.
+  const double east = -std::sin(hour_angle);
+  const double north = (std::tan(declination) * cos_latitude) - (sin_latitude * cos_hour);
+  double azimuth = std::atan2(east, north) * 180.0 / kPi;
+  if (azimuth < 0.0) {
+    azimuth += 360.0;
+  }
+  position.azimuth_degrees = azimuth;
+  return position;
+}
+
+double clearness_index(double measured_mj_per_m2, double extraterrestrial_mj_per_m2) noexcept {
+  if (extraterrestrial_mj_per_m2 <= 0.0) {
+    return 0.0;
+  }
+  return std::max(0.0, measured_mj_per_m2) / extraterrestrial_mj_per_m2;
+}
+
+SkyCondition sky_from_clearness(double clearness) noexcept {
+  // 0.25 and 0.75 are FAO-56 Eq. 35's as and as + bs: what arrives with no
+  // direct sun, and what arrives with a full day of it.
+  constexpr double kOvercast = 0.25;
+  constexpr double kClear = 0.75;
+  constexpr double kMidpoint = (kOvercast + kClear) / 2.0;
+
+  if (clearness >= kMidpoint + ((kClear - kMidpoint) / 2.0)) {
+    return SkyCondition::Clear;
+  }
+  if (clearness >= kMidpoint - ((kMidpoint - kOvercast) / 2.0)) {
+    return SkyCondition::PartlyCloudy;
+  }
+  return SkyCondition::Overcast;
+}
+
 double daylight_hours(double latitude_degrees, int day_of_year) noexcept {
   return (24.0 / kPi) * sunset_hour_angle(latitude_degrees, day_of_year);
 }

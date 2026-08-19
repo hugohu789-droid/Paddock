@@ -196,6 +196,9 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "paddock-gui: ground modelled flat\n";
       }
+      if (const std::string& weather = window.weather_line(); !weather.empty()) {
+        std::cout << "paddock-gui: weather " << weather << '\n';
+      }
       if (const std::string& reason = window.no_ground_reason(); !reason.empty()) {
         std::cout << "paddock-gui: " << reason << '\n';
       }
