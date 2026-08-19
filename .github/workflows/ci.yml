@@ -450,6 +450,15 @@ jobs:
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-baseline --smoke
 
+      # Changing farms, which no single frame can check: the two bundles below
+      # are thirteen kilometres apart, so a camera left on the first one shows
+      # an empty window - which looks exactly like a broken pipeline and is
+      # not one. paddock-gui checks the camera landed inside the new farm and
+      # exits non-zero if it did not.
+      - name: Follow the farm when it changes
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/canterbury-baseline --smoke             --then data/scenarios/lincoln-lurdf
+
       # And that the fences land on the field rather than beside it. A PNG is
       # the only way to check that without a person at the screen, and it is
       # kept so a reviewer can look at what the run actually drew.

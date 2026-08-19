@@ -4,6 +4,7 @@
 #include "MapWindow.hpp"
 
 #include <QApplication>
+#include <QDir>
 #include <QDockWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -15,10 +16,12 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vtkCamera.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkNew.h>
 #include <vtkPNGWriter.h>
 #include <vtkRenderWindow.h>
+#include <vtkRenderer.h>
 #include <vtkWindowToImageFilter.h>
 
 #include <paddock/config/ScenarioReport.hpp>
@@ -217,9 +220,9 @@ void MapWindow::start_run() {
     }
 
     clear_series();
-    // The ground this run is over, taken once. Empty for flat, which is what
-    // disables the terrain view rather than drawing a plane and calling it
-    // terrain.
+    // The ground this run is over, taken once. Empty for flat, which the
+    // terrain view draws as a level surface and says so, rather than refusing
+    // to open.
     elevation_ = bundle.make_elevation();
     last_run_had_stock_ = !bundle.mobs.empty();
     if (last_run_had_stock_) {
@@ -467,6 +470,65 @@ void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle) {
   last_run_ = std::move(summary);
 }
 
+void MapWindow::open_scenario(const std::string& bundle_directory) {
+  // Absolute, because the panel holds absolute paths and matches on them
+  // exactly. Handed a relative one it finds nothing, changes nothing, and the
+  // run that follows is the farm that was already there - which looks like
+  // success from the outside.
+  const std::string resolved =
+      QDir(QString::fromStdString(bundle_directory)).absolutePath().toStdString();
+  const config::ScenarioBundle bundle = config::load_scenario(resolved);
+  setup_->adopt_bundle(resolved, bundle.mobs.empty() ? 0 : bundle.mobs.front().head,
+                       bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg,
+                       bundle.management.has_value() ? &*bundle.management : nullptr,
+                       bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
+  if (setup_->choices().scenario_directory != resolved) {
+    throw std::runtime_error("the panel does not offer " + resolved +
+                             ", so nothing was opened. The panel lists the bundles under the data "
+                             "directory it was given.");
+  }
+  // No reset_camera here, deliberately. Moving to the new farm is the run's own
+  // job; doing it here as well would hide a failure to do it at all.
+  start_run();
+}
+
+std::optional<std::pair<double, double>> MapWindow::camera_focus() const {
+  vtkRenderer* renderer = showing_terrain_ ? terrain_.renderer() : scene_.renderer();
+  if (renderer == nullptr || renderer->GetActiveCamera() == nullptr) {
+    return std::nullopt;
+  }
+  const double* focus = renderer->GetActiveCamera()->GetFocalPoint();
+  return std::make_pair(focus[0], focus[1]);
+}
+
+std::optional<std::array<double, 4>> MapWindow::drawn_farm() const {
+  if (cover_.empty()) {
+    return std::nullopt;
+  }
+  const core::Raster<double>& raster = cover_.front();
+  const core::GeoTransform& transform = raster.transform();
+  const double width = static_cast<double>(raster.cols()) * transform.cell_size;
+  const double height = static_cast<double>(raster.rows()) * transform.cell_size;
+  return std::array<double, 4>{transform.origin_easting, transform.origin_northing - height, width,
+                               height};
+}
+
+bool MapWindow::farm_moved(const core::Raster<double>& raster) const {
+  if (!drawn_extent_.has_value()) {
+    return true;
+  }
+  const core::GeoTransform& before = *drawn_extent_;
+  const core::GeoTransform& now = raster.transform();
+
+  // Exact comparison, deliberately. These are not computed values that drift -
+  // they are read from the manifest and passed through - so two farms are the
+  // same farm when their extents are the same numbers. A tolerance here would
+  // only invent a distance below which two farms count as one.
+  return before.origin_easting != now.origin_easting ||
+         before.origin_northing != now.origin_northing || before.cell_size != now.cell_size ||
+         drawn_cols_ != raster.cols() || drawn_rows_ != raster.rows();
+}
+
 void MapWindow::adopt_series() {
   for (const Field field :
        {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction}) {
@@ -521,6 +583,28 @@ void MapWindow::adopt_series() {
   current_day_ = most_varied_day();
   timeline_->setValue(current_day_);
   refresh();
+
+  // Follow the farm. A run over a different piece of ground needs the camera
+  // moved to it; a run over the same ground keeps whatever view was being
+  // used, because re-running with different stock is not a reason to throw
+  // away somebody's zoom.
+  if (!cover_.empty()) {
+    if (farm_moved(cover_.front())) {
+      if (showing_terrain_) {
+        terrain_.reset_camera();
+      } else {
+        scene_.reset_camera();
+      }
+      if (vtkRenderWindow* window = view_->renderWindow(); window != nullptr) {
+        window->Render();
+      }
+    }
+    drawn_extent_ = cover_.front().transform();
+    drawn_cols_ = cover_.front().cols();
+    drawn_rows_ = cover_.front().rows();
+  } else {
+    drawn_extent_.reset();
+  }
 }
 
 const std::vector<core::Raster<double>>& MapWindow::series_of(Field field) const {

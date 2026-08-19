@@ -10,6 +10,7 @@
 #include <QSlider>
 #include <QTimer>
 #include <QVTKOpenGLNativeWidget.h>
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -113,6 +114,22 @@ class MapWindow : public QMainWindow {
 
   [[nodiscard]] std::size_t day_count() const noexcept { return dates_.size(); }
 
+  /// Open a different farm, exactly as choosing it in the panel would.
+  ///
+  /// Here for the headless path, which is the only way to exercise a change of
+  /// farm without a person at the screen - and a change of farm is precisely
+  /// where the camera used to be left behind, pointing at ground kilometres
+  /// away from anything that was drawn.
+  void open_scenario(const std::string& bundle_directory);
+
+  /// Where the camera of whichever view is showing is pointing, in metres on
+  /// the ground. Empty when there is no view yet.
+  [[nodiscard]] std::optional<std::pair<double, double>> camera_focus() const;
+
+  /// The extent of the farm currently drawn: easting, northing of the
+  /// south-west corner, then width and height in metres.
+  [[nodiscard]] std::optional<std::array<double, 4>> drawn_farm() const;
+
   /// The day on which the selected field varies most across the farm.
   ///
   /// The view opens there rather than on day one. In a temperate pasture the
@@ -203,6 +220,22 @@ class MapWindow : public QMainWindow {
   /// A level surface for a run that has no elevation, kept because the scene
   /// holds a reference to what it is shown.
   core::Raster<double> flat_ground_;
+
+  /// Where the last drawn farm was on the ground, so that a run over a
+  /// different one can be recognised. Empty before the first run.
+  ///
+  /// Farms are kilometres apart - Lincoln and the Canterbury demonstration
+  /// grid by about thirteen - so a camera left where the previous farm was
+  /// shows blank space rather than the new one. Comparing extents rather than
+  /// resetting on every run is what lets somebody zoom into a corner, change
+  /// the stock, run again, and still be looking at that corner.
+  std::optional<core::GeoTransform> drawn_extent_;
+  std::size_t drawn_cols_ = 0;
+  std::size_t drawn_rows_ = 0;
+
+  /// Whether the farm on screen is somewhere other than the one that was there
+  /// before, and the camera therefore has to move.
+  [[nodiscard]] bool farm_moved(const core::Raster<double>& raster) const;
 
   /// One entry per simulated day, per field.
   std::vector<core::Raster<double>> cover_;

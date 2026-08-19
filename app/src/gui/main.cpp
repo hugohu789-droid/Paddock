@@ -85,6 +85,9 @@ void print_usage() {
             << "                 north, 2 facing south, 3 rolling\n"
             << "  --terrain      Show the three-dimensional view rather than the\n"
             << "                 flat map\n"
+            << "  --then BUNDLE  After the first frame, open BUNDLE as choosing it in the\n"
+            << "                 panel would, and check the camera followed it onto the\n"
+               "                 new farm. Exits non-zero if it did not\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
             << "                 on screen, because exaggeration makes every slope look\n"
             << "                 steeper than it is\n";
@@ -196,6 +199,42 @@ int main(int argc, char** argv) {
       if (const std::string& reason = window.no_ground_reason(); !reason.empty()) {
         std::cout << "paddock-gui: " << reason << '\n';
       }
+      // Changing farms, which no single frame can check. Two bundles kilometres
+      // apart used to leave the camera on the first one, so the second rendered
+      // as an empty window - a failure that looks exactly like a broken
+      // pipeline and is not one.
+      const auto then_flag = std::find(args.begin(), args.end(), "--then");
+      if (then_flag != args.end()) {
+        if (std::next(then_flag) == args.end()) {
+          std::cerr << "paddock-gui: --then needs a bundle to open" << '\n';
+          return 2;
+        }
+        // No render_once here: it resets the camera itself, which would make
+        // this check pass whether or not opening a farm moves the view. The run
+        // draws its own frame.
+        window.open_scenario(std::string(*std::next(then_flag)));
+
+        const auto farm = window.drawn_farm();
+        const auto focus = window.camera_focus();
+        if (!farm.has_value() || !focus.has_value()) {
+          std::cerr << "paddock-gui: --then drew no farm to look at" << '\n';
+          return 1;
+        }
+        const double west = (*farm)[0];
+        const double south = (*farm)[1];
+        const double east = west + (*farm)[2];
+        const double north = south + (*farm)[3];
+        std::cout << "paddock-gui: camera on " << focus->first << ", " << focus->second << "; farm "
+                  << west << " to " << east << " E, " << south << " to " << north << " N" << '\n';
+        if (focus->first < west || focus->first > east || focus->second < south ||
+            focus->second > north) {
+          std::cerr << "paddock-gui: the camera stayed on the farm that was there before, so the "
+                       "new one is off screen"
+                    << '\n';
+          return 1;
+        }
+      }
+
       const auto panel_flag = std::find(args.begin(), args.end(), "--panel-shot");
       if (panel_flag != args.end() && std::next(panel_flag) != args.end()) {
         const std::string panel_path(*std::next(panel_flag));
