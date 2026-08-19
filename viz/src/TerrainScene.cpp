@@ -20,6 +20,7 @@
 #include <vtkTextProperty.h>
 
 #include <paddock/viz/ColourTable.hpp>
+#include <paddock/viz/MobMarkers.hpp>
 #include <paddock/viz/TerrainScene.hpp>
 
 namespace paddock::viz {
@@ -38,6 +39,9 @@ constexpr double kFenceLift = 0.25;
 constexpr float kFenceWidth = 1.5F;
 constexpr float kGrazedFenceWidth = 4.0F;
 constexpr double kFenceOpacity = 0.5;
+
+/// The same marker size the flat map uses, so a mob is the same size in both.
+constexpr double kMarkerSizeM = 40.0;
 
 }  // namespace
 
@@ -80,6 +84,35 @@ TerrainScene::TerrainScene() {
   grazed_actor_->GetProperty()->SetLineWidth(kGrazedFenceWidth);
   grazed_actor_->GetProperty()->LightingOff();
   renderer_->AddActor(grazed_actor_);
+
+  const std::size_t kinds = marker_kinds().size();
+  mob_shapes_.resize(kinds);
+  mob_mappers_.resize(kinds);
+  mob_actors_.resize(kinds);
+  for (std::size_t i = 0; i < kinds; ++i) {
+    const std::array<double, 3> colour = colour_of(marker_kinds()[i]);
+    mob_mappers_[i]->SetInputData(mob_shapes_[i]);
+    mob_actors_[i]->SetMapper(mob_mappers_[i]);
+    mob_actors_[i]->GetProperty()->SetColor(colour[0], colour[1], colour[2]);
+    mob_actors_[i]->GetProperty()->LightingOff();
+    renderer_->AddActor(mob_actors_[i]);
+  }
+}
+
+void TerrainScene::show_mobs(const std::vector<MobMarker>& markers) {
+  mobs_ = markers;
+  rebuild_mobs();
+}
+
+void TerrainScene::rebuild_mobs() {
+  // Lifted onto the surface the same way a fence is, and by the same amount, so
+  // a mob stands on the ground rather than in it.
+  const auto height = [this](core::Point2D point) {
+    return (height_at(point) + kFenceLift) * exaggeration_;
+  };
+  for (std::size_t i = 0; i < marker_kinds().size() && i < mob_shapes_.size(); ++i) {
+    build_mob_markers(mobs_, marker_kinds()[i], kMarkerSizeM, height, mob_shapes_[i]);
+  }
 }
 
 double TerrainScene::height_at(core::Point2D point) const {
@@ -146,6 +179,7 @@ void TerrainScene::show(const core::Raster<double>& field, const core::Raster<do
   has_field_ = true;
   rebuild_surface();
   rebuild_fences();
+  rebuild_mobs();
 }
 
 void TerrainScene::rebuild_surface() {
@@ -283,6 +317,7 @@ void TerrainScene::set_vertical_exaggeration(double factor) {
   exaggeration_ = std::max(factor, 0.01);
   rebuild_surface();
   rebuild_fences();
+  rebuild_mobs();
 }
 
 std::size_t TerrainScene::fence_ring_count() const {

@@ -10,6 +10,33 @@
 
 namespace paddock::core {
 
+std::string to_string(AnimalKind kind) {
+  switch (kind) {
+    case AnimalKind::Sheep:
+      return "sheep";
+    case AnimalKind::Cattle:
+      return "cattle";
+    case AnimalKind::Deer:
+      return "deer";
+    case AnimalKind::Other:
+      break;
+  }
+  return "other";
+}
+
+AnimalKind animal_kind_from(const std::string& name) {
+  if (name == "sheep") {
+    return AnimalKind::Sheep;
+  }
+  if (name == "cattle") {
+    return AnimalKind::Cattle;
+  }
+  if (name == "deer") {
+    return AnimalKind::Deer;
+  }
+  return AnimalKind::Other;
+}
+
 namespace {
 
 /// TMC Eq. 13: the base rate, MJ per kg of metabolic liveweight.

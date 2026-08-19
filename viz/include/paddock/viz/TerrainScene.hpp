@@ -19,6 +19,7 @@
 #include <paddock/core/Geometry.hpp>
 #include <paddock/core/Raster.hpp>
 #include <paddock/viz/ColourScale.hpp>
+#include <paddock/viz/MobMarkers.hpp>
 
 namespace paddock::viz {
 
@@ -50,6 +51,9 @@ class TerrainScene {
   void set_boundaries(const std::vector<core::Polygon>& boundaries);
   void show_grazed(const std::vector<std::size_t>& grazed);
   void clear_boundaries();
+
+  /// Puts the stock on the ground, lifted onto the surface as the fences are.
+  void show_mobs(const std::vector<MobMarker>& markers);
 
   /// How much the heights are stretched, and **it is a lie in a known
   /// direction**.
@@ -88,6 +92,7 @@ class TerrainScene {
 
   void rebuild_surface();
   void rebuild_fences();
+  void rebuild_mobs();
 
   core::Raster<double> elevation_;
   core::Raster<double> field_;
@@ -106,6 +111,11 @@ class TerrainScene {
   vtkNew<vtkPolyData> grazed_fences_;
   vtkNew<vtkPolyDataMapper> grazed_mapper_;
   vtkNew<vtkActor> grazed_actor_;
+
+  std::vector<MobMarker> mobs_;
+  std::vector<vtkNew<vtkPolyData>> mob_shapes_;
+  std::vector<vtkNew<vtkPolyDataMapper>> mob_mappers_;
+  std::vector<vtkNew<vtkActor>> mob_actors_;
 
   vtkNew<vtkRenderer> renderer_;
 

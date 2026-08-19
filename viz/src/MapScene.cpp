@@ -16,6 +16,7 @@
 
 #include <paddock/viz/ColourTable.hpp>
 #include <paddock/viz/MapScene.hpp>
+#include <paddock/viz/MobMarkers.hpp>
 
 namespace paddock::viz {
 
@@ -34,6 +35,14 @@ constexpr int kLegendLabels = 5;
 constexpr float kFenceWidth = 1.0F;
 constexpr float kGrazedFenceWidth = 3.0F;
 constexpr double kFenceOpacity = 0.45;
+
+/// How wide a mob's marker is drawn on the ground, in metres.
+///
+/// In ground units rather than pixels, so it scales with the farm: a mob is a
+/// thing standing in a paddock, and zooming in should make it larger the way
+/// the paddock does. Forty metres is small against a 150 m paddock and visible
+/// on a 1.2 km farm.
+constexpr double kMarkerSizeM = 40.0;
 
 /// Builds one polydata of closed rings from the polygons at `indices`.
 void build_rings(const std::vector<core::Polygon>& boundaries,
@@ -151,6 +160,28 @@ MapScene::MapScene() {
   grazed_actor_->GetProperty()->SetLineWidth(kGrazedFenceWidth);
   grazed_actor_->GetProperty()->LightingOff();
   renderer_->AddActor(grazed_actor_);
+
+  // A layer per kind, built once. Which kinds exist is asked of MobMarkers
+  // rather than listed here, so adding an animal does not need this loop found
+  // and edited.
+  const std::size_t kinds = marker_kinds().size();
+  mob_shapes_.resize(kinds);
+  mob_mappers_.resize(kinds);
+  mob_actors_.resize(kinds);
+  for (std::size_t i = 0; i < kinds; ++i) {
+    const std::array<double, 3> colour = colour_of(marker_kinds()[i]);
+    mob_mappers_[i]->SetInputData(mob_shapes_[i]);
+    mob_actors_[i]->SetMapper(mob_mappers_[i]);
+    mob_actors_[i]->GetProperty()->SetColor(colour[0], colour[1], colour[2]);
+    mob_actors_[i]->GetProperty()->LightingOff();
+    renderer_->AddActor(mob_actors_[i]);
+  }
+}
+
+void MapScene::show_mobs(const std::vector<MobMarker>& markers) {
+  for (std::size_t i = 0; i < marker_kinds().size() && i < mob_shapes_.size(); ++i) {
+    build_mob_markers(markers, marker_kinds()[i], kMarkerSizeM, {}, mob_shapes_[i]);
+  }
 }
 
 void MapScene::set_boundaries(const std::vector<core::Polygon>& boundaries) {

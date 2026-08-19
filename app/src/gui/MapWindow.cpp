@@ -50,6 +50,9 @@ constexpr double kPastureDigestibility = 75.0;
 /// no stock in it. A reference has to refer to something.
 const std::vector<std::size_t> kNothingGrazed;
 
+/// The same, for the stock themselves.
+const std::vector<viz::MobMarker> kNobodyOnTheFarm;
+
 struct FieldStyle {
   const char* label;
   const char* legend;
@@ -164,7 +167,8 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   const int head = bundle.mobs.empty() ? 0 : bundle.mobs.front().head;
   const double liveweight = bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg;
   setup_->adopt_bundle(bundle_directory, head, liveweight,
-                       bundle.management.has_value() ? &*bundle.management : nullptr);
+                       bundle.management.has_value() ? &*bundle.management : nullptr,
+                       bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
 
   resize(1400, 860);
   start_run();
@@ -350,7 +354,13 @@ void MapWindow::clear_series() {
   whole_run_ranges_.clear();
   boundaries_.clear();
   grazed_each_day_.clear();
+  mobs_each_day_.clear();
+  stock_summary_.clear();
   elevation_.reset();
+}
+
+const std::vector<viz::MobMarker>& MapWindow::mobs_on(std::size_t day) const {
+  return day < mobs_each_day_.size() ? mobs_each_day_[day] : kNobodyOnTheFarm;
 }
 
 const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
@@ -394,6 +404,36 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
         std::sort(grazed.begin(), grazed.end());
         grazed.erase(std::unique(grazed.begin(), grazed.end()), grazed.end());
         grazed_each_day_.push_back(std::move(grazed));
+
+        // Where the stock stood, one marker per paddock each mob occupied. A
+        // set stocked mob has the run of the farm and gets a mark on all of it,
+        // which is what set stocking looks like; a rotating one gets one mark.
+        std::vector<viz::MobMarker> markers;
+        for (const core::FarmMob& mob : farm.mobs()) {
+          for (const std::size_t paddock : mob.paddocks) {
+            if (paddock >= farm.paddocks().size()) {
+              continue;
+            }
+            viz::MobMarker marker;
+            marker.at = farm.paddocks()[paddock].boundary.centroid();
+            marker.kind = mob.mob.animal.kind;
+            marker.head = mob.mob.head;
+            markers.push_back(marker);
+          }
+        }
+        mobs_each_day_.push_back(std::move(markers));
+
+        if (stock_summary_.empty()) {
+          std::string summary;
+          for (const core::FarmMob& mob : farm.mobs()) {
+            if (!summary.empty()) {
+              summary += ", ";
+            }
+            summary += std::to_string(mob.mob.head) + " " + core::to_string(mob.mob.animal.kind) +
+                       " (" + mob.mob.animal.class_id + ")";
+          }
+          stock_summary_ = summary;
+        }
       });
 }
 
@@ -571,9 +611,11 @@ void MapWindow::refresh() {
   if (showing_terrain_ && elevation_.has_value()) {
     terrain_.show(raster, *elevation_, colours, legend);
     terrain_.show_grazed(grazed_on(day));
+    terrain_.show_mobs(mobs_on(day));
   } else {
     scene_.show(raster, colours, legend);
     scene_.show_grazed(grazed_on(day));
+    scene_.show_mobs(mobs_on(day));
   }
   // The day number is here so that a playing timeline is visibly playing even
   // on a field whose colours barely move: legume fraction shifts by about a
@@ -588,14 +630,18 @@ void MapWindow::refresh() {
   // profile makes differences in water-holding capacity irrelevant until
   // something draws it down.
   const double spread = today.second - today.first;
+  const QString stock =
+      stock_summary_.empty() ? QString("no stock") : QString::fromStdString(stock_summary_);
   summary_label_->setText(
-      QString("Mean pasture cover %1 kg DM/ha over %2 cells   |   %3 across the farm today: %4")
+      QString("%5   |   Mean pasture cover %1 kg DM/ha over %2 cells   |   %3 across the farm "
+              "today: %4")
           .arg(mean_cover_[day], 0, 'f', 0)
           .arg(raster.size())
           .arg(style.label)
           .arg(spread > 0.0
                    ? QString("%1 to %2").arg(today.first, 0, 'f', 1).arg(today.second, 0, 'f', 1)
-                   : QString("uniform (%1)").arg(today.first, 0, 'f', 1)));
+                   : QString("uniform (%1)").arg(today.first, 0, 'f', 1))
+          .arg(stock));
   view_->renderWindow()->Render();
 }
 

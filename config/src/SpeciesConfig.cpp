@@ -51,11 +51,16 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   detail::reject_unknown_keys(root, {"species", "energy", "typical"}, path, "the file");
 
   const toml::table& species = detail::require_table(root, "species", path);
-  detail::reject_unknown_keys(species, {"name", "display_name", "description"}, path, "[species]");
+  detail::reject_unknown_keys(species, {"name", "display_name", "description", "kind"}, path,
+                              "[species]");
 
   SpeciesDefinition definition;
   definition.name = detail::require_string(species, "name", path);
   definition.display_name = detail::optional_string(species, "display_name", definition.name);
+  // Declared rather than read off the name. "sheep_ewe" begins "sheep_" today and a
+  // convention that holds until somebody adds a species is not a fact about the animal.
+  definition.energy.kind =
+      core::animal_kind_from(detail::optional_string(species, "kind", "other"));
   definition.description = detail::optional_string(species, "description", "");
 
   const toml::table& energy = detail::require_table(root, "energy", path);

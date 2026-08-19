@@ -149,6 +149,9 @@ class MapWindow : public QMainWindow {
 
   /// Which paddocks had stock on them on `day`, or empty for a run without.
   [[nodiscard]] const std::vector<std::size_t>& grazed_on(std::size_t day) const;
+
+  /// The stock as they stood on `day`, one marker per paddock a mob occupied.
+  [[nodiscard]] const std::vector<viz::MobMarker>& mobs_on(std::size_t day) const;
   void refresh();
   [[nodiscard]] const std::vector<core::Raster<double>>& series_of(Field field) const;
 
@@ -202,6 +205,12 @@ class MapWindow : public QMainWindow {
   /// what set stocking looks like and is worth being able to see.
   std::vector<core::Polygon> boundaries_;
   std::vector<std::vector<std::size_t>> grazed_each_day_;
+  std::vector<std::vector<viz::MobMarker>> mobs_each_day_;
+
+  /// What the run was carrying, for the line under the map. Taken once: a mob's
+  /// class does not change through a year, and its head count does not either
+  /// in this model - nothing is born, sold or dies.
+  std::string stock_summary_;
   /// Indexed by Field.
   std::vector<std::pair<double, double>> whole_run_ranges_;
   std::vector<double> mean_cover_;

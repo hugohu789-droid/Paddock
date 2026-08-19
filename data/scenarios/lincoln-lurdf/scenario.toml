@@ -104,7 +104,7 @@ sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "3fa4fe61da611bd49fd64541acaf839c48b9da654912ff7e656d723e16d0adc2"
+sha256 = "98c473bb07de20578ff950347d7959d9d11c66367dc6fca3cf4e1b884d7eb064"
 head = 417
 paddock = 0
 # 417 ewes on 80 hectares is 5.2 a hectare, the same stocking rate

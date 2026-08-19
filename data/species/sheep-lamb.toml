@@ -7,6 +7,12 @@
 
 [species]
 name = "sheep_lamb_weaned"
+
+# What a person would call it, for anything that has to show this animal
+# rather than compute with it. The energy model works from the factors below and
+# does not read this; a map that cannot say whether those are sheep or cattle is
+# withholding the one thing a reader could see for themselves.
+kind = "sheep"
 display_name = "Weaned lamb"
 description = "A growing lamb after weaning; the class with a published worked example behind it."
 

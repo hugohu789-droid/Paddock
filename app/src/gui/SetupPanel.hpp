@@ -76,7 +76,8 @@ class SetupPanel : public QWidget {
   /// scenario that fails to load is a thing the window has to report anyway,
   /// and having two places that can fail at it would mean two ways of saying so.
   void adopt_bundle(const std::string& directory, int head, double liveweight_kg,
-                    const core::ManagementPolicy* policy = nullptr);
+                    const core::ManagementPolicy* policy = nullptr,
+                    const core::AnimalClassParameters* animal = nullptr);
 
   /// Chooses the ground by its position in the list, for the screenshot path.
   /// A view of terrain that only a person clicking can reach is a view nothing

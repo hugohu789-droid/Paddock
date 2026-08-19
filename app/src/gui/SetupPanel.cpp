@@ -329,7 +329,8 @@ SetupPanel::Choices SetupPanel::choices() const {
 }
 
 void SetupPanel::adopt_bundle(const std::string& directory, int head, double liveweight_kg,
-                              const core::ManagementPolicy* policy) {
+                              const core::ManagementPolicy* policy,
+                              const core::AnimalClassParameters* animal) {
   const int index = scenario_box_->findData(QString::fromStdString(directory));
   if (index >= 0) {
     scenario_box_->setCurrentIndex(index);
@@ -340,6 +341,15 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
   if (liveweight_kg > 0.0) {
     liveweight_box_->setValue(liveweight_kg);
   }
+  // Say what the scenario actually carries. "As the scenario defines" is true
+  // and useless: a person cannot tell from it whether they are about to run
+  // sheep or cattle, which is the first thing they would want to know.
+  if (animal != nullptr && species_box_->count() > 0) {
+    species_box_->setItemText(0, QString("As the scenario defines (%1, %2)")
+                                     .arg(QString::fromStdString(animal->class_id),
+                                          QString::fromStdString(core::to_string(animal->kind))));
+  }
+
   if (policy != nullptr) {
     cover_floor_box_->setValue(policy->minimum_cover_kg_dm_per_ha);
     rotation_box_->setValue(policy->rotation_cover_threshold_kg_dm_per_ha);
