@@ -195,13 +195,48 @@ TEST(ScenarioBundleTest, ABundleMayTakeItsGroundFromASnapshot) {
   EXPECT_EQ(bundle.elevation, nullptr);
 }
 
-// The other kinds, which the same allow-list has to admit.
-TEST(ScenarioBundleTest, TheShippedBundlesSayTheirGroundIsFlat) {
-  for (const char* name : {"canterbury-baseline", "canterbury-grazed"}) {
+// Every shipped bundle now stands on measured ground.
+//
+// The demonstration bundles used to be flat, and their grid used to sit on a
+// round-number coordinate that turned out to be central Christchurch. They were
+// moved onto farmland west of Lincoln - chosen from the LINZ cadastre, see the
+// note above [grid] - and onto the same LiDAR tile the research farm uses. One
+// snapshot, one hash, three farms.
+//
+// What this test guards is that they all still point at the same file. Three
+// bundles quietly drifting onto three copies of the same survey is the kind of
+// thing nobody notices until one of them is stale.
+TEST(ScenarioBundleTest, TheShippedBundlesStandOnTheSameMeasuredGround) {
+  std::string shared_path;
+  std::string shared_hash;
+  for (const char* name : {"canterbury-baseline", "canterbury-grazed", "lincoln-lurdf"}) {
     const ScenarioBundle bundle =
         load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
-    EXPECT_TRUE(bundle.terrain.is_flat()) << name;
+    EXPECT_EQ(bundle.terrain.kind, TerrainSpec::Kind::Snapshot) << name;
+    EXPECT_FALSE(bundle.terrain.is_flat()) << name;
+    EXPECT_EQ(bundle.terrain.elevation_sha256.size(), 64U) << name;
+
+    // Named and not opened. The snapshot is tens of megabytes and is not
+    // committed; most commands never touch it.
+    EXPECT_EQ(bundle.elevation, nullptr) << name;
+
+    if (shared_path.empty()) {
+      shared_path = bundle.terrain.elevation_path;
+      shared_hash = bundle.terrain.elevation_sha256;
+    } else {
+      EXPECT_EQ(bundle.terrain.elevation_path, shared_path) << name;
+      EXPECT_EQ(bundle.terrain.elevation_sha256, shared_hash) << name;
+    }
   }
+}
+
+// And that a bundle which names ground nobody can read refuses, rather than
+// running flat and saying nothing. This suite has no geospatial stack, which
+// makes it the right place to check the refusal actually happens.
+TEST(ScenarioBundleTest, GroundThatCannotBeReadIsRefusedRatherThanIgnored) {
+  const ScenarioBundle bundle =
+      load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/canterbury-grazed");
+  EXPECT_THROW((void)bundle.make_elevation(), std::runtime_error);
 }
 
 TEST(ScenarioBundleTest, TheBundleRunsAndItsBudgetsClose) {

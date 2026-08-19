@@ -28,6 +28,8 @@
 
 #include <paddock/config/ScenarioRun.hpp>
 
+#include "../support/ShippedBundle.hpp"
+
 namespace paddock::config {
 namespace {
 
@@ -53,7 +55,7 @@ struct Comparison {
 /// anything to compare, so it is a parameter of the comparison rather than
 /// something buried in the bundle.
 Comparison compare(int head) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = head;
 
   // Smith and Dawson's rule for the rotational arm: graze no more than three

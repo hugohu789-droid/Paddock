@@ -28,6 +28,8 @@
 
 #include <paddock/config/ScenarioRun.hpp>
 
+#include "../support/ShippedBundle.hpp"
+
 namespace paddock::config {
 namespace {
 
@@ -55,7 +57,7 @@ core::ManagementPolicy default_policy() {
 }
 
 RunSummary run(int head, const core::ManagementPolicy& policy, std::string label) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = head;
   return run_managed_scenario(bundle, policy, pasture_diet(), std::move(label));
 }
@@ -66,7 +68,7 @@ RunSummary run(int head, const core::ManagementPolicy& policy, std::string label
 // If these two diverged, the section would be decoration - a manifest that says
 // what the farm was run under while the farm was run under something else.
 TEST(ManagedFarmTest, ABundlesOwnRulesGiveTheSameRunAsThoseRulesPassedIn) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   // if-and-FAIL rather than ASSERT_TRUE, so the assertion is visible to more
   // than a person: clang-tidy's optional analysis cannot see through a gtest
   // macro, and it disagrees across platforms about whether it can.
@@ -88,7 +90,7 @@ TEST(ManagedFarmTest, ABundlesOwnRulesGiveTheSameRunAsThoseRulesPassedIn) {
 // And a bundle that names none says so rather than inventing one. Inventing the
 // rules a farm was run under is the thing this section exists to stop.
 TEST(ManagedFarmTest, ABundleWithNoRulesRefusesToBeRunByAFarmer) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.management.reset();
 
   EXPECT_THROW(static_cast<void>(run_managed_scenario(bundle, pasture_diet(), "no policy")),

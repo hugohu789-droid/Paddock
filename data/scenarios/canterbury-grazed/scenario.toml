@@ -5,9 +5,10 @@
 # managed, so a run of it exercises the whole loop - pasture grows, a mob eats,
 # being underfed costs it weight, the farmer moves it, the paddock rests.
 #
-# The inputs are still PLACEHOLDER definitions (see docs/verify.md), so this
-# bundle demonstrates that the loop closes and is stable. It is not a
-# description of Canterbury, and no number out of it is a prediction.
+# The weather, soil and sward are still PLACEHOLDER definitions (see
+# docs/verify.md), so this bundle demonstrates that the loop closes and is
+# stable. It is not a description of Canterbury, and no number out of it is a
+# prediction. The ground is the exception: see [terrain].
 
 [scenario]
 name = "canterbury_grazed"
@@ -40,6 +41,20 @@ grass_kg_dm_per_ha = 2200.0
 legume_kg_dm_per_ha = 600.0
 soil_mineral_nitrogen_kg_per_ha = 60.0
 
+# **Where this block is, and why there.** The origin used to be 1570000 E,
+# 5180000 N - round numbers, chosen as a plausible-looking Canterbury
+# coordinate and never checked. Converted, they land on central Christchurch:
+# every LINZ elevation collection covering that point is named "Christchurch".
+#
+# It now sits on the same farmland as canterbury-baseline, chosen from the LINZ
+# primary parcels in data/snapshots/lincoln-parcels.geojson rather than from a
+# look at a map: 93.8% of points sampled across it fall inside parcels larger
+# than 10 ha, and only 14 parcels touch it, one of them under half a hectare.
+# Three of the holdings under it are Rural Sections. See
+# data/scenarios/canterbury-baseline/scenario.toml for the whole reasoning.
+#
+# The ground is measured. The weather is still synthetic and the soils are
+# still a placeholder gradient.
 [grid]
 # 48 x 32 cells at 25 m is 96 hectares.
 cols = 48
@@ -47,8 +62,8 @@ rows = 32
 cell_size_m = 25.0
 available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
 available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
-origin_easting = 1570000.0
-origin_northing = 5180000.0
+origin_easting = 1554550.0
+origin_northing = 5167300.0
 
 # Subdividing 96 ha at 2 ha gives 40 paddocks of 2.4 ha, not 48 of 2.0. The
 # generator fits as many WHOLE paddocks of the target size as the block takes -
@@ -138,3 +153,26 @@ maximum_graze_days = 3
 minimum_spell_days = 35
 supplement_me_mj_per_kg_dm = 10.0
 may_buy_feed = true
+
+[terrain]
+# Measured ground, shared with data/scenarios/lincoln-lurdf and
+# data/scenarios/canterbury-baseline.
+#
+# One LiDAR tile covers all three farms, so all three bundles pin the same file
+# and the same hash. Fetching it once is enough:
+#
+#   scripts/nz-elevation-snapshot.py --lon 172.44386 --lat -43.64954 \
+#       --collection canterbury/selwyn_2023 \
+#       --out data/snapshots/lincoln-dem-1m.tiff
+#
+# Canterbury - Selwyn LiDAR 1m DEM (2023), tile BX23_10000_0404, flown 23 March
+# to 3 May 2023, 1 m, already in NZTM2000. Licensed CC BY 4.0, licensor
+# Environment Canterbury, produced by Landpro, hosted and processed by Toitu Te
+# Whenua LINZ. A DEM and not a DSM: bare earth, because grass grows on the
+# ground and not on the woolshed roof.
+#
+# The file is not committed - snapshots never are - and the hash is what makes
+# that safe.
+kind = "snapshot"
+path = "../../snapshots/lincoln-dem-1m.tiff"
+sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"

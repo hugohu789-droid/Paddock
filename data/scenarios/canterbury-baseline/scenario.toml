@@ -4,8 +4,10 @@
 # whose inputs have changed underneath it is not the bundle that produced the
 # result, and `paddock scenario run` says so rather than running anyway.
 #
-# The inputs are all PLACEHOLDER definitions (see docs/verify.md), so this
-# bundle demonstrates reproducibility, not Canterbury.
+# The weather, soil and sward are all PLACEHOLDER definitions (see
+# docs/verify.md), so this bundle demonstrates reproducibility, not Canterbury.
+# The one input that is not a placeholder is the ground: see [terrain], and the
+# note above [grid] about where this block sits and how it was chosen.
 
 [scenario]
 name = "canterbury_baseline"
@@ -44,6 +46,28 @@ soil_mineral_nitrogen_kg_per_ha = 60.0
 # Optional: turns the scenario from one hectare into a map.
 #
 # 48 x 32 cells at 25 m is 96 hectares, near enough a small Canterbury block.
+#
+# **Where this block is, and why there.** The origin used to be 1570000 E,
+# 5180000 N - round numbers, chosen as a plausible-looking Canterbury
+# coordinate and never checked. Converted, they land on central Christchurch:
+# every LINZ elevation collection covering that point is named "Christchurch".
+# Real LiDAR under it would have been real ground, of a city, under a bundle
+# calling itself a farm.
+#
+# It now sits on farmland, chosen from the LINZ primary parcels already
+# snapshotted in data/snapshots/lincoln-parcels.geojson rather than from a
+# look at a map. Of points sampled across this box, 93.8% fall inside parcels
+# larger than 10 ha, and only 14 parcels touch it at all, one of them under
+# half a hectare. The holdings under it are Lot 2 DP 23370 (52.6 ha), RS 2718
+# (40.9 ha), Part RS 2719 (33.0 ha), RS 2775 (11.3 ha) and Lot 1 DP 70466
+# (10.0 ha) - three of them Rural Sections, the cadastral designation for
+# rural land. It is about 2 km west of Lincoln and clear of the Lincoln
+# University Research Dairy Farm, which has its own bundle.
+#
+# What this does NOT make the bundle. The ground is measured; the weather is
+# still synthetic and the soils are still a placeholder gradient. This is a
+# demonstration standing on real land, not a survey of a real farm.
+#
 # The available-water gradient is a DEMONSTRATION, not a survey: it rises from a
 # shallow western edge to a deeper eastern one so the map has something to show.
 # Real soils arrive with Manaaki Whenua S-map in M3 and replace this section.
@@ -53,5 +77,27 @@ rows = 32
 cell_size_m = 25.0
 available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
 available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
-origin_easting = 1570000.0
-origin_northing = 5180000.0
+origin_easting = 1554550.0
+origin_northing = 5167300.0
+
+[terrain]
+# Measured ground, shared with data/scenarios/lincoln-lurdf.
+#
+# One LiDAR tile covers both farms, so both bundles pin the same file and the
+# same hash. Fetching it once is enough:
+#
+#   scripts/nz-elevation-snapshot.py --lon 172.44386 --lat -43.64954 \
+#       --collection canterbury/selwyn_2023 \
+#       --out data/snapshots/lincoln-dem-1m.tiff
+#
+# Canterbury - Selwyn LiDAR 1m DEM (2023), tile BX23_10000_0404, flown 23 March
+# to 3 May 2023, 1 m, already in NZTM2000. Licensed CC BY 4.0, licensor
+# Environment Canterbury, produced by Landpro, hosted and processed by Toitu Te
+# Whenua LINZ. A DEM and not a DSM: bare earth, because grass grows on the
+# ground and not on the woolshed roof.
+#
+# The file is not committed - snapshots never are - and the hash is what makes
+# that safe.
+kind = "snapshot"
+path = "../../snapshots/lincoln-dem-1m.tiff"
+sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"

@@ -72,8 +72,8 @@ be retyped would quietly take that away.
 
 The map draws the fences too, and picks out the paddocks carrying stock that
 day. There is a second view that draws the same farm on the ground it sits on,
-with the fences draped over it - and for one farm that ground is measured
-rather than invented:
+with the fences draped over it - and that ground is measured rather than
+invented, on every farm this repository ships:
 
 ```bash
 cmake --preset desktop && cmake --build --preset desktop
@@ -81,6 +81,13 @@ python scripts/nz-elevation-snapshot.py --lon 172.470 --lat -43.641 \
   --collection canterbury/selwyn_2023 --out data/snapshots/lincoln-dem-1m.tiff
 ./build/desktop/bin/paddock-gui data/scenarios/lincoln-lurdf --terrain
 ```
+
+All three bundles rest on the same LiDAR tile, so one fetch serves them all.
+The demonstration bundles used to sit on a round-number coordinate that turned
+out to be central Christchurch; they were moved onto farmland west of Lincoln,
+picked from the LINZ cadastre rather than off a map - 93.8% of the block falls
+inside parcels over 10 ha, three of them Rural Sections. Their weather and
+soils are still placeholders; only the ground is real.
 
 The three-dimensional view opens on any farm. Without measured ground it draws
 the farm flat and says so - under the map, in the report's Ground row, and on
