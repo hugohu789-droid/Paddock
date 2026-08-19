@@ -89,6 +89,8 @@ void print_usage() {
             << "                 panel would, and check the camera followed it onto the\n"
                "                 new farm. Exits non-zero if it did not\n"
             << "  --irrigate     Turn irrigation on, as the panel would\n"
+            << "  --inspect      Report the paddock under three points on screen\n"
+            << "  --day N        Move the timeline to day N before drawing\n"
             << "  --field NAME   Draw a named field, as the list under the map does\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
             << "                 on screen, because exaggeration makes every slope look\n"
@@ -126,8 +128,12 @@ int main(int argc, char** argv) {
       }
       screenshot = std::string(*std::next(screenshot_flag));
     }
+    // --inspect is on this list because it reports to the console and then has
+    // nothing left to do: without it the window opens and waits for somebody,
+    // and a diagnostic that blocks is not one.
     const bool smoke = !screenshot.empty() ||
                        std::find(args.begin(), args.end(), "--panel-shot") != args.end() ||
+                       std::find(args.begin(), args.end(), "--inspect") != args.end() ||
                        std::find(args.begin(), args.end(), "--smoke") != args.end();
     // Must be set before the QApplication exists, or the widget and the render
     // window disagree about the surface they share.
@@ -209,9 +215,6 @@ int main(int argc, char** argv) {
         std::cout << "paddock-gui: irrigated " << water.effective_mm << " mm over " << water.events
                   << " events, " << water.mean_event_mm() << " mm a time" << '\n';
       }
-      if (const std::string& weather = window.weather_line(); !weather.empty()) {
-        std::cout << "paddock-gui: weather " << weather << '\n';
-      }
       if (const std::string& reason = window.no_ground_reason(); !reason.empty()) {
         std::cout << "paddock-gui: " << reason << '\n';
       }
@@ -285,6 +288,82 @@ int main(int argc, char** argv) {
           return 2;
         }
         std::cout << "paddock-gui: showing " << field << '\n';
+      }
+
+      // Which day to show, so a check can land on one where something
+      // happened. Irrigation runs in the dry months and the timeline opens
+      // wherever the farm varied most, which is not always the same day.
+      if (const auto day_flag = std::find(args.begin(), args.end(), "--day");
+          day_flag != args.end() && std::next(day_flag) != args.end()) {
+        window.go_to_day(std::stoi(std::string(*std::next(day_flag))));
+        std::cout << "paddock-gui: showing day " << *std::next(day_flag) << '\n';
+      }
+
+      // Inspecting a paddock, so the chain from a screen point to a paddock's
+      // numbers can be checked by something other than a person clicking.
+      //
+      // **And checked, not merely exercised.** That chain - a screen pixel, the
+      // ground under it, the paddock containing it, the cells that paddock owns
+      // - has four places to get a coordinate frame wrong, and every one of
+      // them returns a real paddock with believable numbers for the wrong piece
+      // of ground. Qt measures y down and VTK measures it up, which is the
+      // easiest of the four to get backwards and the hardest to notice.
+      if (std::find(args.begin(), args.end(), "--inspect") != args.end()) {
+        const int width = window.render_width();
+        const int height = window.render_height();
+        const auto at = [&window](double across, double up) {
+          return std::pair<int, int>{static_cast<int>(window.render_width() * across),
+                                     static_cast<int>(window.render_height() * up)};
+        };
+        const std::pair<int, int> north_west = at(0.30, 0.70);
+        const std::pair<int, int> south_east = at(0.70, 0.30);
+
+        for (const std::pair<const char*, std::pair<int, int>>& spot :
+             {std::pair<const char*, std::pair<int, int>>{"centre", at(0.50, 0.50)},
+              {"north-west", north_west},
+              {"south-east", south_east}}) {
+          std::cout << "paddock-gui: " << spot.first << " -> "
+                    << window.inspect_pixel(spot.second.first, spot.second.second) << '\n';
+        }
+
+        // The flat map is drawn north up and east right, so a point up and to
+        // the left of another must come back further north and further west.
+        // In the terrain view the camera carries a bearing and this does not
+        // hold, so it is not asserted there.
+        if (width > 0 && height > 0 &&
+            std::find(args.begin(), args.end(), "--terrain") == args.end()) {
+          const std::optional<paddock::core::Point2D> up_left =
+              window.ground_under(north_west.first, north_west.second);
+          const std::optional<paddock::core::Point2D> down_right =
+              window.ground_under(south_east.first, south_east.second);
+          if (!up_left.has_value() || !down_right.has_value()) {
+            std::cerr << "paddock-gui: --inspect could not find the ground under the map" << '\n';
+            return 1;
+          }
+          if (up_left->easting >= down_right->easting ||
+              up_left->northing <= down_right->northing) {
+            std::cerr << "paddock-gui: the map's north-west reads as " << up_left->easting << ", "
+                      << up_left->northing << " and its south-east as " << down_right->easting
+                      << ", " << down_right->northing
+                      << " - the picked ground is mirrored, so a click reports the wrong paddock"
+                      << '\n';
+            return 1;
+          }
+          std::cout << "paddock-gui: the picked ground runs north-west to south-east correctly"
+                    << '\n';
+        }
+      }
+
+      // The day being shown, reported last on purpose.
+      //
+      // This line describes the day on screen, and several things above it move
+      // that day: the width check plays the run, --then opens another farm, and
+      // --day goes where it is told. Printed where it used to be - up with the
+      // summary of the run - it named whichever day the timeline first opened on
+      // and was then left behind, so the console described February while the
+      // picture showed June. It misled twice before it was moved.
+      if (const std::string& weather = window.weather_line(); !weather.empty()) {
+        std::cout << "paddock-gui: weather " << weather << '\n';
       }
 
       const auto panel_flag = std::find(args.begin(), args.end(), "--panel-shot");
