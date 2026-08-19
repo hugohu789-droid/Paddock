@@ -6,23 +6,33 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+#include <vtkAppendPolyData.h>
 #include <vtkCamera.h>
 #include <vtkCellArray.h>
+#include <vtkContourFilter.h>
 #include <vtkDataSetMapper.h>
 #include <vtkDoubleArray.h>
+#include <vtkGPUVolumeRayCastMapper.h>
+#include <vtkPerlinNoise.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkPolyDataNormals.h>
 #include <vtkProperty.h>
+#include <vtkSampleFunction.h>
+#include <vtkSphereSource.h>
 #include <vtkStructuredGridGeometryFilter.h>
 #include <vtkTextProperty.h>
+#include <vtkVolumeProperty.h>
 
+#include <paddock/core/Distributions.hpp>
 #include <paddock/core/Solar.hpp>
+#include <paddock/viz/CloudLayer.hpp>
 #include <paddock/viz/ColourTable.hpp>
 #include <paddock/viz/MobMarkers.hpp>
 #include <paddock/viz/TerrainScene.hpp>
@@ -49,6 +59,8 @@ constexpr double kFenceOpacity = 0.5;
 // a real one is about a metre - but a marker has to be findable on a farm
 // drawn a kilometre wide, and a flock of them reads as a flock.
 constexpr double kMarkerSizeM = 8.0;
+
+constexpr double kPi = 3.14159265358979323846;
 
 constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
 
@@ -79,6 +91,60 @@ TerrainScene::TerrainScene() {
   renderer_->AddLight(sky_);
 
   renderer_->SetAutomaticLightCreation(0);
+
+  // The sky. Lighting is off on all four: these are symbols and their colour
+  // is their meaning, so a light falling across them would change what they
+  // say.
+  sun_actor_->SetMapper(nullptr);
+  for (const auto& pair : {std::make_pair(sun_disc_.Get(), sun_actor_.Get()),
+                           std::make_pair(rain_lines_.Get(), rain_actor_.Get()),
+                           std::make_pair(wind_marks_.Get(), wind_actor_.Get())}) {
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(pair.first);
+    // **No scalar colouring on any of these.** Their colour is their meaning
+    // and it is set on the actor. The cloud is cut from a noise field and
+    // carries that field's values with it; mapped through a lookup table they
+    // painted it bright red, which is a data colour on a thing that is not
+    // data.
+    mapper->ScalarVisibilityOff();
+    pair.second->SetMapper(mapper);
+    pair.second->GetProperty()->LightingOff();
+    renderer_->AddActor(pair.second);
+  }
+
+  sun_actor_->GetProperty()->SetColor(1.0, 0.93, 0.62);
+
+  // The cloud is a volume, not an actor with a surface. Ray casting through a
+  // density field is how cloud is actually drawn: there is no shell to catch
+  // the light wrongly, and the edges fray because the density does.
+  vtkNew<vtkGPUVolumeRayCastMapper> cloud_mapper;
+  cloud_mapper->SetInputData(cloud_density_);
+  cloud_mapper->SetBlendModeToComposite();
+
+  vtkNew<vtkVolumeProperty> cloud_property;
+  cloud_property->SetColor(cloud_colour_);
+  cloud_property->SetScalarOpacity(cloud_opacity_);
+  cloud_property->SetInterpolationTypeToLinear();
+  // Lit, so the top of the cloud is brighter than its underside, which is what
+  // separates a cloud from a puff of smoke.
+  cloud_property->ShadeOn();
+  cloud_property->SetAmbient(0.55);
+  cloud_property->SetDiffuse(0.65);
+  cloud_property->SetSpecular(0.0);
+
+  cloud_volume_->SetMapper(cloud_mapper);
+  cloud_volume_->SetProperty(cloud_property);
+  // Hidden until a day has been drawn. An empty volume still has bounds - a
+  // unit box at the origin - and a renderer asked for the extent of what it
+  // can see would hand back a farm stretching from Lincoln to the middle of
+  // the projection. That is not a test artefact: the camera is placed from
+  // those bounds, so a stray volume would have framed every scene wrongly.
+  cloud_volume_->SetVisibility(0);
+  renderer_->AddVolume(cloud_volume_);
+  rain_actor_->GetProperty()->SetColor(0.62, 0.76, 0.95);
+  rain_actor_->GetProperty()->SetLineWidth(1.5);
+  wind_actor_->GetProperty()->SetColor(0.80, 0.85, 0.92);
+  wind_actor_->GetProperty()->SetLineWidth(2.0);
 
   surface_mapper_->SetLookupTable(lookup_);
   surface_mapper_->SetScalarModeToUsePointData();
@@ -247,6 +313,23 @@ void TerrainScene::rebuild_surface() {
     }
   }
 
+  // Where to hang the sky. Taken from the field rather than from the render
+  // window, so it is the farm's extent and not whatever happens to be in view.
+  {
+    const core::GeoTransform& transform = field_.transform();
+    sky_width_ = static_cast<double>(cols) * transform.cell_size;
+    sky_height_ = static_cast<double>(rows) * transform.cell_size;
+    sky_east_ = transform.origin_easting + (sky_width_ / 2.0);
+    sky_north_ = transform.origin_northing - (sky_height_ / 2.0);
+    // **Clear of the ground, whatever the ground is doing.** The sky has to sit
+    // above the terrain as drawn, not above sea level, or a farm at twenty
+    // times exaggeration reaches up into its own weather - which put a
+    // translucent cloud between the camera and the paddocks and tinted them.
+    // That is the same fault the weather was moved out of the lighting to
+    // avoid, arriving through a different door.
+    sky_top_ = (highest_m_ * exaggeration_) + (std::max(sky_width_, sky_height_) * 0.60);
+  }
+
   surface_->SetDimensions(cols, rows, 1);
   surface_->SetPoints(points);
   surface_->GetPointData()->SetScalars(scalars);
@@ -367,86 +450,318 @@ void TerrainScene::clear_boundaries() {
   rebuild_fences();
 }
 
-void TerrainScene::light_for(double latitude_degrees, int day_of_year, double solar_hour,
-                             double clearness_index) {
-  const core::SunPosition sun = core::sun_position(latitude_degrees, day_of_year, solar_hour);
+void TerrainScene::light_the_ground() {
+  // **The ground is lit by a fixed light, and the weather does not touch it.**
+  //
+  // The colour on this surface is a reading off a legend: 3500 kg DM/ha has to
+  // be the same pixel colour on every day of the run, or the map cannot be
+  // compared with its own scale, let alone with yesterday. Lighting it with
+  // the day's sun broke exactly that - the same paddock came out pale under
+  // cloud and was read as having less feed on it, when what had changed was
+  // the light.
+  //
+  // So this light never moves and never dims. What it gives is relief: a
+  // slope facing it is brighter than one facing away, which is the hillshade
+  // of any topographic map, and it is the same hillshade every day. The
+  // weather is drawn in the sky instead, where it is a picture of itself
+  // rather than a filter over the data.
+  //
+  // North-west at 45 degrees, which is where cartographic convention puts the
+  // light. It is not where the sun is - the real sun is drawn overhead by
+  // show_sky() - and it is not meant to be.
+  constexpr double kHillshadeBearing = 315.0 * kDegreesToRadians;
+  constexpr double kHillshadeElevation = 45.0 * kDegreesToRadians;
+  constexpr double kFarAway = 100000.0;
 
-  // A direction on the unit sphere, from the compass bearing and the height.
-  // VTK's y is north and its x is east, matching the ground coordinates this
-  // scene draws in.
+  const double horizontal = std::cos(kHillshadeElevation);
+  sun_->SetFocalPoint(0.0, 0.0, 0.0);
+  sun_->SetPosition(horizontal * std::sin(kHillshadeBearing) * kFarAway,
+                    horizontal * std::cos(kHillshadeBearing) * kFarAway,
+                    std::sin(kHillshadeElevation) * kFarAway);
+  sun_->SetIntensity(0.55);
+  sun_->SetColor(1.0, 1.0, 1.0);
+
+  // A fill from overhead so that ground facing away from the hillshade is
+  // shaded rather than black. Also fixed.
+  sky_->SetFocalPoint(0.0, 0.0, 0.0);
+  sky_->SetPosition(0.0, 0.0, kFarAway);
+  sky_->SetIntensity(0.45);
+  sky_->SetColor(1.0, 1.0, 1.0);
+}
+
+namespace {
+
+/// A ball of `radius` at `centre`, as polygons.
+///
+/// A ball rather than a disc, and the reason is not decoration: a flat disc
+/// has to face somewhere, and from any other angle it is an ellipse. The sun
+/// came out squashed that way. A sphere is round from everywhere, which is
+/// what the sun is.
+void append_ball(const std::array<double, 3>& centre, double radius, int resolution,
+                 vtkAppendPolyData* into) {
+  vtkNew<vtkSphereSource> ball;
+  ball->SetCenter(centre[0], centre[1], centre[2]);
+  ball->SetRadius(radius);
+  ball->SetThetaResolution(resolution);
+  ball->SetPhiResolution(resolution);
+  ball->Update();
+  into->AddInputData(ball->GetOutput());
+}
+
+}  // namespace
+
+void TerrainScene::build_cloud_density() {
+  // 128 x 128 x 64 voxels over the sky above the farm - a million of them,
+  // which is plenty for a farm and cheap enough to build once.
+  //
+  // **Built once, on purpose.** The field never changes; what changes with the
+  // day is the opacity it is drawn at. Rebuilding it every frame would cost a
+  // million noise evaluations for a picture that must not move anyway - the
+  // series carries no cloud field, so a cloud that rearranged itself overnight
+  // would be showing weather nobody recorded.
+  constexpr int kAcross = 128;
+  constexpr int kDeep = 64;
+  const double span = std::max(sky_width_, sky_height_);
+  const double half_w = sky_width_ * 0.55;
+  const double half_h = sky_height_ * 0.55;
+  const double thickness = span * 0.22;
+
+  cloud_density_->SetDimensions(kAcross, kAcross, kDeep);
+  cloud_density_->SetOrigin(sky_east_ - half_w, sky_north_ - half_h, sky_top_ - (thickness / 2.0));
+  cloud_density_->SetSpacing((2.0 * half_w) / (kAcross - 1), (2.0 * half_h) / (kAcross - 1),
+                             thickness / (kDeep - 1));
+  cloud_density_->AllocateScalars(VTK_FLOAT, 1);
+
+  vtkNew<vtkPerlinNoise> noise;
+  const double frequency = 4.5 / span;
+  noise->SetFrequency(frequency, frequency, frequency);
+
+  // A second, finer pass laid over the first. One frequency gives smooth
+  // lumps; two give a cloud an edge that frays.
+  vtkNew<vtkPerlinNoise> detail;
+  const double fine = frequency * 3.1;
+  detail->SetFrequency(fine, fine, fine);
+  detail->SetPhase(0.3, 0.7, 0.1);
+
+  auto* voxels = static_cast<float*>(cloud_density_->GetScalarPointer());
+  const double base = sky_top_ - (thickness / 2.0);
+  for (int k = 0; k < kDeep; ++k) {
+    const double z = base + (k * (thickness / (kDeep - 1)));
+
+    // Where in the slab this layer sits, 0 at the base and 1 at the top.
+    const double up = static_cast<double>(k) / (kDeep - 1);
+
+    // A cloud has a flat underside and a domed top: dense low down, thinning
+    // upward. Both ends are faded so the field does not end in a hard face.
+    const double shape = std::sin(3.14159265358979323846 * std::pow(up, 0.7));
+
+    for (int j = 0; j < kAcross; ++j) {
+      const double y = (sky_north_ - half_h) + (j * ((2.0 * half_h) / (kAcross - 1)));
+      for (int i = 0; i < kAcross; ++i) {
+        const double x = (sky_east_ - half_w) + (i * ((2.0 * half_w) / (kAcross - 1)));
+
+        std::array<double, 3> at{x, y, z};
+        const double coarse = noise->EvaluateFunction(at.data());
+        const double fine_value = detail->EvaluateFunction(at.data());
+        const double lumpy = (0.72 * coarse) + (0.28 * fine_value);
+
+        // Fade towards the edges of the box, so the cloud does not end in a
+        // wall where the sampling does.
+        const double edge_x = 1.0 - std::pow(std::abs((x - sky_east_) / half_w), 3.0);
+        const double edge_y = 1.0 - std::pow(std::abs((y - sky_north_) / half_h), 3.0);
+        const double edge = std::clamp(edge_x, 0.0, 1.0) * std::clamp(edge_y, 0.0, 1.0);
+
+        const double density = std::clamp((lumpy + 1.0) / 2.0, 0.0, 1.0) * shape * edge;
+        voxels[(static_cast<std::size_t>(k) * kAcross * kAcross) +
+               (static_cast<std::size_t>(j) * kAcross) + static_cast<std::size_t>(i)] =
+            static_cast<float>(density);
+      }
+    }
+  }
+  cloud_density_->Modified();
+  cloud_built_ = true;
+}
+
+void TerrainScene::show_weather(bool visible) {
+  weather_shown_ = visible;
+  const int on = visible ? 1 : 0;
+  sun_actor_->SetVisibility(on);
+  cloud_volume_->SetVisibility(on);
+  rain_actor_->SetVisibility(on);
+  wind_actor_->SetVisibility(on);
+}
+
+void TerrainScene::show_sky(double latitude_degrees, int day_of_year, double solar_hour,
+                            double clearness_index, double rainfall_mm, double wind_speed_m_per_s,
+                            double uv_index) {
+  if (!has_field_) {
+    return;
+  }
+  const double clearness = std::clamp(clearness_index, 0.0, 1.0);
+  const double span = std::max(sky_width_, sky_height_);
+
+  // How high the weather floats over the ground as drawn. Everything else in
+  // the sky is placed against this, and it already clears the terrain at any
+  // exaggeration - see where sky_top_ is worked out.
+  const double cloud_height = sky_top_;
+
+  // ------------------------------------------------------------------ the sun
+  //
+  // **On its true ray.** The bearing and the elevation are FAO-56 geometry for
+  // the date, the latitude and the hour, and neither is bent to tidy the
+  // picture. What is chosen is how far along that ray it sits, and it is
+  // chosen so that it clears the cloud: a sun drawn behind the weather it is
+  // shining through is a picture of nothing.
+  //
+  // A low winter sun therefore sits further out than a high summer one, which
+  // is what a low sun does.
+  const core::SunPosition sun = core::sun_position(latitude_degrees, day_of_year, solar_hour);
   const double elevation = sun.elevation_degrees * kDegreesToRadians;
   const double azimuth = sun.azimuth_degrees * kDegreesToRadians;
-  const double horizontal = std::cos(elevation);
-  const double east = horizontal * std::sin(azimuth);
-  const double north = horizontal * std::cos(azimuth);
-  const double up = std::sin(elevation);
-
-  // The light shines from the sun towards the focal point, so the light's
-  // position is out along the sun's direction. Distance is arbitrary for a
-  // directional light and only has to be outside the scene.
-  constexpr double kFarAway = 100000.0;
-  sun_->SetFocalPoint(0.0, 0.0, 0.0);
-  sun_->SetPosition(east * kFarAway, north * kFarAway, std::max(up, 0.05) * kFarAway);
-
-  // How much of the sun got through, and what that leaves the sky looking
-  // like. The intensities are a drawing choice; the number driving them is
-  // not. Clear is not full brightness, because a surface lit at 1.0 with no
-  // ambient reads as white paper rather than as a paddock.
-  const double clearness = std::clamp(clearness_index, 0.0, 1.0);
-  const core::SkyCondition sky = core::sky_from_clearness(clearness);
-
-  // Between the Angstrom endpoints, so a dull day is dimmer than a bright one
-  // by the ratio the radiation actually differed by.
-  constexpr double kOvercastClearness = 0.25;
-  constexpr double kClearClearness = 0.75;
-  const double lit = std::clamp(
-      (clearness - kOvercastClearness) / (kClearClearness - kOvercastClearness), 0.0, 1.0);
-
-  // **The split between the two lights is the clearness index itself**, and
-  // that is not a fudge to keep the picture bright. Rs/Ra IS the share of the
-  // sky's radiation that arrived as direct beam rather than scattered - that
-  // is what FAO-56 Eq. 35's Angstrom relation describes - so a clear day is
-  // mostly sun and an overcast one is mostly sky. Their sum is held roughly
-  // level, because a dull day is duller and not darker.
+  // **On a dome whose origin sits above the cloud.**
   //
-  // The consequence worth stating: relief is easiest to see on a clear day and
-  // nearly flat on an overcast one, which is what a paddock looks like.
+  // The bearing and the elevation are FAO-56 geometry for the date, the
+  // latitude and the hour, and neither is bent to tidy the picture. What is
+  // chosen is where that dome is centred and how wide it is - and the distance
+  // to the sun means nothing in a drawing, it being 150 million km away, so
+  // choosing it costs no truth.
   //
-  // Their SPLIT is the clearness index and is not a choice. Their SUM is a
-  // drawing choice, and is said to be one: it is set so that level ground
-  // lands a little under full brightness, because a surface lit to 1.0 washes
-  // the colour ramp out - a paddock at 3500 kg DM/ha came back grey-green
-  // instead of green, and read as having less feed on it rather than more.
-  sun_->SetIntensity(0.25 + (0.55 * lit));
-  sky_->SetIntensity(0.45 - (0.20 * lit));
-
-  // A dull sky is a little bluer than a bright one, and the sun a little
-  // warmer. Both stay close to white: this is lighting, not a filter.
-  sky_->SetColor(0.90 + (0.06 * lit), 0.93 + (0.04 * lit), 1.0);
-
-  // Warm and low under a clear sky, flat and grey under cloud - which is what
-  // the light itself does, not a filter over the picture.
-  sun_->SetColor(1.0 - (0.10 * (1.0 - lit)), 0.98 - (0.06 * (1.0 - lit)),
-                 0.92 + (0.06 * (1.0 - lit)));
-
-  switch (sky) {
-    case core::SkyCondition::Clear:
-      renderer_->SetBackground(0.09, 0.13, 0.20);
-      break;
-    case core::SkyCondition::PartlyCloudy:
-      renderer_->SetBackground(0.13, 0.15, 0.18);
-      break;
-    case core::SkyCondition::Overcast:
-      renderer_->SetBackground(0.17, 0.18, 0.19);
-      break;
+  // Centred above the cloud rather than on the ground, so the sun is never
+  // drawn behind the weather it is shining through; and narrow enough that it
+  // stays over the farm rather than out past its edge, which is where an
+  // earlier version put it.
+  const double cloud_top = cloud_height + (span * 0.10);
+  const double dome = span * 0.55;
+  const std::array<double, 3> sun_at{sky_east_ + (dome * std::cos(elevation) * std::sin(azimuth)),
+                                     sky_north_ + (dome * std::cos(elevation) * std::cos(azimuth)),
+                                     cloud_top + (dome * std::sin(std::max(elevation, 0.0)))};
+  {
+    vtkNew<vtkAppendPolyData> append;
+    append_ball(sun_at, span * 0.06, 24, append);
+    append->Update();
+    sun_disc_->DeepCopy(append->GetOutput());
   }
 
-  // Below the horizon there is no sun to light anything with. It cannot happen
-  // at 14:00 solar time anywhere in New Zealand - the lowest is about 17
-  // degrees at midwinter - but this scene does not know it will only ever be
-  // asked about that hour.
-  if (!sun.is_up()) {
-    sun_->SetIntensity(0.15);
+  // Brightness from the ultraviolet index, which is measured, and not from the
+  // radiation, which is a different quantity entirely. New Zealand's runs from
+  // about 1 in midwinter to above 12 in midsummer, so 12 is the top of the
+  // scale. A series carrying no ultraviolet gets a fixed sun rather than an
+  // invented one.
+  const double uv = std::clamp(uv_index / 12.0, 0.0, 1.0);
+  const double glow = uv_index > 0.0 ? 0.35 + (0.65 * uv) : 0.7;
+  sun_actor_->GetProperty()->SetColor(1.0, 0.80 + (0.15 * glow), 0.30 + (0.45 * glow));
+  sun_actor_->GetProperty()->SetOpacity(sun.is_up() ? 0.55 + (0.45 * glow) : 0.2);
+
+  // ---------------------------------------------------------------- the cloud
+  //
+  // A density field, ray cast. The field is built once and never moves; what
+  // the day changes is how much of it is visible.
+  //
+  // **What is measured and what is drawn.** The clearness index says how much
+  // of the sky's radiation reached the ground, read against FAO-56 Eq. 35's
+  // Angstrom endpoints - 0.75 for full sun, 0.25 for none of it direct. That
+  // becomes the layer's coverage, and coverage sets where the opacity ramp
+  // starts: a clear day makes only the densest cores visible and leaves a few
+  // fair-weather lumps, an overcast day makes nearly the whole field visible.
+  // Everything else about the cloud - how high it floats, how deep it is, how
+  // lumpy - is a drawing choice and says so in CloudLayer.
+  const CloudLayer layer{std::clamp((0.75 - clearness) / 0.5, 0.0, 1.0), cloud_height, span * 0.22};
+  {
+    if (!cloud_built_) {
+      build_cloud_density();
+    }
+
+    // Where the ramp begins. High on a clear day, so almost nothing shows;
+    // low on a dull one, so most of the field does.
+    const double onset = 0.62 - (0.42 * layer.coverage);
+    const double peak = std::min(0.98, onset + 0.30);
+
+    cloud_opacity_->RemoveAllPoints();
+    cloud_opacity_->AddPoint(0.0, 0.0);
+    cloud_opacity_->AddPoint(onset, 0.0);
+    cloud_opacity_->AddPoint(peak, 0.16 + (0.30 * layer.coverage));
+    cloud_opacity_->AddPoint(1.0, 0.22 + (0.38 * layer.coverage));
+
+    // Greyer as it thickens, because a heavy cloud is grey from underneath.
+    const double grey = 0.97 - (0.30 * layer.coverage);
+    cloud_colour_->RemoveAllPoints();
+    cloud_colour_->AddRGBPoint(0.0, grey, grey, std::min(1.0, grey + 0.03));
+    cloud_colour_->AddRGBPoint(1.0, grey, grey, std::min(1.0, grey + 0.03));
+
+    cloud_volume_->SetVisibility(weather_shown_ && layer.coverage > 0.02 ? 1 : 0);
+  }
+
+  // ----------------------------------------------------------------- the rain
+  //
+  // Falling over the whole farm, because the day's rainfall is one number for
+  // the whole farm. How many lines follows the millimetres; where each one
+  // falls means nothing and is fixed, so the picture does not shimmer while
+  // the timeline plays.
+  {
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> lines;
+    const int drops = static_cast<int>(std::clamp(rainfall_mm * 14.0, 0.0, 450.0));
+    std::mt19937_64 placer(0x5EED5EEDULL);
+    for (int i = 0; i < drops; ++i) {
+      const double east = sky_east_ + (core::uniform(placer, -0.45, 0.45) * sky_width_);
+      const double north = sky_north_ + (core::uniform(placer, -0.45, 0.45) * sky_height_);
+      const double top = cloud_height * core::uniform(placer, 0.30, 0.94);
+      const double length = span * 0.035;
+      const vtkIdType first = points->GetNumberOfPoints();
+      points->InsertNextPoint(east, north, top);
+      points->InsertNextPoint(east, north, top - length);
+      lines->InsertNextCell(2);
+      lines->InsertCellPoint(first);
+      lines->InsertCellPoint(first + 1);
+    }
+    rain_lines_->SetPoints(points);
+    rain_lines_->SetLines(lines);
+    rain_lines_->Modified();
+    rain_actor_->SetVisibility(drops > 0 ? 1 : 0);
+    rain_actor_->GetProperty()->SetOpacity(0.45 + std::clamp(rainfall_mm / 30.0, 0.0, 0.45));
+  }
+
+  // ----------------------------------------------------------------- the wind
+  //
+  // **Strength and nothing else.** The series carries a speed and no bearing,
+  // so the gusts are laid out around the whole compass at once and no one of
+  // them is the wind's. A set of parallel streaks would have drawn the single
+  // thing the data does not have.
+  //
+  // Curved and multi-segment so they read as moving air rather than as marks
+  // on a pane.
+  {
+    const double strength = std::clamp(wind_speed_m_per_s / 20.0, 0.0, 1.0);
+    const int gusts = static_cast<int>(std::round(strength * 8.0));
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> lines;
+
+    for (int gust = 0; gust < gusts; ++gust) {
+      const double bearing = (2.0 * kPi * gust) / std::max(gusts, 1);
+      const double radius = span * (0.34 + (0.06 * (gust % 3)));
+      const double height = cloud_height + (span * 0.10) + (span * 0.02 * ((gust % 4) - 1.5));
+      const double arc = 0.55 + (0.45 * strength);
+
+      constexpr int kSegments = 12;
+      const vtkIdType first = points->GetNumberOfPoints();
+      for (int i = 0; i <= kSegments; ++i) {
+        const double along = bearing + ((arc * i) / kSegments) - (arc / 2.0);
+        points->InsertNextPoint(sky_east_ + (radius * std::sin(along)),
+                                sky_north_ + (radius * std::cos(along) * 0.55),
+                                height + (span * 0.015 * std::sin(3.0 * along)));
+      }
+      lines->InsertNextCell(kSegments + 1);
+      for (int i = 0; i <= kSegments; ++i) {
+        lines->InsertCellPoint(first + i);
+      }
+    }
+
+    wind_marks_->SetPoints(points);
+    wind_marks_->SetLines(lines);
+    wind_marks_->Modified();
+    wind_actor_->SetVisibility(gusts > 0 ? 1 : 0);
+    wind_actor_->GetProperty()->SetLineWidth(static_cast<float>(1.0 + (2.5 * strength)));
+    wind_actor_->GetProperty()->SetOpacity(0.40 + (0.45 * strength));
   }
 }
 

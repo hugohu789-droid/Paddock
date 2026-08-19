@@ -16,11 +16,15 @@
     "utc_offset_seconds": 43200
   },
   "measurement": "reanalysis, not observation",
+  "sources_by_column": {
+    "rainfall_mm, min_air_temperature_c, max_air_temperature_c, solar_radiation_mj_per_m2, wind_speed_m_per_s": "Open-Meteo historical archive (ERA5)",
+    "uv_index": "Open-Meteo air quality API (CAMS), daily maximum - the archive carries no ultraviolet"
+  },
   "wind_height_m": 10,
   "wind_statistic": "daily maximum, not daily mean",
   "days": 366,
   "licence": "CC-BY-4.0",
   "attribution": "Weather data by Open-Meteo.com (https://open-meteo.com), licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5).",
-  "fetched_utc": "2026-08-19T07:24:33.878991+00:00",
-  "sha256": "86bfba5bffdef1879dd2aeb44f915d5a4623e1a47cd12c9e2c4089ecc137d6b4"
+  "fetched_utc": "2026-08-19T10:12:42.760355+00:00",
+  "sha256": "8252d1baf9399fd77d6420bc72e4ac0a1e60f59721c5e363f217104f4475e552"
 }

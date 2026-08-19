@@ -59,12 +59,25 @@ latitude_degrees = -43.641
 # value, and never above 1.0, so the series never reports more sun than the sky
 # at this latitude can deliver.
 #
+# **Two models in one file.** Everything but the ultraviolet is ERA5, from the
+# archive endpoint. The archive carries no ultraviolet at all - asking it
+# returns a column of nulls - so `uv_index` comes from the air quality endpoint,
+# which is CAMS: a different reanalysis by a different group. The provenance
+# file names which column came from which, and a run should not treat the two
+# as one measurement.
+#
+# The ultraviolet is a daily maximum and is dimensionless. It peaks at 11.6 on
+# 13 January and falls to 0.15 in late July, with a January mean of 8.7 against
+# June's 0.9 - which is New Zealand, where the summer index is high for the
+# latitude because of the ozone above it rather than because of the sun's
+# height.
+#
 # Wind is carried and **nothing in the model reads it** - see docs/verify.md
 # E12. It is a daily maximum at 10 m, not a mean at the 2 m most agronomic
 # equations expect, which is another reason not to feed it to one yet.
 kind = "snapshot"
 path = "weather-2023.csv"
-sha256 = "86bfba5bffdef1879dd2aeb44f915d5a4623e1a47cd12c9e2c4089ecc137d6b4"
+sha256 = "8252d1baf9399fd77d6420bc72e4ac0a1e60f59721c5e363f217104f4475e552"
 dataset = "Open-Meteo historical weather API (ERA5 reanalysis)"
 licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5)."
 

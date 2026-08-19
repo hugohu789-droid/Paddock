@@ -8,14 +8,19 @@
 #include <utility>
 #include <vector>
 #include <vtkActor.h>
+#include <vtkColorTransferFunction.h>
+#include <vtkImageData.h>
 #include <vtkLight.h>
 #include <vtkLookupTable.h>
 #include <vtkNew.h>
+#include <vtkPiecewiseFunction.h>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
+#include <vtkProperty.h>
 #include <vtkRenderer.h>
 #include <vtkScalarBarActor.h>
 #include <vtkStructuredGrid.h>
+#include <vtkVolume.h>
 
 #include <paddock/core/Geometry.hpp>
 #include <paddock/core/Raster.hpp>
@@ -64,8 +69,7 @@ class TerrainScene {
   /// view exists to show is invisible. Exaggeration is the usual answer and it
   /// makes every slope look steeper than it is, so the factor is reported
   /// rather than quietly applied, and one is the default.
-  /// Light the ground with the sun of a particular day, and colour the sky by
-  /// how much of that sun reached the ground.
+  /// Light the ground, the same way on every day of the run.
   ///
   /// **Everything here is a number the run was driven by.** The sun's position
   /// is FAO-56 geometry from the date and the latitude - the same declination
@@ -79,8 +83,45 @@ class TerrainScene {
   /// The hour is the caller's, and it is solar time. Passing a wall clock hour
   /// would put the sun in the wrong part of the sky by half an hour of
   /// rotation at this longitude.
-  void light_for(double latitude_degrees, int day_of_year, double solar_hour,
-                 double clearness_index);
+  void light_the_ground();
+
+  /// Draw the day's weather in the sky over the farm.
+  ///
+  /// **Everything here is a glyph for a number the run was driven by, and
+  /// nothing here touches the grass.** The colour on the ground is a reading
+  /// off a legend and has to mean the same thing on every day of the run, so
+  /// the weather is drawn beside it rather than over it.
+  ///
+  /// What each thing stands for:
+  ///   * the sun sits where FAO-56 geometry puts it for the date, the latitude
+  ///     and the hour, and its brightness follows the day's ultraviolet index;
+  ///   * the cloud's opacity follows the clearness index Rs/Ra, so a dull day
+  ///     has a thicker sheet - the shape is a drawing and the thickness is a
+  ///     measurement;
+  ///   * the rain's density follows the day's total in millimetres, and it
+  ///     falls over the whole farm because the series has one value for the
+  ///     whole farm;
+  ///   * the wind is drawn as strength alone. **There is no direction in the
+  ///     data**, so nothing here points anywhere: an arrow would be inventing
+  ///     the one thing the series does not carry.
+  ///
+  /// `uv_index` is dimensionless and zero when the series carries none, in
+  /// which case the sun is drawn at a fixed brightness rather than a made-up
+  /// one.
+  void show_sky(double latitude_degrees, int day_of_year, double solar_hour, double clearness_index,
+                double rainfall_mm = 0.0, double wind_speed_m_per_s = 0.0, double uv_index = 0.0);
+
+  /// Show or hide the weather drawn over the farm.
+  ///
+  /// **The reason this exists is the colour on the ground.** A cloud rendered
+  /// as a density field is translucent by construction - that is what makes it
+  /// look like cloud rather than like a grey solid - and anything translucent
+  /// between the camera and the paddocks shifts a colour the reader is meant
+  /// to match against the legend. Turning the sky off makes the map exact
+  /// again. Neither answer serves both jobs, so both are offered.
+  void show_weather(bool visible);
+
+  [[nodiscard]] bool weather_shown() const noexcept { return weather_shown_; }
 
   void set_vertical_exaggeration(double factor);
 
@@ -90,6 +131,25 @@ class TerrainScene {
   /// checked without a render window: a light that never moved would look
   /// entirely plausible on ground that falls six metres in a kilometre.
   [[nodiscard]] vtkLight* sun() const noexcept { return sun_; }
+
+  /// The sky's glyphs, exposed so what they say can be checked without a
+  /// render window. A screenshot cannot tell a sun that moves with the season
+  /// from one that is painted in place.
+  [[nodiscard]] vtkPolyData* sun_disc() const noexcept { return sun_disc_; }
+
+  [[nodiscard]] vtkVolume* cloud() const noexcept { return cloud_volume_; }
+
+  /// The opacity the cloud is drawn at, which is where the day's cloud cover
+  /// ends up. Exposed so a test can read the day off the picture.
+  [[nodiscard]] vtkPiecewiseFunction* cloud_opacity() const noexcept { return cloud_opacity_; }
+
+  [[nodiscard]] vtkActor* rain() const noexcept { return rain_actor_; }
+
+  [[nodiscard]] vtkPolyData* rain_lines() const noexcept { return rain_lines_; }
+
+  [[nodiscard]] vtkActor* wind() const noexcept { return wind_actor_; }
+
+  [[nodiscard]] vtkPolyData* wind_marks() const noexcept { return wind_marks_; }
 
   /// Looks at the farm from the north-west and above, the angle a farm is
   /// usually photographed from.
@@ -132,6 +192,42 @@ class TerrainScene {
   /// The sky. A second light from overhead standing in for the light that
   /// arrives from every direction rather than from the sun.
   vtkNew<vtkLight> sky_;
+
+  /// The weather drawn over the farm: the sun, a sheet of cloud, falling rain,
+  /// and a mark for the wind's strength. All of them are glyphs, all of them
+  /// are driven by the day's own numbers, and none of them colours the ground.
+  vtkNew<vtkPolyData> sun_disc_;
+  vtkNew<vtkActor> sun_actor_;
+  /// The cloud, as a density field rendered by ray casting rather than as a
+  /// surface.
+  ///
+  /// **Built once and never rebuilt.** The noise field is fixed; what changes
+  /// from day to day is how much of it is made visible, which is the opacity
+  /// transfer function. That is both the fast way and the honest one - a
+  /// million voxels is not something to recompute every frame, and the series
+  /// carries no cloud field, so cloud that rearranged itself overnight would
+  /// be showing weather nobody recorded.
+  vtkNew<vtkImageData> cloud_density_;
+  vtkNew<vtkVolume> cloud_volume_;
+  vtkNew<vtkPiecewiseFunction> cloud_opacity_;
+  vtkNew<vtkColorTransferFunction> cloud_colour_;
+  bool cloud_built_ = false;
+
+  /// Builds the density field. Called once, on the first day drawn.
+  void build_cloud_density();
+  vtkNew<vtkPolyData> rain_lines_;
+  vtkNew<vtkActor> rain_actor_;
+  vtkNew<vtkPolyData> wind_marks_;
+  vtkNew<vtkActor> wind_actor_;
+
+  /// The farm's extent, kept so the sky can be hung over it.
+  double sky_east_ = 0.0;
+  double sky_north_ = 0.0;
+  double sky_width_ = 0.0;
+  double sky_height_ = 0.0;
+  double sky_top_ = 0.0;
+
+  bool weather_shown_ = true;
   vtkNew<vtkLookupTable> lookup_;
   vtkNew<vtkPolyDataMapper> surface_mapper_;
   vtkNew<vtkActor> surface_actor_;

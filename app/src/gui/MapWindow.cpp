@@ -4,6 +4,7 @@
 #include "MapWindow.hpp"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QDir>
 #include <QDockWidget>
 #include <QHBoxLayout>
@@ -158,8 +159,20 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   height_box_->addItem("Heights x20", 20);
   height_box_->setEnabled(false);
 
+  weather_box_ = new QCheckBox("Weather", this);
+  weather_box_->setChecked(true);
+  weather_box_->setToolTip(
+      "Draw the day's sun, cloud and rain over the farm.\n\n"
+      "Turn it off to read the map exactly: cloud is translucent, and anything translucent "
+      "over the paddocks shifts the colour you are matching against the legend.");
+  connect(weather_box_, &QCheckBox::toggled, this, [this](bool on) {
+    terrain_.show_weather(on);
+    refresh();
+  });
+
   auto* controls = new QHBoxLayout;
   controls->addWidget(view_box_);
+  controls->addWidget(weather_box_);
   controls->addWidget(height_box_);
   controls->addWidget(field_box_);
   controls->addWidget(scale_box_);
@@ -802,8 +815,10 @@ void MapWindow::refresh() {
                                                latitude_degrees_, weather_[day].date.day_of_year()))
                    : 0.0;
   if (have_weather) {
-    terrain_.light_for(latitude_degrees_, weather_[day].date.day_of_year(), kSolarHourShown,
-                       clearness);
+    terrain_.light_the_ground();
+    terrain_.show_sky(latitude_degrees_, weather_[day].date.day_of_year(), kSolarHourShown,
+                      clearness, weather_[day].rainfall_mm, weather_[day].wind_speed_m_per_s,
+                      weather_[day].uv_index);
   }
   show_weather(day, clearness);
 

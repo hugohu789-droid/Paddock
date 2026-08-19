@@ -48,6 +48,14 @@ from pathlib import Path
 
 ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 
+# **A second endpoint, and a second model.** The archive is ERA5 and carries no
+# ultraviolet: asking it for uv_index_max returns a column of nulls with the
+# unit "undefined". The air quality API does carry it, from CAMS, which is a
+# different reanalysis by a different group. Two models in one file is a thing
+# a reader has to be told rather than left to discover, so the provenance
+# records which column came from which.
+AIR_QUALITY = "https://air-quality-api.open-meteo.com/v1/air-quality"
+
 TIMEOUT_SECONDS = 120
 
 LICENCE = "CC-BY-4.0"
@@ -77,6 +85,7 @@ COLUMNS = [
     "max_air_temperature_c",
     "solar_radiation_mj_per_m2",
     "wind_speed_m_per_s",
+    "uv_index",
 ]
 
 
@@ -160,6 +169,45 @@ def rows_from(payload: dict, start: dt.date, end: dt.date) -> list[dict]:
     return rows
 
 
+def add_uv(rows: list[dict], lat: float, lon: float, start: dt.date, end: dt.date,
+           timezone: str) -> None:
+    """Adds the day's peak ultraviolet index to each row, in place.
+
+    The daily maximum rather than a mean, because that is what a person is
+    exposed to and what a sun drawn on a map should be brightest for. It is
+    dimensionless: about 1 in a New Zealand midwinter and above 12 in midsummer,
+    which is high by world standards and is why it is worth showing at all.
+    """
+    query = urllib.parse.urlencode({
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "daily": "uv_index_max",
+        "timezone": timezone,
+    })
+    payload = fetch_json(f"{AIR_QUALITY}?{query}")
+    daily = payload.get("daily", {})
+    values = daily.get("uv_index_max")
+    times = daily.get("time")
+    if not values or not times:
+        raise Failure(
+            "the air quality API returned no ultraviolet. It is a different service from the "
+            "archive and may not cover this period; re-run without it rather than writing a "
+            "column of zeros"
+        )
+
+    by_date = dict(zip(times, values))
+    for row in rows:
+        value = by_date.get(row["date"])
+        if value is None:
+            raise Failure(
+                f"{row['date']}: no ultraviolet index. A gap is refused rather than filled - a "
+                "zero here is a sunless day that did not happen"
+            )
+        row["uv_index"] = value
+
+
 def write_snapshot(rows: list[dict], out: Path) -> str:
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8", newline="\n") as handle:
@@ -214,6 +262,7 @@ def main() -> int:
 
     payload = fetch_json(url)
     rows = rows_from(payload, start, end)
+    add_uv(rows, arguments.lat, arguments.lon, start, end, arguments.timezone)
     digest = write_snapshot(rows, arguments.out)
 
     provenance = {
@@ -238,6 +287,13 @@ def main() -> int:
             "utc_offset_seconds": payload.get("utc_offset_seconds"),
         },
         "measurement": "reanalysis, not observation",
+        "sources_by_column": {
+            "rainfall_mm, min_air_temperature_c, max_air_temperature_c, "
+            "solar_radiation_mj_per_m2, wind_speed_m_per_s":
+                "Open-Meteo historical archive (ERA5)",
+            "uv_index": "Open-Meteo air quality API (CAMS), daily maximum - the archive carries "
+                        "no ultraviolet",
+        },
         "wind_height_m": 10,
         "wind_statistic": "daily maximum, not daily mean",
         "days": len(rows),

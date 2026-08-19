@@ -14,6 +14,8 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include <vtkIdList.h>
+#include <vtkVolume.h>
 
 #include <paddock/core/Geometry.hpp>
 #include <paddock/core/Raster.hpp>
@@ -135,75 +137,175 @@ TEST(TerrainSceneTest, FencesAreDrapedOnTheGround) {
 TEST(TerrainSceneTest, MismatchedShapesAreRefused) {
   TerrainScene scene;
   EXPECT_THROW(scene.show(raster(48, 32, 2000.0), sloping(20, 16),
-                          ColourScale(Ramp::PastureGreen, 0.0, 1.0), "cover"),
+                          ColourScale(Ramp::PastureGreen, 0.0, 5000.0), "cover"),
                std::invalid_argument);
 }
 
 }  // namespace
 
-// The sun moves with the date, and the light follows it.
+// **The ground light does not move.** This is the opposite of what it used to
+// assert, and deliberately so.
 //
-// A screenshot cannot check this: a farm on the Canterbury Plains falls six
-// metres in a kilometre, so midwinter and midsummer light look much the same
-// on it, and a light that never moved would look entirely plausible.
-TEST(TerrainSceneTest, TheLightMovesWithTheDate) {
+// The colour on the surface is a reading off a legend: 3500 kg DM/ha has to be
+// the same pixel colour on every day of the run. Lighting the ground with the
+// day's own sun broke that - the same paddock came out pale under cloud and
+// was read as carrying less feed, when what had changed was the light. The
+// weather moved to the sky; the ground gets a fixed hillshade.
+TEST(TerrainSceneTest, TheGroundIsLitTheSameWayOnEveryDay) {
   TerrainScene scene;
-  constexpr double kLincoln = -43.64;
 
-  scene.light_for(kLincoln, 172, 14.0, 0.75);  // Midwinter
-  std::array<double, 3> midwinter{};
-  scene.sun()->GetPosition(midwinter.data());
+  scene.light_the_ground();
+  std::array<double, 3> first{};
+  scene.sun()->GetPosition(first.data());
+  const double first_intensity = scene.sun()->GetIntensity();
 
-  scene.light_for(kLincoln, 355, 14.0, 0.75);  // Midsummer
-  std::array<double, 3> midsummer{};
-  scene.sun()->GetPosition(midsummer.data());
+  // A different day, a different sky - and the same light on the grass.
+  scene.show_sky(-43.64, 172, 14.0, 0.30, 12.0, 9.0, 1.0);
+  scene.light_the_ground();
+  std::array<double, 3> again{};
+  scene.sun()->GetPosition(again.data());
+
+  EXPECT_DOUBLE_EQ(first[0], again[0]);
+  EXPECT_DOUBLE_EQ(first[1], again[1]);
+  EXPECT_DOUBLE_EQ(first[2], again[2]);
+  EXPECT_DOUBLE_EQ(first_intensity, scene.sun()->GetIntensity());
+}
+
+// The sun in the SKY does move, which is where the season became visible once
+// it left the grass alone.
+TEST(TerrainSceneTest, TheSunInTheSkyMovesWithTheDate) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_sky(-43.64, 172, 14.0, 0.75);  // Midwinter
+  std::array<double, 6> midwinter{};
+  scene.sun_disc()->GetBounds(midwinter.data());
+
+  scene.show_sky(-43.64, 355, 14.0, 0.75);  // Midsummer
+  std::array<double, 6> midsummer{};
+  scene.sun_disc()->GetBounds(midsummer.data());
 
   // Higher in summer, which is the whole of what a season is.
-  EXPECT_GT(midsummer[2], midwinter[2])
-      << "midwinter z " << midwinter[2] << ", midsummer z " << midsummer[2];
-
-  // And in the northern sky both times, because this is New Zealand. A light
-  // put south of the farm would shade every face the model grows most grass
-  // on.
-  EXPECT_GT(midwinter[1], 0.0) << "midwinter sun should be north of the farm";
-  EXPECT_GT(midsummer[1], 0.0) << "midsummer sun should be north of the farm";
-
-  // West of north at two in the afternoon, both times.
-  EXPECT_LT(midwinter[0], 0.0) << "afternoon sun should be west";
-  EXPECT_LT(midsummer[0], 0.0) << "afternoon sun should be west";
+  EXPECT_GT(midsummer[5], midwinter[5])
+      << "midwinter top " << midwinter[5] << ", midsummer top " << midsummer[5];
 }
 
-// A dull day is dimmer than a bright one, by the radiation that actually
-// differed.
-TEST(TerrainSceneTest, CloudDimsTheLightItCameFrom) {
+// Cloud thickens as less of the sky's radiation reaches the ground.
+//
+// The field of density is fixed; what the day changes is how much of it is
+// made visible. So the measurement to read back is the opacity the cloud is
+// drawn at, not its shape - the shape must not change, or the picture would be
+// showing a cloud field nobody recorded.
+TEST(TerrainSceneTest, CloudThickensAsTheDayDulls) {
   TerrainScene scene;
-  constexpr double kLincoln = -43.64;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
 
-  scene.light_for(kLincoln, 355, 14.0, 0.75);
-  const double clear = scene.sun()->GetIntensity();
+  scene.show_sky(-43.64, 355, 14.0, 0.75);
+  const double clear = scene.cloud_opacity()->GetValue(1.0);
 
-  scene.light_for(kLincoln, 355, 14.0, 0.25);
-  const double overcast = scene.sun()->GetIntensity();
+  scene.show_sky(-43.64, 355, 14.0, 0.25);
+  const double dull = scene.cloud_opacity()->GetValue(1.0);
 
-  EXPECT_GT(clear, overcast) << "clear " << clear << ", overcast " << overcast;
-  EXPECT_GT(overcast, 0.0) << "an overcast day is not a night";
+  EXPECT_GT(dull, clear) << "clear " << clear << ", overcast " << dull;
+  EXPECT_GT(clear, 0.0) << "even a clear day has some cloud in it";
 }
 
-// The sun stays where the date puts it whatever the cloud, because cloud is
-// not a position.
-TEST(TerrainSceneTest, CloudDoesNotMoveTheSun) {
+// **The cloud can be taken away.** A density field is translucent by
+// construction, and anything translucent between the camera and the paddocks
+// shifts a colour the reader is meant to match against the legend. Turning the
+// weather off is what makes the map exact.
+TEST(TerrainSceneTest, TheWeatherCanBeTakenOffTheMap) {
   TerrainScene scene;
-  scene.light_for(-43.64, 355, 14.0, 0.75);
-  std::array<double, 3> bright{};
-  scene.sun()->GetPosition(bright.data());
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 8.0, 9.0, 6.0);
 
-  scene.light_for(-43.64, 355, 14.0, 0.20);
-  std::array<double, 3> dull{};
-  scene.sun()->GetPosition(dull.data());
+  EXPECT_TRUE(scene.weather_shown());
+  EXPECT_EQ(scene.cloud()->GetVisibility(), 1);
 
-  EXPECT_DOUBLE_EQ(bright[0], dull[0]);
-  EXPECT_DOUBLE_EQ(bright[1], dull[1]);
-  EXPECT_DOUBLE_EQ(bright[2], dull[2]);
+  scene.show_weather(false);
+  EXPECT_FALSE(scene.weather_shown());
+  EXPECT_EQ(scene.cloud()->GetVisibility(), 0);
+  EXPECT_EQ(scene.rain()->GetVisibility(), 0);
+  EXPECT_EQ(scene.wind()->GetVisibility(), 0);
+}
+
+// Rain is drawn when it rained and not when it did not.
+TEST(TerrainSceneTest, RainIsDrawnOnlyOnDaysItRained) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 0.0);
+  EXPECT_EQ(scene.rain()->GetVisibility(), 0);
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 12.0);
+  EXPECT_EQ(scene.rain()->GetVisibility(), 1);
+  const vtkIdType wet = scene.rain_lines()->GetNumberOfLines();
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 2.0);
+  EXPECT_LT(scene.rain_lines()->GetNumberOfLines(), wet)
+      << "a wetter day should draw more rain than a damp one";
+}
+
+// **The wind has strength and no direction, and the picture must not give it
+// one.** The series carries a speed and no bearing. These strokes are all
+// parallel and all level; if a future change makes one of them point
+// somewhere, it is drawing data that does not exist.
+TEST(TerrainSceneTest, TheWindIsDrawnWithoutADirection) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 0.0, 0.0);
+  EXPECT_EQ(scene.wind()->GetVisibility(), 0) << "still air draws nothing";
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 0.0, 12.0);
+  EXPECT_EQ(scene.wind()->GetVisibility(), 1);
+
+  // **The gusts are spread around the compass, so the set as a whole points
+  // nowhere.** This is the invariant that matters, and it is not "every stroke
+  // is level" - that was the first thing asserted here and it was the wrong
+  // thing, because a set of parallel level strokes still reads as flow along
+  // one axis. What must never happen is that the picture agrees on a bearing
+  // the data does not carry.
+  //
+  // Measured as the mean direction of the gusts: if they all ran one way its
+  // length would be near one, and spread evenly it is near zero.
+  vtkPolyData* marks = scene.wind_marks();
+  ASSERT_NE(marks->GetPoints(), nullptr);
+  ASSERT_GT(marks->GetNumberOfLines(), 1);
+
+  double sum_east = 0.0;
+  double sum_north = 0.0;
+  int counted = 0;
+  vtkNew<vtkIdList> ids;
+  marks->GetLines()->InitTraversal();
+  while (marks->GetLines()->GetNextCell(ids) != 0) {
+    if (ids->GetNumberOfIds() < 2) {
+      continue;
+    }
+    std::array<double, 3> from{};
+    std::array<double, 3> to{};
+    marks->GetPoint(ids->GetId(0), from.data());
+    marks->GetPoint(ids->GetId(ids->GetNumberOfIds() - 1), to.data());
+    const double east = to[0] - from[0];
+    const double north = to[1] - from[1];
+    const double length = std::hypot(east, north);
+    if (length <= 0.0) {
+      continue;
+    }
+    sum_east += east / length;
+    sum_north += north / length;
+    ++counted;
+  }
+  ASSERT_GT(counted, 1);
+
+  const double resultant = std::hypot(sum_east, sum_north) / counted;
+  EXPECT_LT(resultant, 0.5) << "the gusts agree on a bearing (resultant " << resultant
+                            << "), which is the one thing the wind series does not carry";
 }
 
 }  // namespace paddock::viz

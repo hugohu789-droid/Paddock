@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
 #include <QMainWindow>
@@ -220,6 +221,15 @@ class MapWindow : public QMainWindow {
   SetupPanel* setup_ = nullptr;
   QComboBox* view_box_ = nullptr;
   QComboBox* height_box_ = nullptr;
+
+  /// Whether the weather is drawn over the farm.
+  ///
+  /// Off makes the map exact: a cloud is translucent by construction, and
+  /// anything translucent between the camera and the paddocks shifts a colour
+  /// the reader is meant to match against the legend. On shows what the day
+  /// was like. Neither serves both jobs, so it is a control rather than a
+  /// decision made for somebody.
+  QCheckBox* weather_box_ = nullptr;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;

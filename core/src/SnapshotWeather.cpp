@@ -150,6 +150,7 @@ std::vector<DailyWeather> parse_snapshot(const std::string& text, const std::str
         parse_number(field_at("max_air_temperature_c"), "max_air_temperature_c", path, line_number);
     record.solar_radiation_mj_per_m2 = optional_number("solar_radiation_mj_per_m2");
     record.wind_speed_m_per_s = optional_number("wind_speed_m_per_s");
+    record.uv_index = optional_number("uv_index");
 
     if (!record.is_valid()) {
       throw SnapshotParseError(where(path, line_number) +

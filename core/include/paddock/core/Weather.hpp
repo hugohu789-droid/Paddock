@@ -23,6 +23,17 @@ struct DailyWeather {
   double solar_radiation_mj_per_m2 = 0.0;
   double wind_speed_m_per_s = 0.0;
 
+  /// The day's peak ultraviolet index, dimensionless. Zero when the series
+  /// carries none.
+  ///
+  /// It is not derived from `solar_radiation_mj_per_m2` and cannot be: that is
+  /// broadband shortwave, while the ultraviolet index is an erythemally
+  /// weighted band from 280 to 400 nm and depends on the ozone column as much
+  /// as on the sun's height. New Zealand's is famously high for its latitude -
+  /// about 1 in midwinter and above 12 in midsummer - which is a fact about
+  /// the ozone above it rather than about how sunny the day was.
+  double uv_index = 0.0;
+
   /// The mean of the daily extremes, which is what growth models expect.
   [[nodiscard]] double mean_air_temperature_c() const noexcept;
 
