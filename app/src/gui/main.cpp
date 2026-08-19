@@ -206,6 +206,30 @@ int main(int argc, char** argv) {
       // apart used to leave the camera on the first one, so the second rendered
       // as an empty window - a failure that looks exactly like a broken
       // pipeline and is not one.
+      // The window must not resize as the run plays.
+      //
+      // The weather and summary lines change length every day - "dry" becomes
+      // "12.3 mm", the ground note appears and disappears - and a label whose
+      // size hint reaches the layout drags the window with it. A screenshot
+      // cannot show that; it takes two days and a comparison.
+      if (window.day_count() > 1) {
+        const int opening = window.width();
+        int widest = opening;
+        int narrowest = opening;
+        const std::size_t days = window.day_count();
+        for (std::size_t sample = 0; sample < 24; ++sample) {
+          window.show_day_for_check(static_cast<int>((sample * days) / 24));
+          widest = std::max(widest, window.width());
+          narrowest = std::min(narrowest, window.width());
+        }
+        if (widest != narrowest) {
+          std::cerr << "paddock-gui: the window resized while playing, from " << narrowest << " to "
+                    << widest << " pixels. A status line is sizing the layout.\n";
+          return 1;
+        }
+        std::cout << "paddock-gui: window steady at " << opening << " pixels across the year\n";
+      }
+
       const auto then_flag = std::find(args.begin(), args.end(), "--then");
       if (then_flag != args.end()) {
         if (std::next(then_flag) == args.end()) {

@@ -115,6 +115,25 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   weather_label_ = new QLabel(this);
   weather_label_->setTextFormat(Qt::RichText);
 
+  // **These two lines must not set the width of the window.**
+  //
+  // Both change length as the run plays: "dry" becomes "12.3 mm", a
+  // three-digit radiation becomes two, the ground note appears and
+  // disappears. A label's size hint is its text, so with the default policy
+  // every one of those resized the window - the map jumped a few pixels wider
+  // and narrower as the days went by, which reads as a rendering fault and
+  // makes the picture impossible to compare from one day to the next.
+  //
+  // Ignored means the hint is not consulted for the layout at all: the line
+  // takes whatever width the controls row settles on, and the window stays
+  // where the person using it put it. Word wrapping would fix the width and
+  // move the problem to the height, which is worse - the map would grow and
+  // shrink instead.
+  for (QLabel* line : {weather_label_, summary_label_}) {
+    line->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    line->setWordWrap(false);
+  }
+
   view_box_ = new QComboBox(this);
   view_box_->addItem("Flat map", 0);
   view_box_->addItem("Terrain", 1);
@@ -189,6 +208,9 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
                        bundle.management.has_value() ? &*bundle.management : nullptr,
                        bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
 
+  // Wide enough for the controls row and the weather line, and a floor under
+  // it so the window cannot be dragged narrower than its own controls.
+  setMinimumWidth(1100);
   resize(1400, 860);
   start_run();
   scene_.reset_camera();

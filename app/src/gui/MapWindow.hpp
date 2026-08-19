@@ -114,6 +114,14 @@ class MapWindow : public QMainWindow {
 
   [[nodiscard]] std::size_t day_count() const noexcept { return dates_.size(); }
 
+  /// Show a particular day, for the headless path.
+  ///
+  /// The width check below needs to step the run without a person dragging the
+  /// timeline: the status lines change length as the days go by, and a label
+  /// that sizes the window makes the map jump wider and narrower while it
+  /// plays.
+  void show_day_for_check(int day) { show_day(day); }
+
   /// Open a different farm, exactly as choosing it in the panel would.
   ///
   /// Here for the headless path, which is the only way to exercise a change of
