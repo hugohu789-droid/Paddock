@@ -23,6 +23,8 @@
 
 #include <paddock/config/ScenarioConfig.hpp>
 
+#include "../support/ShippedBundle.hpp"
+
 namespace paddock::config {
 namespace {
 
@@ -90,7 +92,7 @@ YearOfGrazing run_the_year(const ScenarioBundle& bundle) {
 
 // The bundle loads, with its stock and its calendar, and its hashes still match.
 TEST(GrazedYearTest, TheBundleLoadsWithItsStockAndItsCalendar) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
 
   EXPECT_EQ(bundle.name, "canterbury_grazed");
   EXPECT_TRUE(bundle.inputs_unchanged()) << "a bundle whose inputs moved is not this bundle";
@@ -112,7 +114,7 @@ TEST(GrazedYearTest, TheBundleLoadsWithItsStockAndItsCalendar) {
 // The whole loop, for a year, and the thing that matters: it is stable. Cover
 // neither runs away nor collapses, and the stock are still alive at the end.
 TEST(GrazedYearTest, AYearOfGrazingIsStable) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   const YearOfGrazing year = run_the_year(bundle);
 
   ASSERT_EQ(year.cover_kg_dm_per_ha.size(), 366U) << "2023-07-01 to 2024-06-30 is a leap year span";
@@ -160,7 +162,7 @@ TEST(GrazedYearTest, AYearOfGrazingIsStable) {
 // The calendar drives the farm rather than decorating it: under set stocking
 // the mob stays put, and it moves again when rotation resumes.
 TEST(GrazedYearTest, TheCalendarActuallyChangesWhatHappens) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   const YearOfGrazing year = run_the_year(bundle);
 
   // Lambing runs 20 August to 28 October, days 50 to 119 of a run starting
@@ -190,7 +192,7 @@ TEST(GrazedYearTest, TheCalendarActuallyChangesWhatHappens) {
 // single assertion can judge, and a plot somebody looks at is worth more than a
 // bound nobody reads.
 TEST(GrazedYearTest, WritesTheYearForInspection) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   const YearOfGrazing year = run_the_year(bundle);
 
   const std::string path = std::string(PADDOCK_VALIDATION_OUTPUT_DIR) + "/grazed-year.csv";

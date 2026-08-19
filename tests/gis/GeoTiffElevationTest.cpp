@@ -96,6 +96,58 @@ class TemporaryGeoTiff {
   bool written_ = false;
 };
 
+/// The same plane with a single pixel raised sharply, at a known place.
+///
+/// A plane cannot tell the two sampling rules apart: the mean of a linear
+/// surface over a symmetric footprint is exactly its value at the centre, so
+/// nearest-neighbour and cell-mean agree to the last bit. One spike is the
+/// smallest surface on which they must differ.
+class TemporaryGeoTiffWithASpike {
+ public:
+  static constexpr std::size_t kSpikeCol = 12;
+  static constexpr std::size_t kSpikeRow = 8;
+  static constexpr double kSpikeM = 50.0;
+
+  explicit TemporaryGeoTiffWithASpike(const std::string& name) {
+    path_ = (std::filesystem::temp_directory_path() / (name + ".tif")).string();
+
+    core::GeoTransform transform;
+    transform.origin_easting = kOriginEasting;
+    transform.origin_northing = kOriginNorthing;
+    transform.cell_size = kPixelSizeM;
+
+    core::Raster<double> surface(kCols, kRows, transform);
+    for (std::size_t row = 0; row < surface.rows(); ++row) {
+      for (std::size_t col = 0; col < surface.cols(); ++col) {
+        const double easting = kOriginEasting + ((static_cast<double>(col) + 0.5) * kPixelSizeM);
+        const double northing = kOriginNorthing - ((static_cast<double>(row) + 0.5) * kPixelSizeM);
+        surface(col, row) = plane_elevation(easting, northing);
+      }
+    }
+    surface(kSpikeCol, kSpikeRow) += kSpikeM;
+    write_geotiff(surface, path_);
+    written_ = true;
+  }
+
+  ~TemporaryGeoTiffWithASpike() {
+    std::error_code ignored;
+    std::filesystem::remove(path_, ignored);
+  }
+
+  TemporaryGeoTiffWithASpike(const TemporaryGeoTiffWithASpike&) = delete;
+  TemporaryGeoTiffWithASpike& operator=(const TemporaryGeoTiffWithASpike&) = delete;
+  TemporaryGeoTiffWithASpike(TemporaryGeoTiffWithASpike&&) = delete;
+  TemporaryGeoTiffWithASpike& operator=(TemporaryGeoTiffWithASpike&&) = delete;
+
+  [[nodiscard]] const std::string& path() const noexcept { return path_; }
+
+  [[nodiscard]] bool written() const noexcept { return written_; }
+
+ private:
+  std::string path_;
+  bool written_ = false;
+};
+
 core::BoundingBox box(double west, double south, double east, double north) {
   core::BoundingBox area = core::BoundingBox::empty();
   area.expand_to_include(core::Point2D{west, south});
@@ -138,6 +190,54 @@ TEST(GeoTiffElevationTest, ValuesComeBackAtThePositionTheyWereWrittenAt) {
     for (std::size_t col = 0; col < elevation.cols(); ++col) {
       const double easting = kOriginEasting + ((static_cast<double>(col) + 0.5) * kPixelSizeM);
       const double northing = kOriginNorthing - ((static_cast<double>(row) + 0.5) * kPixelSizeM);
+      ASSERT_NEAR(elevation(col, row), plane_elevation(easting, northing), 1e-9)
+          << "at column " << col << ", row " << row;
+    }
+  }
+}
+
+// A cell is worth the ground it covers, not the pixel under its middle.
+//
+// Read at four times the pixel size, each output cell covers sixteen source
+// pixels. The cell holding the spike must carry a sixteenth of it - the spike
+// is real and averaging it away entirely would be losing measured ground - and
+// the cell centre must NOT be able to swallow it whole or miss it entirely,
+// which is what sampling one pixel does depending on where the centre lands.
+TEST(GeoTiffElevationTest, ACellIsTheMeanOfTheGroundItCovers) {
+  const TemporaryGeoTiffWithASpike fixture("paddock_geotiff_spike");
+  ASSERT_TRUE(fixture.written());
+  const GeoTiffElevationSource source(fixture.path());
+
+  const double cell_size = kPixelSizeM * 4.0;
+  const core::Raster<double> elevation = source.fetch(
+      box(kOriginEasting, kOriginNorthing - (static_cast<double>(kRows) * kPixelSizeM),
+          kOriginEasting + (static_cast<double>(kCols) * kPixelSizeM), kOriginNorthing),
+      cell_size);
+
+  const std::size_t cell_col = TemporaryGeoTiffWithASpike::kSpikeCol / 4;
+  const std::size_t cell_row = TemporaryGeoTiffWithASpike::kSpikeRow / 4;
+
+  // What the plane alone would give at this cell: the mean of a linear surface
+  // over the cell is its value at the cell centre.
+  const double centre_easting =
+      kOriginEasting + ((static_cast<double>(cell_col) + 0.5) * cell_size);
+  const double centre_northing =
+      kOriginNorthing - ((static_cast<double>(cell_row) + 0.5) * cell_size);
+  const double without_spike = plane_elevation(centre_easting, centre_northing);
+
+  EXPECT_NEAR(elevation(cell_col, cell_row),
+              without_spike + (TemporaryGeoTiffWithASpike::kSpikeM / 16.0), 1e-9)
+      << "one raised pixel in sixteen should raise the cell by a sixteenth of it";
+
+  // And every cell that does not contain the spike is the plane exactly, so the
+  // averaging has not smeared it into the neighbours.
+  for (std::size_t row = 0; row < elevation.rows(); ++row) {
+    for (std::size_t col = 0; col < elevation.cols(); ++col) {
+      if (col == cell_col && row == cell_row) {
+        continue;
+      }
+      const double easting = kOriginEasting + ((static_cast<double>(col) + 0.5) * cell_size);
+      const double northing = kOriginNorthing - ((static_cast<double>(row) + 0.5) * cell_size);
       ASSERT_NEAR(elevation(col, row), plane_elevation(easting, northing), 1e-9)
           << "at column " << col << ", row " << row;
     }

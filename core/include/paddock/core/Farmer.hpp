@@ -48,6 +48,53 @@ struct MobMove {
   bool spell_was_short = false;
 };
 
+/// How the farmer decides which grazing system to run.
+///
+/// The default is what this model did before there was a choice, and it is a
+/// real decision rather than an absence of one: rotation concentrates stock
+/// onto one paddock and only works if that paddock can carry them, so a farm
+/// short of cover spreads out instead.
+enum class GrazingPreference : std::uint8_t {
+  /// Rotate when the mean cover can afford it, set stock when it cannot.
+  ByCover,
+
+  /// Rotate wherever possible, falling back to set stocking only at the cover
+  /// floor. A farmer who believes in the rotation and will hold to it while the
+  /// sward can stand it.
+  PreferRotation,
+
+  /// Never rotate. Smith and Dawson (1976) name set stocking for lambing, when
+  /// demand is highest and the whole farm is wanted at once; a farm may be run
+  /// that way all year, and the model should be able to show what that costs.
+  AlwaysSetStock,
+
+  /// Do what the bundle's own calendar says.
+  ///
+  /// **This was previously unreachable.** A scenario could carry
+  /// `[[grazing_period]]` describing set stocking over lambing and rotation the
+  /// rest of the year, and a managed run ignored every word of it, because the
+  /// farmer decided from cover alone. The calendar was written down and nothing
+  /// read it.
+  FollowCalendar,
+};
+
+/// What the farmer buys once the sward is at the floor.
+enum class FloorPurchase : std::uint8_t {
+  /// Buy the mob's whole demand, so the pasture is asked for nothing and
+  /// recovers. This is what the model did before there was a choice.
+  WholeDemand,
+
+  /// Let the stock graze down to the floor and buy the rest, so cover holds
+  /// there rather than climbing away from it.
+  ///
+  /// **Not "buy whatever today's growth does not cover".** The farmer decides
+  /// before the day is stepped, so today's growth is not yet known, and a rule
+  /// written against it would be guessing at a number the model already has -
+  /// tomorrow. Grazing down to the line is the same intent expressed in what is
+  /// knowable when the decision is made.
+  HoldAtFloor,
+};
+
 /// What a farmer is trying to do, and what they will not let happen.
 ///
 /// A calendar says what the management is meant to be. A policy says what the
@@ -90,6 +137,10 @@ struct ManagementPolicy {
   /// against.
   bool may_buy_feed = true;
 
+  /// Which system to run, and how much to buy at the floor.
+  GrazingPreference preference = GrazingPreference::ByCover;
+  FloorPurchase floor_purchase = FloorPurchase::WholeDemand;
+
   [[nodiscard]] std::string validation_error() const;
 };
 
@@ -115,6 +166,8 @@ struct FeedPurchase {
 };
 
 [[nodiscard]] std::string to_string(FeedPurchase::Reason reason);
+[[nodiscard]] std::string to_string(GrazingPreference preference);
+[[nodiscard]] std::string to_string(FloorPurchase purchase);
 
 /// Moves mobs according to a grazing calendar.
 ///
@@ -187,7 +240,11 @@ class Farmer {
 
  private:
   /// Which system the farm can afford today.
-  [[nodiscard]] GrazingSystem system_for(const Farm& farm) const;
+  [[nodiscard]] GrazingSystem system_for(const Farm& farm, const Date& date) const;
+
+  /// The farm's mean cover, which both the system choice and the feed decision
+  /// are made against. One definition so the two cannot disagree.
+  [[nodiscard]] static double mean_cover(const Farm& farm);
 
   GrazingCalendar calendar_;
   ManagementPolicy policy_;

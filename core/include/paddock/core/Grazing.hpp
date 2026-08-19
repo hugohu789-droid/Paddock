@@ -28,6 +28,24 @@ struct Mob {
   AnimalState state;
   int head = 0;
 
+  /// What the manager is feeding this mob for, in kg/head/day.
+  ///
+  /// **Intent, not observation.** `state.liveweight_change_kg_per_day` is what
+  /// the mob actually did yesterday; this is what somebody is trying to make it
+  /// do. They were the same field once, and demand was computed from it, which
+  /// made the whole thing circular: a well fed mob ate to maintenance, changed
+  /// by nothing, and so was offered maintenance again the next day. A year of
+  /// that leaves a ewe on exactly her opening weight while the farmer's target
+  /// gain sits in the panel doing nothing - it only ever reached the decision
+  /// about how much feed to buy, which on a farm with grass to spare is no
+  /// decision at all.
+  ///
+  /// Zero means hold weight, which is what an unmanaged mob gets and what the
+  /// model did before this existed. Negative is not honoured: deliberately
+  /// feeding an animal below maintenance is a decision this model does not
+  /// represent, and the sign would silently shrink demand.
+  double target_gain_kg_per_day = 0.0;
+
   [[nodiscard]] std::string validation_error() const;
 };
 

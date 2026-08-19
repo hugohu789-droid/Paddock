@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -140,4 +141,79 @@ TEST(WaterConservationTest, TheProfileFillsInWinterAndDrawsDownInSummer) {
 }
 
 }  // namespace
+
+// Irrigation is water like any other, and the budget has to say so.
+//
+// A new inflow that the ledger does not know about is the exact failure this
+// gate exists for: the profile would gain water the accounts cannot explain,
+// and every drainage and leaching number downstream would be quietly wrong.
+TEST(WaterConservationTest, AYearOfIrrigatedSoilWaterBalances) {
+  const WeatherSeries year = test_year(2024);
+  SoilWaterBucket soil(soil_parameters(), 60.0);
+  BudgetLedger ledger;
+  ledger.set_opening_stock(Budget::Water, soil.water_mm());
+
+  double applied_mm = 0.0;
+  for (const DailyWeather& day : year.records) {
+    // The textbook rule: water when the profile has been drawn down to the
+    // readily available water, and put back what is missing. FAO-56 Eq. 83.
+    const double irrigation =
+        soil.depletion_mm() >= soil.readily_available_water_mm() ? soil.depletion_mm() : 0.0;
+    applied_mm += irrigation;
+    soil.step(day, kLatitude, 1.0, &ledger, irrigation);
+  }
+
+  EXPECT_GT(applied_mm, 0.0) << "a Canterbury year that never triggered the rule would mean the "
+                                "trigger, not the balance, is what this test measured";
+  EXPECT_TRUE(ledger.closes(Budget::Water, soil.water_mm()))
+      << ledger.report(Budget::Water, soil.water_mm());
+  EXPECT_DOUBLE_EQ(ledger.total_inflow(Budget::Water), year.total_rainfall_mm() + applied_mm)
+      << "every millimetre put on has to appear in the accounts";
+}
+
+// And that it does the thing it is for: water put on is water the pasture is
+// not short of.
+TEST(WaterConservationTest, IrrigatingRelievesTheStressItWasAppliedFor) {
+  const WeatherSeries year = test_year(2024);
+
+  SoilWaterBucket dry(soil_parameters(), 60.0);
+  SoilWaterBucket watered(soil_parameters(), 60.0);
+
+  double driest_stress = 1.0;
+  double watered_stress = 1.0;
+  double applied_mm = 0.0;
+  for (const DailyWeather& day : year.records) {
+    driest_stress = std::min(driest_stress, dry.step(day, kLatitude).stress_coefficient);
+
+    const double irrigation = watered.depletion_mm() >= watered.readily_available_water_mm()
+                                  ? watered.depletion_mm()
+                                  : 0.0;
+    applied_mm += irrigation;
+    watered_stress = std::min(
+        watered_stress, watered.step(day, kLatitude, 1.0, nullptr, irrigation).stress_coefficient);
+  }
+
+  EXPECT_LT(driest_stress, 1.0) << "the unirrigated year never went short, so there was nothing "
+                                   "for irrigation to relieve";
+  EXPECT_GT(watered_stress, driest_stress)
+      << "unirrigated stress fell to " << driest_stress << ", irrigated to " << watered_stress
+      << " on " << applied_mm << " mm";
+}
+
+// Over-applying is not free. Water past field capacity leaves as drainage, and
+// it has to be reported rather than absorbed.
+TEST(WaterConservationTest, WaterPutOnAFullProfileDrainsAndIsCounted) {
+  const WeatherSeries year = test_year(2024);
+  SoilWaterBucket soil(soil_parameters(), soil_parameters().total_available_water_mm);
+  BudgetLedger ledger;
+  ledger.set_opening_stock(Budget::Water, soil.water_mm());
+
+  const SoilWaterFluxes fluxes = soil.step(year.records.front(), kLatitude, 1.0, &ledger, 50.0);
+
+  EXPECT_DOUBLE_EQ(fluxes.irrigation_mm, 50.0);
+  EXPECT_GT(fluxes.drainage_mm, 0.0) << "50 mm onto a full profile has to go somewhere";
+  EXPECT_TRUE(ledger.closes(Budget::Water, soil.water_mm()))
+      << ledger.report(Budget::Water, soil.water_mm());
+}
+
 }  // namespace paddock::core

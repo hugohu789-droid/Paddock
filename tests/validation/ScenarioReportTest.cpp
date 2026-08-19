@@ -16,6 +16,8 @@
 
 #include <paddock/config/ScenarioReport.hpp>
 
+#include "../support/ShippedBundle.hpp"
+
 namespace paddock::config {
 namespace {
 
@@ -42,12 +44,17 @@ bool contains(const std::string& text, const std::string& needle) {
 }
 
 TEST(ScenarioReportTest, ItReportsEveryPurchaseWithItsDate) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = 1400;
   const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "managed");
   ASSERT_FALSE(run.purchases.empty());
 
-  const std::string report = render_report(bundle, run, {"Canterbury demonstration", nullptr});
+  // Named rather than positional: a braced list here breaks every time
+  // ReportOptions grows a field, which is a rebuild failure that says nothing
+  // about this test.
+  ReportOptions options;
+  options.farm_name = "Canterbury demonstration";
+  const std::string report = render_report(bundle, run, options);
 
   EXPECT_TRUE(contains(report, "## Bought feed"));
   EXPECT_TRUE(contains(report, "kg DM"));
@@ -61,7 +68,7 @@ TEST(ScenarioReportTest, ItReportsEveryPurchaseWithItsDate) {
 // A farm that bought nothing says so, rather than leaving an empty table for a
 // reader to interpret.
 TEST(ScenarioReportTest, AFarmThatBoughtNothingSaysSo) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = 300;
   const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "lightly stocked");
   ASSERT_TRUE(run.purchases.empty());
@@ -73,12 +80,12 @@ TEST(ScenarioReportTest, AFarmThatBoughtNothingSaysSo) {
 // The caveats travel with the numbers. This is the test that stops a
 // good-looking report from being a misleading one.
 TEST(ScenarioReportTest, TheEvidenceCaveatsTravelWithTheNumbers) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "managed");
   const std::string report = render_report(bundle, run);
 
   EXPECT_TRUE(contains(report, "What this report may be relied on for"));
-  EXPECT_TRUE(contains(report, "Overstated by up to 17%"))
+  EXPECT_TRUE(contains(report, "Overstated by about 18%"))
       << "the sheep carrying capacity caveat is missing";
   EXPECT_TRUE(contains(report, "Not quotable"))
       << "the report does not say absolute liveweight gain cannot be quoted";
@@ -96,7 +103,7 @@ TEST(ScenarioReportTest, TheEvidenceCaveatsTravelWithTheNumbers) {
 
 // The pasture and the stock, month by month, because a year is not one number.
 TEST(ScenarioReportTest, ItShowsTheYearMonthByMonth) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "managed");
   const std::string report = render_report(bundle, run);
 
@@ -111,7 +118,7 @@ TEST(ScenarioReportTest, ItShowsTheYearMonthByMonth) {
 
 // The comparison report, which is the one a farmer would actually read.
 TEST(ScenarioReportTest, TheComparisonPutsFeedBoughtBesideConditionHeld) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = 1400;
 
   core::ManagementPolicy may_not_buy = policy();
@@ -133,7 +140,7 @@ TEST(ScenarioReportTest, TheComparisonPutsFeedBoughtBesideConditionHeld) {
 
 // Written out so a person can read one, and so CI keeps it.
 TEST(ScenarioReportTest, WritesAReportForInspection) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = 1400;
   const core::ManagementPolicy chosen = policy();
   const RunSummary run = run_managed_scenario(bundle, chosen, pasture_diet(), "managed");

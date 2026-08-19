@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
 #include <QMainWindow>
@@ -10,6 +11,7 @@
 #include <QSlider>
 #include <QTimer>
 #include <QVTKOpenGLNativeWidget.h>
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -40,7 +42,16 @@ class MapWindow : public QMainWindow {
   /// Which field the map is showing. Each carries its own units and its own
   /// colour ramp, because a stress coefficient and a pasture cover are not
   /// comparable quantities and should not share a scale.
-  enum class Field : int { Cover = 0, SoilWater, WaterStress, LegumeFraction };
+  enum class Field : int {
+    Cover = 0,
+    SoilWater,
+    AvailableWater,
+    WaterStress,
+    IrrigationToday,
+    IrrigationToDate,
+    LegumeFraction,
+    Slope
+  };
 
   /// What the colour scale spans.
   ///
@@ -71,7 +82,7 @@ class MapWindow : public QMainWindow {
   /// path. `ground` indexes the panel's ground list; `terrain` asks for the
   /// three-dimensional view, which is ignored when the run was over flat
   /// ground because there would be nothing to draw.
-  void show_configuration(int ground, bool terrain, int heights = 1);
+  void show_configuration(int ground, bool terrain, int heights = 1, bool irrigate = false);
 
   /// Why the last run failed, or empty if it did not.
   ///
@@ -89,6 +100,20 @@ class MapWindow : public QMainWindow {
   /// both are nearly level, and two numbers separate them.
   [[nodiscard]] std::optional<std::pair<double, double>> ground_range() const;
 
+  /// Why this run has no measured ground when its scenario names some, or
+  /// empty. Exposed so that the headless path says it as well as the window:
+  /// a screenshot of flat ground looks the same whether the farm is flat or
+  /// the snapshot was never fetched.
+  [[nodiscard]] const std::string& no_ground_reason() const noexcept { return no_ground_reason_; }
+
+  /// Writes the setup panel to a PNG.
+  ///
+  /// The map has had a way to be looked at without a person since it was drawn,
+  /// and the panel is just as much a deliverable: a form of nine rows can be
+  /// perfectly wired and unreadable. Pure Qt widgets, so an ordinary grab
+  /// captures them.
+  bool save_panel_screenshot(const std::string& path);
+
   /// Writes the current frame to a PNG.
   ///
   /// A map is a claim about what the model did, and a claim nobody looks at is
@@ -98,6 +123,44 @@ class MapWindow : public QMainWindow {
   bool save_screenshot(const std::string& path);
 
   [[nodiscard]] std::size_t day_count() const noexcept { return dates_.size(); }
+
+  /// Show a particular day, for the headless path.
+  ///
+  /// The width check below needs to step the run without a person dragging the
+  /// timeline: the status lines change length as the days go by, and a label
+  /// that sizes the window makes the map jump wider and narrower while it
+  /// plays.
+  void show_day_for_check(int day) { show_day(day); }
+
+  /// Show a field by name, for the headless path. Returns false when no field
+  /// goes by that name.
+  bool select_field(const std::string& name);
+
+  /// The range of a field over the run, for the headless path.
+  ///
+  /// Slope is the reason this exists: it is the one field a picture cannot
+  /// show - on ground this flat the shading difference is under three per cent
+  /// of brightness - so the only way to say how steep a farm is, is to print
+  /// the number.
+  [[nodiscard]] std::pair<double, double> field_range(Field field) const {
+    return whole_run_range(field);
+  }
+
+  /// Open a different farm, exactly as choosing it in the panel would.
+  ///
+  /// Here for the headless path, which is the only way to exercise a change of
+  /// farm without a person at the screen - and a change of farm is precisely
+  /// where the camera used to be left behind, pointing at ground kilometres
+  /// away from anything that was drawn.
+  void open_scenario(const std::string& bundle_directory);
+
+  /// Where the camera of whichever view is showing is pointing, in metres on
+  /// the ground. Empty when there is no view yet.
+  [[nodiscard]] std::optional<std::pair<double, double>> camera_focus() const;
+
+  /// The extent of the farm currently drawn: easting, northing of the
+  /// south-west corner, then width and height in metres.
+  [[nodiscard]] std::optional<std::array<double, 4>> drawn_farm() const;
 
   /// The day on which the selected field varies most across the farm.
   ///
@@ -123,13 +186,17 @@ class MapWindow : public QMainWindow {
  private:
   /// Steps the bundle with its stock on it, under `policy`, keeping every day's
   /// rasters as it goes.
-  void simulate_managed(const config::ScenarioBundle& bundle, const core::ManagementPolicy& policy);
+  void simulate_managed(const config::ScenarioBundle& bundle, const core::ManagementPolicy& policy,
+                        const core::IrrigationPolicy& irrigation,
+                        const core::IrrigationSystem& system);
 
   /// Steps the pasture alone, for a bundle that carries no stock. Both paths
   /// exist because `canterbury-baseline` has no mobs and is still worth looking
   /// at; only this one can be taken for such a bundle, and a managed run of it
   /// would have no mob to report on.
-  void simulate_pasture_only(const config::ScenarioBundle& bundle);
+  void simulate_pasture_only(const config::ScenarioBundle& bundle,
+                             const core::IrrigationPolicy& irrigation,
+                             const core::IrrigationSystem& system);
 
   /// Empties the per-day series, so a second run does not append to the first.
   void clear_series();
@@ -141,7 +208,29 @@ class MapWindow : public QMainWindow {
 
   /// Which paddocks had stock on them on `day`, or empty for a run without.
   [[nodiscard]] const std::vector<std::size_t>& grazed_on(std::size_t day) const;
+
+  /// The stock as they stood on `day`, one marker per paddock a mob occupied.
+  [[nodiscard]] const std::vector<viz::MobMarker>& mobs_on(std::size_t day) const;
   void refresh();
+
+  /// Fills the line above the map with the day's weather.
+  void show_weather(std::size_t day, double clearness);
+
+ public:
+  /// The same weather line in plain text, for the headless path.
+  ///
+  /// A screenshot captures the render window and not the labels around it, so
+  /// without this the one part of the weather work a person can read is the
+  /// part nothing can check.
+  [[nodiscard]] const std::string& weather_line() const noexcept { return weather_line_; }
+
+  /// What the run watered over the year. Reported by the headless path because
+  /// a screenshot cannot show a season's water.
+  [[nodiscard]] const core::IrrigationTally& irrigation() const noexcept {
+    return irrigation_tally_;
+  }
+
+ private:
   [[nodiscard]] const std::vector<core::Raster<double>>& series_of(Field field) const;
 
   /// The whole-run range of a field, computed once when the run is loaded.
@@ -155,12 +244,34 @@ class MapWindow : public QMainWindow {
   SetupPanel* setup_ = nullptr;
   QComboBox* view_box_ = nullptr;
   QComboBox* height_box_ = nullptr;
+
+  /// Whether the weather is drawn over the farm.
+  ///
+  /// Off makes the map exact: a cloud is translucent by construction, and
+  /// anything translucent between the camera and the paddocks shifts a colour
+  /// the reader is meant to match against the legend. On shows what the day
+  /// was like. Neither serves both jobs, so it is a control rather than a
+  /// decision made for somebody.
+  QCheckBox* weather_box_ = nullptr;
+
+  /// How far above the horizon the three-dimensional view looks from.
+  ///
+  /// Beside the scene rather than under it, because it belongs to the picture
+  /// and not to the run. Dragging with the mouse can put the camera anywhere,
+  /// including under the ground; this is the one axis worth adjusting on
+  /// purpose - how much of the farm is in view against how much of its shape -
+  /// and it always lands somewhere the farm is visible from.
+  QSlider* tilt_slider_ = nullptr;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;
   QPushButton* play_button_ = nullptr;
   QLabel* date_label_ = nullptr;
   QLabel* summary_label_ = nullptr;
+
+  /// The day's weather, above the map rather than below it: it is the thing
+  /// driving what the map shows, so it reads first.
+  QLabel* weather_label_ = nullptr;
   QTimer* timer_ = nullptr;
 
   viz::MapScene scene_;
@@ -179,12 +290,86 @@ class MapWindow : public QMainWindow {
 
   bool showing_terrain_ = false;
 
+  /// Why this run has no measured ground, when it was supposed to. Empty when
+  /// it has some, and when it never asked for any.
+  std::string no_ground_reason_;
+
+  /// A level surface for a run that has no elevation, kept because the scene
+  /// holds a reference to what it is shown.
+  core::Raster<double> flat_ground_;
+
+  /// Where the last drawn farm was on the ground, so that a run over a
+  /// different one can be recognised. Empty before the first run.
+  ///
+  /// Farms are kilometres apart - Lincoln and the Canterbury demonstration
+  /// grid by about thirteen - so a camera left where the previous farm was
+  /// shows blank space rather than the new one. Comparing extents rather than
+  /// resetting on every run is what lets somebody zoom into a corner, change
+  /// the stock, run again, and still be looking at that corner.
+  std::optional<core::GeoTransform> drawn_extent_;
+  std::size_t drawn_cols_ = 0;
+  std::size_t drawn_rows_ = 0;
+
+  /// Whether the farm on screen is somewhere other than the one that was there
+  /// before, and the camera therefore has to move.
+  [[nodiscard]] bool farm_moved(const core::Raster<double>& raster) const;
+
   /// One entry per simulated day, per field.
   std::vector<core::Raster<double>> cover_;
   std::vector<core::Raster<double>> soil_water_;
   std::vector<core::Raster<double>> water_stress_;
   std::vector<core::Raster<double>> legume_fraction_;
+
+  /// The slope of each cell, in degrees. One frame, not one per day: the
+  /// ground does not move.
+  ///
+  /// It is here because it is invisible in the picture and it drives two
+  /// sourced pieces of the model. On a farm falling six metres in a kilometre
+  /// the shading difference between the steepest and the flattest cell is
+  /// under three per cent of brightness, so no amount of lighting will show
+  /// it - but that same slope sets the energy cost of walking (TMC Eq. 23) and
+  /// the radiation a face receives (Gillingham et al.). A quantity that
+  /// changes the answer and cannot be seen is worth a colour ramp of its own.
+  std::vector<core::Raster<double>> slope_;
+
+  /// The share of each cell's water still there, 0 to 1. The same fact as the
+  /// soil water depth read the way a farmer reads it, and the map that makes
+  /// an irrigation trigger legible: the rule fires at a percentage, so a map
+  /// in millimetres cannot show why it fired.
+  std::vector<core::Raster<double>> available_water_;
+
+  /// Where the water went, on the day and over the run.
+  ///
+  /// A mean over the farm cannot show these: the whole point of a rule that
+  /// waters cell by cell is that some ground gets water and some does not.
+  std::vector<core::Raster<double>> irrigation_today_;
+  std::vector<core::Raster<double>> irrigation_to_date_;
+
+  /// What the run watered, day by day, as a mean over the farm in mm, and what
+  /// the year came to. Empty when nothing was irrigated.
+  std::vector<double> irrigation_mm_;
+  core::IrrigationTally irrigation_tally_;
   std::vector<std::string> dates_;
+
+  /// The weather each day was run on, kept so the view can say what the day
+  /// was like and light the ground with that day's sun.
+  std::vector<core::DailyWeather> weather_;
+
+  /// The latitude the run was over, which the sun's position depends on.
+  double latitude_degrees_ = 0.0;
+
+  /// The hour the sun is drawn at, in SOLAR time.
+  ///
+  /// The model has no hours - a weather record is a day - so one hour has to
+  /// stand for the day. Two in the afternoon is above the horizon on every day
+  /// of a New Zealand year and sits north-west rather than due north, which is
+  /// what gives the ground a lit side and a shaded one; solar noon puts the sun
+  /// exactly north and flattens the relief. Solar time and not the clock:
+  /// Lincoln's solar noon is about half an hour after 12:00 NZST.
+  static constexpr double kSolarHourShown = 14.0;
+
+  /// The weather line as plain text, kept as it is built.
+  std::string weather_line_;
 
   /// The fences, and where the stock were behind them.
   ///
@@ -194,6 +379,12 @@ class MapWindow : public QMainWindow {
   /// what set stocking looks like and is worth being able to see.
   std::vector<core::Polygon> boundaries_;
   std::vector<std::vector<std::size_t>> grazed_each_day_;
+  std::vector<std::vector<viz::MobMarker>> mobs_each_day_;
+
+  /// What the run was carrying, for the line under the map. Taken once: a mob's
+  /// class does not change through a year, and its head count does not either
+  /// in this model - nothing is born, sold or dies.
+  std::string stock_summary_;
   /// Indexed by Field.
   std::vector<std::pair<double, double>> whole_run_ranges_;
   std::vector<double> mean_cover_;

@@ -92,6 +92,13 @@ void Farm::move_mob(std::size_t mob, std::size_t paddock) {
   mobs_[mob].days_on_paddock = 0;
 }
 
+void Farm::set_target_gain(std::size_t mob, double kg_per_day) {
+  if (mob >= mobs_.size()) {
+    throw std::out_of_range("Farm::set_target_gain: no such mob");
+  }
+  mobs_[mob].mob.target_gain_kg_per_day = kg_per_day;
+}
+
 void Farm::spread_mob(std::size_t mob) {
   if (mob >= mobs_.size()) {
     throw std::out_of_range("Farm::spread_mob: no such mob");
@@ -183,10 +190,11 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet, BudgetL
 }
 
 FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
-                   const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger) {
+                   const std::vector<double>& supplement_kg_dm, BudgetLedger* ledger,
+                   const std::vector<double>& irrigation_mm) {
   // Growth first: a mob eats what is standing when it walks in, which includes
   // what grew that morning.
-  grid_.step(weather, ledger);
+  grid_.step(weather, ledger, irrigation_mm);
 
   FarmDay day;
   day.date = weather.date;
@@ -233,8 +241,12 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     // because an animal went short; if anything it rises, and modelling that
     // properly means intake capacity, which is a piece of work with its own
     // literature. Holding weight is the honest floor in the meantime.
+    // Demand is computed at what the manager is FEEDING FOR, not at what the
+    // mob happened to do yesterday. Yesterday's number is an outcome, and
+    // feeding to it is circular - see Mob::target_gain_kg_per_day. Holding
+    // weight remains the floor, for the reason above.
     AnimalState wanting = farm_mob.mob.state;
-    wanting.liveweight_change_kg_per_day = std::max(0.0, wanting.liveweight_change_kg_per_day);
+    wanting.liveweight_change_kg_per_day = std::max(0.0, farm_mob.mob.target_gain_kg_per_day);
 
     const EnergyRequirement need =
         daily_energy_requirement(farm_mob.mob.animal, wanting, diet, ground);

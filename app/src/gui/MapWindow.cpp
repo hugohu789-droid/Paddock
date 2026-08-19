@@ -4,6 +4,8 @@
 #include "MapWindow.hpp"
 
 #include <QApplication>
+#include <QCheckBox>
+#include <QDir>
 #include <QDockWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -15,14 +17,17 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vtkCamera.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkNew.h>
 #include <vtkPNGWriter.h>
 #include <vtkRenderWindow.h>
+#include <vtkRenderer.h>
 #include <vtkWindowToImageFilter.h>
 
 #include <paddock/config/ScenarioReport.hpp>
 #include <paddock/core/FarmletGrid.hpp>
+#include <paddock/core/Solar.hpp>
 #include <paddock/core/Weather.hpp>
 
 #include "../AttachElevation.hpp"
@@ -50,6 +55,9 @@ constexpr double kPastureDigestibility = 75.0;
 /// no stock in it. A reference has to refer to something.
 const std::vector<std::size_t> kNothingGrazed;
 
+/// The same, for the stock themselves.
+const std::vector<viz::MobMarker> kNobodyOnTheFarm;
+
 struct FieldStyle {
   const char* label;
   const char* legend;
@@ -69,6 +77,20 @@ FieldStyle style_of(MapWindow::Field field) {
       return {"Water stress", "Water stress (1 = unstressed)", viz::Ramp::Viridis, true, 0.0, 1.0};
     case MapWindow::Field::LegumeFraction:
       return {"Legume fraction", "Legume share of green DM", viz::Ramp::Viridis, true, 0.0, 1.0};
+    case MapWindow::Field::AvailableWater:
+      return {"Soil moisture",
+              "Water left of what the soil can hold",
+              viz::Ramp::Viridis,
+              true,
+              0.0,
+              1.0};
+    case MapWindow::Field::IrrigationToday:
+      return {"Irrigation today", "Water put on today (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+    case MapWindow::Field::IrrigationToDate:
+      return {
+          "Irrigation to date", "Water put on so far (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+    case MapWindow::Field::Slope:
+      return {"Slope", "Slope (degrees)", viz::Ramp::Viridis, false, 0.0, 0.0};
     case MapWindow::Field::Cover:
     default:
       return {
@@ -89,8 +111,11 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   window->AddRenderer(scene_.renderer());
 
   field_box_ = new QComboBox(this);
+  // Ordered as the causal chain runs, so the list itself reads as the story:
+  // the ground dries, the rule fires, the water lands, the stress lifts.
   for (const MapWindow::Field field :
-       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction}) {
+       {Field::Cover, Field::AvailableWater, Field::IrrigationToday, Field::IrrigationToDate,
+        Field::WaterStress, Field::SoilWater, Field::LegumeFraction, Field::Slope}) {
     field_box_->addItem(style_of(field).label, static_cast<int>(field));
   }
 
@@ -105,6 +130,28 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   date_label_->setMinimumWidth(200);
   summary_label_ = new QLabel(this);
 
+  weather_label_ = new QLabel(this);
+  weather_label_->setTextFormat(Qt::RichText);
+
+  // **These two lines must not set the width of the window.**
+  //
+  // Both change length as the run plays: "dry" becomes "12.3 mm", a
+  // three-digit radiation becomes two, the ground note appears and
+  // disappears. A label's size hint is its text, so with the default policy
+  // every one of those resized the window - the map jumped a few pixels wider
+  // and narrower as the days went by, which reads as a rendering fault and
+  // makes the picture impossible to compare from one day to the next.
+  //
+  // Ignored means the hint is not consulted for the layout at all: the line
+  // takes whatever width the controls row settles on, and the window stays
+  // where the person using it put it. Word wrapping would fix the width and
+  // move the problem to the height, which is worse - the map would grow and
+  // shrink instead.
+  for (QLabel* line : {weather_label_, summary_label_}) {
+    line->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    line->setWordWrap(false);
+  }
+
   view_box_ = new QComboBox(this);
   view_box_->addItem("Flat map", 0);
   view_box_->addItem("Terrain", 1);
@@ -116,10 +163,31 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   height_box_->addItem("Heights true to scale", 1);
   height_box_->addItem("Heights x2", 2);
   height_box_->addItem("Heights x5", 5);
+  // The shipped farms are on the Canterbury Plains and their steepest cell is
+  // under one and a half degrees. Lit at a true scale, the brightest and
+  // darkest ground on them differ by about 1.6% - invisible, and no choice of
+  // sun angle changes that, because the ground and not the light is what is
+  // flat. These two are what make relief visible on them at all, and the
+  // factor stays in the label because a farm drawn twenty times too steep must
+  // never be mistaken for one that is.
+  height_box_->addItem("Heights x10", 10);
+  height_box_->addItem("Heights x20", 20);
   height_box_->setEnabled(false);
+
+  weather_box_ = new QCheckBox("Weather", this);
+  weather_box_->setChecked(true);
+  weather_box_->setToolTip(
+      "Draw the day's sun, cloud and rain over the farm.\n\n"
+      "Turn it off to read the map exactly: cloud is translucent, and anything translucent "
+      "over the paddocks shifts the colour you are matching against the legend.");
+  connect(weather_box_, &QCheckBox::toggled, this, [this](bool on) {
+    terrain_.show_weather(on);
+    refresh();
+  });
 
   auto* controls = new QHBoxLayout;
   controls->addWidget(view_box_);
+  controls->addWidget(weather_box_);
   controls->addWidget(height_box_);
   controls->addWidget(field_box_);
   controls->addWidget(scale_box_);
@@ -127,8 +195,30 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   controls->addWidget(timeline_, 1);
   controls->addWidget(date_label_);
 
+  tilt_slider_ = new QSlider(Qt::Vertical, this);
+  tilt_slider_->setRange(5, 85);
+  tilt_slider_->setValue(40);
+  tilt_slider_->setToolTip(
+      "How far above the horizon the view looks from.\n\n"
+      "Low is a photograph from the gate and shows the shape of the ground; high is closer "
+      "to a map and shows the whole farm. It cannot reach straight down, where the camera "
+      "has nothing to keep it upright.");
+  connect(tilt_slider_, &QSlider::valueChanged, this, [this](int degrees) {
+    if (!showing_terrain_) {
+      return;
+    }
+    terrain_.look_from_above(degrees);
+    view_->renderWindow()->Render();
+  });
+
+  // The scene and its tilt sit side by side; the weather line spans both.
+  auto* scene_row = new QHBoxLayout;
+  scene_row->addWidget(view_, 1);
+  scene_row->addWidget(tilt_slider_);
+
   auto* layout = new QVBoxLayout;
-  layout->addWidget(view_, 1);
+  layout->addWidget(weather_label_);
+  layout->addLayout(scene_row, 1);
   layout->addLayout(controls);
   layout->addWidget(summary_label_);
 
@@ -156,6 +246,17 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   connect(height_box_, &QComboBox::currentIndexChanged, this, &MapWindow::change_exaggeration);
   connect(setup_, &SetupPanel::runRequested, this, &MapWindow::start_run);
   connect(setup_, &SetupPanel::reportRequested, this, &MapWindow::open_report);
+  connect(setup_, &SetupPanel::scenarioChanged, this, [this](const QString& directory) {
+    // Choosing a farm runs it. Anything thrown here has to be caught rather
+    // than escaping through the signal, where it would end the process instead
+    // of appearing in the panel.
+    try {
+      open_scenario(directory.toStdString());
+    } catch (const std::exception& error) {
+      last_failure_ = error.what();
+      setup_->show_failure(QString::fromUtf8(error.what()));
+    }
+  });
 
   // Open on the bundle named on the command line, configured as that bundle
   // configures itself. Pressing Run without touching anything therefore
@@ -163,8 +264,13 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // explore from: the user can always get back to the published run.
   const int head = bundle.mobs.empty() ? 0 : bundle.mobs.front().head;
   const double liveweight = bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg;
-  setup_->adopt_bundle(bundle_directory, head, liveweight);
+  setup_->adopt_bundle(bundle_directory, head, liveweight,
+                       bundle.management.has_value() ? &*bundle.management : nullptr,
+                       bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
 
+  // Wide enough for the controls row and the weather line, and a floor under
+  // it so the window cannot be dragged narrower than its own controls.
+  setMinimumWidth(1100);
   resize(1400, 860);
   start_run();
   scene_.reset_camera();
@@ -184,7 +290,7 @@ void MapWindow::start_run() {
   last_failure_.clear();
   try {
     config::ScenarioBundle bundle = config::load_scenario(choices.scenario_directory);
-    attach_elevation(bundle, choices.scenario_directory);
+    no_ground_reason_ = attach_elevation(bundle, choices.scenario_directory);
     if (!bundle.grid.has_value()) {
       throw std::runtime_error("This scenario has no [grid] section, so there is no map to draw.");
     }
@@ -207,27 +313,56 @@ void MapWindow::start_run() {
     // a preference to be overridden. The panel offers formulae; a snapshot is a
     // survey, and swapping one for the other would quietly replace the ground
     // with an invention.
-    if (bundle.terrain.kind != config::TerrainSpec::Kind::Snapshot) {
+    const bool measured_ground = bundle.terrain.kind == config::TerrainSpec::Kind::Snapshot;
+    if (!measured_ground) {
       bundle.terrain = choices.terrain;
     }
+    setup_->show_measured_ground(measured_ground);
 
     clear_series();
-    // The ground this run is over, taken once. Empty for flat, which is what
-    // disables the terrain view rather than drawing a plane and calling it
-    // terrain.
+    // The ground this run is over, taken once. Empty for flat, which the
+    // terrain view draws as a level surface and says so, rather than refusing
+    // to open.
     elevation_ = bundle.make_elevation();
     last_run_had_stock_ = !bundle.mobs.empty();
     if (last_run_had_stock_) {
-      simulate_managed(bundle, choices.policy);
+      simulate_managed(bundle, choices.policy, choices.irrigation, choices.irrigation_system);
     } else {
-      simulate_pasture_only(bundle);
+      simulate_pasture_only(bundle, choices.irrigation, choices.irrigation_system);
     }
 
     last_policy_ = choices.policy;
     last_bundle_ = bundle;
+    latitude_degrees_ = bundle.latitude_degrees;
+
+    // The slope of the ground the run was over, taken once. Flat ground has no
+    // topography, and a farm with none gets a raster of zeros rather than a
+    // missing field: "every slope here is zero" is the true answer, and a menu
+    // whose entries come and go with the scenario is a menu people stop
+    // trusting.
+    if (const std::optional<core::Topography> ground = bundle.make_topography();
+        ground.has_value()) {
+      slope_.push_back(ground->slope_degrees);
+    } else if (bundle.grid.has_value()) {
+      core::GeoTransform transform;
+      transform.origin_easting = bundle.grid->origin_easting;
+      transform.origin_northing = bundle.grid->origin_northing;
+      transform.cell_size = bundle.grid->cell_size_m;
+      slope_.emplace_back(bundle.grid->cols, bundle.grid->rows, transform, 0.0);
+    }
+    if (last_run_.has_value()) {
+      weather_ = last_run_->weather;
+      irrigation_mm_ = last_run_->irrigation_mm;
+      irrigation_tally_ = last_run_->irrigation;
+    }
     adopt_series();
     if (last_run_.has_value()) {
-      setup_->show_results(*last_run_, last_run_had_stock_);
+      const double hectares = bundle.grid.has_value()
+                                  ? static_cast<double>(bundle.grid->cols * bundle.grid->rows) *
+                                        bundle.grid->cell_size_m * bundle.grid->cell_size_m /
+                                        10000.0
+                                  : 0.0;
+      setup_->show_results(*last_run_, last_run_had_stock_, irrigation_tally_, hectares);
     }
   } catch (const std::exception& error) {
     // A failed run must not leave half a year on the timeline. Everything the
@@ -251,6 +386,7 @@ void MapWindow::open_report() {
   config::ReportOptions options;
   options.farm_name = last_bundle_->name;
   options.policy = &last_policy_;
+  options.ground_caveat = no_ground_reason_;
 
   auto* dialog = new ReportDialog(
       QString::fromStdString(config::render_report(*last_bundle_, *last_run_, options)),
@@ -270,6 +406,13 @@ std::optional<std::pair<double, double>> MapWindow::ground_range() const {
     highest = std::max(highest, height);
   }
   return std::make_pair(lowest, highest);
+}
+
+bool MapWindow::save_panel_screenshot(const std::string& path) {
+  if (setup_ == nullptr) {
+    return false;
+  }
+  return setup_->grab().save(QString::fromStdString(path), "PNG");
 }
 
 bool MapWindow::save_screenshot(const std::string& path) {
@@ -293,8 +436,9 @@ bool MapWindow::save_screenshot(const std::string& path) {
   return writer->GetErrorCode() == 0;
 }
 
-void MapWindow::show_configuration(int ground, bool terrain, int heights) {
+void MapWindow::show_configuration(int ground, bool terrain, int heights, bool irrigate) {
   setup_->select_ground(ground);
+  setup_->select_irrigation(irrigate);
   start_run();
   if (terrain) {
     view_box_->setCurrentIndex(1);
@@ -306,12 +450,13 @@ void MapWindow::show_configuration(int ground, bool terrain, int heights) {
 }
 
 void MapWindow::change_view(int index) {
-  const bool terrain = index == 1 && elevation_.has_value();
+  const bool terrain = index == 1;
   if (terrain == showing_terrain_) {
     return;
   }
   showing_terrain_ = terrain;
   height_box_->setEnabled(terrain);
+  tilt_slider_->setEnabled(terrain);
 
   vtkRenderWindow* window = view_->renderWindow();
   if (window != nullptr) {
@@ -321,6 +466,7 @@ void MapWindow::change_view(int index) {
   refresh();
   if (showing_terrain_) {
     terrain_.reset_camera();
+    terrain_.look_from_above(tilt_slider_->value());
   } else {
     scene_.reset_camera();
   }
@@ -333,6 +479,13 @@ void MapWindow::change_exaggeration(int index) {
 }
 
 void MapWindow::clear_series() {
+  weather_.clear();
+  slope_.clear();
+  available_water_.clear();
+  irrigation_today_.clear();
+  irrigation_to_date_.clear();
+  irrigation_mm_.clear();
+  irrigation_tally_ = {};
   cover_.clear();
   soil_water_.clear();
   water_stress_.clear();
@@ -342,7 +495,13 @@ void MapWindow::clear_series() {
   whole_run_ranges_.clear();
   boundaries_.clear();
   grazed_each_day_.clear();
+  mobs_each_day_.clear();
+  stock_summary_.clear();
   elevation_.reset();
+}
+
+const std::vector<viz::MobMarker>& MapWindow::mobs_on(std::size_t day) const {
+  return day < mobs_each_day_.size() ? mobs_each_day_[day] : kNobodyOnTheFarm;
 }
 
 const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
@@ -352,20 +511,40 @@ const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
 void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date) {
   cover_.push_back(grid.cover_kg_dm());
   soil_water_.push_back(grid.soil_water_mm());
+  available_water_.push_back(grid.available_water_fraction());
   water_stress_.push_back(grid.water_stress());
+
+  // Today's water, and the running total behind it. The total is accumulated
+  // here rather than asked of the grid, because the grid holds a day and not a
+  // season - it would have to keep a tally for a picture, which is the wrong
+  // reason for a model to remember anything.
+  core::Raster<double> today = grid.last_irrigation_mm();
+  core::Raster<double> so_far = today;
+  if (!irrigation_to_date_.empty()) {
+    const core::Raster<double>& before = irrigation_to_date_.back();
+    for (std::size_t cell = 0; cell < so_far.size() && cell < before.size(); ++cell) {
+      so_far.values()[cell] += before.values()[cell];
+    }
+  }
+  irrigation_today_.push_back(std::move(today));
+  irrigation_to_date_.push_back(std::move(so_far));
+
   legume_fraction_.push_back(grid.legume_fraction());
   dates_.push_back(date);
   mean_cover_.push_back(grid.mean_cover_kg_dm());
 }
 
 void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
-                                 const core::ManagementPolicy& policy) {
+                                 const core::ManagementPolicy& policy,
+                                 const core::IrrigationPolicy& irrigation,
+                                 const core::IrrigationSystem& system) {
   core::DietQuality diet;
   diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
   diet.digestibility_percent = kPastureDigestibility;
 
   last_run_ = config::run_managed_scenario(
-      bundle, policy, diet, bundle.name, [this](const core::Farm& farm, const core::FarmDay& day) {
+      bundle, policy, diet, bundle.name,
+      [this](const core::Farm& farm, const core::FarmDay& day) {
         keep_day(farm.grid(), day.date.to_iso_string());
 
         // The fences do not move, so they are taken once, on the first day.
@@ -386,10 +565,55 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
         std::sort(grazed.begin(), grazed.end());
         grazed.erase(std::unique(grazed.begin(), grazed.end()), grazed.end());
         grazed_each_day_.push_back(std::move(grazed));
-      });
+
+        // Where the stock stood, one marker per paddock each mob occupied. A
+        // set stocked mob has the run of the farm and gets a mark on all of it,
+        // which is what set stocking looks like; a rotating one gets one mark.
+        std::vector<viz::MobMarker> markers;
+        for (const core::FarmMob& mob : farm.mobs()) {
+          // How many of the mob to draw in each paddock it has the run of.
+          // Split evenly, with the remainder going to the first paddocks, and
+          // it is an illustration: nothing in the model says how a set stocked
+          // mob distributes itself. marker.head stays the whole mob, because
+          // that is the number the model actually knows.
+          const auto occupied = static_cast<int>(mob.paddocks.size());
+          int drawn = 0;
+          for (const std::size_t paddock : mob.paddocks) {
+            if (paddock >= farm.paddocks().size()) {
+              continue;
+            }
+            viz::MobMarker marker;
+            marker.at = farm.paddocks()[paddock].boundary.centroid();
+            marker.kind = mob.mob.animal.kind;
+            marker.head = mob.mob.head;
+            marker.paddock = paddock;
+            marker.head_here = occupied > 0 ? (mob.mob.head / occupied) +
+                                                  (drawn < (mob.mob.head % occupied) ? 1 : 0)
+                                            : 0;
+            ++drawn;
+            markers.push_back(marker);
+          }
+        }
+        mobs_each_day_.push_back(std::move(markers));
+
+        if (stock_summary_.empty()) {
+          std::string summary;
+          for (const core::FarmMob& mob : farm.mobs()) {
+            if (!summary.empty()) {
+              summary += ", ";
+            }
+            summary += std::to_string(mob.mob.head) + " " + core::to_string(mob.mob.animal.kind) +
+                       " (" + mob.mob.animal.class_id + ")";
+          }
+          stock_summary_ = summary;
+        }
+      },
+      irrigation, system);
 }
 
-void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle) {
+void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle,
+                                      const core::IrrigationPolicy& irrigation,
+                                      const core::IrrigationSystem& system) {
   core::FarmletGrid grid = bundle.make_grid();
   const core::WeatherSeries weather = bundle.weather->fetch(bundle.range);
 
@@ -405,22 +629,94 @@ void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle) {
   dates_.reserve(days);
   mean_cover_.reserve(days);
 
+  // The schedule holds the per-cell memory of when each piece of ground was
+  // last watered. It reads the grid's dryness and decides; the grid applies
+  // what it is handed and decides nothing.
+  core::IrrigationSchedule schedule(irrigation, system, grid.cell_count());
+  irrigation_mm_.reserve(days);
+
   for (const core::DailyWeather& day : weather.records) {
-    grid.step(day, &summary.ledger);
+    const core::Raster<double> dryness = grid.depletion_mm();
+    const std::vector<double>& water =
+        schedule.decide(dryness.values(), grid.total_available_water_mm());
+    irrigation_mm_.push_back(schedule.last_mean_mm());
+    grid.step(day, &summary.ledger, water);
     keep_day(grid, day.date.to_iso_string());
     summary.dates.push_back(day.date);
+    summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(grid.mean_cover_kg_dm());
   }
 
+  irrigation_tally_ = schedule.tally();
   summary.closing_cover_kg_dm = grid.mean_cover_kg_dm();
   summary.closing_nitrogen_kg = grid.mean_total_nitrogen_kg();
   summary.closing_water_mm = grid.mean_soil_water_mm();
   last_run_ = std::move(summary);
 }
 
+void MapWindow::open_scenario(const std::string& bundle_directory) {
+  // Absolute, because the panel holds absolute paths and matches on them
+  // exactly. Handed a relative one it finds nothing, changes nothing, and the
+  // run that follows is the farm that was already there - which looks like
+  // success from the outside.
+  const std::string resolved =
+      QDir(QString::fromStdString(bundle_directory)).absolutePath().toStdString();
+  const config::ScenarioBundle bundle = config::load_scenario(resolved);
+  setup_->adopt_bundle(resolved, bundle.mobs.empty() ? 0 : bundle.mobs.front().head,
+                       bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg,
+                       bundle.management.has_value() ? &*bundle.management : nullptr,
+                       bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
+  if (setup_->choices().scenario_directory != resolved) {
+    throw std::runtime_error("the panel does not offer " + resolved +
+                             ", so nothing was opened. The panel lists the bundles under the data "
+                             "directory it was given.");
+  }
+  // No reset_camera here, deliberately. Moving to the new farm is the run's own
+  // job; doing it here as well would hide a failure to do it at all.
+  start_run();
+}
+
+std::optional<std::pair<double, double>> MapWindow::camera_focus() const {
+  vtkRenderer* renderer = showing_terrain_ ? terrain_.renderer() : scene_.renderer();
+  if (renderer == nullptr || renderer->GetActiveCamera() == nullptr) {
+    return std::nullopt;
+  }
+  const double* focus = renderer->GetActiveCamera()->GetFocalPoint();
+  return std::make_pair(focus[0], focus[1]);
+}
+
+std::optional<std::array<double, 4>> MapWindow::drawn_farm() const {
+  if (cover_.empty()) {
+    return std::nullopt;
+  }
+  const core::Raster<double>& raster = cover_.front();
+  const core::GeoTransform& transform = raster.transform();
+  const double width = static_cast<double>(raster.cols()) * transform.cell_size;
+  const double height = static_cast<double>(raster.rows()) * transform.cell_size;
+  return std::array<double, 4>{transform.origin_easting, transform.origin_northing - height, width,
+                               height};
+}
+
+bool MapWindow::farm_moved(const core::Raster<double>& raster) const {
+  if (!drawn_extent_.has_value()) {
+    return true;
+  }
+  const core::GeoTransform& before = *drawn_extent_;
+  const core::GeoTransform& now = raster.transform();
+
+  // Exact comparison, deliberately. These are not computed values that drift -
+  // they are read from the manifest and passed through - so two farms are the
+  // same farm when their extents are the same numbers. A tolerance here would
+  // only invent a distance below which two farms count as one.
+  return before.origin_easting != now.origin_easting ||
+         before.origin_northing != now.origin_northing || before.cell_size != now.cell_size ||
+         drawn_cols_ != raster.cols() || drawn_rows_ != raster.rows();
+}
+
 void MapWindow::adopt_series() {
   for (const Field field :
-       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction}) {
+       {Field::Cover, Field::SoilWater, Field::AvailableWater, Field::WaterStress,
+        Field::IrrigationToday, Field::IrrigationToDate, Field::LegumeFraction, Field::Slope}) {
     double lowest = std::numeric_limits<double>::max();
     double highest = std::numeric_limits<double>::lowest();
     for (const core::Raster<double>& frame : series_of(field)) {
@@ -441,15 +737,13 @@ void MapWindow::adopt_series() {
     terrain_.set_boundaries(boundaries_);
   }
 
-  const bool have_ground = elevation_.has_value();
-  view_box_->setEnabled(have_ground);
-  view_box_->setToolTip(have_ground
-                            ? QString()
-                            : QString("This run was over flat ground, so there is no terrain to "
-                                      "draw. Choose a ground other than Flat and run again."));
-  if (!have_ground && showing_terrain_) {
-    view_box_->setCurrentIndex(0);
-  }
+  // The terrain view is offered whatever the run was over. A farm with no
+  // elevation is drawn as the flat thing it is, and the line under the map says
+  // why - more use than a disabled control explained in a tooltip nobody hovers.
+  view_box_->setToolTip(
+      elevation_.has_value()
+          ? QString("The ground this run was over.")
+          : QString("This run has no measured ground, so the terrain view draws it flat."));
 
   // The exact extent goes in the title, where it can be read once. Axis labels
   // are for orientation; seven-digit coordinates repeated across the bottom of
@@ -474,12 +768,42 @@ void MapWindow::adopt_series() {
   current_day_ = most_varied_day();
   timeline_->setValue(current_day_);
   refresh();
+
+  // Follow the farm. A run over a different piece of ground needs the camera
+  // moved to it; a run over the same ground keeps whatever view was being
+  // used, because re-running with different stock is not a reason to throw
+  // away somebody's zoom.
+  if (!cover_.empty()) {
+    if (farm_moved(cover_.front())) {
+      if (showing_terrain_) {
+        terrain_.reset_camera();
+      } else {
+        scene_.reset_camera();
+      }
+      if (vtkRenderWindow* window = view_->renderWindow(); window != nullptr) {
+        window->Render();
+      }
+    }
+    drawn_extent_ = cover_.front().transform();
+    drawn_cols_ = cover_.front().cols();
+    drawn_rows_ = cover_.front().rows();
+  } else {
+    drawn_extent_.reset();
+  }
 }
 
 const std::vector<core::Raster<double>>& MapWindow::series_of(Field field) const {
   switch (field) {
+    case Field::Slope:
+      return slope_;
     case Field::SoilWater:
       return soil_water_;
+    case Field::AvailableWater:
+      return available_water_;
+    case Field::IrrigationToday:
+      return irrigation_today_;
+    case Field::IrrigationToDate:
+      return irrigation_to_date_;
     case Field::WaterStress:
       return water_stress_;
     case Field::LegumeFraction:
@@ -496,6 +820,9 @@ std::pair<double, double> MapWindow::whole_run_range(Field field) const {
 
 int MapWindow::most_varied_day() const {
   const std::vector<core::Raster<double>>& series = series_of(field_);
+  if (series.size() < 2) {
+    return 0;  // Nothing varies over a single frame.
+  }
   int best_day = 0;
   double best_spread = -1.0;
   for (std::size_t day = 0; day < series.size(); ++day) {
@@ -517,7 +844,12 @@ void MapWindow::refresh() {
       static_cast<std::size_t>(std::clamp(current_day_, 0, static_cast<int>(dates_.size()) - 1));
 
   const std::vector<core::Raster<double>>& series = series_of(field_);
-  const core::Raster<double>& raster = series[day];
+  if (series.empty()) {
+    return;
+  }
+  // Slope has one frame and the rest have one per day, because the ground does
+  // not move and the pasture does.
+  const core::Raster<double>& raster = series[std::min(day, series.size() - 1)];
   const FieldStyle style = style_of(field_);
 
   const std::pair<double, double> today = viz::ColourScale::range_of(raster);
@@ -559,13 +891,49 @@ void MapWindow::refresh() {
       break;
   }
 
+  // The day's sky, and the sun that lit it.
+  //
+  // 14:00 solar time, every day. The model has no hours - a DailyWeather is a
+  // day's totals - so a single hour has to stand for the whole of it, and this
+  // one earns the job: over New Zealand the sun is above the horizon at 2 pm on
+  // every day of the year (17.5 degrees at midwinter, 58.2 at midsummer for
+  // Lincoln), and it sits in the north-west rather than due north, so the
+  // ground has a lit side and a shaded one. At solar noon the sun is exactly
+  // north and the relief flattens out.
+  const bool have_weather = day < weather_.size();
+  const double clearness =
+      have_weather ? core::clearness_index(weather_[day].solar_radiation_mj_per_m2,
+                                           core::extraterrestrial_radiation_mj(
+                                               latitude_degrees_, weather_[day].date.day_of_year()))
+                   : 0.0;
+  if (have_weather) {
+  }
+  show_weather(day, clearness);
+
   const viz::ColourScale colours(style.ramp, lowest, highest);
-  if (showing_terrain_ && elevation_.has_value()) {
-    terrain_.show(raster, *elevation_, colours, legend);
+  if (showing_terrain_) {
+    // A run with no elevation is draped on a level surface of its own shape.
+    // Zero rather than an invented datum: a made-up height is a number somebody
+    // could read off the view and believe.
+    if (!elevation_.has_value()) {
+      flat_ground_ = core::Raster<double>(raster.cols(), raster.rows(), raster.transform(), 0.0);
+    }
+    const core::Raster<double>& ground = elevation_.has_value() ? *elevation_ : flat_ground_;
+    terrain_.show(raster, ground, colours, legend);
+    // **After the surface, not before.** The sky hangs off the farm's extent,
+    // which show() is what works out - so called first it drew nothing, and the
+    // camera, which frames whatever is visible, framed the farm alone and left
+    // the weather to hang off the top of the picture.
+    terrain_.light_the_ground();
+    terrain_.show_sky(latitude_degrees_, weather_[day].date.day_of_year(), kSolarHourShown,
+                      clearness, weather_[day].rainfall_mm, weather_[day].wind_speed_m_per_s,
+                      weather_[day].uv_index);
     terrain_.show_grazed(grazed_on(day));
+    terrain_.show_mobs(mobs_on(day));
   } else {
     scene_.show(raster, colours, legend);
     scene_.show_grazed(grazed_on(day));
+    scene_.show_mobs(mobs_on(day));
   }
   // The day number is here so that a playing timeline is visibly playing even
   // on a field whose colours barely move: legume fraction shifts by about a
@@ -580,14 +948,30 @@ void MapWindow::refresh() {
   // profile makes differences in water-holding capacity irrelevant until
   // something draws it down.
   const double spread = today.second - today.first;
+  const QString stock =
+      stock_summary_.empty() ? QString("no stock") : QString::fromStdString(stock_summary_);
+
+  // Why the ground looks the way it does, when it is not what the scenario
+  // asked for. This is the "quietly" that a farm running flat must not be.
+  QString ground_note;
+  if (!no_ground_reason_.empty()) {
+    ground_note = "   |   " + QString::fromStdString(no_ground_reason_);
+  } else if (showing_terrain_ && !elevation_.has_value()) {
+    ground_note = "   |   drawn flat: this run was not over any terrain";
+  }
   summary_label_->setText(
-      QString("Mean pasture cover %1 kg DM/ha over %2 cells   |   %3 across the farm today: %4")
+      QString("%5   |   Mean pasture cover %1 kg DM/ha over %2 cells of %7 m (%8 ha each)   |   "
+              "%3 across the farm today: %4%6")
           .arg(mean_cover_[day], 0, 'f', 0)
           .arg(raster.size())
           .arg(style.label)
           .arg(spread > 0.0
                    ? QString("%1 to %2").arg(today.first, 0, 'f', 1).arg(today.second, 0, 'f', 1)
-                   : QString("uniform (%1)").arg(today.first, 0, 'f', 1)));
+                   : QString("uniform (%1)").arg(today.first, 0, 'f', 1))
+          .arg(stock)
+          .arg(ground_note)
+          .arg(raster.transform().cell_size, 0, 'f', 0)
+          .arg(raster.transform().cell_size * raster.transform().cell_size / 10000.0, 0, 'f', 4));
   view_->renderWindow()->Render();
 }
 
@@ -596,9 +980,92 @@ void MapWindow::show_day(int day) {
   refresh();
 }
 
+void MapWindow::show_weather(std::size_t day, double clearness) {
+  if (day >= weather_.size()) {
+    weather_line_ = "this run kept no daily weather to show";
+    weather_label_->setText("<b>Weather</b> &nbsp; this run kept no daily weather to show");
+    return;
+  }
+  const core::DailyWeather& today = weather_[day];
+
+  const auto describe = [](core::SkyCondition condition) -> const char* {
+    switch (condition) {
+      case core::SkyCondition::Clear:
+        return "clear";
+      case core::SkyCondition::PartlyCloudy:
+        return "partly cloudy";
+      case core::SkyCondition::Overcast:
+        return "overcast";
+    }
+    return "clear";
+  };
+  const char* sky = describe(core::sky_from_clearness(clearness));
+
+  // Rain is the day's total. There is no intensity and no time of day in the
+  // series, so "wet" is as much as can be said about when.
+  // Beside the rain, because the two are the same quantity arriving two ways
+  // and the point of showing them together is to let somebody weigh one
+  // against the other.
+  const double watered_mm = day < irrigation_mm_.size() ? irrigation_mm_[day] : 0.0;
+  const QString irrigation =
+      watered_mm >= 0.05 ? QString("%1 mm").arg(watered_mm, 0, 'f', 1) : QString("none");
+
+  const QString rain = today.rainfall_mm >= 0.05
+                           ? QString("%1 mm").arg(today.rainfall_mm, 0, 'f', 1)
+                           : QString("dry");
+
+  const core::SunPosition sun =
+      core::sun_position(latitude_degrees_, today.date.day_of_year(), kSolarHourShown);
+
+  weather_label_->setText(
+      QString("<b>%1</b> &nbsp;&nbsp; %2 &nbsp;&nbsp; rain <b>%3</b> &nbsp;&nbsp; "
+              "irrigation <b>%11</b> &nbsp;&nbsp; "
+              "%4 to %5 &deg;C &nbsp;&nbsp; sun %6 MJ/m&sup2; "
+              "(%7 of what the sky could give) &nbsp;&nbsp; "
+              "sun %8&deg; up, bearing %9&deg; at 14:00 solar time &nbsp;&nbsp; "
+              "<span style='color:#888'>wind %10 m/s - recorded, not modelled</span>")
+          .arg(QString::fromStdString(today.date.to_iso_string()))
+          .arg(sky)
+          .arg(rain)
+          .arg(today.min_air_temperature_c, 0, 'f', 1)
+          .arg(today.max_air_temperature_c, 0, 'f', 1)
+          .arg(today.solar_radiation_mj_per_m2, 0, 'f', 1)
+          .arg(QString("%1%").arg(clearness * 100.0, 0, 'f', 0))
+          .arg(sun.elevation_degrees, 0, 'f', 0)
+          .arg(sun.azimuth_degrees, 0, 'f', 0)
+          .arg(today.wind_speed_m_per_s, 0, 'f', 1)
+          .arg(irrigation));
+
+  weather_line_ = QString(
+                      "%1  %2, rain %3, %4 to %5 C, sun %6 MJ/m2 (%7 of the sky's), sun %8 deg up "
+                      "bearing %9 deg at 14:00 solar, wind %10 m/s (recorded, not modelled), "
+                      "irrigation %11")
+                      .arg(QString::fromStdString(today.date.to_iso_string()))
+                      .arg(sky)
+                      .arg(rain)
+                      .arg(today.min_air_temperature_c, 0, 'f', 1)
+                      .arg(today.max_air_temperature_c, 0, 'f', 1)
+                      .arg(today.solar_radiation_mj_per_m2, 0, 'f', 1)
+                      .arg(QString("%1%").arg(clearness * 100.0, 0, 'f', 0))
+                      .arg(sun.elevation_degrees, 0, 'f', 0)
+                      .arg(sun.azimuth_degrees, 0, 'f', 0)
+                      .arg(today.wind_speed_m_per_s, 0, 'f', 1)
+                      .arg(irrigation)
+                      .toStdString();
+}
+
 void MapWindow::change_scale(int mode) {
   scale_mode_ = static_cast<ScaleMode>(scale_box_->itemData(mode).toInt());
   refresh();
+}
+
+bool MapWindow::select_field(const std::string& name) {
+  const int index = field_box_->findText(QString::fromStdString(name), Qt::MatchFixedString);
+  if (index < 0) {
+    return false;
+  }
+  field_box_->setCurrentIndex(index);
+  return true;
 }
 
 void MapWindow::change_field(int field) {
@@ -614,6 +1081,10 @@ void MapWindow::toggle_play() {
     play_button_->setText("Play");
     return;
   }
+  // At the end of the year, Play starts it again rather than doing nothing.
+  if (!dates_.empty() && current_day_ >= static_cast<int>(dates_.size()) - 1) {
+    timeline_->setValue(0);
+  }
   timer_->start();
   play_button_->setText("Pause");
 }
@@ -622,7 +1093,16 @@ void MapWindow::advance_frame() {
   if (dates_.empty()) {
     return;
   }
-  const int next = (current_day_ + 1) % static_cast<int>(dates_.size());
+  // The year ends. Looping back to July made a run of the farm look like
+  // something with no beginning and no end, and made it easy to watch the same
+  // spring twice without noticing it was the same spring. Pressing Play again
+  // starts the year over.
+  const int next = current_day_ + 1;
+  if (next >= static_cast<int>(dates_.size())) {
+    timer_->stop();
+    play_button_->setText("Play");
+    return;
+  }
   timeline_->setValue(next);
 }
 

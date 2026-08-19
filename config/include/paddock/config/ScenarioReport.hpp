@@ -32,6 +32,16 @@ struct ReportOptions {
   /// capacity without saying the sheep figure is overstated by up to 17% is a
   /// more dangerous document than no report at all.
   bool include_evidence_notes = true;
+
+  /// Why this run has no measured ground when its scenario names some, or
+  /// empty.
+  ///
+  /// A report that says "Ground: modelled flat" is telling the truth about what
+  /// ran, and hiding the thing a reader needs: whether the farm is flat or
+  /// whether nobody fetched its elevation. Those produce the same numbers and
+  /// mean opposite things about how much the numbers are worth. Supplied by the
+  /// caller because it is the caller who tried to open the file.
+  std::string ground_caveat;
 };
 
 /// Renders one run as a Markdown report.

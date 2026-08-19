@@ -31,6 +31,8 @@
 
 #include <paddock/config/ScenarioRun.hpp>
 
+#include "../support/ShippedBundle.hpp"
+
 namespace paddock::config {
 namespace {
 
@@ -63,7 +65,7 @@ core::ManagementPolicy policy() {
 /// rather than adding a sloped scenario keeps every other input identical, so a
 /// difference between two runs is the ground and nothing else.
 ScenarioBundle on_a_slope(double gradient_east, double gradient_north) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.terrain.kind = TerrainSpec::Kind::Synthetic;
   bundle.terrain.surface.gradient_east = gradient_east;
   bundle.terrain.surface.gradient_north = gradient_north;
@@ -73,14 +75,22 @@ ScenarioBundle on_a_slope(double gradient_east, double gradient_north) {
 
 // The bundles that ship are flat, and that has to stay true: every baseline in
 // the project was recorded on level ground.
-TEST(TerrainReachesTheModelTest, TheShippedBundlesAreStillFlat) {
-  const ScenarioBundle bundle = load_scenario(bundle_path());
+// The rest of this suite runs the shipped bundle with its ground taken away -
+// see tests/support/ShippedBundle.hpp for why - so this checks the taking away
+// works, and that flat means flat all the way down.
+TEST(TerrainReachesTheModelTest, GroundTakenAwayIsFlatAllTheWayDown) {
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
 
   EXPECT_TRUE(bundle.terrain.is_flat());
   EXPECT_FALSE(bundle.make_elevation().has_value())
       << "flat ground has no surface to sample, and generating one would cost a scan of the farm "
          "to learn that every slope is zero";
   EXPECT_FALSE(bundle.make_topography().has_value());
+
+  // And that the bundle on disk is not flat, so this is a choice the test made
+  // rather than a description of what was shipped. Without this the helper
+  // could stop working and nothing would notice.
+  EXPECT_FALSE(load_scenario(bundle_path()).terrain.is_flat());
 }
 
 // A bundle that asks for a hill gets one, over the grid it actually runs on.
@@ -132,8 +142,8 @@ TEST(TerrainReachesTheModelTest, ANorthFaceOutgrowsTheSouthFaceOfTheSameHill) {
 // less well than the terrace it used to be - through the feed bill, because the
 // farmer is protecting the stock and buys the difference.
 TEST(TerrainReachesTheModelTest, TheSameFarmOnASlopeIsNotTheTerraceItUsedToBe) {
-  const RunSummary flat =
-      run_managed_scenario(load_scenario(bundle_path()), policy(), pasture_diet(), "flat");
+  const RunSummary flat = run_managed_scenario(tests::load_on_flat_ground(bundle_path()), policy(),
+                                               pasture_diet(), "flat");
   const RunSummary steep =
       run_managed_scenario(on_a_slope(0.0, 0.20), policy(), pasture_diet(), "south facing slope");
 
@@ -163,7 +173,7 @@ TEST(TerrainReachesTheModelTest, TheSameFarmOnASlopeIsNotTheTerraceItUsedToBe) {
 // as `weather`, and the same shape `[boundary] kind = "geopackage"` already
 // uses for a cadastre.
 TEST(TerrainReachesTheModelTest, ASnapshotBundleRecordsTheFileWithoutOpeningIt) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
   bundle.terrain.elevation_path = "../../snapshots/lincoln-dem-1m.tiff";
   bundle.terrain.elevation_sha256 = "not checked here";
@@ -178,7 +188,7 @@ TEST(TerrainReachesTheModelTest, ASnapshotBundleRecordsTheFileWithoutOpeningIt) 
 // found no reader, and went round the year as a terrace with every report
 // saying the ground was a snapshot.
 TEST(TerrainReachesTheModelTest, ASnapshotWithNoReaderRefusesToRunFlat) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
   bundle.terrain.elevation_path = "../../snapshots/lincoln-dem-1m.tiff";
   bundle.terrain.elevation_sha256 = "not checked here";
@@ -191,7 +201,7 @@ TEST(TerrainReachesTheModelTest, ASnapshotWithNoReaderRefusesToRunFlat) {
 // grid's own extent and resolution, which is the part config is responsible for
 // and the part that would put a farm on the wrong ground if it were wrong.
 TEST(TerrainReachesTheModelTest, ASuppliedSourceIsSampledOverTheGrid) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
   bundle.terrain.elevation_path = "stand-in";
   bundle.terrain.elevation_sha256 = "stand-in";

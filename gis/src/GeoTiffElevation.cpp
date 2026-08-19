@@ -240,25 +240,83 @@ core::Raster<double> GeoTiffElevationSource::fetch(const core::BoundingBox& area
     throw std::runtime_error("Failed reading " + path_ + ": " + std::string(CPLGetLastErrorMsg()));
   }
 
-  // Nearest neighbour at cell centres. Bilinear would be smoother and is what a
-  // resampling step should eventually do, but it invents values between measured
-  // ones, and this reader's job is to report what the DEM says. Recorded in
-  // docs/verify.md rather than left as a silent choice.
+  // The mean of the source pixels inside each cell, not the one pixel under its
+  // centre.
+  //
+  // **Why this changed.** It used to take the single pixel nearest the cell
+  // centre, on the reasoning that averaging is a kind of invention and this
+  // reader's job is to report what the DEM says. That reasoning was wrong about
+  // which quantity is being asked for. A 25 m cell over a 1 m DEM covers 625
+  // measured pixels, and the centre one is 0.16% of the ground the cell stands
+  // for: a molehill, a wheel rut or a single noisy return became the height of
+  // a quarter-hectare. What came out was visibly rough on a farm that is not,
+  // and the roughness fed the slope, which feeds the energy cost of walking and
+  // the radiation a face receives.
+  //
+  // A mean over the cell is not interpolation. Bilinear would invent values
+  // BETWEEN measured points and is still not done here; every number in this
+  // average is a measured pixel inside the cell it is reported for. It is the
+  // ordinary meaning of "the height of this cell".
+  //
+  // Where a cell is smaller than a source pixel there is nothing to average, so
+  // it falls back to the pixel the cell centre lands in - the old behaviour, in
+  // the one case where it was the only thing available.
   for (std::size_t row = 0; row < rows; ++row) {
-    const double north =
-        out_transform.origin_northing - ((static_cast<double>(row) + 0.5) * cell_size_m);
-    const auto source_row =
-        static_cast<int>(std::floor((north - transform.origin_northing) / transform.pixel_height));
-    const std::size_t window_y =
-        static_cast<std::size_t>(std::clamp(source_row - window_row, 0, window_rows - 1));
+    const double north_edge =
+        out_transform.origin_northing - (static_cast<double>(row) * cell_size_m);
+    const double south_edge = north_edge - cell_size_m;
 
     for (std::size_t col = 0; col < cols; ++col) {
-      const double east = area.min_easting + ((static_cast<double>(col) + 0.5) * cell_size_m);
-      const auto source_col =
-          static_cast<int>(std::floor((east - transform.origin_easting) / transform.pixel_width));
-      const std::size_t window_x =
-          static_cast<std::size_t>(std::clamp(source_col - window_col, 0, window_cols - 1));
+      const double west_edge = area.min_easting + (static_cast<double>(col) * cell_size_m);
+      const double east_edge = west_edge + cell_size_m;
 
+      // Source pixels whose centres fall inside the cell. Centres rather than
+      // any overlap, so that every source pixel is counted by exactly one cell
+      // and no pixel is weighed twice on a shared edge.
+      const auto first_source_col = static_cast<int>(
+          std::ceil(((west_edge - transform.origin_easting) / transform.pixel_width) - 0.5));
+      const auto last_source_col = static_cast<int>(
+          std::floor(((east_edge - transform.origin_easting) / transform.pixel_width) - 0.5));
+      const auto first_source_row = static_cast<int>(
+          std::ceil(((north_edge - transform.origin_northing) / transform.pixel_height) - 0.5));
+      const auto last_source_row = static_cast<int>(
+          std::floor(((south_edge - transform.origin_northing) / transform.pixel_height) - 0.5));
+
+      double total = 0.0;
+      std::size_t counted = 0;
+      for (int source_row = first_source_row; source_row <= last_source_row; ++source_row) {
+        const int y = source_row - window_row;
+        if (y < 0 || y >= window_rows) {
+          continue;
+        }
+        for (int source_col = first_source_col; source_col <= last_source_col; ++source_col) {
+          const int x = source_col - window_col;
+          if (x < 0 || x >= window_cols) {
+            continue;
+          }
+          total += window[(static_cast<std::size_t>(y) * static_cast<std::size_t>(window_cols)) +
+                          static_cast<std::size_t>(x)];
+          ++counted;
+        }
+      }
+
+      if (counted > 0) {
+        elevation(col, row) = total / static_cast<double>(counted);
+        continue;
+      }
+
+      // Nothing inside the cell: it is finer than the DEM. Take the pixel the
+      // centre lands in.
+      const double north = north_edge - (cell_size_m / 2.0);
+      const double east = west_edge + (cell_size_m / 2.0);
+      const auto centre_row = static_cast<int>(
+          std::floor((north - transform.origin_northing) / transform.pixel_height));
+      const auto centre_col =
+          static_cast<int>(std::floor((east - transform.origin_easting) / transform.pixel_width));
+      const std::size_t window_y =
+          static_cast<std::size_t>(std::clamp(centre_row - window_row, 0, window_rows - 1));
+      const std::size_t window_x =
+          static_cast<std::size_t>(std::clamp(centre_col - window_col, 0, window_cols - 1));
       elevation(col, row) = window[(window_y * static_cast<std::size_t>(window_cols)) + window_x];
     }
   }

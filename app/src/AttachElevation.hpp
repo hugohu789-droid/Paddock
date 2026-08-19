@@ -36,15 +36,27 @@ namespace paddock::app {
 /// is the moment the file is actually going to be used, and a hash that is
 /// recorded and never checked is decoration.
 ///
-/// Without the geospatial stack this does nothing, and the bundle throws the
-/// first time it is asked for ground. That is the honest outcome: a farm
-/// quietly running flat when its manifest says otherwise is the failure worth
-/// preventing, and a build that cannot read a DEM should say so rather than
-/// substitute a terrace for a hill.
-inline void attach_elevation(config::ScenarioBundle& bundle, const std::string& bundle_directory) {
+/// **Absent and different are not the same failure.** A snapshot nobody has
+/// fetched is the ordinary state of a fresh clone, and refusing to run over it
+/// would make the elevation an installation step rather than an input. So a
+/// missing file returns a reason and leaves the bundle without ground, for the
+/// caller to say out loud and carry on flat. A file that is present and hashes
+/// to something else is a different matter - that is not this scenario's
+/// ground - and it still throws.
+///
+/// A farm quietly running flat when its manifest says otherwise is still the
+/// failure worth preventing. Quietly is the word doing the work: the reason
+/// goes on the line under the map, into the report's Ground row, and to stdout
+/// on the headless path - where a screenshot of flat ground would otherwise
+/// look the same either way.
+///
+/// Returns empty when the bundle has its elevation, or names none. Otherwise
+/// returns why it has not, in words meant to be shown to somebody.
+[[nodiscard]] inline std::string attach_elevation(config::ScenarioBundle& bundle,
+                                                  const std::string& bundle_directory) {
 #ifdef PADDOCK_WITH_GIS
   if (bundle.terrain.kind != config::TerrainSpec::Kind::Snapshot) {
-    return;
+    return {};
   }
   // The manifest's path is relative to the bundle, as every other input's is.
   const std::filesystem::path resolved =
@@ -52,10 +64,15 @@ inline void attach_elevation(config::ScenarioBundle& bundle, const std::string& 
 
   std::ifstream file(resolved, std::ios::binary);
   if (!file) {
-    throw std::runtime_error("scenario '" + bundle.name + "' takes its ground from " +
-                             resolved.string() +
-                             ", which is not there. Snapshots are not committed - fetch it with "
-                             "scripts/nz-elevation-snapshot.py.");
+    // Demoted, not merely left unattached. ScenarioBundle::make_elevation
+    // refuses a Snapshot with no reader behind it - rightly, because that is
+    // how a farm would run flat without saying so - and this is the one place
+    // that knows the file is absent rather than unreadable, and has already
+    // written the sentence that says so out loud.
+    bundle.terrain.kind = config::TerrainSpec::Kind::Flat;
+    return "This farm has measured ground and the file is not on this machine, so it is being "
+           "drawn flat. Snapshots are not committed; fetch it with "
+           "scripts/nz-elevation-snapshot.py.";
   }
   const std::string contents((std::istreambuf_iterator<char>(file)),
                              std::istreambuf_iterator<char>());
@@ -68,9 +85,15 @@ inline void attach_elevation(config::ScenarioBundle& bundle, const std::string& 
   }
 
   bundle.elevation = std::make_shared<gis::GeoTiffElevationSource>(resolved.string());
+  return {};
 #else
-  (void)bundle;
   (void)bundle_directory;
+  if (bundle.terrain.kind != config::TerrainSpec::Kind::Snapshot) {
+    return {};
+  }
+  bundle.terrain.kind = config::TerrainSpec::Kind::Flat;
+  return "This farm has measured ground and this build has no geospatial stack to read it with, "
+         "so it is being drawn flat. Build with the desktop preset - see docs/setup.md.";
 #endif
 }
 

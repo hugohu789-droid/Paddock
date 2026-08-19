@@ -17,6 +17,7 @@
 #include <paddock/config/ScenarioRun.hpp>
 #include <paddock/config/SpeciesConfig.hpp>
 #include <paddock/core/Farmer.hpp>
+#include <paddock/core/Irrigation.hpp>
 
 namespace paddock::app {
 
@@ -53,6 +54,11 @@ class SetupPanel : public QWidget {
     /// every baseline was recorded on; the others are invented surfaces, and
     /// the panel says so rather than offering them as places.
     config::TerrainSpec terrain;
+
+    /// When to water and how far to refill, and what the plant can deliver.
+    /// Off by default, so a rain-fed run is what you get without asking.
+    core::IrrigationPolicy irrigation;
+    core::IrrigationSystem irrigation_system;
   };
 
   /// Scans `data_directory` for scenario bundles and species definitions. A
@@ -63,18 +69,42 @@ class SetupPanel : public QWidget {
 
   [[nodiscard]] Choices choices() const;
 
-  /// Selects the bundle in `directory` if the panel found it, and takes the
-  /// head count and opening weight from the stock that bundle carries.
+  /// Selects the bundle in `directory` if the panel found it, and takes its
+  /// settings: the head count and opening weight of the stock it carries, and
+  /// the rules its farmer works to when it names them.
+  ///
+  /// The panel opens showing what the bundle says, so pressing Run without
+  /// touching anything reproduces the published scenario rather than whatever
+  /// this form happened to default to. `policy` is null for a bundle that names
+  /// none, and the panel keeps its own defaults.
   ///
   /// The window does this rather than the panel loading bundles itself: a
   /// scenario that fails to load is a thing the window has to report anyway,
   /// and having two places that can fail at it would mean two ways of saying so.
-  void adopt_bundle(const std::string& directory, int head, double liveweight_kg);
+  void adopt_bundle(const std::string& directory, int head, double liveweight_kg,
+                    const core::ManagementPolicy* policy = nullptr,
+                    const core::AnimalClassParameters* animal = nullptr);
+
+  /// Say whether the farm on screen brought its own measured ground.
+  ///
+  /// A bundle that names an elevation snapshot has its ground settled: a survey
+  /// is not a preference, and MapWindow::start_run will not let the formulae in
+  /// this list overwrite one. The control was still enabled and still offering
+  /// them, and the caveat below still announced an invented surface while a
+  /// LiDAR tile was on screen - a control that does nothing, explaining
+  /// something that is not happening.
+  void show_measured_ground(bool measured);
 
   /// Chooses the ground by its position in the list, for the screenshot path.
   /// A view of terrain that only a person clicking can reach is a view nothing
   /// can check.
   void select_ground(int index);
+
+  /// Turns irrigation on for the headless path.
+  ///
+  /// The panel is the only place a run can be told to irrigate, and a feature
+  /// that only a person clicking can reach is a feature nothing can check.
+  void select_irrigation(bool on);
 
   /// Why this configuration cannot be run, or empty if it can.
   ///
@@ -84,6 +114,13 @@ class SetupPanel : public QWidget {
   /// declining to ask it.
   [[nodiscard]] QString problem() const;
 
+ private:
+  /// The one way the irrigation rule can contradict itself: refilling to less
+  /// than the level it starts at, which would leave every watering short of
+  /// where the rule said it wanted the ground.
+  [[nodiscard]] QString problem_with_irrigation() const;
+
+ public:
   /// What is worth saying before the run rather than after: chiefly that the
   /// chosen stock rest on parameters that are not published, which decides
   /// whether any number out of the run may be quoted.
@@ -93,7 +130,8 @@ class SetupPanel : public QWidget {
 
   /// Fills the results section. `has_stock` false means the bundle models
   /// pasture alone, so the stock lines are omitted rather than shown as zeroes.
-  void show_results(const config::RunSummary& run, bool has_stock);
+  void show_results(const config::RunSummary& run, bool has_stock,
+                    const core::IrrigationTally& irrigation = {}, double hectares = 0.0);
 
   void show_failure(const QString& message);
 
@@ -101,8 +139,30 @@ class SetupPanel : public QWidget {
   void runRequested();
   void reportRequested();
 
+  /// A different farm was chosen, with the directory it lives in.
+  ///
+  /// Separate from runRequested because choosing a farm is not the same as
+  /// pressing Run on this one: the new farm brings its own stock and its own
+  /// rules, and re-running with the form still showing the last farm's numbers
+  /// would put one farm's mob on another farm's ground. The window reloads the
+  /// bundle and then runs it.
+  ///
+  /// Not emitted while adopt_bundle is filling the form, which sets this box
+  /// itself and would otherwise start a run from inside the setting of it.
+  void scenarioChanged(const QString& directory);
+
  private slots:
   void refresh_readiness();
+
+ private:
+  /// Whether the chosen scenario supplies its own measured ground.
+  bool measured_ground_ = false;
+
+  /// True while adopt_bundle is filling the form from a bundle, so that the
+  /// boxes it sets do not read as a person choosing something.
+  bool adopting_ = false;
+
+ private slots:
 
  private:
   void populate(const std::string& data_directory);
@@ -111,11 +171,29 @@ class SetupPanel : public QWidget {
 
   QComboBox* scenario_box_ = nullptr;
   QComboBox* terrain_box_ = nullptr;
+
+  /// Irrigation, as few controls as the thing needs to be understood.
+  ///
+  /// The trigger and the target are put to a person as "how much water is
+  /// left" rather than as depletion, because that is the way a farmer says it
+  /// - a paddock is at 40% rather than 60% depleted - and the two are the same
+  /// number read from opposite ends.
+  QCheckBox* irrigate_box_ = nullptr;
+  QDoubleSpinBox* irrigation_trigger_box_ = nullptr;
+  QDoubleSpinBox* irrigation_target_box_ = nullptr;
+  QDoubleSpinBox* irrigation_maximum_box_ = nullptr;
+  QDoubleSpinBox* irrigation_efficiency_box_ = nullptr;
   QComboBox* species_box_ = nullptr;
   QSpinBox* head_box_ = nullptr;
   QDoubleSpinBox* liveweight_box_ = nullptr;
   QDoubleSpinBox* cover_floor_box_ = nullptr;
   QDoubleSpinBox* rotation_box_ = nullptr;
+  QDoubleSpinBox* target_gain_box_ = nullptr;
+  QSpinBox* graze_days_box_ = nullptr;
+  QSpinBox* spell_days_box_ = nullptr;
+  QDoubleSpinBox* supplement_me_box_ = nullptr;
+  QComboBox* preference_box_ = nullptr;
+  QComboBox* floor_purchase_box_ = nullptr;
   QCheckBox* may_buy_box_ = nullptr;
   QPushButton* run_button_ = nullptr;
   QPushButton* report_button_ = nullptr;

@@ -50,7 +50,7 @@ TEST(SnapshotWeatherTest, ReplaysEveryRowAndHashesTheFile) {
   EXPECT_DOUBLE_EQ(series.records.front().rainfall_mm, 12.4);
   EXPECT_DOUBLE_EQ(series.records.front().wind_speed_m_per_s, 6.7);
   EXPECT_DOUBLE_EQ(series.records.back().max_air_temperature_c, 11.0);
-  EXPECT_EQ(series.provenance.source_name, "cliflo_snapshot");
+  EXPECT_EQ(series.provenance.source_name, "weather_snapshot");
   EXPECT_EQ(series.provenance.dataset, "test_station");
   EXPECT_EQ(series.provenance.content_hash, source.content_hash());
 }
@@ -173,7 +173,7 @@ TEST(SnapshotWeatherTest, DescribeReportsTheSpanAndLicence) {
   const SnapshotWeatherSource source = loaded(kValidSnapshot);
   const SourceDescription description = source.describe();
 
-  EXPECT_EQ(description.name, "cliflo_snapshot:test_station");
+  EXPECT_EQ(description.name, "weather_snapshot:test_station");
   EXPECT_EQ(description.licence, "test fixture");
   EXPECT_NE(description.coverage.find("2023-06-28"), std::string::npos);
   EXPECT_NE(description.coverage.find("2023-07-01"), std::string::npos);

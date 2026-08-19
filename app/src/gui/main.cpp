@@ -8,16 +8,19 @@
 // links Qt or VTK at all.
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDir>
 #include <QSurfaceFormat>
 #include <QVTKOpenGLNativeWidget.h>
 #include <algorithm>
 #include <cstdio>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <paddock/config/ScenarioConfig.hpp>
@@ -26,9 +29,53 @@
 
 namespace {
 
+/// The scenario the application opens on when it is given none. Lincoln
+/// University's Research Dairy Farm is the one bundle in this repository built
+/// from a real farm's published area and stocking, with a real LINZ elevation
+/// snapshot behind it, so it is the one worth showing first.
+constexpr const char* kDefaultBundle = "data/scenarios/lincoln-lurdf";
+
+/// Find the default bundle without being told where the repository is.
+///
+/// **Why a search rather than a fixed path.** The executable is run three ways -
+/// from the build directory by a developer, from the repository root by CI, and
+/// from wherever a shortcut points - and none of them share a working directory.
+/// Walking up from both the working directory and the executable covers all
+/// three without an install step or an environment variable to forget. Returns
+/// empty when nothing is found, and the caller says so rather than opening
+/// something arbitrary.
+std::string find_default_bundle() {
+  std::vector<std::filesystem::path> starts;
+  std::error_code error;
+  const std::filesystem::path working = std::filesystem::current_path(error);
+  if (!error) {
+    starts.push_back(working);
+  }
+  const QString executable = QCoreApplication::applicationDirPath();
+  if (!executable.isEmpty()) {
+    starts.emplace_back(executable.toStdString());
+  }
+
+  for (const std::filesystem::path& start : starts) {
+    for (std::filesystem::path directory = start; !directory.empty();
+         directory = directory.parent_path()) {
+      const std::filesystem::path candidate = directory / kDefaultBundle;
+      if (std::filesystem::is_directory(candidate, error)) {
+        return candidate.string();
+      }
+      if (!directory.has_relative_path()) {
+        break;  // At the root, where parent_path() would spin.
+      }
+    }
+  }
+  return {};
+}
+
 void print_usage() {
-  std::cout << "paddock-gui <bundle> [--smoke] [--screenshot FILE]\n\n"
-            << "  <bundle>       A scenario bundle directory with a [grid] section\n"
+  std::cout << "paddock-gui [bundle] [--smoke] [--screenshot FILE]\n\n"
+            << "  [bundle]       A scenario bundle directory with a [grid] section.\n"
+            << "                 Defaults to " << kDefaultBundle << ", found by\n"
+            << "                 walking up from here and from the executable\n"
             << "  --smoke        Render one frame and exit; used by CI, which has\n"
             << "                 no one to click anything\n"
             << "  --screenshot   Write that frame to a PNG and exit. Implies --smoke,\n"
@@ -38,6 +85,11 @@ void print_usage() {
             << "                 north, 2 facing south, 3 rolling\n"
             << "  --terrain      Show the three-dimensional view rather than the\n"
             << "                 flat map\n"
+            << "  --then BUNDLE  After the first frame, open BUNDLE as choosing it in the\n"
+            << "                 panel would, and check the camera followed it onto the\n"
+               "                 new farm. Exits non-zero if it did not\n"
+            << "  --irrigate     Turn irrigation on, as the panel would\n"
+            << "  --field NAME   Draw a named field, as the list under the map does\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
             << "                 on screen, because exaggeration makes every slope look\n"
             << "                 steeper than it is\n";
@@ -60,9 +112,9 @@ void report_fatal(const char* message) noexcept {
 int main(int argc, char** argv) {
   try {
     const std::vector<std::string_view> args(argv + 1, argv + argc);
-    if (args.empty() || args.front() == "--help" || args.front() == "-h") {
+    if (!args.empty() && (args.front() == "--help" || args.front() == "-h")) {
       print_usage();
-      return args.empty() ? 2 : 0;
+      return 0;
     }
 
     const auto screenshot_flag = std::find(args.begin(), args.end(), "--screenshot");
@@ -74,15 +126,29 @@ int main(int argc, char** argv) {
       }
       screenshot = std::string(*std::next(screenshot_flag));
     }
-    const bool smoke =
-        !screenshot.empty() || std::find(args.begin(), args.end(), "--smoke") != args.end();
+    const bool smoke = !screenshot.empty() ||
+                       std::find(args.begin(), args.end(), "--panel-shot") != args.end() ||
+                       std::find(args.begin(), args.end(), "--smoke") != args.end();
     // Must be set before the QApplication exists, or the widget and the render
     // window disagree about the surface they share.
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
     const QApplication application(argc, argv);
 
-    const paddock::config::ScenarioBundle bundle =
-        paddock::config::load_scenario(std::string(args.front()));
+    // A leading flag means no bundle was named, so the default stands in.
+    std::string bundle_path;
+    if (!args.empty() && args.front().substr(0, 2) != "--") {
+      bundle_path = std::string(args.front());
+    } else {
+      bundle_path = find_default_bundle();
+      if (bundle_path.empty()) {
+        std::cerr << "paddock-gui: no scenario named, and " << kDefaultBundle
+                  << " is not above this directory or the executable. Name a bundle "
+                     "directory, or run from the repository.\n";
+        return 2;
+      }
+    }
+
+    const paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(bundle_path);
     if (!bundle.grid.has_value()) {
       std::cerr << "paddock-gui: scenario '" << bundle.name
                 << "' has no [grid] section, so there is no map to draw. Add one, or use "
@@ -93,7 +159,7 @@ int main(int argc, char** argv) {
     // it looks in is the data directory the named bundle sits under:
     // data/scenarios/<bundle> means data/. Derived rather than asked for, so
     // the command line stays what it was and CI keeps working.
-    const QDir bundle_directory(QString::fromStdString(std::string(args.front())));
+    const QDir bundle_directory(QString::fromStdString(bundle_path));
     QDir data_directory(bundle_directory);
     data_directory.cdUp();
     data_directory.cdUp();
@@ -102,10 +168,11 @@ int main(int argc, char** argv) {
                                    data_directory.absolutePath().toStdString());
     window.show();
 
+    const bool irrigate = std::find(args.begin(), args.end(), "--irrigate") != args.end();
     const auto ground_flag = std::find(args.begin(), args.end(), "--ground");
     const bool terrain = std::find(args.begin(), args.end(), "--terrain") != args.end();
     const bool heights_given = std::find(args.begin(), args.end(), "--heights") != args.end();
-    if (ground_flag != args.end() || terrain || heights_given) {
+    if (ground_flag != args.end() || terrain || heights_given || irrigate) {
       int ground = 0;
       if (ground_flag != args.end() && std::next(ground_flag) != args.end()) {
         ground = std::stoi(std::string(*std::next(ground_flag)));
@@ -115,7 +182,7 @@ int main(int argc, char** argv) {
       if (heights_flag != args.end() && std::next(heights_flag) != args.end()) {
         heights = std::stoi(std::string(*std::next(heights_flag)));
       }
-      window.show_configuration(ground, terrain, heights);
+      window.show_configuration(ground, terrain, heights, irrigate);
     }
 
     if (smoke) {
@@ -131,6 +198,103 @@ int main(int argc, char** argv) {
                   << " m above sea level\n";
       } else {
         std::cout << "paddock-gui: ground modelled flat\n";
+      }
+      // How steep the farm is, which the picture cannot say.
+      {
+        const std::pair<double, double> slope =
+            window.field_range(paddock::app::MapWindow::Field::Slope);
+        std::cout << "paddock-gui: slope " << slope.first << " to " << slope.second << " degrees\n";
+      }
+      if (const paddock::core::IrrigationTally& water = window.irrigation(); water.events > 0) {
+        std::cout << "paddock-gui: irrigated " << water.effective_mm << " mm over " << water.events
+                  << " events, " << water.mean_event_mm() << " mm a time" << '\n';
+      }
+      if (const std::string& weather = window.weather_line(); !weather.empty()) {
+        std::cout << "paddock-gui: weather " << weather << '\n';
+      }
+      if (const std::string& reason = window.no_ground_reason(); !reason.empty()) {
+        std::cout << "paddock-gui: " << reason << '\n';
+      }
+      // Changing farms, which no single frame can check. Two bundles kilometres
+      // apart used to leave the camera on the first one, so the second rendered
+      // as an empty window - a failure that looks exactly like a broken
+      // pipeline and is not one.
+      // The window must not resize as the run plays.
+      //
+      // The weather and summary lines change length every day - "dry" becomes
+      // "12.3 mm", the ground note appears and disappears - and a label whose
+      // size hint reaches the layout drags the window with it. A screenshot
+      // cannot show that; it takes two days and a comparison.
+      if (window.day_count() > 1) {
+        const int opening = window.width();
+        int widest = opening;
+        int narrowest = opening;
+        const std::size_t days = window.day_count();
+        for (std::size_t sample = 0; sample < 24; ++sample) {
+          window.show_day_for_check(static_cast<int>((sample * days) / 24));
+          widest = std::max(widest, window.width());
+          narrowest = std::min(narrowest, window.width());
+        }
+        if (widest != narrowest) {
+          std::cerr << "paddock-gui: the window resized while playing, from " << narrowest << " to "
+                    << widest << " pixels. A status line is sizing the layout.\n";
+          return 1;
+        }
+        std::cout << "paddock-gui: window steady at " << opening << " pixels across the year\n";
+      }
+
+      const auto then_flag = std::find(args.begin(), args.end(), "--then");
+      if (then_flag != args.end()) {
+        if (std::next(then_flag) == args.end()) {
+          std::cerr << "paddock-gui: --then needs a bundle to open" << '\n';
+          return 2;
+        }
+        // No render_once here: it resets the camera itself, which would make
+        // this check pass whether or not opening a farm moves the view. The run
+        // draws its own frame.
+        window.open_scenario(std::string(*std::next(then_flag)));
+
+        const auto farm = window.drawn_farm();
+        const auto focus = window.camera_focus();
+        if (!farm.has_value() || !focus.has_value()) {
+          std::cerr << "paddock-gui: --then drew no farm to look at" << '\n';
+          return 1;
+        }
+        const double west = (*farm)[0];
+        const double south = (*farm)[1];
+        const double east = west + (*farm)[2];
+        const double north = south + (*farm)[3];
+        std::cout << "paddock-gui: camera on " << focus->first << ", " << focus->second << "; farm "
+                  << west << " to " << east << " E, " << south << " to " << north << " N" << '\n';
+        if (focus->first < west || focus->first > east || focus->second < south ||
+            focus->second > north) {
+          std::cerr << "paddock-gui: the camera stayed on the farm that was there before, so the "
+                       "new one is off screen"
+                    << '\n';
+          return 1;
+        }
+      }
+
+      // Which field to draw, so that a map mode is reachable by something
+      // other than a person clicking.
+      if (const auto field_flag = std::find(args.begin(), args.end(), "--field");
+          field_flag != args.end() && std::next(field_flag) != args.end()) {
+        const std::string field(*std::next(field_flag));
+        if (!window.select_field(field)) {
+          std::cerr << "paddock-gui: no field called '" << field << "'" << '\n';
+          return 2;
+        }
+        std::cout << "paddock-gui: showing " << field << '\n';
+      }
+
+      const auto panel_flag = std::find(args.begin(), args.end(), "--panel-shot");
+      if (panel_flag != args.end() && std::next(panel_flag) != args.end()) {
+        const std::string panel_path(*std::next(panel_flag));
+        if (!window.save_panel_screenshot(panel_path)) {
+          std::cerr << "paddock-gui: could not write " << panel_path << '\n';
+          return 1;
+        }
+        std::cout << "paddock-gui: wrote " << panel_path << '\n';
       }
       if (!screenshot.empty()) {
         if (!window.save_screenshot(screenshot)) {

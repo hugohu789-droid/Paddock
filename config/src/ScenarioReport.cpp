@@ -105,7 +105,11 @@ void write_what_was_simulated(std::ostringstream& out, const ScenarioBundle& bun
   // at all: what a slope costs an animal to walk, and what radiation a slope
   // receives. A reader cannot tell from any other number in this report.
   if (bundle.terrain.is_flat()) {
-    out << "| Ground | modelled flat |\n";
+    out << "| Ground | modelled flat";
+    if (!options.ground_caveat.empty()) {
+      out << " — " << options.ground_caveat;
+    }
+    out << " |\n";
   } else {
     out << "| Ground | synthetic surface, falling "
         << fixed(bundle.terrain.surface.gradient_east * 100.0, 1) << "% east and "
@@ -133,6 +137,13 @@ void write_what_was_simulated(std::ostringstream& out, const ScenarioBundle& bun
     out << "| Target gain | " << fixed(policy.target_liveweight_gain_kg_per_day, 3)
         << " kg per head per day |\n";
     out << "| May buy feed | " << (policy.may_buy_feed ? "yes" : "no") << " |\n";
+    // Which system the farmer ran, and what they bought at the floor. Both
+    // change the answer, and a reader comparing two reports has no other way to
+    // tell which farm was run how.
+    out << "| Grazing | " << core::to_string(policy.preference) << " |\n";
+    if (policy.may_buy_feed) {
+      out << "| At the cover floor | " << core::to_string(policy.floor_purchase) << " |\n";
+    }
   } else {
     out << "| Management | a fixed calendar of " << bundle.grazing.periods().size()
         << " periods |\n";
@@ -309,8 +320,11 @@ void write_evidence_notes(std::ostringstream& out, const ScenarioBundle& bundle)
   out << "| Comparisons between managements | **Sound** — both arms carry the same parameters, "
          "so an error in one cancels |\n";
   out << "| Cattle maintenance | **Sound to about 2%** against DairyNZ across 300–600 kg |\n";
-  out << "| Sheep maintenance | **Low by 2% to 15%** against Nicol and Brookes |\n";
-  out << "| Carrying capacity for sheep | **Overstated by up to 17%** — follows from the line "
+  out << "| Sheep maintenance | **Low by about 15%** against CSIRO, and 21% against Nicol and "
+         "Brookes. The basal term agrees to under 1%; the gap is the cost of grazing, walking "
+         "and activity. CSIRO is the closer comparison because it accounts for chewing inside "
+         "the same efficiency term this model does |\n";
+  out << "| Carrying capacity for sheep | **Overstated by about 18%** — follows from the line "
          "above |\n";
   out << "| Absolute liveweight gain | **Not quotable** — standard reference weight is "
          "unverified on every species |\n";

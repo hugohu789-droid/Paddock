@@ -14,7 +14,7 @@ add_executable(
   unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
   unit/GrazingCalendarTest.cpp
-  unit/GrazingTest.cpp
+  unit/GrazingTest.cpp unit/IrrigationTest.cpp
   unit/LiveweightResponseTest.cpp
   unit/PaddockMaskTest.cpp
   unit/PastureTest.cpp
@@ -113,6 +113,7 @@ if(PADDOCK_BUILD_CONFIG)
   file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
 
   add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
+                                          validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp
                                           validation/ManagedFarmTest.cpp
                                           validation/ScenarioReportTest.cpp
@@ -150,7 +151,8 @@ endif()
 # data on construction and fills it in show(), and only wants a render window
 # when somebody wants pixels.
 if(PADDOCK_BUILD_GUI)
-  add_executable(paddock_map_scene_tests viz/MapSceneTest.cpp viz/TerrainSceneTest.cpp)
+  add_executable(paddock_map_scene_tests viz/MapSceneTest.cpp viz/MobMarkersTest.cpp
+                                        viz/TerrainSceneTest.cpp)
 
   target_link_libraries(paddock_map_scene_tests PRIVATE Paddock::viz_vtk GTest::gtest_main
                                                         Paddock::project_options)
@@ -171,11 +173,19 @@ endif()
 # built, and a developer without it should not see failures.
 if(PADDOCK_BUILD_GIS)
   add_executable(
-    paddock_gis_tests gis/EnvironmentTest.cpp gis/GeoPackageParcelsTest.cpp
-                      gis/GeoTiffElevationTest.cpp gis/ProjectionTest.cpp)
+    paddock_gis_tests gis/AttachElevationTest.cpp gis/EnvironmentTest.cpp
+                      gis/GeoPackageParcelsTest.cpp gis/GeoTiffElevationTest.cpp
+                      gis/ProjectionTest.cpp)
 
-  target_link_libraries(paddock_gis_tests PRIVATE Paddock::gis GTest::gtest_main
+  # config as well as gis: AttachElevationTest covers the application's wiring
+  # between the two, which is the only place that knows about both.
+  target_link_libraries(paddock_gis_tests PRIVATE Paddock::gis Paddock::config GTest::gtest_main
                                                   Paddock::project_options)
+
+  # The header under test is compiled by the application with the geospatial
+  # stack present. Testing its other branch would be testing a different
+  # function.
+  target_compile_definitions(paddock_gis_tests PRIVATE PADDOCK_WITH_GIS)
 
   # PROJ_DATA comes from where gis/CMakeLists.txt found proj.db. Without it the
   # suite passes on a distribution-packaged PROJ and fails on a vcpkg one, for a

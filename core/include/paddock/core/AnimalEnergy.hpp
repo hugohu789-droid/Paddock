@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 /// What a grazing animal needs to eat, and why.
@@ -78,6 +79,30 @@ struct DietQuality {
   [[nodiscard]] std::string validation_error() const;
 };
 
+/// What sort of animal this is, in the sense a person looking at a farm means.
+///
+/// The energy model does not need this: it works from the species factor, the
+/// sex factor and a standard reference weight, and a ewe and a dairy cow differ
+/// in those numbers rather than in a label. A **view** does need it, because a
+/// map that cannot say whether those are sheep or cattle is not telling the
+/// reader the one thing they can see for themselves standing at the gate.
+///
+/// Declared in the species file rather than read off `class_id`. The ids happen
+/// to begin "sheep_" and "cattle_" today, and a convention that works until
+/// somebody adds a species is not a fact about the animal.
+enum class AnimalKind : std::uint8_t {
+  Sheep,
+  Cattle,
+  Deer,
+
+  /// Something the views have no marker for. Drawn as such rather than as a
+  /// guess at the nearest one.
+  Other,
+};
+
+[[nodiscard]] std::string to_string(AnimalKind kind);
+[[nodiscard]] AnimalKind animal_kind_from(const std::string& name);
+
 /// What distinguishes one class of animal from another - a dairy cow from a
 /// ewe, a stag from a weaner.
 ///
@@ -86,6 +111,9 @@ struct DietQuality {
 /// a silent default would be a number nobody chose.
 struct AnimalClassParameters {
   std::string class_id;
+
+  /// Sheep, cattle or deer, for anything that has to show them to a person.
+  AnimalKind kind = AnimalKind::Other;
 
   /// K, the species factor of TMC Eq. 13.
   ///

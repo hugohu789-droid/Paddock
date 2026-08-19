@@ -57,7 +57,23 @@ class FarmletGrid {
   /// folded in once per day, scaled by one over the number of cells. The farm
   /// ledger therefore holds per-hectare means, which is the only unit that
   /// makes sense for a depth in millimetres and a cover in kg DM/ha at once.
-  void step(const DailyWeather& weather, BudgetLedger* ledger = nullptr);
+  /// `irrigation_mm` is water put on deliberately, one entry per cell in row
+  /// order, or empty for none.
+  ///
+  /// Handed in rather than worked out here, and that is the whole arrangement:
+  /// the grid reports how dry each cell is, an irrigation rule reads that and
+  /// decides, and the water comes back as a quantity. A grid that decided for
+  /// itself would be a management policy hiding inside the biology, and there
+  /// would be no way to run the same farm under a different rule.
+  void step(const DailyWeather& weather, BudgetLedger* ledger = nullptr,
+            const std::vector<double>& irrigation_mm = {});
+
+  /// The root zone depletion of every cell, mm. What an irrigation rule reads.
+  [[nodiscard]] Raster<double> depletion_mm() const;
+
+  /// The total available water each cell holds, mm. The other half of what a
+  /// depletion means.
+  [[nodiscard]] double total_available_water_mm() const noexcept;
 
   /// Opening stocks for the three budget lines, as per-hectare means.
   void set_opening_stocks(BudgetLedger& ledger) const;
@@ -86,6 +102,19 @@ class FarmletGrid {
   [[nodiscard]] Raster<double> cover_kg_dm() const;
   [[nodiscard]] Raster<double> soil_water_mm() const;
   [[nodiscard]] Raster<double> water_stress() const;
+
+  /// How much of the water each cell can hold is still there, 0 to 1.
+  ///
+  /// The same fact as `depletion_mm` read from the other end, and the end a
+  /// person uses: a paddock is at 40% rather than 60% depleted.
+  [[nodiscard]] Raster<double> available_water_fraction() const;
+
+  /// The water put on each cell on the last day stepped, mm.
+  ///
+  /// **What the grid was handed, not what it decided** - it decides nothing.
+  /// Recorded so a map can show where the water went, which is the one thing
+  /// an irrigation rule does that a mean over the farm cannot show.
+  [[nodiscard]] Raster<double> last_irrigation_mm() const;
   [[nodiscard]] Raster<double> legume_fraction() const;
 
   /// Per-hectare means, compensated: the closing stocks the conservation tests
@@ -106,6 +135,9 @@ class FarmletGrid {
   std::size_t rows_ = 0;
   GeoTransform transform_{};
   std::vector<Farmlet> cells_;
+
+  /// The water applied on the last day stepped, one entry per cell.
+  std::vector<double> last_irrigation_mm_;
   double latitude_degrees_ = 0.0;
   /// Null until set_terrain: every cell is level ground.
   std::unique_ptr<SlopeRadiationTable> radiation_;

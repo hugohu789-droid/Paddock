@@ -33,13 +33,16 @@ source = "LINZ Concord conversion of 172.470 E, 43.641 S (Canterbury Plains), vi
 [boundary]
 kind = "synthetic"
 # The SHAPE is a placeholder rectangle. The AREA is not: Lincoln University
-# gives LURDF as 72 ha irrigated, so the rectangle is sized to that rather than
-# to a round number. 900 m x 800 m is 72.0 ha exactly.
+# gives LURDF as 79 ha, of which 72 ha is under irrigation. 1000 m x 790 m is
+# 79.0 ha exactly.
 #
-# The earlier 1800 x 1400 was 252 ha, three and a half times the real farm, and
-# every per-hectare figure computed on it was wrong in proportion.
-extent_width_m = 900.0
-extent_height_m = 800.0
-area_hectares = 72.0
-area_source = "Lincoln University, Research Dairy Farm page: LURDF is a 72 ha irrigated property on Weedons Road, Lincoln. https://www.lincoln.ac.nz/about-us/campus/lincoln-university-farms/research-farms/research-dairy-farm/"
+# **The farm is the 79, not the 72.** An earlier version of this file recorded
+# 72 ha, having read "72 ha under irrigation" as the size of the property. That
+# is the area under the pivots, and this model does not represent irrigation at
+# all, so using it made every per-hectare figure 9.7% too large. Before that it
+# said 1800 x 1400, which is 252 ha and three and a half times over.
+extent_width_m = 1000.0
+extent_height_m = 790.0
+area_hectares = 79.0
+area_source = "Lincoln University, Research Dairy Farm page: LURDF is on Weedons Road, Lincoln; total area 79 ha, 72 ha under irrigation, total stock 200. https://www.lincoln.ac.nz/about-us/campus/lincoln-university-farms/research-farms/research-dairy-farm/"
 paddock_hectares = 2.5

@@ -12,6 +12,8 @@
 #include <paddock/core/BudgetLedger.hpp>
 #include <paddock/core/Farmer.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
+#include <paddock/core/Irrigation.hpp>
+#include <paddock/core/Weather.hpp>
 
 /// Running a scenario, and keeping enough of what happened to say something
 /// about it afterwards.
@@ -33,6 +35,24 @@ struct RunSummary {
   std::vector<double> cover_kg_dm_per_ha;
   std::vector<double> liveweight_kg;
   std::vector<int> paddock_of_first_mob;
+
+  /// The weather each day was run on.
+  ///
+  /// Kept whole rather than reduced to the two or three numbers a chart wants.
+  /// It is what the run was actually driven by, it is small - a year is 366
+  /// records - and a view that wants to say what a day was like should read
+  /// the day rather than somebody's summary of it. The alternative, a vector
+  /// per variable, means editing this struct every time one more is wanted.
+  std::vector<core::DailyWeather> weather;
+
+  /// The water put on each day, as a mean over the farm in mm, and what the
+  /// year came to.
+  ///
+  /// In the summary rather than worked out where it is printed, so that two
+  /// ways of reporting one run cannot disagree about how much water it used -
+  /// which is the roadmap's point about metrics belonging to the core.
+  std::vector<double> irrigation_mm;
+  core::IrrigationTally irrigation;
 
   double eaten_kg_dm = 0.0;
 
@@ -116,11 +136,26 @@ using DayObserver = std::function<void(const core::Farm&, const core::FarmDay&)>
                                               const core::ManagementPolicy& policy,
                                               const core::DietQuality& diet, std::string label);
 
+/// Runs a bundle under the farmer its own manifest describes.
+///
+/// This is what `[management]` is for. Until it existed the calendar was in the
+/// bundle and the farmer's judgement was in whatever code started the run, so a
+/// managed result could be reproduced only by somebody who also had that code -
+/// which is not what a bundle is supposed to be.
+///
+/// Throws when the bundle names no policy. The alternative is to invent one,
+/// and inventing the rules a farm was run under is exactly what this section
+/// exists to stop.
+[[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
+                                              const core::DietQuality& diet, std::string label);
+
 /// As above, reporting each day to `each_day` as it is stepped.
 [[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
                                               const core::ManagementPolicy& policy,
                                               const core::DietQuality& diet, std::string label,
-                                              const DayObserver& each_day);
+                                              const DayObserver& each_day,
+                                              const core::IrrigationPolicy& irrigation = {},
+                                              const core::IrrigationSystem& system = {});
 
 /// A calendar that runs one system for the whole of `run`, for comparing a
 /// system against another rather than against a mixed year.

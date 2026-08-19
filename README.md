@@ -46,8 +46,12 @@ With Qt6 and a VTK built against Qt6 (see [docs/setup.md](docs/setup.md)):
 
 ```bash
 cmake --preset gui && cmake --build --preset gui
-./build/gui/bin/paddock-gui data/scenarios/canterbury-baseline
+./build/gui/bin/paddock-gui
 ```
+
+Named with no bundle it opens `data/scenarios/lincoln-lurdf`, found by walking
+up from the working directory and from the executable. Name a directory to open
+a different one.
 
 Pasture cover, soil water, water stress or legume fraction across the farm, with
 a colour scale fixed over the whole run and a timeline you can play. The soil
@@ -68,8 +72,8 @@ be retyped would quietly take that away.
 
 The map draws the fences too, and picks out the paddocks carrying stock that
 day. There is a second view that draws the same farm on the ground it sits on,
-with the fences draped over it - and for one farm that ground is measured
-rather than invented:
+with the fences draped over it - and that ground is measured rather than
+invented, on every farm this repository ships:
 
 ```bash
 cmake --preset desktop && cmake --build --preset desktop
@@ -77,6 +81,20 @@ python scripts/nz-elevation-snapshot.py --lon 172.470 --lat -43.641 \
   --collection canterbury/selwyn_2023 --out data/snapshots/lincoln-dem-1m.tiff
 ./build/desktop/bin/paddock-gui data/scenarios/lincoln-lurdf --terrain
 ```
+
+All three bundles rest on the same LiDAR tile, so one fetch serves them all.
+The demonstration bundles used to sit on a round-number coordinate that turned
+out to be central Christchurch; they were moved onto farmland west of Lincoln,
+picked from the LINZ cadastre rather than off a map - 93.8% of the block falls
+inside parcels over 10 ha, three of them Rural Sections. Their weather and
+soils are still placeholders; only the ground is real.
+
+The three-dimensional view opens on any farm. Without measured ground it draws
+the farm flat and says so - under the map, in the report's Ground row, and on
+stdout when it is run headless - because a flat picture of real ground and a
+flat picture of absent ground look identical, and mean opposite things. A
+snapshot that is present but hashes to something else is refused outright:
+that is not this farm's ground.
 
 That is Lincoln University's research dairy farm on 2023 LiDAR at 1 m, and it
 looks almost flat because it is: the ground falls 6.2 m across 900 m, which is

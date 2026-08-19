@@ -23,15 +23,25 @@ if(PADDOCK_BUILD_GUI)
     VTK REQUIRED
     COMPONENTS CommonCore
                CommonDataModel
+               FiltersCore
+               FiltersGeometry
                ImagingCore
+               ImagingHybrid
                IOImage
                InteractionStyle
                RenderingAnnotation
                RenderingCore
                RenderingOpenGL2
+               RenderingVolume
+               RenderingVolumeOpenGL2
+               RenderingVolume
+               RenderingVolumeOpenGL2
+               RenderingVolume
+               RenderingVolumeOpenGL2
                GUISupportQt)
 
-  add_library(paddock_viz_vtk STATIC src/ColourTable.cpp src/MapScene.cpp src/TerrainScene.cpp)
+  add_library(paddock_viz_vtk STATIC src/ColourTable.cpp src/MapScene.cpp src/MobMarkers.cpp
+                                     src/TerrainScene.cpp)
   add_library(Paddock::viz_vtk ALIAS paddock_viz_vtk)
 
   target_link_libraries(paddock_viz_vtk PUBLIC Paddock::viz ${VTK_LIBRARIES})

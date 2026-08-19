@@ -56,6 +56,17 @@ int RunSummary::days_feed_was_bought() const {
   return days;
 }
 
+RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::DietQuality& diet,
+                                std::string label) {
+  if (!bundle.management.has_value()) {
+    throw std::runtime_error(
+        "scenario '" + bundle.name +
+        "' names no [management], so there is nothing to say what its farmer would not allow. "
+        "Add the section, or run it with a policy of your own.");
+  }
+  return run_managed_scenario(bundle, *bundle.management, diet, std::move(label));
+}
+
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label) {
   return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{});
@@ -63,12 +74,26 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
 
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label,
-                                const DayObserver& each_day) {
+                                const DayObserver& each_day,
+                                const core::IrrigationPolicy& irrigation,
+                                const core::IrrigationSystem& system) {
   core::Farm farm = bundle.make_farm();
 
-  // The calendar is not used by a managing farmer; one is needed to construct
-  // it, so it gets a harmless one.
-  core::Farmer farmer(whole_run_calendar(bundle.range, core::GrazingSystem::SetStocking, 0, 0));
+  // The bundle's own calendar, when it has one.
+  //
+  // This used to be a harmless placeholder, on the grounds that a managing
+  // farmer decides from cover and never reads a calendar. That stopped being
+  // true when the farmer gained a preference: `FollowCalendar` reads exactly
+  // this, and given the placeholder it would have followed a plan nobody wrote
+  // - set stocking for the whole year - while the manifest's own
+  // [[grazing_period]] sat unread beside it.
+  //
+  // Inert for every other preference, which is why the change costs nothing:
+  // manage() builds its own one-day calendar when it rotates and does not touch
+  // this one otherwise.
+  core::Farmer farmer(bundle.grazing.empty()
+                          ? whole_run_calendar(bundle.range, core::GrazingSystem::SetStocking, 0, 0)
+                          : bundle.grazing);
   farmer.set_policy(policy);
 
   RunSummary summary;
@@ -78,6 +103,11 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   const core::WeatherSeries weather = bundle.weather->fetch(bundle.range);
   std::vector<bool> went_short(farm.mobs().size(), false);
   std::vector<double> supplement;
+
+  // The schedule reads how dry the ground is and decides; the farm applies
+  // what it is handed. Neither knows about the other's job.
+  core::IrrigationSchedule schedule(irrigation, system, farm.grid().cell_count());
+  summary.irrigation_mm.reserve(weather.records.size());
 
   for (const core::DailyWeather& day : weather.records) {
     const core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
@@ -89,7 +119,12 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.purchases.insert(summary.purchases.end(), decisions.purchases.begin(),
                              decisions.purchases.end());
 
-    const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger);
+    const core::Raster<double> dryness = farm.grid().depletion_mm();
+    const std::vector<double>& water =
+        schedule.decide(dryness.values(), farm.grid().total_available_water_mm());
+    summary.irrigation_mm.push_back(schedule.last_mean_mm());
+
+    const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger, water);
     if (farm_day.any_mob_short) {
       ++summary.days_short;
     }
@@ -99,6 +134,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
     summary.dates.push_back(day.date);
+    summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);
     summary.paddock_of_first_mob.push_back(static_cast<int>(farm.mobs().front().paddocks.front()));
@@ -108,6 +144,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     }
   }
 
+  summary.irrigation = schedule.tally();
   summary.closing_cover_kg_dm = farm.grid().mean_cover_kg_dm();
   summary.closing_nitrogen_kg = farm.grid().mean_total_nitrogen_kg();
   summary.closing_water_mm = farm.grid().mean_soil_water_mm();
@@ -162,6 +199,7 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
     summary.dates.push_back(day.date);
+    summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);
     summary.paddock_of_first_mob.push_back(static_cast<int>(farm.mobs().front().paddocks.front()));

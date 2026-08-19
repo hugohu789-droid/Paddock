@@ -11,8 +11,13 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
 #include <vector>
+#include <vtkColorTransferFunction.h>
+#include <vtkIdList.h>
+#include <vtkVolume.h>
+#include <vtkVolumeProperty.h>
 
 #include <paddock/core/Geometry.hpp>
 #include <paddock/core/Raster.hpp>
@@ -134,9 +139,297 @@ TEST(TerrainSceneTest, FencesAreDrapedOnTheGround) {
 TEST(TerrainSceneTest, MismatchedShapesAreRefused) {
   TerrainScene scene;
   EXPECT_THROW(scene.show(raster(48, 32, 2000.0), sloping(20, 16),
-                          ColourScale(Ramp::PastureGreen, 0.0, 1.0), "cover"),
+                          ColourScale(Ramp::PastureGreen, 0.0, 5000.0), "cover"),
                std::invalid_argument);
 }
 
 }  // namespace
+
+// **The ground light does not move.** This is the opposite of what it used to
+// assert, and deliberately so.
+//
+// The colour on the surface is a reading off a legend: 3500 kg DM/ha has to be
+// the same pixel colour on every day of the run. Lighting the ground with the
+// day's own sun broke that - the same paddock came out pale under cloud and
+// was read as carrying less feed, when what had changed was the light. The
+// weather moved to the sky; the ground gets a fixed hillshade.
+TEST(TerrainSceneTest, TheGroundIsLitTheSameWayOnEveryDay) {
+  TerrainScene scene;
+
+  scene.light_the_ground();
+  std::array<double, 3> first{};
+  scene.sun()->GetPosition(first.data());
+  const double first_intensity = scene.sun()->GetIntensity();
+
+  // A different day, a different sky - and the same light on the grass.
+  scene.show_sky(-43.64, 172, 14.0, 0.30, 12.0, 9.0, 1.0);
+  scene.light_the_ground();
+  std::array<double, 3> again{};
+  scene.sun()->GetPosition(again.data());
+
+  EXPECT_DOUBLE_EQ(first[0], again[0]);
+  EXPECT_DOUBLE_EQ(first[1], again[1]);
+  EXPECT_DOUBLE_EQ(first[2], again[2]);
+  EXPECT_DOUBLE_EQ(first_intensity, scene.sun()->GetIntensity());
+}
+
+// The sun in the SKY does move, which is where the season became visible once
+// it left the grass alone.
+TEST(TerrainSceneTest, TheSunInTheSkyMovesWithTheDate) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_sky(-43.64, 172, 14.0, 0.75);  // Midwinter
+  std::array<double, 6> midwinter{};
+  scene.sun_disc()->GetBounds(midwinter.data());
+
+  scene.show_sky(-43.64, 355, 14.0, 0.75);  // Midsummer
+  std::array<double, 6> midsummer{};
+  scene.sun_disc()->GetBounds(midsummer.data());
+
+  // Higher in summer, which is the whole of what a season is.
+  EXPECT_GT(midsummer[5], midwinter[5])
+      << "midwinter top " << midwinter[5] << ", midsummer top " << midsummer[5];
+}
+
+// Cloud thickens as less of the sky's radiation reaches the ground.
+//
+// The field of density is fixed; what the day changes is how much of it is
+// made visible. So the measurement to read back is the opacity the cloud is
+// drawn at, not its shape - the shape must not change, or the picture would be
+// showing a cloud field nobody recorded.
+TEST(TerrainSceneTest, CloudThickensAsTheDayDulls) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_sky(-43.64, 355, 14.0, 0.75);
+  const double clear = scene.cloud_opacity()->GetValue(1.0);
+
+  scene.show_sky(-43.64, 355, 14.0, 0.25);
+  const double dull = scene.cloud_opacity()->GetValue(1.0);
+
+  EXPECT_GT(dull, clear) << "clear " << clear << ", overcast " << dull;
+  EXPECT_GT(clear, 0.0) << "even a clear day has some cloud in it";
+}
+
+// A cloud that is raining is grey; one that is not is white.
+//
+// That is optical depth rather than mood: water deep enough to fall out of a
+// cloud is deep enough to stop the light getting through it. So rain darkens
+// it hardest, and cover darkens it a little more.
+TEST(TerrainSceneTest, RainDarkensTheCloudAndDryCloudStaysPale) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  const auto core_brightness = [&scene]() {
+    std::array<double, 3> colour{};
+    scene.cloud()->GetProperty()->GetRGBTransferFunction()->GetColor(1.0, colour.data());
+    return colour[0];
+  };
+
+  // The same overcast sky, once dry and once wet.
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 0.0);
+  const double dry = core_brightness();
+
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 12.0);
+  const double wet = core_brightness();
+
+  EXPECT_LT(wet, dry) << "dry overcast " << dry << ", raining " << wet;
+  EXPECT_GT(dry, 0.6) << "a dry sheet of cloud is pale, not grey: " << dry;
+
+  // And a clear dry day is paler still.
+  scene.show_sky(-43.64, 355, 14.0, 0.75, 0.0);
+  EXPECT_GT(core_brightness(), dry);
+}
+
+// **The cloud follows the farm, and stays put between days.**
+//
+// Both halves matter and they pull opposite ways. The density field is built
+// once so that cloud does not rearrange itself overnight - the series carries
+// no cloud field, and cloud that wandered would be showing weather nobody
+// recorded. But "once" has to mean once per farm: the sun, the rain and the
+// wind are placed every frame, so a cloud that never moved was left over the
+// previous farm, which for the two shipped farms is thirteen kilometres away.
+TEST(TerrainSceneTest, TheCloudMovesToTheNewFarmButNotBetweenDays) {
+  TerrainScene scene;
+  const auto cloud_centre = [&scene]() {
+    std::array<double, 6> bounds{};
+    scene.cloud()->GetBounds(bounds.data());
+    return std::make_pair((bounds[0] + bounds[1]) / 2.0, (bounds[2] + bounds[3]) / 2.0);
+  };
+
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 6.0);
+  const auto first = cloud_centre();
+
+  // A different day on the same farm: the cloud must not budge.
+  scene.show_sky(-43.64, 172, 14.0, 0.30, 2.0);
+  const auto same_farm = cloud_centre();
+  EXPECT_DOUBLE_EQ(first.first, same_farm.first);
+  EXPECT_DOUBLE_EQ(first.second, same_farm.second);
+
+  // A farm ten kilometres away: the cloud has to come with it.
+  core::GeoTransform elsewhere;
+  elsewhere.origin_easting = kOriginEasting + 10000.0;
+  elsewhere.origin_northing = kOriginNorthing + 10000.0;
+  elsewhere.cell_size = kCellSize;
+  const core::Raster<double> field(8, 6, elsewhere, 2500.0);
+  const core::Raster<double> ground(8, 6, elsewhere, 100.0);
+  scene.show(field, ground, ColourScale(Ramp::PastureGreen, 0.0, 5000.0), "cover");
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 6.0);
+  const auto moved = cloud_centre();
+
+  EXPECT_NEAR(moved.first - first.first, 10000.0, 1.0)
+      << "the cloud stayed over the farm that was there before";
+  EXPECT_NEAR(moved.second - first.second, 10000.0, 1.0);
+}
+
+// The tilt control puts the camera where it was asked to, and keeps the
+// bearing the mouse left it on.
+TEST(TerrainSceneTest, TheTiltGoesWhereItIsAsked) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.reset_camera();
+
+  for (const double wanted : {15.0, 40.0, 75.0}) {
+    scene.look_from_above(wanted);
+    EXPECT_NEAR(scene.view_elevation_degrees(), wanted, 0.01) << "asked for " << wanted;
+  }
+}
+
+// **It cannot reach straight down.** At 90 degrees the view up and the view
+// direction line up, the camera basis collapses and the window goes black -
+// this scene has drawn one before, and a slider that could reach it would be a
+// control whose end stop is a fault.
+TEST(TerrainSceneTest, TheTiltCannotCollapseTheCamera) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.reset_camera();
+
+  scene.look_from_above(90.0);
+  EXPECT_LT(scene.view_elevation_degrees(), 89.0);
+
+  scene.look_from_above(-30.0);
+  EXPECT_GT(scene.view_elevation_degrees(), 0.0) << "and never from under the ground";
+}
+
+// **The compass must not change how the farm is framed.** The letters sit
+// outside the paddocks so they do not cover them, and a prop outside the farm
+// that counts towards the bounds makes the camera pull back every time the
+// view is reset - a farm drawn smaller so that the letter N fits.
+TEST(TerrainSceneTest, TheCompassDoesNotChangeWhatTheCameraFrames) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  std::array<double, 6> bounds{};
+  scene.renderer()->ComputeVisiblePropBounds(bounds.data());
+
+  // Still the surface's own extent: points sit at cell centres, so 7 x 5 cells.
+  EXPECT_NEAR(bounds[1] - bounds[0], 7.0 * kCellSize, 1e-6);
+  EXPECT_NEAR(bounds[3] - bounds[2], 5.0 * kCellSize, 1e-6);
+}
+
+// **The cloud can be taken away.** A density field is translucent by
+// construction, and anything translucent between the camera and the paddocks
+// shifts a colour the reader is meant to match against the legend. Turning the
+// weather off is what makes the map exact.
+TEST(TerrainSceneTest, TheWeatherCanBeTakenOffTheMap) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.show_sky(-43.64, 355, 14.0, 0.25, 8.0, 9.0, 6.0);
+
+  EXPECT_TRUE(scene.weather_shown());
+  EXPECT_EQ(scene.cloud()->GetVisibility(), 1);
+
+  scene.show_weather(false);
+  EXPECT_FALSE(scene.weather_shown());
+  EXPECT_EQ(scene.cloud()->GetVisibility(), 0);
+  EXPECT_EQ(scene.rain()->GetVisibility(), 0);
+  EXPECT_EQ(scene.wind()->GetVisibility(), 0);
+}
+
+// Rain is drawn when it rained and not when it did not.
+TEST(TerrainSceneTest, RainIsDrawnOnlyOnDaysItRained) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 0.0);
+  EXPECT_EQ(scene.rain()->GetVisibility(), 0);
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 12.0);
+  EXPECT_EQ(scene.rain()->GetVisibility(), 1);
+  const vtkIdType wet = scene.rain_lines()->GetNumberOfLines();
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 2.0);
+  EXPECT_LT(scene.rain_lines()->GetNumberOfLines(), wet)
+      << "a wetter day should draw more rain than a damp one";
+}
+
+// **The wind has strength and no direction, and the picture must not give it
+// one.** The series carries a speed and no bearing. These strokes are all
+// parallel and all level; if a future change makes one of them point
+// somewhere, it is drawing data that does not exist.
+TEST(TerrainSceneTest, TheWindIsDrawnWithoutADirection) {
+  TerrainScene scene;
+  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 0.0, 0.0);
+  EXPECT_EQ(scene.wind()->GetVisibility(), 0) << "still air draws nothing";
+
+  scene.show_sky(-43.64, 355, 14.0, 0.5, 0.0, 12.0);
+  EXPECT_EQ(scene.wind()->GetVisibility(), 1);
+
+  // **The gusts are spread around the compass, so the set as a whole points
+  // nowhere.** This is the invariant that matters, and it is not "every stroke
+  // is level" - that was the first thing asserted here and it was the wrong
+  // thing, because a set of parallel level strokes still reads as flow along
+  // one axis. What must never happen is that the picture agrees on a bearing
+  // the data does not carry.
+  //
+  // Measured as the mean direction of the gusts: if they all ran one way its
+  // length would be near one, and spread evenly it is near zero.
+  vtkPolyData* marks = scene.wind_marks();
+  ASSERT_NE(marks->GetPoints(), nullptr);
+  ASSERT_GT(marks->GetNumberOfLines(), 1);
+
+  double sum_east = 0.0;
+  double sum_north = 0.0;
+  int counted = 0;
+  vtkNew<vtkIdList> ids;
+  marks->GetLines()->InitTraversal();
+  while (marks->GetLines()->GetNextCell(ids) != 0) {
+    if (ids->GetNumberOfIds() < 2) {
+      continue;
+    }
+    std::array<double, 3> from{};
+    std::array<double, 3> to{};
+    marks->GetPoint(ids->GetId(0), from.data());
+    marks->GetPoint(ids->GetId(ids->GetNumberOfIds() - 1), to.data());
+    const double east = to[0] - from[0];
+    const double north = to[1] - from[1];
+    const double length = std::hypot(east, north);
+    if (length <= 0.0) {
+      continue;
+    }
+    sum_east += east / length;
+    sum_north += north / length;
+    ++counted;
+  }
+  ASSERT_GT(counted, 1);
+
+  const double resultant = std::hypot(sum_east, sum_north) / counted;
+  EXPECT_LT(resultant, 0.5) << "the gusts agree on a bearing (resultant " << resultant
+                            << "), which is the one thing the wind series does not carry";
+}
+
 }  // namespace paddock::viz

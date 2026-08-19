@@ -32,6 +32,7 @@
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/core/Simulation.hpp>
 
+#include "../support/ShippedBundle.hpp"
 #include "support/CalibrationSeries.hpp"
 
 namespace paddock {
@@ -122,7 +123,7 @@ std::size_t index_of_minimum(const std::array<double, 12>& monthly) {
 const core::RunResult& modelled_run() {
   static const core::RunResult result = [] {
     const config::ScenarioBundle bundle =
-        config::load_scenario(data_path("scenarios/canterbury-baseline"));
+        tests::load_on_flat_ground(data_path("scenarios/canterbury-baseline"));
     static core::Farmlet farmlet = bundle.make_farmlet();
     const core::DateRange twenty_years{core::Date{2000, 7, 1}, core::Date{2020, 6, 30}};
     return core::run(farmlet, *bundle.weather, twenty_years);

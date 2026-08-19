@@ -21,9 +21,14 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <paddock/config/ScenarioRun.hpp>
+
+#include "../support/ShippedBundle.hpp"
 
 namespace paddock::config {
 namespace {
@@ -51,10 +56,151 @@ core::ManagementPolicy default_policy() {
   return policy;
 }
 
+/// A stocking rate this farm carries without strain, so that what the target
+/// gain does is not hidden behind a mob that is short of feed whatever it is
+/// asked for. 300 head is the rate the lightly stocked case below uses.
+constexpr int kComfortableHead = 300;
+
 RunSummary run(int head, const core::ManagementPolicy& policy, std::string label) {
-  ScenarioBundle bundle = load_scenario(bundle_path());
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = head;
   return run_managed_scenario(bundle, policy, pasture_diet(), std::move(label));
+}
+
+// The claim [management] makes: a bundle that names its farmer's rules runs the
+// same way as one handed those rules by its caller.
+//
+// If these two diverged, the section would be decoration - a manifest that says
+// what the farm was run under while the farm was run under something else.
+TEST(ManagedFarmTest, ABundlesOwnRulesGiveTheSameRunAsThoseRulesPassedIn) {
+  const ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
+  // if-and-FAIL rather than ASSERT_TRUE, so the assertion is visible to more
+  // than a person: clang-tidy's optional analysis cannot see through a gtest
+  // macro, and it disagrees across platforms about whether it can.
+  if (!bundle.management.has_value()) {
+    FAIL() << "this test is about the bundle carrying a policy, and it carries none";
+  }
+
+  const RunSummary from_bundle = run_managed_scenario(bundle, pasture_diet(), "from the bundle");
+  const RunSummary passed_in =
+      run_managed_scenario(bundle, *bundle.management, pasture_diet(), "passed in");
+
+  EXPECT_EQ(from_bundle.cover_kg_dm_per_ha, passed_in.cover_kg_dm_per_ha);
+  EXPECT_EQ(from_bundle.liveweight_kg, passed_in.liveweight_kg);
+  EXPECT_DOUBLE_EQ(from_bundle.bought_feed_kg_dm(), passed_in.bought_feed_kg_dm());
+  EXPECT_EQ(from_bundle.days_short, passed_in.days_short);
+  EXPECT_EQ(from_bundle.moves, passed_in.moves);
+}
+
+// And a bundle that names none says so rather than inventing one. Inventing the
+// rules a farm was run under is the thing this section exists to stop.
+TEST(ManagedFarmTest, ABundleWithNoRulesRefusesToBeRunByAFarmer) {
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
+  bundle.management.reset();
+
+  EXPECT_THROW(static_cast<void>(run_managed_scenario(bundle, pasture_diet(), "no policy")),
+               std::runtime_error);
+}
+
+namespace {
+
+int days_rotating(const RunSummary& run) {
+  return static_cast<int>(std::count(run.system_each_day.begin(), run.system_each_day.end(),
+                                     core::GrazingSystem::Rotational));
+}
+
+RunSummary run_preferring(core::GrazingPreference preference, std::string label) {
+  core::ManagementPolicy policy = default_policy();
+  policy.preference = preference;
+  return run(1400, policy, std::move(label));
+}
+
+}  // namespace
+
+// A farmer told never to rotate never does, whatever the cover says.
+//
+// Smith and Dawson (1976) name set stocking for lambing, when demand is highest
+// and the whole farm is wanted at once. A farm may be run that way all year,
+// and the model should be able to show what it costs rather than quietly
+// deciding otherwise.
+TEST(ManagedFarmTest, AFarmerWhoNeverRotatesNeverDoes) {
+  const RunSummary year =
+      run_preferring(core::GrazingPreference::AlwaysSetStock, "always set stocked");
+
+  EXPECT_EQ(days_rotating(year), 0);
+  EXPECT_EQ(year.moves, 0) << "set stocking gives the mob the whole farm, so there is nothing to "
+                              "move it between";
+}
+
+// And one who prefers to rotate does it on days the cover rule would not have.
+TEST(ManagedFarmTest, AFarmerWhoPrefersRotationRotatesMoreThanTheCoverRuleWould) {
+  const RunSummary by_cover = run_preferring(core::GrazingPreference::ByCover, "by cover");
+  const RunSummary preferring =
+      run_preferring(core::GrazingPreference::PreferRotation, "prefer rotation");
+
+  EXPECT_GT(days_rotating(preferring), days_rotating(by_cover));
+
+  GTEST_LOG_(INFO) << "days rotating: by cover " << days_rotating(by_cover) << ", preferring "
+                   << days_rotating(preferring) << " of " << by_cover.dates.size();
+}
+
+// The scenario's own calendar, which a managed run used to ignore completely.
+//
+// canterbury-grazed sets stock from 20 August to 28 October for lambing and
+// rotates the rest of the year. A farmer told to follow it should show exactly
+// that shape, and one deciding from cover should not.
+TEST(ManagedFarmTest, AFarmerCanFollowTheScenariosOwnCalendar) {
+  const RunSummary following =
+      run_preferring(core::GrazingPreference::FollowCalendar, "following the calendar");
+  ASSERT_EQ(following.dates.size(), following.system_each_day.size());
+
+  const core::Date lambing{2023, 9, 15};
+  const core::Date summer{2024, 2, 15};
+  core::GrazingSystem on_lambing = core::GrazingSystem::Rotational;
+  core::GrazingSystem in_summer = core::GrazingSystem::SetStocking;
+  for (std::size_t day = 0; day < following.dates.size(); ++day) {
+    if (following.dates[day] == lambing) {
+      on_lambing = following.system_each_day[day];
+    }
+    if (following.dates[day] == summer) {
+      in_summer = following.system_each_day[day];
+    }
+  }
+
+  EXPECT_EQ(on_lambing, core::GrazingSystem::SetStocking)
+      << "the calendar sets stock over lambing and the farmer did not";
+  EXPECT_EQ(in_summer, core::GrazingSystem::Rotational)
+      << "the calendar rotates through the dry season and the farmer did not";
+}
+
+// At the floor, what the farmer buys.
+//
+// Buying the whole demand asks the pasture for nothing, so the sward is left to
+// grow back. Grazing down to the line buys only the difference, so cover sits
+// at the floor instead of climbing away from it. Less feed, less grass: the
+// trade a farmer actually makes.
+TEST(ManagedFarmTest, GrazingDownToTheFloorBuysLessFeedAndLeavesLessGrass) {
+  core::ManagementPolicy whole = default_policy();
+  whole.floor_purchase = core::FloorPurchase::WholeDemand;
+  core::ManagementPolicy holding = default_policy();
+  holding.floor_purchase = core::FloorPurchase::HoldAtFloor;
+
+  const RunSummary bought_the_lot = run(1400, whole, "whole demand");
+  const RunSummary grazed_to_the_line = run(1400, holding, "hold at the floor");
+
+  EXPECT_LT(grazed_to_the_line.bought_feed_kg_dm(), bought_the_lot.bought_feed_kg_dm());
+  EXPECT_LT(grazed_to_the_line.mean_cover_kg_dm_per_ha(), bought_the_lot.mean_cover_kg_dm_per_ha());
+
+  // Neither may take the sward through the floor. That is the whole point of
+  // the floor, and it is the assertion that would catch a rule that grazed too
+  // far in the name of buying less.
+  EXPECT_GT(grazed_to_the_line.lowest_cover_kg_dm_per_ha(), 1000.0)
+      << "cover reached " << grazed_to_the_line.lowest_cover_kg_dm_per_ha() << " kg DM/ha";
+
+  GTEST_LOG_(INFO) << "bought: whole demand " << bought_the_lot.bought_feed_kg_dm()
+                   << " kg DM, holding at the floor " << grazed_to_the_line.bought_feed_kg_dm()
+                   << " kg DM; mean cover " << bought_the_lot.mean_cover_kg_dm_per_ha() << " and "
+                   << grazed_to_the_line.mean_cover_kg_dm_per_ha() << " kg DM/ha";
 }
 
 // The two things the farmer is not allowed to let happen. At a stocking rate the
@@ -165,4 +311,55 @@ TEST(ManagedFarmTest, EveryPurchaseSaysWhenAndWhyItWasMade) {
 }
 
 }  // namespace
+
+// The farmer's target gain has to reach the animals.
+//
+// It used to reach only the decision about how much feed to BUY, and on a farm
+// with grass to spare that is no decision at all: nothing was bought, the mob
+// ate to maintenance, and a year later every ewe stood on exactly her opening
+// weight with the target sitting in the panel doing nothing. The failure was
+// silent and looked like a model that simply held stock steady.
+TEST(ManagedFarmTest, AskingForGainGetsGainWhenTheGrassAllowsIt) {
+  core::ManagementPolicy holding = default_policy();
+  holding.target_liveweight_gain_kg_per_day = 0.0;
+
+  core::ManagementPolicy growing = default_policy();
+  growing.target_liveweight_gain_kg_per_day = 0.1;
+
+  const RunSummary held = run(kComfortableHead, holding, "holding");
+  const RunSummary grown = run(kComfortableHead, growing, "growing");
+
+  EXPECT_NEAR(held.liveweight_change_kg(), 0.0, 1.0)
+      << "asked to hold weight, the mob should end the year near where it started";
+  EXPECT_GT(grown.liveweight_change_kg(), held.liveweight_change_kg() + 5.0)
+      << "held " << held.liveweight_change_kg() << " kg, grown " << grown.liveweight_change_kg()
+      << " kg";
+
+  GTEST_LOG_(INFO) << "liveweight change over the year: holding " << held.liveweight_change_kg()
+                   << " kg, target 0.1 kg/day " << grown.liveweight_change_kg() << " kg";
+}
+
+// And that it is paid for. Feeding for gain takes more grass off the farm, so
+// something has to give: less cover, more bought feed, or both. A run that
+// produced gain out of the same feed would be gain from nowhere.
+TEST(ManagedFarmTest, GainIsPaidForInGrassOrInBoughtFeed) {
+  const core::ManagementPolicy holding = default_policy();
+  core::ManagementPolicy growing = default_policy();
+  growing.target_liveweight_gain_kg_per_day = 0.1;
+
+  const RunSummary held = run(kComfortableHead, holding, "holding");
+  const RunSummary grown = run(kComfortableHead, growing, "growing");
+
+  EXPECT_GT(grown.eaten_kg_dm, held.eaten_kg_dm)
+      << "a mob fed for gain has to eat more: held " << held.eaten_kg_dm << " kg DM, grown "
+      << grown.eaten_kg_dm << " kg DM";
+
+  const bool cover_fell = grown.mean_cover_kg_dm_per_ha() < held.mean_cover_kg_dm_per_ha();
+  const bool bought_more = grown.bought_feed_kg_dm() > held.bought_feed_kg_dm();
+  EXPECT_TRUE(cover_fell || bought_more)
+      << "the extra feed came from nowhere: cover " << held.mean_cover_kg_dm_per_ha() << " to "
+      << grown.mean_cover_kg_dm_per_ha() << " kg DM/ha, bought " << held.bought_feed_kg_dm()
+      << " to " << grown.bought_feed_kg_dm() << " kg DM";
+}
+
 }  // namespace paddock::config

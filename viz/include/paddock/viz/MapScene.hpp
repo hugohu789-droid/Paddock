@@ -21,6 +21,7 @@
 #include <paddock/core/Geometry.hpp>
 #include <paddock/core/Raster.hpp>
 #include <paddock/viz/ColourScale.hpp>
+#include <paddock/viz/MobMarkers.hpp>
 
 namespace paddock::viz {
 
@@ -68,6 +69,13 @@ class MapScene {
   /// Removes the fences, for a scene with no farm behind it.
   void clear_boundaries();
 
+  /// Puts the stock on the map.
+  ///
+  /// The fences say where the paddocks are and the amber says which is being
+  /// grazed; neither says whether those are sheep or cattle, which is the one
+  /// thing a person at the gate could tell you without being told.
+  void show_mobs(const std::vector<MobMarker>& markers);
+
   /// Fits the camera to the current raster. Called after the first `show` and
   /// whenever the widget is resized.
   void reset_camera();
@@ -114,6 +122,12 @@ class MapScene {
   vtkNew<vtkPolyData> grazed_fences_;
   vtkNew<vtkPolyDataMapper> grazed_mapper_;
   vtkNew<vtkActor> grazed_actor_;
+
+  /// One layer per kind of animal, so each keeps its own colour without
+  /// per-cell colouring, and a kind with no stock in it draws nothing.
+  std::vector<vtkNew<vtkPolyData>> mob_shapes_;
+  std::vector<vtkNew<vtkPolyDataMapper>> mob_mappers_;
+  std::vector<vtkNew<vtkActor>> mob_actors_;
 
   vtkNew<vtkRenderer> renderer_;
   bool has_field_ = false;

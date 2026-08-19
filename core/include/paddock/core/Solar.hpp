@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace paddock::core {
 
 /// Solar geometry from FAO Irrigation and Drainage Paper 56 (Allen, Pereira,
@@ -53,6 +55,63 @@ inline constexpr double kEvaporationMmPerMj = 0.408;
 
 /// Daylight hours (FAO-56 Eq. 34).
 [[nodiscard]] double daylight_hours(double latitude_degrees, int day_of_year) noexcept;
+
+/// Where the sun is in the sky, as seen from the ground.
+struct SunPosition {
+  /// Degrees above the horizon. Negative when the sun is down.
+  double elevation_degrees = 0.0;
+
+  /// Compass bearing, degrees clockwise from north. In the southern hemisphere
+  /// the sun passes through the northern sky, so this sits near 0 at solar
+  /// noon and swings west through the afternoon.
+  double azimuth_degrees = 0.0;
+
+  [[nodiscard]] bool is_up() const noexcept { return elevation_degrees > 0.0; }
+};
+
+/// The sun's position at a given hour of solar time.
+///
+/// **Solar time, not clock time.** Solar noon is when the sun crosses the local
+/// meridian, which is not 12:00 on anybody's watch: Lincoln sits at 172.47 E
+/// against New Zealand Standard Time's 180 E meridian, so its solar noon is
+/// about half an hour late before the equation of time moves it another
+/// quarter hour either way. A caller that wants a wall clock hour has to make
+/// that conversion itself and say which it did - naming the hour "2 pm" when
+/// it is neither would be the kind of quiet inaccuracy this project spends its
+/// effort avoiding.
+///
+/// Built on the same declination this file already uses for the radiation the
+/// pasture model runs on (FAO-56 Eq. 24), so a face drawn in sunlight and a
+/// face growing in sunlight cannot disagree about where the sun was.
+[[nodiscard]] SunPosition sun_position(double latitude_degrees, int day_of_year,
+                                       double solar_hour) noexcept;
+
+/// The fraction of the sky's radiation that reached the ground, Rs/Ra.
+///
+/// The clearness index of FAO-56 Eq. 35's Angstrom relation, and the nearest
+/// thing to a cloud measurement this model has: it carries no cloud cover, and
+/// deriving one from the radiation that was actually measured is a reading of
+/// data rather than an invention. About 0.75 on a clear day, which is what the
+/// Angstrom coefficients as + bs = 0.25 + 0.50 give for full sunshine, and
+/// falling towards 0.25 under complete overcast.
+///
+/// Returns 0 when there is no extraterrestrial radiation to compare against,
+/// which inside the polar circles is a real answer rather than an error.
+[[nodiscard]] double clearness_index(double measured_mj_per_m2,
+                                     double extraterrestrial_mj_per_m2) noexcept;
+
+/// What the sky was doing, as far as the radiation can say.
+enum class SkyCondition : std::uint8_t { Clear, PartlyCloudy, Overcast };
+
+/// Reads a clearness index as a sky.
+///
+/// The thresholds are the Angstrom relation's own endpoints read as a scale:
+/// as = 0.25 is what reaches the ground with no direct sun at all, as + bs =
+/// 0.75 is full sunshine, and the midpoint between them divides the two cloudy
+/// cases. That is a reading of FAO-56 Eq. 35 rather than a cloud
+/// classification from the meteorological literature, and it is here so a
+/// picture can be drawn from measured radiation instead of from nothing.
+[[nodiscard]] SkyCondition sky_from_clearness(double clearness_index) noexcept;
 
 /// Extraterrestrial radiation on a tilted surface, MJ per square metre per day.
 ///

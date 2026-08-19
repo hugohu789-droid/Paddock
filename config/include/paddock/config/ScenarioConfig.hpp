@@ -197,6 +197,20 @@ struct ScenarioBundle {
   /// alone, which is what every bundle written before livestock existed does.
   std::vector<MobSpec> mobs;
 
+  /// The rules a deciding farmer works to, when the bundle names them.
+  ///
+  /// Empty means a run of this bundle has to be given a policy by whoever
+  /// starts it, which is what every managed run did until this existed: the
+  /// calendar was in the manifest and the farmer's judgement was in code, so a
+  /// managed result could be reproduced only by somebody who also had the
+  /// source that produced it. A bundle is supposed to be the whole of a run.
+  ///
+  /// A calendar and a policy are not alternatives. The calendar says which
+  /// system applies when; the policy says what the farmer will not allow while
+  /// running it - the cover the sward is not taken below, and whether feed may
+  /// be bought to hold both that and the stock.
+  std::optional<core::ManagementPolicy> management;
+
   /// Which grazing system runs when. Empty when the bundle has no stock; a
   /// bundle with stock must say how they are managed, because leaving it to a
   /// default would make the most consequential decision in a pastoral model
@@ -240,6 +254,9 @@ struct ScenarioBundle {
 
   /// The farmer who will move that stock. Throws when the bundle has no
   /// grazing calendar.
+  ///
+  /// Carries the bundle's own `[management]` when it has one, so a farmer built
+  /// from a bundle decides the way that bundle says.
   [[nodiscard]] core::Farmer make_farmer() const;
 };
 

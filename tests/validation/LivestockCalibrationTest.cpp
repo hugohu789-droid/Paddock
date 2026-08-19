@@ -23,6 +23,8 @@
 namespace paddock::core {
 namespace {
 
+constexpr double kPi = 3.14159265358979323846;
+
 std::string table_path(const std::string& name) {
   return std::string(PADDOCK_DATA_DIR) + "/calibration/livestock/" + name;
 }
@@ -50,6 +52,125 @@ double maintenance_me(double liveweight_kg, double species_factor, double diet_m
   diet.digestibility_percent = 75.0;
 
   return basal_net_energy_mj(animal, state) / diet.maintenance_efficiency();
+}
+
+// VALIDATION. Adjabui et al. (2025) put the three New Zealand frameworks
+// through one set of assumptions, which is the comparison this project could
+// not make for itself - and it locates this model's sheep shortfall precisely
+// enough to say what is wrong rather than only how much.
+//
+// Adjabui, J.A., Morel, P.H.C., Morris, S.T., Kenyon, P.R., Tozer, P.R. (2025),
+// "A comparison of three nutritional models for estimating total metabolisable
+// energy requirements for a ewe, beef breeding cow, lamb, and a calf/yearling
+// in New Zealand's pasture-only system", Livestock Science 299:105766.
+//
+// **It settles what the published Nicol and Brookes figure contains.** Their
+// Eq. 2 writes that model's maintenance as the basal term over km PLUS
+// MEgraze, MEmove and MEactivity. This project's other comparison against the
+// same source uses the basal term alone, so the 14.8% it records at 60 kg was
+// two different quantities being subtracted.
+//
+// Their Table 1: a 60 kg ewe, four years old, standard reference weight 65 kg,
+// pasture mass 3.5 t DM/ha, terrain 1.5. Their daily maintenance for a ewe
+// neither pregnant nor lactating: 9.7 MJ ME/d under Nicol and Brookes (2017),
+// 9.0 under CSIRO (2007), 9.9 under the AIM (MPI 2022).
+//
+// Two things cannot be reproduced exactly and are stated rather than hidden.
+// Their baseline uses AIM's month-by-month pasture quality, so 11.0 MJ ME/kg DM
+// is taken from the middle of their own sensitivity range. And "terrain 1.5" is
+// a multiplier in their formulation rather than a slope: TMC Eq. 23 makes the
+// same factor 1 + tan(slope), so 1.5 is 26.6 degrees.
+TEST(LivestockCalibrationTest, SheepMaintenanceAgainstAdjabuiWithGrazingIncluded) {
+  // The paper's ewe, from its Table 1. The grazing coefficient is this
+  // project's own sheep value, which is the cattle figure carried across and is
+  // marked placeholder in data/species/sheep-ewe.toml.
+  AnimalClassParameters ewe;
+  ewe.class_id = "sheep_ewe";
+  ewe.kind = AnimalKind::Sheep;
+  ewe.species_factor = 1.0;
+  ewe.sex_factor = 1.0;
+  ewe.standard_reference_weight_kg = 65.0;
+  ewe.grazing_coefficient = 0.0025;
+  ewe.gain_energy_ceiling_mj_per_kg = 20.3;
+
+  AnimalState state;
+  state.liveweight_kg = 60.0;
+  state.age_days = 4.0 * 365.0;
+  state.liveweight_change_kg_per_day = 0.0;
+
+  GrazingConditions ground;
+  ground.pasture_mass_t_dm_per_ha = 3.5;
+  ground.slope_degrees = std::atan(0.5) * 180.0 / kPi;
+  // Hill country stocking, since their Table 1 does not state one. The sweep
+  // below shows the choice barely matters, which is itself the point.
+  ground.area_per_animal_ha = 1.0 / 10.0;
+
+  DietQuality diet;
+  diet.metabolisable_energy_mj_per_kg_dm = 11.0;
+  diet.digestibility_percent = 75.0;
+
+  // THE BASAL TERM AGREES. Their equation computed here rather than taken on
+  // trust, so what follows is a comparison and not an assumption.
+  const double theirs_basal =
+      0.28 * std::pow(60.0, 0.75) * std::exp(-0.03 * 4.0) / diet.maintenance_efficiency();
+  const double ours_basal = basal_net_energy_mj(ewe, state) / diet.maintenance_efficiency();
+  EXPECT_NEAR(ours_basal, theirs_basal, theirs_basal * 0.01)
+      << "the two basal terms are the same equation and should give the same answer: theirs "
+      << theirs_basal << ", ours " << ours_basal;
+
+  // AND THE REST DOES NOT. Both published totals sit well above that basal term,
+  // and the difference is what each framework charges for grazing, walking and
+  // activity. This model charges a small fraction of it.
+  //
+  // **CSIRO is the comparator that means something here, and Nicol and Brookes
+  // is reported beside it rather than instead of it.** The paper's own
+  // discussion records that CSIRO accounts for chewing and ruminating inside
+  // km, while Nicol and Brookes add those costs separately on top of the same
+  // km - and that AgResearch (2016) asked the authors to correct the model for
+  // the double counting that follows. This model's km is used the CSIRO way, so
+  // measuring it against the figure that carries a known double count would
+  // book somebody else's arithmetic as this project's error.
+  constexpr double kPublishedCsiro = 9.0;
+  constexpr double kPublishedNicolAndBrookes = 9.7;
+
+  const EnergyRequirement need = daily_energy_requirement(ewe, state, diet, ground);
+  const double our_grazing_terms = need.maintenance_me_mj - ours_basal;
+  const double their_grazing_terms = kPublishedCsiro - theirs_basal;
+
+  EXPECT_GT(their_grazing_terms, 1.4) << "the published figure carries a substantial grazing cost";
+  EXPECT_LT(our_grazing_terms, their_grazing_terms / 5.0)
+      << "this model's grazing, movement and activity terms come to " << our_grazing_terms
+      << " MJ ME/d against the " << their_grazing_terms << " implied by CSIRO's total";
+
+  // The two are far enough apart that which one is quoted changes the number a
+  // reader takes away, which is why the report gives both.
+  EXPECT_GT(kPublishedNicolAndBrookes - kPublishedCsiro, 0.5)
+      << "if these ever converge, the reason for preferring CSIRO here should be revisited";
+
+  // **The activity term is zero in every run this project makes.** TMC Eq. 24
+  // charges for kilometres walked beyond grazing, and nothing ever supplies a
+  // distance: Farm::conditions_on fills the pasture mass, the slope and the
+  // area per animal, and leaves horizontal_km_per_day and vertical_km_per_day
+  // at zero. The equation is implemented, tested in isolation, and fed by
+  // nothing - the same shape of gap terrain had before it was wired up. See
+  // docs/verify.md, engineering caveat E10.
+  EXPECT_DOUBLE_EQ(need.activity_net_mj, 0.0)
+      << "if this ever becomes non-zero somebody has started supplying a distance, and the "
+         "caveat about it should go";
+
+  const double against_csiro = (kPublishedCsiro - need.maintenance_me_mj) / kPublishedCsiro;
+  const double against_nicol =
+      (kPublishedNicolAndBrookes - need.maintenance_me_mj) / kPublishedNicolAndBrookes;
+
+  // Both are pinned, because the report quotes both and a change that moved one
+  // without the other would go unnoticed.
+  EXPECT_NEAR(against_csiro, 0.15, 0.02) << "against CSIRO: " << need.maintenance_me_mj;
+  EXPECT_NEAR(against_nicol, 0.21, 0.02) << "against Nicol and Brookes: " << need.maintenance_me_mj;
+
+  GTEST_LOG_(INFO) << "basal: theirs " << theirs_basal << ", ours " << ours_basal
+                   << "; maintenance: CSIRO " << kPublishedCsiro << ", Nicol and Brookes "
+                   << kPublishedNicolAndBrookes << ", ours " << need.maintenance_me_mj << " ("
+                   << (against_csiro * 100.0) << "% and " << (against_nicol * 100.0) << "% low)";
 }
 
 // VALIDATION. DairyNZ publish maintenance ME by liveweight for a lactating cow,

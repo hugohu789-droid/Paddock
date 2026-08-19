@@ -51,13 +51,26 @@ double FarmletGrid::radiation_ratio(std::size_t col, std::size_t row, int day_of
   return radiation_ == nullptr ? 1.0 : radiation_->ratio(col, row, day_of_year);
 }
 
-void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger) {
+void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger,
+                       const std::vector<double>& irrigation_mm) {
   const int day = weather.date.day_of_year();
+
+  // Kept so a map can show where the water went. The grid records what it was
+  // handed; it never worked any of it out.
+  last_irrigation_mm_.assign(cells_.size(), 0.0);
+  for (std::size_t index = 0; index < irrigation_mm.size() && index < cells_.size(); ++index) {
+    last_irrigation_mm_[index] = std::max(0.0, irrigation_mm[index]);
+  }
+
+  const auto water_for = [&irrigation_mm](std::size_t index) {
+    return index < irrigation_mm.size() ? std::max(0.0, irrigation_mm[index]) : 0.0;
+  };
 
   if (ledger == nullptr) {
     for (std::size_t row = 0; row < rows_; ++row) {
       for (std::size_t col = 0; col < cols_; ++col) {
-        cells_[(row * cols_) + col].step(weather, radiation_ratio(col, row, day));
+        const std::size_t index = (row * cols_) + col;
+        cells_[index].step(weather, radiation_ratio(col, row, day), nullptr, water_for(index));
       }
     }
     return;
@@ -66,7 +79,8 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger) {
   scratch_.reset();
   for (std::size_t row = 0; row < rows_; ++row) {
     for (std::size_t col = 0; col < cols_; ++col) {
-      cells_[(row * cols_) + col].step(weather, radiation_ratio(col, row, day), &scratch_);
+      const std::size_t index = (row * cols_) + col;
+      cells_[index].step(weather, radiation_ratio(col, row, day), &scratch_, water_for(index));
     }
   }
   ledger->add_scaled(scratch_, 1.0 / static_cast<double>(cells_.size()));
@@ -93,6 +107,30 @@ Raster<double> FarmletGrid::snapshot(Fn&& value_of) const {
 
 Raster<double> FarmletGrid::cover_kg_dm() const {
   return snapshot([](const Farmlet& farmlet) { return farmlet.sward().cover_kg_dm(); });
+}
+
+Raster<double> FarmletGrid::available_water_fraction() const {
+  return snapshot([](const Farmlet& farmlet) {
+    const double capacity = farmlet.soil().parameters().total_available_water_mm;
+    return capacity > 0.0 ? farmlet.soil().water_mm() / capacity : 0.0;
+  });
+}
+
+Raster<double> FarmletGrid::last_irrigation_mm() const {
+  Raster<double> applied = snapshot([](const Farmlet&) { return 0.0; });
+  for (std::size_t index = 0; index < last_irrigation_mm_.size() && index < applied.size();
+       ++index) {
+    applied(index % cols_, index / cols_) = last_irrigation_mm_[index];
+  }
+  return applied;
+}
+
+Raster<double> FarmletGrid::depletion_mm() const {
+  return snapshot([](const Farmlet& farmlet) { return farmlet.soil().depletion_mm(); });
+}
+
+double FarmletGrid::total_available_water_mm() const noexcept {
+  return cells_.empty() ? 0.0 : cells_.front().soil().parameters().total_available_water_mm;
 }
 
 Raster<double> FarmletGrid::soil_water_mm() const {

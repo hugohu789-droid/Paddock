@@ -9,7 +9,7 @@
 #
 # **The ground is real and nearly flat, and both halves of that matter.** Over
 # the whole 4.8 by 7.2 km LiDAR tile the elevation runs from 0.4 m to 26.1 m
-# above sea level, mean 7.0 m; over these 72 hectares it moves by a couple of
+# above sea level, mean 7.0 m; over these 80 hectares it moves by a couple of
 # metres. Drawn true to scale the farm looks flat because it is flat: this is
 # the Canterbury Plains. A viewer wanting to see the shape of it has to
 # exaggerate the heights, and the view says by how much when it does.
@@ -21,7 +21,7 @@
 
 [scenario]
 name = "lincoln_lurdf"
-description = "LURDF's 72 hectares on measured LiDAR ground, with placeholder weather, soil and sward."
+description = "LURDF's 79 hectares on measured LiDAR ground, with placeholder weather, soil and sward."
 engine_version = "0.1.0"
 master_seed = 20230323
 
@@ -32,9 +32,55 @@ end_date = "2024-06-30"
 latitude_degrees = -43.641
 
 [weather]
-kind = "synthetic"
-path = "weather.toml"
-sha256 = "b59bc98a348677638770e004a1050a9f55f1fd93b5b2346fa4079151588dcb33"
+# The weather that actually happened over this farm year, not a generator.
+#
+# 1 July 2023 to 30 June 2024, the run's own dates, fetched with
+#
+#   scripts/open-meteo-snapshot.py --lon 172.44386 --lat -43.64954 \
+#       --start 2023-07-01 --end 2024-06-30 \
+#       --out data/scenarios/lincoln-lurdf/weather-2023.csv
+#
+# **Committed, unlike the elevation.** data/snapshots/ is gitignored because
+# bulk datasets are not committed and because NIWA's terms forbid passing their
+# data on. Neither applies here: this is 13 kB, and Open-Meteo is CC BY 4.0,
+# which permits redistribution. So it lives with the bundle like weather.toml
+# did, and a fresh clone runs this farm on the weather it really had.
+#
+# **Reanalysis, not observation.** ERA5 is a model's estimate of the weather,
+# on a grid cell tens of kilometres across - it answered for -43.6204,
+# 172.4096 at 15 m, about 4 km from the farm. It is the right source for a farm
+# with no station on it, and the wrong one for checking a station that has one.
+# The full record is in weather-2023.csv.provenance.json.
+#
+# What it looks like, against Lincoln's published normals: 652 mm of rain over
+# the year against a normal near 630, a mean of 12.2 C against about 11.5, and
+# January at 18.3 C against July at 7.5. The strongest check is physical - the
+# highest clearness index Rs/Ra in the year is 0.75, the textbook clear-sky
+# value, and never above 1.0, so the series never reports more sun than the sky
+# at this latitude can deliver.
+#
+# **Two models in one file.** Everything but the ultraviolet is ERA5, from the
+# archive endpoint. The archive carries no ultraviolet at all - asking it
+# returns a column of nulls - so `uv_index` comes from the air quality endpoint,
+# which is CAMS: a different reanalysis by a different group. The provenance
+# file names which column came from which, and a run should not treat the two
+# as one measurement.
+#
+# The ultraviolet is a daily maximum and is dimensionless. It peaks at 11.6 on
+# 13 January and falls to 0.15 in late July, with a January mean of 8.7 against
+# June's 0.9 - which is New Zealand, where the summer index is high for the
+# latitude because of the ozone above it rather than because of the sun's
+# height.
+#
+# Wind is carried and **nothing in the model reads it** - see docs/verify.md
+# E12. It is a daily maximum at 10 m, not a mean at the 2 m most agronomic
+# equations expect, which is another reason not to feed it to one yet.
+kind = "snapshot"
+path = "weather-2023.csv"
+sha256 = "8252d1baf9399fd77d6420bc72e4ac0a1e60f59721c5e363f217104f4475e552"
+dataset = "Open-Meteo historical weather API (ERA5 reanalysis)"
+licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5)."
+
 
 [soil]
 path = "soil.toml"
@@ -51,24 +97,30 @@ legume_kg_dm_per_ha = 600.0
 soil_mineral_nitrogen_kg_per_ha = 60.0
 
 [grid]
-# 36 x 32 cells at 25 m is 900 by 800 m, which is 72.0 hectares - the area
-# Lincoln University publishes for LURDF, and the same rectangle
-# data/farms/lincoln-research-farms.toml carries.
+# 40 x 32 cells at 25 m is 1000 by 800 m, which is 80.0 hectares against
+# LURDF's published 79. The overshoot is one row of cells, 1.3%, and it is here
+# because 79 hectares is not a whole number of 625 m2 cells in any farm-shaped
+# rectangle: 79 is prime, so the only exact tilings are strips.
 #
-# The origin is that rectangle's north-west corner, taken from the farm's centre
-# at 1557252.3158 E, 5167862.7895 N. It sits inside the LiDAR tile with room to
+# An earlier version of this file used 900 by 800, 72 ha, having taken "72 ha
+# under irrigation" from Lincoln University's page as the size of the farm. It
+# is the area under the pivots. The farm is 79 ha, and this model does not
+# represent irrigation at all.
+#
+# The origin is the farm rectangle's north-west corner, taken from the centre at
+# 1557252.3158 E, 5167862.7895 N. It sits inside the LiDAR tile with room to
 # spare: the tile runs 1554400-1559200 E and 5161200-5168400 N, so this farm has
 # 137 m of margin at its nearest edge, the northern one.
-cols = 36
+cols = 40
 rows = 32
 cell_size_m = 25.0
 available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
 available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
-origin_easting = 1556802.3158
+origin_easting = 1556752.3158
 origin_northing = 5168262.7895
 
-# 72 ha at 2 ha gives 36 paddocks of 2.0 ha: 6 across and 6 down at 150 m
-# square, which divides this block exactly for once.
+# 80 ha at 2 ha gives 40 paddocks of 2.0 ha: 8 across and 5 down at 125 by
+# 160 m, which divides this block exactly.
 paddock_hectares = 2.0
 
 [terrain]
@@ -98,13 +150,14 @@ sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "3fa4fe61da611bd49fd64541acaf839c48b9da654912ff7e656d723e16d0adc2"
-head = 375
+sha256 = "98c473bb07de20578ff950347d7959d9d11c66367dc6fca3cf4e1b884d7eb064"
+head = 417
 paddock = 0
-# 375 ewes on 72 hectares is 5.2 a hectare, the same stocking rate
-# canterbury-grazed settles at, scaled to this farm's area. It is a rate this
+# 417 ewes on 80 hectares is 5.2 a hectare, the same stocking rate
+# canterbury-grazed settles at, scaled to this block's area. It is a rate this
 # model reports rather than one taken from anywhere, and LURDF is a dairy farm
-# in any case - the stock here demonstrate the loop, not the enterprise.
+# carrying about 200 head in any case - the stock here demonstrate the loop,
+# not the enterprise.
 liveweight_kg = 55.0
 age_days = 1500.0
 
@@ -140,3 +193,14 @@ to = "2024-06-30"
 system = "rotational"
 maximum_graze_days = 3
 minimum_spell_days = 35
+
+# The same rules canterbury-grazed carries, so the two differ in their ground
+# and their stocking and in nothing else.
+[management]
+minimum_cover_kg_dm_per_ha = 1600.0
+rotation_cover_threshold_kg_dm_per_ha = 2200.0
+target_liveweight_gain_kg_per_day = 0.0
+maximum_graze_days = 3
+minimum_spell_days = 35
+supplement_me_mj_per_kg_dm = 10.0
+may_buy_feed = true

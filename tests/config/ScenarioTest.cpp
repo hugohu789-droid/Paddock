@@ -27,19 +27,27 @@ std::string shipped_bundle() {
   return std::string(PADDOCK_DATA_DIR) + "/scenarios/canterbury-baseline";
 }
 
+/// The bundle that carries stock, a calendar and a policy.
+std::string grazed_bundle() {
+  return std::string(PADDOCK_DATA_DIR) + "/scenarios/canterbury-grazed";
+}
+
 /// A copy of the shipped bundle in a temporary directory, removed on
 /// destruction. Tests that tamper with a bundle tamper with this, never with
 /// the committed files.
 class BundleCopy {
  public:
-  BundleCopy() {
-    directory_ =
-        std::filesystem::temp_directory_path() /
-        ("paddock-bundle-" +
-         std::to_string(std::filesystem::hash_value(std::filesystem::path(shipped_bundle()))) +
-         "-" + testing::UnitTest::GetInstance()->current_test_info()->name());
+  /// Copies `source`, or the pasture-only bundle when none is named. A test
+  /// that edits a manifest needs one it can break without breaking the
+  /// repository's copy, and which bundle it starts from depends on what is
+  /// being broken - only the grazed ones carry stock or a policy.
+  explicit BundleCopy(const std::string& source = shipped_bundle()) {
+    directory_ = std::filesystem::temp_directory_path() /
+                 ("paddock-bundle-" +
+                  std::to_string(std::filesystem::hash_value(std::filesystem::path(source))) + "-" +
+                  testing::UnitTest::GetInstance()->current_test_info()->name());
     std::filesystem::remove_all(directory_);
-    std::filesystem::copy(shipped_bundle(), directory_, std::filesystem::copy_options::recursive);
+    std::filesystem::copy(source, directory_, std::filesystem::copy_options::recursive);
   }
 
   BundleCopy(const BundleCopy&) = delete;
@@ -114,6 +122,65 @@ TEST(ScenarioBundleTest, TheShippedBundleLoadsWithItsHashesIntact) {
 // "unknown key 'terrain'" - and nothing caught it, because the tests that
 // exercised terrain all set it on a bundle in memory and never parsed one from
 // a file. A feature reachable only from a test is a feature nobody has.
+// A bundle can carry the rules its farmer works to.
+//
+// Until it could, a managed run put the calendar in the manifest and the
+// farmer's judgement in whatever code started it, so the result could only be
+// reproduced by somebody who also had that code. A bundle is supposed to be the
+// whole of a run.
+TEST(ScenarioBundleTest, AGrazedBundleCarriesTheRulesItsFarmerWorksTo) {
+  const ScenarioBundle bundle = load_scenario(grazed_bundle());
+
+  if (!bundle.management.has_value()) {
+    FAIL() << "a grazed bundle should carry the rules its farmer works to";
+  }
+  const core::ManagementPolicy& policy = *bundle.management;
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_kg_dm_per_ha, 1600.0);
+  EXPECT_DOUBLE_EQ(policy.rotation_cover_threshold_kg_dm_per_ha, 2200.0);
+  EXPECT_TRUE(policy.may_buy_feed);
+
+  // A calendar and a policy are different things and a bundle with stock has
+  // both: the calendar says which system applies when, the policy says what
+  // the farmer will not allow while running it.
+  EXPECT_FALSE(bundle.grazing.empty());
+}
+
+// The section is optional, because every bundle written before it existed
+// leaves the policy to its caller and is still a valid bundle.
+TEST(ScenarioBundleTest, ABundleWithoutStockNeedsNoPolicy) {
+  const ScenarioBundle bundle = load_scenario(shipped_bundle());
+
+  EXPECT_FALSE(bundle.management.has_value());
+  EXPECT_TRUE(bundle.mobs.empty());
+}
+
+// Two rules that cannot both hold. A floor at or above the rotation threshold
+// tells the farmer to start rotating only once the sward is already below the
+// cover being protected, which is not strictness - it is a contradiction, and
+// it runs perfectly happily while meaning nothing.
+TEST(ScenarioBundleTest, ACoverFloorAboveTheRotationThresholdIsRefused) {
+  const BundleCopy copy{grazed_bundle()};
+  copy.edit("scenario.toml", "minimum_cover_kg_dm_per_ha = 1600.0",
+            "minimum_cover_kg_dm_per_ha = 2600.0");
+
+  try {
+    static_cast<void>(load_scenario(copy.path()));
+    FAIL() << "expected a cover floor above the rotation threshold to be refused";
+  } catch (const ConfigError& error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("rotation"), std::string::npos) << message;
+  }
+}
+
+// Feed with no energy in it would be bought forever and never fill anything.
+TEST(ScenarioBundleTest, SupplementWithNoEnergyInItIsRefused) {
+  const BundleCopy copy{grazed_bundle()};
+  copy.edit("scenario.toml", "supplement_me_mj_per_kg_dm = 10.0",
+            "supplement_me_mj_per_kg_dm = 0.0");
+
+  EXPECT_THROW(static_cast<void>(load_scenario(copy.path())), ConfigError);
+}
+
 TEST(ScenarioBundleTest, ABundleMayTakeItsGroundFromASnapshot) {
   const ScenarioBundle bundle =
       load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/lincoln-lurdf");
@@ -128,13 +195,48 @@ TEST(ScenarioBundleTest, ABundleMayTakeItsGroundFromASnapshot) {
   EXPECT_EQ(bundle.elevation, nullptr);
 }
 
-// The other kinds, which the same allow-list has to admit.
-TEST(ScenarioBundleTest, TheShippedBundlesSayTheirGroundIsFlat) {
-  for (const char* name : {"canterbury-baseline", "canterbury-grazed"}) {
+// Every shipped bundle now stands on measured ground.
+//
+// The demonstration bundles used to be flat, and their grid used to sit on a
+// round-number coordinate that turned out to be central Christchurch. They were
+// moved onto farmland west of Lincoln - chosen from the LINZ cadastre, see the
+// note above [grid] - and onto the same LiDAR tile the research farm uses. One
+// snapshot, one hash, three farms.
+//
+// What this test guards is that they all still point at the same file. Three
+// bundles quietly drifting onto three copies of the same survey is the kind of
+// thing nobody notices until one of them is stale.
+TEST(ScenarioBundleTest, TheShippedBundlesStandOnTheSameMeasuredGround) {
+  std::string shared_path;
+  std::string shared_hash;
+  for (const char* name : {"canterbury-baseline", "canterbury-grazed", "lincoln-lurdf"}) {
     const ScenarioBundle bundle =
         load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
-    EXPECT_TRUE(bundle.terrain.is_flat()) << name;
+    EXPECT_EQ(bundle.terrain.kind, TerrainSpec::Kind::Snapshot) << name;
+    EXPECT_FALSE(bundle.terrain.is_flat()) << name;
+    EXPECT_EQ(bundle.terrain.elevation_sha256.size(), 64U) << name;
+
+    // Named and not opened. The snapshot is tens of megabytes and is not
+    // committed; most commands never touch it.
+    EXPECT_EQ(bundle.elevation, nullptr) << name;
+
+    if (shared_path.empty()) {
+      shared_path = bundle.terrain.elevation_path;
+      shared_hash = bundle.terrain.elevation_sha256;
+    } else {
+      EXPECT_EQ(bundle.terrain.elevation_path, shared_path) << name;
+      EXPECT_EQ(bundle.terrain.elevation_sha256, shared_hash) << name;
+    }
   }
+}
+
+// And that a bundle which names ground nobody can read refuses, rather than
+// running flat and saying nothing. This suite has no geospatial stack, which
+// makes it the right place to check the refusal actually happens.
+TEST(ScenarioBundleTest, GroundThatCannotBeReadIsRefusedRatherThanIgnored) {
+  const ScenarioBundle bundle =
+      load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/canterbury-grazed");
+  EXPECT_THROW((void)bundle.make_elevation(), std::runtime_error);
 }
 
 TEST(ScenarioBundleTest, TheBundleRunsAndItsBudgetsClose) {

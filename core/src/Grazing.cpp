@@ -44,7 +44,13 @@ GrazingDay graze(PastureSward& sward, double paddock_hectares, const Mob& mob,
   }
 
   // Throws for an impossible diet, which is where that check belongs.
-  const EnergyRequirement need = daily_energy_requirement(mob.animal, mob.state, diet, ground);
+  //
+  // Fed for the target, not for yesterday's outcome. The same reasoning as
+  // Farm::step, and the two paths have to agree: a single paddock and a whole
+  // farm must not offer the same mob different amounts of the same feed.
+  AnimalState wanting = mob.state;
+  wanting.liveweight_change_kg_per_day = std::max(0.0, mob.target_gain_kg_per_day);
+  const EnergyRequirement need = daily_energy_requirement(mob.animal, wanting, diet, ground);
 
   GrazingDay day;
   day.demand_kg_dm = need.intake_kg_dm * static_cast<double>(mob.head);

@@ -14,7 +14,8 @@ double DailyWeather::mean_air_temperature_c() const noexcept {
 
 bool DailyWeather::is_valid() const noexcept {
   return date.is_valid() && rainfall_mm >= 0.0 && solar_radiation_mj_per_m2 >= 0.0 &&
-         wind_speed_m_per_s >= 0.0 && max_air_temperature_c >= min_air_temperature_c;
+         wind_speed_m_per_s >= 0.0 && uv_index >= 0.0 &&
+         max_air_temperature_c >= min_air_temperature_c;
 }
 
 DateRange DateRange::calendar_year(int year) noexcept {
