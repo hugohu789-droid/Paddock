@@ -64,6 +64,20 @@ TerrainScene::TerrainScene() {
   sun_->SetLightTypeToSceneLight();
   sun_->SetPositional(0);
   renderer_->AddLight(sun_);
+
+  // The sky, from overhead. Not an ambient term - that was tried and it was
+  // wrong twice over. VTK's ambient carries its own colour, white by default,
+  // and scalar colouring replaces only the diffuse one, so an ambient share
+  // mixes white into the grass: a paddock at 3500 kg DM/ha came out grey-green
+  // instead of green, and looked like it had less feed on it rather than more.
+  // A second light goes through the diffuse term like the sun does, so it
+  // brightens the ground in the ground's own colour.
+  sky_->SetLightTypeToSceneLight();
+  sky_->SetPositional(0);
+  sky_->SetFocalPoint(0.0, 0.0, 0.0);
+  sky_->SetPosition(0.0, 0.0, 100000.0);
+  renderer_->AddLight(sky_);
+
   renderer_->SetAutomaticLightCreation(0);
 
   surface_mapper_->SetLookupTable(lookup_);
@@ -388,24 +402,27 @@ void TerrainScene::light_for(double latitude_degrees, int day_of_year, double so
   const double lit = std::clamp(
       (clearness - kOvercastClearness) / (kClearClearness - kOvercastClearness), 0.0, 1.0);
 
-  sun_->SetIntensity(0.75 + (0.45 * lit));
-
-  // **Ambient rises as the sun falls behind cloud, and that is not a fudge to
-  // keep the picture bright.** The clearness index IS the split between direct
-  // and diffuse radiation - that is what FAO-56 Eq. 35's Angstrom relation
-  // describes - so an overcast sky delivers most of its light from every
-  // direction at once and a clear one delivers it from the sun. Modelling that
-  // as one directional light and nothing else made shaded ground read as
-  // black, which is both ugly and wrong: under cloud there is barely a shaded
-  // side at all.
+  // **The split between the two lights is the clearness index itself**, and
+  // that is not a fudge to keep the picture bright. Rs/Ra IS the share of the
+  // sky's radiation that arrived as direct beam rather than scattered - that
+  // is what FAO-56 Eq. 35's Angstrom relation describes - so a clear day is
+  // mostly sun and an overcast one is mostly sky. Their sum is held roughly
+  // level, because a dull day is duller and not darker.
   //
   // The consequence worth stating: relief is easiest to see on a clear day and
   // nearly flat on an overcast one, which is what a paddock looks like.
-  if (surface_actor_->GetProperty() != nullptr) {
-    const double ambient = 0.55 - (0.25 * lit);
-    surface_actor_->GetProperty()->SetAmbient(ambient);
-    surface_actor_->GetProperty()->SetDiffuse(1.0 - ambient);
-  }
+  //
+  // Their SPLIT is the clearness index and is not a choice. Their SUM is a
+  // drawing choice, and is said to be one: it is set so that level ground
+  // lands a little under full brightness, because a surface lit to 1.0 washes
+  // the colour ramp out - a paddock at 3500 kg DM/ha came back grey-green
+  // instead of green, and read as having less feed on it rather than more.
+  sun_->SetIntensity(0.25 + (0.55 * lit));
+  sky_->SetIntensity(0.45 - (0.20 * lit));
+
+  // A dull sky is a little bluer than a bright one, and the sun a little
+  // warmer. Both stay close to white: this is lighting, not a filter.
+  sky_->SetColor(0.90 + (0.06 * lit), 0.93 + (0.04 * lit), 1.0);
 
   // Warm and low under a clear sky, flat and grey under cloud - which is what
   // the light itself does, not a filter over the picture.

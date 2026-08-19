@@ -128,6 +128,10 @@ class TerrainScene {
   /// The sun. One directional light standing in for a body 150 million km
   /// away, which is what a directional light is for.
   vtkNew<vtkLight> sun_;
+
+  /// The sky. A second light from overhead standing in for the light that
+  /// arrives from every direction rather than from the sun.
+  vtkNew<vtkLight> sky_;
   vtkNew<vtkLookupTable> lookup_;
   vtkNew<vtkPolyDataMapper> surface_mapper_;
   vtkNew<vtkActor> surface_actor_;
