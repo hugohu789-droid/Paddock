@@ -105,7 +105,7 @@ struct FieldStyle {
 FieldStyle style_of(MapWindow::Field field) {
   switch (field) {
     case MapWindow::Field::SoilWater:
-      return {"Soil water", "Soil water (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+      return {"Soil water", "Soil water (mm)", viz::Ramp::SoilWater, false, 0.0, 0.0};
     case MapWindow::Field::WaterStress:
       return {"Water stress", "Water stress (1 = unstressed)", viz::Ramp::Viridis, true, 0.0, 1.0};
     case MapWindow::Field::LegumeFraction:
@@ -113,15 +113,15 @@ FieldStyle style_of(MapWindow::Field field) {
     case MapWindow::Field::AvailableWater:
       return {"Soil moisture",
               "Water left of what the soil can hold",
-              viz::Ramp::Viridis,
+              viz::Ramp::SoilWater,
               true,
               0.0,
               1.0};
     case MapWindow::Field::IrrigationToday:
-      return {"Irrigation today", "Water put on today (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+      return {"Irrigation today", "Water put on today (mm)", viz::Ramp::SoilWater, false, 0.0, 0.0};
     case MapWindow::Field::IrrigationToDate:
       return {
-          "Irrigation to date", "Water put on so far (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+          "Irrigation to date", "Water put on so far (mm)", viz::Ramp::SoilWater, false, 0.0, 0.0};
     case MapWindow::Field::Growth:
       return {"Growth today",
               "Pasture grown today (kg DM/ha)",
@@ -309,7 +309,16 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
                     "same fences - dimmer, because down there they are for finding a paddock "
                     "rather than for reading.")
                 .arg(style.legend),
-            false, [this, i](bool on) { terrain_.show_stack_layer(i, on); });
+            false, [this, i](bool on) {
+              terrain_.show_stack_layer(i, on);
+              // Today's irrigation brings its spray with it. The sheet says
+              // where the water went; the spray puts it over the paddocks it
+              // went onto, which is the same fact seen from the farm rather
+              // than from a legend.
+              if (kStackedFields.at(i) == Field::IrrigationToday) {
+                terrain_.show_spray(on);
+              }
+            });
   }
   layers->addStretch(1);
 

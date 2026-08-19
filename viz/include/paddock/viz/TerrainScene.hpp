@@ -190,6 +190,18 @@ class TerrainScene {
   /// the sheets below carry.
   void name_top_layer(const std::string& name);
 
+  /// Shows or hides the spray standing over ground that was watered today.
+  ///
+  /// **Tied to the irrigation layer rather than to the weather.** It used to
+  /// come on with the sky, which put a thicket of white uprights over the
+  /// paddocks on every watering day, crossing the fences that are drawn there
+  /// too - and the first person to see it asked what the white lines meant.
+  /// Two things were wrong with that: it said the same thing the irrigation
+  /// sheet says, and it said it in the one place already carrying the fences
+  /// and the stock. Now it appears when somebody asks about irrigation, which
+  /// is when a picture of water landing on the paddocks is what they want.
+  void show_spray(bool visible);
+
   /// Shows or hides one sheet of the stack, by its position in it.
   void show_stack_layer(std::size_t index, bool visible);
 
@@ -379,6 +391,10 @@ class TerrainScene {
   };
 
   std::vector<std::unique_ptr<StackedSheet>> stack_;
+
+  /// Whether somebody has asked to see the spray. Kept because the geometry is
+  /// rebuilt every day and has to know, on a fresh day, whether to appear.
+  bool spray_wanted_ = false;
 
   vtkNew<vtkPolyData> pivot_lines_;
   vtkNew<vtkActor> pivot_actor_;

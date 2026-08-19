@@ -200,9 +200,9 @@ TerrainScene::TerrainScene() {
   // thick, close to the ground and only over the cells that got water. Somebody
   // glancing at the scene has to be able to say which water is which without
   // reading a legend.
-  spray_actor_->GetProperty()->SetColor(0.92, 0.98, 1.00);
-  spray_actor_->GetProperty()->SetLineWidth(2.5);
-  spray_actor_->GetProperty()->SetOpacity(0.75);
+  spray_actor_->GetProperty()->SetColor(0.72, 0.90, 1.00);
+  spray_actor_->GetProperty()->SetLineWidth(1.6);
+  spray_actor_->GetProperty()->SetOpacity(0.55);
   spray_actor_->SetVisibility(0);
 
   // The equipment: a steel grey that is plainly a machine rather than weather.
@@ -800,6 +800,16 @@ bool TerrainScene::layer_shown(Layer layer) const {
   return false;
 }
 
+void TerrainScene::show_spray(bool visible) {
+  spray_wanted_ = visible;
+  // Whether there is anything to show is the geometry's business, and it is
+  // empty on a day that watered nothing - so asking for spray on a dry day
+  // still draws none.
+  const int anything = spray_lines_->GetNumberOfLines() > 0 && visible ? 1 : 0;
+  spray_actor_->SetVisibility(anything);
+  pivot_actor_->SetVisibility(anything);
+}
+
 void TerrainScene::show_stack_layer(std::size_t index, bool visible) {
   if (index >= stack_.size()) {
     return;
@@ -1008,9 +1018,12 @@ void TerrainScene::show_irrigation(const core::Raster<double>& applied_mm) {
     pivot_lines_->SetPoints(frame);
     pivot_lines_->SetLines(frame_cells);
     pivot_lines_->Modified();
+    // Shown only when irrigation is being asked about, and only on a day that
+    // had some: a pivot standing over a dry farm would be the picture claiming
+    // something the model did not do.
     const bool anything = spray->GetNumberOfPoints() > 0;
-    spray_actor_->SetVisibility(weather_shown_ && anything ? 1 : 0);
-    pivot_actor_->SetVisibility(weather_shown_ && anything ? 1 : 0);
+    spray_actor_->SetVisibility(spray_wanted_ && anything ? 1 : 0);
+    pivot_actor_->SetVisibility(spray_wanted_ && anything ? 1 : 0);
   };
 
   if (!has_field_ || applied_mm.empty()) {
@@ -1222,13 +1235,6 @@ void TerrainScene::show_weather(bool visible) {
   cloud_volume_->SetVisibility(on);
   rain_actor_->SetVisibility(on);
   wind_actor_->SetVisibility(on);
-
-  // The pivot only ever shows on a day that had water, so turning the weather
-  // back on must not conjure it onto a dry day. Whether there is anything to
-  // show is decided by the geometry, which is empty when nothing was watered.
-  const int watered = spray_lines_->GetNumberOfLines() > 0 ? on : 0;
-  spray_actor_->SetVisibility(watered);
-  pivot_actor_->SetVisibility(watered);
 }
 
 void TerrainScene::show_sky(double latitude_degrees, int day_of_year, double solar_hour,

@@ -46,6 +46,21 @@ constexpr std::array<Stop, 4> kPastureGreen = {{
     {1.0000, {27, 94, 32}},
 }};
 
+/// Dry tan through to deep water blue.
+///
+/// The dry end is the colour of bare ground rather than white, so an empty
+/// profile looks like empty ground; the wet end is dark enough that a full one
+/// reads as water without being black. Between them it passes through a pale
+/// blue-grey rather than through green, which would collide with the pasture
+/// ramp on a stack where both are showing.
+constexpr std::array<Stop, 5> kSoilWater = {{
+    {0.0000, {214, 184, 138}},
+    {0.2500, {198, 196, 174}},
+    {0.5000, {142, 182, 197}},
+    {0.7500, {68, 130, 175}},
+    {1.0000, {16, 62, 112}},
+}};
+
 std::uint8_t blend(std::uint8_t from, std::uint8_t to, double weight) noexcept {
   const double value = static_cast<double>(from) + ((static_cast<double>(to) - from) * weight);
   return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0)));
@@ -89,6 +104,8 @@ std::string ramp_name(Ramp ramp) {
       return "viridis";
     case Ramp::PastureGreen:
       return "pasture green";
+    case Ramp::SoilWater:
+      return "soil water";
   }
   return "unknown";
 }
@@ -121,6 +138,8 @@ Rgb ColourScale::colour_of(double value) const noexcept {
   switch (ramp_) {
     case Ramp::PastureGreen:
       return interpolate(kPastureGreen, position);
+    case Ramp::SoilWater:
+      return interpolate(kSoilWater, position);
     case Ramp::Viridis:
     default:
       return interpolate(kViridis, position);
