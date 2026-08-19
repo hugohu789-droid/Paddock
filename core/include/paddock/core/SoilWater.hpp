@@ -77,6 +77,11 @@ struct SoilWaterParameters {
 /// that the caller decides what to record and the bucket stays testable.
 struct SoilWaterFluxes {
   double rainfall_mm = 0.0;
+
+  /// Water put on deliberately, mm. Separate from rainfall because the whole
+  /// point of reporting it is to say how much was spent.
+  double irrigation_mm = 0.0;
+
   double runoff_mm = 0.0;
   double infiltration_mm = 0.0;
   double reference_et_mm = 0.0;
@@ -102,7 +107,19 @@ class SoilWaterBucket {
   /// rainfall as an inflow, runoff, evapotranspiration and drainage as
   /// outflows, all on the water line.
   SoilWaterFluxes step(const DailyWeather& weather, double latitude_degrees,
-                       double radiation_ratio = 1.0, BudgetLedger* ledger = nullptr);
+                       double radiation_ratio = 1.0, BudgetLedger* ledger = nullptr,
+                       double irrigation_mm = 0.0);
+
+  /// Readily available water, RAW = p x TAW (FAO-56 Eq. 83): how far the
+  /// profile may be drawn down before the pasture starts to feel it.
+  ///
+  /// This is the standard irrigation trigger - water when depletion reaches
+  /// RAW - and it is exposed here so a scheduler does not have to reach into
+  /// the parameters and reconstruct it. The unadjusted depletion fraction is
+  /// used, not the demand-adjusted one the stress calculation uses: an
+  /// irrigator decides on a season's soil and crop, not on this afternoon's
+  /// evaporative demand.
+  [[nodiscard]] double readily_available_water_mm() const noexcept;
 
   /// Water held above wilting point, mm. This is the closing stock the
   /// conservation tests compare the ledger against.

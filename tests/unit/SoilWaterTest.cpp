@@ -192,7 +192,22 @@ TEST(SoilWaterBucketTest, EveryFlowIsReportedToTheWaterBudget) {
   EXPECT_TRUE(ledger.closes(Budget::Water, bucket.water_mm()))
       << ledger.report(Budget::Water, bucket.water_mm());
   EXPECT_DOUBLE_EQ(ledger.total_inflow(Budget::Water), 40.0);
-  EXPECT_EQ(ledger.entries(Budget::Water).size(), 4U);
+  EXPECT_EQ(ledger.entries(Budget::Water).size(), 4U)
+      << "an unirrigated profile has four water processes, and a fifth line for a thing that did "
+         "not happen would be in every report this project prints";
+}
+
+TEST(SoilWaterBucketTest, IrrigationIsReportedOnlyWhenItHappened) {
+  BudgetLedger ledger;
+  SoilWaterBucket bucket(test_parameters(), 100.0);
+  ledger.set_opening_stock(Budget::Water, bucket.water_mm());
+
+  bucket.step(day_of(7, 1, 40.0, 3.0, 9.0), kCanterburyLatitude, 1.0, &ledger, 25.0);
+
+  EXPECT_TRUE(ledger.closes(Budget::Water, bucket.water_mm()))
+      << ledger.report(Budget::Water, bucket.water_mm());
+  EXPECT_DOUBLE_EQ(ledger.total_inflow(Budget::Water), 65.0) << "40 mm of rain and 25 mm applied";
+  EXPECT_EQ(ledger.entries(Budget::Water).size(), 5U);
 }
 
 }  // namespace

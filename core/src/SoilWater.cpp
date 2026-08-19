@@ -110,12 +110,26 @@ double SoilWaterBucket::stress_coefficient() const noexcept {
                                   parameters_.depletion_fraction);
 }
 
+double SoilWaterBucket::readily_available_water_mm() const noexcept {
+  return parameters_.depletion_fraction * parameters_.total_available_water_mm;
+}
+
 SoilWaterFluxes SoilWaterBucket::step(const DailyWeather& weather, double latitude_degrees,
-                                      double radiation_ratio, BudgetLedger* ledger) {
+                                      double radiation_ratio, BudgetLedger* ledger,
+                                      double irrigation_mm) {
   SoilWaterFluxes fluxes;
   fluxes.rainfall_mm = std::max(0.0, weather.rainfall_mm);
+  fluxes.irrigation_mm = std::max(0.0, irrigation_mm);
+
+  // **Irrigation is not charged the runoff fraction.** That fraction stands for
+  // rainfall intensity - how much of a downpour leaves before it can soak in -
+  // and an irrigator picks the depth and the rate. Modelling irrigation runoff
+  // needs an application rate against an infiltration rate, and this model
+  // carries neither, so applying the rainfall figure to it would be putting a
+  // number on a mechanism that is not represented. What is over-applied still
+  // drains, below, and is still reported.
   fluxes.runoff_mm = fluxes.rainfall_mm * parameters_.runoff_fraction;
-  fluxes.infiltration_mm = fluxes.rainfall_mm - fluxes.runoff_mm;
+  fluxes.infiltration_mm = fluxes.rainfall_mm - fluxes.runoff_mm + fluxes.irrigation_mm;
 
   fluxes.reference_et_mm = reference_et_mm(weather, latitude_degrees, radiation_ratio);
   const double crop_et = parameters_.crop_coefficient * fluxes.reference_et_mm;
@@ -140,6 +154,12 @@ SoilWaterFluxes SoilWaterBucket::step(const DailyWeather& weather, double latitu
 
   if (ledger != nullptr) {
     ledger->record_inflow(Budget::Water, "rainfall", fluxes.rainfall_mm);
+    if (fluxes.irrigation_mm > 0.0) {
+      // Only when it happened. Nearly every bucket in this model is
+      // unirrigated, and a zero-valued line on all of them would put a process
+      // that did not occur into every water report the project prints.
+      ledger->record_inflow(Budget::Water, "irrigation", fluxes.irrigation_mm);
+    }
     ledger->record_outflow(Budget::Water, "runoff", fluxes.runoff_mm);
     ledger->record_outflow(Budget::Water, "evapotranspiration", fluxes.evapotranspiration_mm);
     ledger->record_outflow(Budget::Water, "drainage", fluxes.drainage_mm);

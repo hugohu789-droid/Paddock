@@ -64,7 +64,19 @@ use_main_archive() {
 # Measurements, so the next person tuning this has more than one: ninja-build
 # with GDAL and PROJ installs in 20 seconds, and the map-view job's Qt6, VTK,
 # clang and clang-tidy in 127 seconds on a fast mirror and more than 180 on a
-# slow one.
+# slow one. The clang-tidy job's ninja-build with clang-19 and clang-tidy-19
+# has been measured at 19, 26 and 54 seconds across consecutive runs.
+#
+# **And one measurement of the failure, which is the useful one.** A run of
+# that same clang-tidy install hit the 300s bound three times over, on Azure
+# and then twice on archive.ubuntu.com. Against a 54 second worst case that is
+# not a slow install, it is a stall - so the answer there was NOT to raise the
+# bound. Raising it would repeat the earlier mistake in the other direction:
+# 300 seconds is already six times the slowest healthy run, and a stall waited
+# on for longer is still a stall. The job was re-run and passed. This is the
+# case the stall detector in docs/backlog.md is for, and until it exists the
+# right response to three timeouts on a job that normally takes under a minute
+# is to re-run it, not to tune this number.
 attempt_seconds="${CI_APT_TIMEOUT:-300}"
 
 attempts=3
