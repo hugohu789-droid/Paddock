@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -141,26 +142,72 @@ class TerrainScene {
   /// water.
   void show_irrigation(const core::Raster<double>& applied_mm);
 
+  /// What the scene draws, from the sky down to the ground the model does not
+  /// track. Ordered as the profile is ordered, so a list of them reads as a
+  /// section through the farm.
+  enum class Layer : std::uint8_t {
+    Weather,   ///< Sun, cloud, rain and wind, above everything.
+    Pasture,   ///< The sward, drawn on the ground surface. The map's own field.
+    RootZone,  ///< The soil the water balance is about, coloured by how full it is.
+    Subsoil,   ///< Ground below the root zone. Context, and carries no data.
+  };
+
+  /// Shows or hides one layer. Hiding a layer removes it from the scene
+  /// entirely rather than drawing it faintly, so what is on screen is only ever
+  /// the layers that were asked for.
+  void show_layer(Layer layer, bool visible);
+  [[nodiscard]] bool layer_shown(Layer layer) const;
+
+  /// Draws the soil under the pasture, given the share of available water left
+  /// in each cell, 0 to 1.
+  ///
+  /// **The root zone is coloured, not filled to a level.** The water balance
+  /// here is a single-layer store - FAO-56's bucket - and it does not know
+  /// where in the profile the water sits. A water table drawn across the middle
+  /// of the soil would be the picture inventing a depth the model has no
+  /// opinion about, so how full the store is is shown by colour across the
+  /// whole layer, which is exactly what one number per cell supports.
+  ///
+  /// **The subsoil carries no data at all, and is drawn plainly for that
+  /// reason.** Nothing in the model is below the root zone. It is there so the
+  /// root zone reads as a layer in a profile rather than a sheet hanging in the
+  /// air, and it is a flat earth colour so that nobody reads a value off it.
+  ///
+  /// **The thicknesses are drawing choices and are sized against the farm.** A
+  /// root zone is half a metre and this farm is a kilometre and a half across;
+  /// drawn to scale the whole profile is thinner than the line around a
+  /// paddock. The same choice as the cloud, which carries a measured coverage
+  /// at a height and thickness picked to be seen.
+  void show_profile(const core::Raster<double>& available_water_fraction);
+
   /// How many spray uprights and pieces of equipment were drawn. Here so the
   /// picture can be checked without rendering it: these are the two things
   /// show_irrigation decides, and both are decidable from the geometry alone.
   [[nodiscard]] std::size_t spray_line_count() const;
   [[nodiscard]] std::size_t pivot_line_count() const;
 
-  /// Tilt the camera to look down at this many degrees above the horizon,
-  /// keeping where it is looking and how far away it is.
+  /// Slides the view up or down the screen without turning it.
   ///
-  /// Rotating with the mouse is free, which is what makes it easy to end up
-  /// under the ground or edge-on to it. This is the one axis somebody wants to
-  /// adjust deliberately - how much of the farm is in view against how much of
-  /// its shape - so it gets a control that always lands somewhere sensible.
-  void look_from_above(double degrees);
+  /// `fraction` is a share of the visible height: 1.0 moves a whole screenful,
+  /// positive towards the sky and negative towards the ground. The camera and
+  /// its focal point move together, so nothing rotates and the bearing the
+  /// mouse left the scene on is kept.
+  ///
+  /// **This exists because the sky is part of what the camera frames.** The sun
+  /// and the cloud sit well above the farm and the view is reset around all of
+  /// it, so zooming in on a farm that sits at the bottom of that volume walks
+  /// the pasture off the bottom of the window. Turning it back into view by
+  /// dragging with the mouse also turns the scene, which loses the bearing;
+  /// this changes what is on screen and nothing else.
+  void pan_vertically(double fraction);
+
+  /// How far the view has been slid from where reset_camera put it, as a share
+  /// of the visible height. Zero after a reset.
+  [[nodiscard]] double vertical_pan() const noexcept { return panned_; }
 
   /// The ground under a point on the screen, in the scene's own coordinates,
   /// or nothing when the point missed the surface. See MapScene::ground_at.
   [[nodiscard]] std::optional<core::Point2D> ground_at(int x, int y) const;
-
-  [[nodiscard]] double view_elevation_degrees() const;
 
   [[nodiscard]] bool weather_shown() const noexcept { return weather_shown_; }
 
@@ -244,6 +291,9 @@ class TerrainScene {
 
   void place_compass();
 
+  /// Puts a name beside each layer at the height that layer is drawn.
+  void place_layer_labels(double gap);
+
   /// The weather drawn over the farm: the sun, a sheet of cloud, falling rain,
   /// and a mark for the wind's strength. All of them are glyphs, all of them
   /// are driven by the day's own numbers, and none of them colours the ground.
@@ -292,6 +342,22 @@ class TerrainScene {
   /// the equipment does not.
   vtkNew<vtkPolyData> spray_lines_;
   vtkNew<vtkActor> spray_actor_;
+  /// The soil under the pasture: the root zone the water balance is about, and
+  /// inert ground below it. Each is a copy of the surface moved down, so the
+  /// profile follows the shape of the country rather than sitting flat under a
+  /// farm that rises and falls.
+  /// A name beside each layer, so a stack of sheets is readable without
+  /// counting down from the top. Billboards for the same reason the compass
+  /// points are: a flat label turns edge-on and vanishes when the scene is
+  /// spun, which is exactly when somebody needs to know which sheet is which.
+  std::vector<vtkNew<vtkBillboardTextActor3D>> layer_labels_;
+
+  vtkNew<vtkStructuredGrid> root_zone_;
+  vtkNew<vtkLookupTable> root_zone_colours_;
+  vtkNew<vtkActor> root_zone_actor_;
+  vtkNew<vtkStructuredGrid> subsoil_;
+  vtkNew<vtkActor> subsoil_actor_;
+
   vtkNew<vtkPolyData> pivot_lines_;
   vtkNew<vtkActor> pivot_actor_;
 
@@ -325,6 +391,11 @@ class TerrainScene {
   double exaggeration_ = 1.0;
   double lowest_m_ = 0.0;
   double highest_m_ = 0.0;
+  /// How far the view has been slid, so the control can be absolute: a slider
+  /// says where it is, not how far to go, and applying its value as a step
+  /// every time it moved would run the view off the screen.
+  double panned_ = 0.0;
+
   bool has_field_ = false;
 };
 

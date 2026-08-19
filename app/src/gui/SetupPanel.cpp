@@ -22,6 +22,15 @@
 namespace paddock::app {
 
 namespace {
+/// The narrowest the setup panel is worth showing, in pixels.
+///
+/// Measured against the form rather than chosen: the stock class row and the
+/// "Buy feed when the farm cannot carry the stock" checkbox are the longest
+/// things in it, and below this they start losing words.
+constexpr int kNarrowestUsefulPanel = 470;
+}  // namespace
+
+namespace {
 
 /// Defaults the panel opens with.
 ///
@@ -279,13 +288,29 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   scroll->setWidget(inner);
   scroll->setWidgetResizable(true);
   scroll->setFrameShape(QFrame::NoFrame);
-  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+  // **And it scrolls sideways too, which it used not to.**
+  //
+  // With the horizontal bar switched off, a dock dragged narrower than the form
+  // needs did not squeeze - it clipped, and it clipped from the left, so the
+  // labels lost their first letters and read "cenario" and "round". A panel
+  // that silently eats the beginning of every word is worse than one with a
+  // scroll bar along the bottom, and the bar only appears when it is needed.
+  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
   auto* outer = new QVBoxLayout;
   outer->setContentsMargins(0, 0, 0, 0);
   outer->addWidget(scroll);
   setLayout(outer);
-  setMinimumWidth(360);
+
+  // Wide enough for the form's own rows rather than a round number.
+  //
+  // The widest row is the stock class - "As the scenario defines (sheep_ewe,
+  // sheep_lamb)" - beside a label; 360 was set before the irrigation rows and
+  // the longer management labels joined, and every one of those is now cut off
+  // at that width. This is the minimum the panel asks for; the dock is opened
+  // wider than it by MapWindow, so there is room before anything scrolls.
+  setMinimumWidth(kNarrowestUsefulPanel);
 
   populate(data_directory);
 

@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include <vtkCamera.h>
 #include <vtkColorTransferFunction.h>
 #include <vtkIdList.h>
 #include <vtkVolume.h>
@@ -288,35 +289,65 @@ TEST(TerrainSceneTest, TheCloudMovesToTheNewFarmButNotBetweenDays) {
   EXPECT_NEAR(moved.second - first.second, 10000.0, 1.0);
 }
 
-// The tilt control puts the camera where it was asked to, and keeps the
-// bearing the mouse left it on.
-TEST(TerrainSceneTest, TheTiltGoesWhereItIsAsked) {
+// The slider slides the view, and coming back to the middle puts it back
+// exactly. A control that does not return to where it started is one people
+// stop touching.
+TEST(TerrainSceneTest, TheViewSlidesAndComesBack) {
   TerrainScene scene;
-  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
              "cover");
   scene.reset_camera();
 
-  for (const double wanted : {15.0, 40.0, 75.0}) {
-    scene.look_from_above(wanted);
-    EXPECT_NEAR(scene.view_elevation_degrees(), wanted, 0.01) << "asked for " << wanted;
+  std::array<double, 3> framed{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(framed.data());
+
+  scene.pan_vertically(0.5);
+  std::array<double, 3> moved{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(moved.data());
+  EXPECT_GT(std::abs(moved[2] - framed[2]), 1.0) << "half a screenful should be visible movement";
+  EXPECT_NEAR(scene.vertical_pan(), 0.5, 1e-9);
+
+  scene.pan_vertically(0.0);
+  std::array<double, 3> back{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(back.data());
+  for (std::size_t i = 0; i < back.size(); ++i) {
+    EXPECT_NEAR(back[i], framed[i], 1e-6) << "axis " << i;
   }
 }
 
-// **It cannot reach straight down.** At 90 degrees the view up and the view
-// direction line up, the camera basis collapses and the window goes black -
-// this scene has drawn one before, and a slider that could reach it would be a
-// control whose end stop is a fault.
-TEST(TerrainSceneTest, TheTiltCannotCollapseTheCamera) {
+// **It says where it is, not how far to go.** Asked for the same position
+// twice, the view must not move the second time - a slider held still while
+// anything else called in would otherwise walk the scene off the screen.
+TEST(TerrainSceneTest, AskingForTheSamePositionTwiceMovesNothing) {
   TerrainScene scene;
-  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
              "cover");
   scene.reset_camera();
 
-  scene.look_from_above(90.0);
-  EXPECT_LT(scene.view_elevation_degrees(), 89.0);
+  scene.pan_vertically(0.4);
+  std::array<double, 3> once{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(once.data());
 
-  scene.look_from_above(-30.0);
-  EXPECT_GT(scene.view_elevation_degrees(), 0.0) << "and never from under the ground";
+  scene.pan_vertically(0.4);
+  std::array<double, 3> twice{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(twice.data());
+  for (std::size_t i = 0; i < once.size(); ++i) {
+    EXPECT_DOUBLE_EQ(twice[i], once[i]) << "axis " << i;
+  }
+}
+
+// Reframing the scene is the view the slider calls zero, so the slide it
+// remembers has to go with it.
+TEST(TerrainSceneTest, ReframingForgetsTheSlide) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.reset_camera();
+  scene.pan_vertically(0.6);
+  EXPECT_NEAR(scene.vertical_pan(), 0.6, 1e-9);
+
+  scene.reset_camera();
+  EXPECT_NEAR(scene.vertical_pan(), 0.0, 1e-9);
 }
 
 // **The compass must not change how the farm is framed.** The letters sit

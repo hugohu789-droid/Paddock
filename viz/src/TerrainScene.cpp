@@ -67,6 +67,26 @@ constexpr double kPi = 3.14159265358979323846;
 /// picture, not a count of anything: the water is in the map underneath.
 constexpr double kSprayUprights = 320.0;
 
+/// Steps in the soil ramp. Enough that the ground shades smoothly rather than
+/// banding, which would read as layers within the layer.
+constexpr int kSoilColours = 64;
+
+/// How far apart the layers are drawn, as a share of the farm's span.
+///
+/// **This is a separation, not a depth, and the difference matters.** The
+/// layers are held apart so that all of them can be watched at once - the
+/// pasture greening while the root zone dries under it - which is the whole
+/// point of stacking them. Pushed together into a section they would hide each
+/// other and only the top one would be readable.
+///
+/// It stands in for nothing. A pasture root zone is perhaps half a metre and
+/// this farm is a kilometre and a half across, so a profile drawn to scale is
+/// thinner than the line around a paddock; and the model has no depth at all -
+/// its water store is a single bucket in millimetres. The same kind of choice
+/// as the cloud, which carries a measured coverage at a height picked to be
+/// seen.
+constexpr double kLayerSeparation = 0.13;
+
 constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
 
 }  // namespace
@@ -170,6 +190,52 @@ TerrainScene::TerrainScene() {
   pivot_actor_->GetProperty()->SetColor(0.72, 0.74, 0.78);
   pivot_actor_->GetProperty()->SetLineWidth(2.0);
   pivot_actor_->SetVisibility(0);
+
+  // ------------------------------------------------------------ the profile
+  //
+  // **Dry earth to wet earth, and deliberately not the water ramp used on the
+  // maps.** The flat map's soil-moisture field is a data layer read against a
+  // legend; this is a section through the ground, and it has to look like
+  // ground. A blue slab under the paddocks reads as a pond.
+  root_zone_colours_->SetNumberOfTableValues(kSoilColours);
+  root_zone_colours_->SetTableRange(0.0, 1.0);
+  for (int i = 0; i < kSoilColours; ++i) {
+    const double wet = static_cast<double>(i) / (kSoilColours - 1);
+    // Pale, dusty tan when empty; dark and saturated when full. The hue barely
+    // moves - wet soil is darker soil, not bluer soil.
+    root_zone_colours_->SetTableValue(i, 0.72 - (0.36 * wet), 0.58 - (0.31 * wet),
+                                      0.42 - (0.20 * wet), 1.0);
+  }
+  root_zone_colours_->Build();
+
+  vtkNew<vtkStructuredGridGeometryFilter> root_geometry;
+  root_geometry->SetInputData(root_zone_);
+  vtkNew<vtkPolyDataMapper> root_mapper;
+  root_mapper->SetInputConnection(root_geometry->GetOutputPort());
+  root_mapper->SetLookupTable(root_zone_colours_);
+  root_mapper->SetScalarRange(0.0, 1.0);
+  root_mapper->SetScalarModeToUsePointData();
+  root_mapper->SetColorModeToMapScalars();
+  root_zone_actor_->SetMapper(root_mapper);
+  root_zone_actor_->GetProperty()->SetInterpolationToGouraud();
+
+  vtkNew<vtkStructuredGridGeometryFilter> subsoil_geometry;
+  subsoil_geometry->SetInputData(subsoil_);
+  vtkNew<vtkPolyDataMapper> subsoil_mapper;
+  subsoil_mapper->SetInputConnection(subsoil_geometry->GetOutputPort());
+  // **No scalars on this one, because it has none.** Nothing in the model is
+  // below the root zone. A flat colour is the honest way to draw ground the
+  // simulation says nothing about - anything varying would invite a reading.
+  subsoil_mapper->ScalarVisibilityOff();
+  subsoil_actor_->SetMapper(subsoil_mapper);
+  subsoil_actor_->GetProperty()->SetColor(0.34, 0.28, 0.23);
+
+  // Both start hidden. The profile is something to turn on when it is wanted:
+  // a farm opens as a farm, seen from above, not as a soil pit.
+  root_zone_actor_->SetVisibility(0);
+  subsoil_actor_->SetVisibility(0);
+  renderer_->AddActor(root_zone_actor_);
+  renderer_->AddActor(subsoil_actor_);
 
   surface_mapper_->SetLookupTable(lookup_);
   surface_mapper_->SetScalarModeToUsePointData();
@@ -713,6 +779,161 @@ std::size_t TerrainScene::pivot_line_count() const {
   return static_cast<std::size_t>(pivot_lines_->GetNumberOfLines());
 }
 
+void TerrainScene::show_profile(const core::Raster<double>& available_water_fraction) {
+  if (!has_field_) {
+    return;
+  }
+
+  const auto cols = static_cast<int>(field_.cols());
+  const auto rows = static_cast<int>(field_.rows());
+
+  // How far to hold the layers apart. Against the farm, not in metres - see
+  // kLayerSeparation.
+  const double span = std::max(sky_width_, sky_height_);
+  const double gap = span * kLayerSeparation;
+
+  vtkNew<vtkPoints> root_points;
+  root_points->SetNumberOfPoints(static_cast<vtkIdType>(cols) * rows);
+  vtkNew<vtkDoubleArray> wetness;
+  wetness->SetNumberOfComponents(1);
+  wetness->SetNumberOfTuples(static_cast<vtkIdType>(cols) * rows);
+  vtkNew<vtkPoints> subsoil_points;
+  subsoil_points->SetNumberOfPoints(static_cast<vtkIdType>(cols) * rows);
+
+  // Walked exactly as the surface is: row 0 of a Paddock raster is the
+  // northernmost and VTK's y increases north, so the rows go from the south
+  // edge up. A profile built the other way round would sit under a mirrored
+  // farm, which looks perfectly plausible.
+  for (int row = 0; row < rows; ++row) {
+    const int source_row = rows - 1 - row;
+    for (int col = 0; col < cols; ++col) {
+      const auto c = static_cast<std::size_t>(col);
+      const auto r = static_cast<std::size_t>(source_row);
+      const core::Point2D centre = field_.cell_centre(c, r);
+      const vtkIdType index = (static_cast<vtkIdType>(row) * cols) + col;
+      // **Every layer carries the same ground.** Each is the measured surface
+      // moved straight down, so a rise in the country rises in all three and
+      // the stack reads as one piece of land seen three ways rather than as
+      // three unrelated sheets.
+      const double ground = elevation_(c, r) * exaggeration_;
+      root_points->SetPoint(index, centre.easting, centre.northing, ground - gap);
+      subsoil_points->SetPoint(index, centre.easting, centre.northing, ground - (2.0 * gap));
+      const double left =
+          (c < available_water_fraction.cols() && r < available_water_fraction.rows())
+              ? available_water_fraction(c, r)
+              : 0.0;
+      wetness->SetTuple1(index, std::clamp(left, 0.0, 1.0));
+    }
+  }
+
+  root_zone_->SetDimensions(cols, rows, 1);
+  root_zone_->SetPoints(root_points);
+  root_zone_->GetPointData()->SetScalars(wetness);
+  root_zone_->Modified();
+
+  place_layer_labels(gap);
+
+  subsoil_->SetDimensions(cols, rows, 1);
+  subsoil_->SetPoints(subsoil_points);
+  subsoil_->Modified();
+}
+
+void TerrainScene::place_layer_labels(double gap) {
+  // Off the south-western corner, clear of the paddocks, and at the height of
+  // the layer each one names.
+  //
+  // Not squarely west: the compass puts its W at the middle of that edge, and
+  // the two sets of words sat on top of each other. South of it, and further
+  // out, keeps both readable - and these can sit as far out as they like,
+  // because like the compass they are kept out of the camera's bounds.
+  const double span = std::max(sky_width_, sky_height_);
+  const double west = sky_east_ - (sky_width_ / 2.0) - (span * 0.16);
+  const double south = sky_north_ - (sky_height_ * 0.38);
+  const double ground = highest_m_ * exaggeration_;
+
+  const std::array<std::pair<const char*, double>, 3> marks{{
+      {"Pasture", ground},
+      {"Root zone", ground - gap},
+      {"Ground below", ground - (2.0 * gap)},
+  }};
+
+  if (layer_labels_.size() != marks.size()) {
+    layer_labels_.clear();
+    layer_labels_.resize(marks.size());
+    for (auto& mark : layer_labels_) {
+      mark->GetTextProperty()->SetFontSize(22);
+      mark->GetTextProperty()->SetJustificationToRight();
+      mark->GetTextProperty()->SetColor(0.86, 0.89, 0.94);
+      // Out of the bounds, like the compass: a label outside the farm that
+      // counted towards them would push the camera back every time the view was
+      // reset, drawing the farm smaller so the word "Pasture" could fit.
+      mark->UseBoundsOff();
+      renderer_->AddActor(mark);
+    }
+  }
+
+  // A name shows exactly when its layer does. Built visible and left that way,
+  // the root zone and the ground below - which both start hidden - had their
+  // names floating in empty air over a farm with nothing under it.
+  const std::array<vtkActor*, 3> owners{
+      {surface_actor_.Get(), root_zone_actor_.Get(), subsoil_actor_.Get()}};
+  for (std::size_t i = 0; i < marks.size(); ++i) {
+    layer_labels_[i]->SetInput(marks[i].first);
+    layer_labels_[i]->SetPosition(west, south, marks[i].second);
+    layer_labels_[i]->SetVisibility(owners[i]->GetVisibility());
+  }
+}
+
+void TerrainScene::show_layer(Layer layer, bool visible) {
+  // A layer's name goes with it. A word left floating beside nothing is worse
+  // than no word at all.
+  const auto label_visible = [this](std::size_t which, bool on) {
+    if (which < layer_labels_.size()) {
+      layer_labels_[which]->SetVisibility(on ? 1 : 0);
+    }
+  };
+
+  switch (layer) {
+    case Layer::Weather:
+      show_weather(visible);
+      return;
+    case Layer::Pasture:
+      surface_actor_->SetVisibility(visible ? 1 : 0);
+      // The fences and the stock belong to the pasture: they are things on the
+      // paddocks, and left hanging over a hidden surface they would float above
+      // the soil with nothing under them.
+      fence_actor_->SetVisibility(visible ? 1 : 0);
+      grazed_actor_->SetVisibility(visible ? 1 : 0);
+      for (auto& mob : mob_actors_) {
+        mob->SetVisibility(visible ? 1 : 0);
+      }
+      label_visible(0, visible);
+      return;
+    case Layer::RootZone:
+      root_zone_actor_->SetVisibility(visible ? 1 : 0);
+      label_visible(1, visible);
+      return;
+    case Layer::Subsoil:
+      subsoil_actor_->SetVisibility(visible ? 1 : 0);
+      label_visible(2, visible);
+      return;
+  }
+}
+
+bool TerrainScene::layer_shown(Layer layer) const {
+  switch (layer) {
+    case Layer::Weather:
+      return weather_shown_;
+    case Layer::Pasture:
+      return surface_actor_->GetVisibility() != 0;
+    case Layer::RootZone:
+      return root_zone_actor_->GetVisibility() != 0;
+    case Layer::Subsoil:
+      return subsoil_actor_->GetVisibility() != 0;
+  }
+  return false;
+}
+
 void TerrainScene::show_irrigation(const core::Raster<double>& applied_mm) {
   vtkNew<vtkPoints> spray;
   vtkNew<vtkCellArray> spray_cells;
@@ -861,51 +1082,76 @@ void TerrainScene::show_irrigation(const core::Raster<double>& applied_mm) {
   finish();
 }
 
-void TerrainScene::look_from_above(double degrees) {
+void TerrainScene::pan_vertically(double fraction) {
   vtkCamera* camera = renderer_->GetActiveCamera();
   if (camera == nullptr) {
     return;
   }
+
+  // The slider says where it is, not how far to move, so only the difference
+  // from what has already been applied is acted on. Without this, holding the
+  // slider still while anything else called in would keep sliding the view.
+  const double step = fraction - panned_;
+  if (std::abs(step) < 1e-9) {
+    return;
+  }
+
   std::array<double, 3> focus{};
   camera->GetFocalPoint(focus.data());
   std::array<double, 3> at{};
   camera->GetPosition(at.data());
 
-  const double east = at[0] - focus[0];
-  const double north = at[1] - focus[1];
-  const double up = at[2] - focus[2];
-  const double distance = std::sqrt((east * east) + (north * north) + (up * up));
-  if (distance <= 0.0) {
+  // How much of the world the window shows, top to bottom, at the focal
+  // distance. A share of that is the unit a person means by "a bit further up":
+  // metres would move a large farm imperceptibly and throw a small one off the
+  // screen.
+  const double distance = std::sqrt(((at[0] - focus[0]) * (at[0] - focus[0])) +
+                                    ((at[1] - focus[1]) * (at[1] - focus[1])) +
+                                    ((at[2] - focus[2]) * (at[2] - focus[2])));
+  const double visible =
+      camera->GetParallelProjection() != 0
+          ? 2.0 * camera->GetParallelScale()
+          : 2.0 * distance * std::tan(camera->GetViewAngle() * 0.5 * kDegreesToRadians);
+  if (visible <= 0.0) {
     return;
   }
 
-  // Keep the bearing the mouse left it on; change only how high the camera is.
-  const double flat = std::hypot(east, north);
-  const double bearing = flat > 0.0 ? std::atan2(east, north) : 0.0;
+  // Along the screen's own up direction, which is not the world's: the scene
+  // can be tilted, and sliding along the world z would drift sideways on
+  // screen as the view came down towards the horizon.
+  std::array<double, 3> up{};
+  camera->GetViewUp(up.data());
+  std::array<double, 3> forward{{focus[0] - at[0], focus[1] - at[1], focus[2] - at[2]}};
+  const double length =
+      std::sqrt((forward[0] * forward[0]) + (forward[1] * forward[1]) + (forward[2] * forward[2]));
+  if (length > 0.0) {
+    for (double& component : forward) {
+      component /= length;
+    }
+    // The part of view-up square to the view direction. VTK keeps these close
+    // to perpendicular but does not guarantee it, and an up vector leaning
+    // along the view would slide the camera towards the farm rather than over
+    // it.
+    const double along = (up[0] * forward[0]) + (up[1] * forward[1]) + (up[2] * forward[2]);
+    for (std::size_t i = 0; i < up.size(); ++i) {
+      up[i] -= along * forward[i];
+    }
+  }
+  const double up_length = std::sqrt((up[0] * up[0]) + (up[1] * up[1]) + (up[2] * up[2]));
+  if (up_length <= 0.0) {
+    return;
+  }
 
-  // Clamped short of straight down and short of the horizon: at 90 degrees the
-  // view up and the view direction line up and the camera basis collapses,
-  // which is a black window - this scene has drawn one before.
-  const double tilt = std::clamp(degrees, 5.0, 85.0) * kDegreesToRadians;
-  camera->SetPosition(focus[0] + (distance * std::cos(tilt) * std::sin(bearing)),
-                      focus[1] + (distance * std::cos(tilt) * std::cos(bearing)),
-                      focus[2] + (distance * std::sin(tilt)));
-  camera->SetViewUp(0.0, 0.0, 1.0);
+  const double shift = step * visible;
+  for (std::size_t i = 0; i < up.size(); ++i) {
+    const double move = (up[i] / up_length) * shift;
+    focus[i] += move;
+    at[i] += move;
+  }
+  camera->SetFocalPoint(focus.data());
+  camera->SetPosition(at.data());
+  panned_ = fraction;
   renderer_->ResetCameraClippingRange();
-}
-
-double TerrainScene::view_elevation_degrees() const {
-  vtkCamera* camera = renderer_->GetActiveCamera();
-  if (camera == nullptr) {
-    return 45.0;
-  }
-  std::array<double, 3> focus{};
-  camera->GetFocalPoint(focus.data());
-  std::array<double, 3> at{};
-  camera->GetPosition(at.data());
-  const double flat = std::hypot(at[0] - focus[0], at[1] - focus[1]);
-  const double up = at[2] - focus[2];
-  return flat > 0.0 ? std::atan2(up, flat) / kDegreesToRadians : 89.0;
 }
 
 void TerrainScene::show_weather(bool visible) {
@@ -1148,6 +1394,11 @@ void TerrainScene::reset_camera() {
   if (bounds[0] > bounds[1]) {
     return;
   }
+
+  // The view is back where the framing put it, so the slide is back to nothing.
+  // Left as it was, the next nudge of the slider would be measured from an
+  // offset that is no longer on screen.
+  panned_ = 0.0;
 
   const double centre_x = (bounds[0] + bounds[1]) / 2.0;
   const double centre_y = (bounds[2] + bounds[3]) / 2.0;

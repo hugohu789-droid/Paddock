@@ -9,11 +9,13 @@
 #include <QDockWidget>
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QMouseEvent>
 #include <QRegularExpression>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <exception>
 #include <limits>
@@ -39,6 +41,10 @@
 namespace paddock::app {
 
 namespace {
+/// How wide the setup dock opens, in pixels. Comfortably past the panel's own
+/// minimum, so the form is not on the edge of scrolling the moment it opens.
+constexpr int kOpeningPanelWidth = 520;
+
 /// How far the pointer may move between press and release and still count as a
 /// click rather than a drag. A hand moves a little on a mouse button.
 constexpr int kClickSlopPixels = 4;
@@ -195,52 +201,144 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   height_box_->addItem("Heights x20", 20);
   height_box_->setEnabled(false);
 
-  weather_box_ = new QCheckBox("Weather", this);
-  weather_box_->setChecked(true);
-  weather_box_->setToolTip(
-      "Draw the day's sun, cloud and rain over the farm.\n\n"
-      "Turn it off to read the map exactly: cloud is translucent, and anything translucent "
-      "over the paddocks shifts the colour you are matching against the legend.");
-  connect(weather_box_, &QCheckBox::toggled, this, [this](bool on) {
-    terrain_.show_weather(on);
-    refresh();
-  });
+  // **Two rows, because one did not fit.**
+  //
+  // Five drop-downs, a checkbox, a button, a timeline and a date on a single
+  // line came to more than the window was wide, and the timeline - the control
+  // people actually drag - was the one squeezed to nothing, because it is the
+  // only one that gives up space. Splitting them puts the whole width under the
+  // timeline and keeps the day's date where it can be read.
+  //
+  // The playing controls go on top, nearest the map they move: play, the
+  // timeline, the date. What is being drawn goes underneath, because those are
+  // set once and then left alone.
+  auto* playing = new QHBoxLayout;
+  playing->addWidget(play_button_);
+  playing->addWidget(timeline_, 1);
+  playing->addWidget(date_label_);
 
-  auto* controls = new QHBoxLayout;
-  controls->addWidget(view_box_);
-  controls->addWidget(weather_box_);
-  controls->addWidget(height_box_);
-  controls->addWidget(field_box_);
-  controls->addWidget(scale_box_);
-  controls->addWidget(play_button_);
-  controls->addWidget(timeline_, 1);
-  controls->addWidget(date_label_);
+  auto* choices = new QHBoxLayout;
+  choices->addWidget(view_box_);
+  choices->addWidget(height_box_);
+  choices->addWidget(field_box_);
+  choices->addWidget(scale_box_);
+  choices->addStretch(1);
 
-  tilt_slider_ = new QSlider(Qt::Vertical, this);
-  tilt_slider_->setRange(5, 85);
-  tilt_slider_->setValue(40);
-  tilt_slider_->setToolTip(
-      "How far above the horizon the view looks from.\n\n"
-      "Low is a photograph from the gate and shows the shape of the ground; high is closer "
-      "to a map and shows the whole farm. It cannot reach straight down, where the camera "
-      "has nothing to keep it upright.");
-  connect(tilt_slider_, &QSlider::valueChanged, this, [this](int degrees) {
+  // **The layers, in the order they are stacked, from the sky down.**
+  //
+  // Read left to right this row is a section through the farm: weather above
+  // it, the sward on the surface, the root zone the water balance is about,
+  // and the ground below that. The order is the profile's, not a list of
+  // features, so somebody who has never seen the window can tell which is on
+  // top of which without turning any of them on.
+  //
+  // The weather box moves in here from the row above, where it sat among the
+  // drop-downs as though it were a different kind of thing. It is the top
+  // layer, and it belongs with the rest of them.
+  auto* layers = new QHBoxLayout;
+  layers->addWidget(new QLabel("Layers", this));
+
+  struct LayerBox {
+    viz::TerrainScene::Layer layer;
+    const char* name;
+    const char* explanation;
+    bool on;
+  };
+
+  const std::array<LayerBox, 4> boxes{{
+      {viz::TerrainScene::Layer::Weather, "Weather",
+       "The day's sun, cloud, rain and wind, drawn above the farm.\n\nTurn it off to read the "
+       "map exactly: cloud is translucent, and anything translucent over the paddocks shifts "
+       "the colour you are matching against the legend.",
+       true},
+      {viz::TerrainScene::Layer::Pasture, "Pasture",
+       "The sward on the ground surface, coloured by whichever field is chosen, with the "
+       "fences and the stock that stand on it.",
+       true},
+      {viz::TerrainScene::Layer::RootZone, "Root zone",
+       "The soil the water balance is about, coloured by how much of its available water is "
+       "left - pale when dry, dark when full.\n\nColoured rather than filled to a level: this "
+       "is a single-layer store and it does not know where in the profile the water sits.",
+       false},
+      {viz::TerrainScene::Layer::Subsoil, "Ground below",
+       "Ground beneath the root zone.\n\nIt carries no data and is drawn flat for that reason "
+       "- nothing in the model is below the root zone. It is here so the root zone reads as a "
+       "layer in a profile rather than a sheet hanging in the air.",
+       false},
+  }};
+  for (const LayerBox& box : boxes) {
+    auto* check = new QCheckBox(box.name, this);
+    check->setChecked(box.on);
+    check->setToolTip(box.explanation);
+    const viz::TerrainScene::Layer layer = box.layer;
+    connect(check, &QCheckBox::toggled, this, [this, layer](bool on) {
+      terrain_.show_layer(layer, on);
+      // **Turning a layer on reframes the scene; turning one off does not.**
+      //
+      // The camera is placed from the bounds of what can be seen, and a hidden
+      // layer is not in them - so a stack revealed after the view was framed
+      // hung off the bottom of the window and the ground below the root zone
+      // was not on screen at all. Ticking a box to see something and having
+      // nothing appear is the box not working.
+      //
+      // Hiding does not reframe, because then every tick would move the view
+      // and somebody who had zoomed in on a corner would lose it for switching
+      // the sky off.
+      if (on) {
+        terrain_.reset_camera();
+        pan_slider_->setValue(0);
+      }
+      if (showing_terrain_) {
+        view_->renderWindow()->Render();
+      }
+    });
+    layer_boxes_.push_back(check);
+    layers->addWidget(check);
+  }
+  layers->addStretch(1);
+
+  // **Slides the view up and down, and that is what it is for.**
+  //
+  // The camera is framed around everything drawn, and the sun and cloud sit
+  // well above the farm - so zooming in on a farm that sits at the bottom of
+  // that volume walks the pasture off the bottom of the window. Dragging it
+  // back with the mouse also turns the scene, which loses the bearing the
+  // compass was added to keep. This moves what is on screen and nothing else.
+  //
+  // Zero in the middle, so the control shows at a glance whether the view has
+  // been moved, and returns to the framing exactly by coming back to the centre.
+  pan_slider_ = new QSlider(Qt::Vertical, this);
+  pan_slider_->setRange(-100, 100);
+  pan_slider_->setValue(0);
+  pan_slider_->setTickPosition(QSlider::TicksBothSides);
+  pan_slider_->setTickInterval(50);
+  pan_slider_->setToolTip(
+      "Slide the view up and down.\n\n"
+      "Up looks towards the sky, down towards the paddocks. Zoomed in, the farm can sit "
+      "below the bottom of the window because the sun and cloud are drawn well above it; "
+      "this brings it back without turning the scene. The middle is where the view was "
+      "framed.");
+  connect(pan_slider_, &QSlider::valueChanged, this, [this](int position) {
     if (!showing_terrain_) {
       return;
     }
-    terrain_.look_from_above(degrees);
+    // A whole screenful at each end, which is enough to bring a farm back from
+    // either edge without letting the slider throw it clean out of sight.
+    terrain_.pan_vertically(position / 100.0);
     view_->renderWindow()->Render();
   });
 
-  // The scene and its tilt sit side by side; the weather line spans both.
+  // The scene and its slider sit side by side; the weather line spans both.
   auto* scene_row = new QHBoxLayout;
   scene_row->addWidget(view_, 1);
-  scene_row->addWidget(tilt_slider_);
+  scene_row->addWidget(pan_slider_);
 
   auto* layout = new QVBoxLayout;
   layout->addWidget(weather_label_);
   layout->addLayout(scene_row, 1);
-  layout->addLayout(controls);
+  layout->addLayout(playing);
+  layout->addLayout(choices);
+  layout->addLayout(layers);
   layout->addWidget(paddock_label_);
   layout->addWidget(summary_label_);
 
@@ -292,10 +390,25 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
                        bundle.management.has_value() ? &*bundle.management : nullptr,
                        bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
 
-  // Wide enough for the controls row and the weather line, and a floor under
-  // it so the window cannot be dragged narrower than its own controls.
-  setMinimumWidth(1100);
-  resize(1400, 860);
+  // The dock opens wider than its own minimum, so the form has room before
+  // anything has to scroll. Qt sizes a dock from its widget's hint otherwise,
+  // and that hint is the minimum - which is the width at which the panel is
+  // merely legible rather than comfortable.
+  resizeDocks({dock}, {kOpeningPanelWidth}, Qt::Horizontal);
+
+  // Wide enough for the panel beside the map, and a floor under it so the
+  // window cannot be dragged narrower than the two of them together. The
+  // controls no longer set this, because they are on two rows now and the
+  // timeline gives up whatever width it is left.
+  setMinimumWidth(kOpeningPanelWidth + 620);
+  resize(kOpeningPanelWidth + 1080, 940);
+
+  // **Opens in three dimensions.** The farm is a piece of country with layers
+  // under it, and that is what the window is for; the flat map is the view to
+  // switch to when a value has to be read off a legend exactly, which is the
+  // narrower job. It is set before the first run so the opening frame is the
+  // one that will be kept, rather than a flat map that redraws itself.
+  view_box_->setCurrentIndex(1);
   start_run();
   scene_.reset_camera();
 }
@@ -448,6 +561,13 @@ bool MapWindow::save_panel_screenshot(const std::string& path) {
   return setup_->grab().save(QString::fromStdString(path), "PNG");
 }
 
+bool MapWindow::save_window_screenshot(const std::string& path) {
+  // The map itself is drawn by OpenGL into a surface Qt does not own, so a
+  // grab of the window leaves a hole where it is. That is the point here: what
+  // is being checked is everything around the map.
+  return grab().save(QString::fromStdString(path), "PNG");
+}
+
 bool MapWindow::save_screenshot(const std::string& path) {
   vtkRenderWindow* window = view_->renderWindow();
   if (window == nullptr) {
@@ -489,7 +609,13 @@ void MapWindow::change_view(int index) {
   }
   showing_terrain_ = terrain;
   height_box_->setEnabled(terrain);
-  tilt_slider_->setEnabled(terrain);
+  pan_slider_->setEnabled(terrain);
+  // The layers are a section through a three-dimensional scene. The flat map
+  // has no profile to stack, so the row greys out rather than offering
+  // switches that would do nothing.
+  for (QCheckBox* box : layer_boxes_) {
+    box->setEnabled(terrain);
+  }
 
   vtkRenderWindow* window = view_->renderWindow();
   if (window != nullptr) {
@@ -499,7 +625,9 @@ void MapWindow::change_view(int index) {
   refresh();
   if (showing_terrain_) {
     terrain_.reset_camera();
-    terrain_.look_from_above(tilt_slider_->value());
+    // The framing is the view the slider calls zero, so the control has to say
+    // so - left where it was it would sit somewhere it no longer means.
+    pan_slider_->setValue(0);
   } else {
     scene_.reset_camera();
   }
@@ -958,6 +1086,14 @@ void MapWindow::refresh() {
     terrain_.show_irrigation(irrigation_today_[day]);
   }
 
+  // The soil under the pasture, on the day being shown. Handed the share of
+  // available water left rather than the depth in millimetres: the profile is
+  // drawn as a section and "how full is it" is the question a section answers,
+  // where millimetres would need a legend the layer does not have.
+  if (day < available_water_.size()) {
+    terrain_.show_profile(available_water_[day]);
+  }
+
   const viz::ColourScale colours(style.ramp, lowest, highest);
   if (showing_terrain_) {
     // A run with no elevation is draped on a level surface of its own shape.
@@ -1066,6 +1202,20 @@ void MapWindow::go_to_day(int day) {
     return;
   }
   timeline_->setValue(std::clamp(day, 0, static_cast<int>(dates_.size()) - 1));
+}
+
+void MapWindow::slide_view(int percent) {
+  pan_slider_->setValue(std::clamp(percent, pan_slider_->minimum(), pan_slider_->maximum()));
+}
+
+void MapWindow::select_view(bool terrain) {
+  view_box_->setCurrentIndex(terrain ? 1 : 0);
+}
+
+void MapWindow::show_all_layers() {
+  for (QCheckBox* box : layer_boxes_) {
+    box->setChecked(true);
+  }
 }
 
 std::string MapWindow::inspect_pixel(int x, int y) {

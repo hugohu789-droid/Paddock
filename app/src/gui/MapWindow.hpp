@@ -118,6 +118,13 @@ class MapWindow : public QMainWindow {
   /// captures them.
   bool save_panel_screenshot(const std::string& path);
 
+  /// The whole window, controls and panel included.
+  ///
+  /// The render window screenshot shows the map and nothing around it, so the
+  /// rows of controls under it - the ones that have twice been too wide for the
+  /// window - cannot be checked from a screenshot at all. This can.
+  bool save_window_screenshot(const std::string& path);
+
   /// Writes the current frame to a PNG.
   ///
   /// A map is a claim about what the model did, and a claim nobody looks at is
@@ -241,6 +248,22 @@ class MapWindow : public QMainWindow {
   /// not know how long the run was.
   void go_to_day(int day);
 
+  /// Slides the terrain view, as the slider beside it would. `percent` runs
+  /// from -100 (a screenful down, towards the paddocks) to 100 (up, towards
+  /// the sky).
+  void slide_view(int percent);
+
+  /// Turns every layer of the scene on, as ticking each box would. Here so the
+  /// stack can be drawn by something other than a person clicking four times.
+  void show_all_layers();
+
+  /// Switches between the flat map and the terrain view, as the drop-down
+  /// would.
+  void select_view(bool terrain);
+
+  /// Which of the two is showing.
+  [[nodiscard]] bool showing_terrain() const noexcept { return showing_terrain_; }
+
   [[nodiscard]] std::string inspect_pixel(int x, int y);
 
   /// The render window's size in device pixels, which is the frame
@@ -282,7 +305,6 @@ class MapWindow : public QMainWindow {
   /// the reader is meant to match against the legend. On shows what the day
   /// was like. Neither serves both jobs, so it is a control rather than a
   /// decision made for somebody.
-  QCheckBox* weather_box_ = nullptr;
 
   /// How far above the horizon the three-dimensional view looks from.
   ///
@@ -291,7 +313,12 @@ class MapWindow : public QMainWindow {
   /// including under the ground; this is the one axis worth adjusting on
   /// purpose - how much of the farm is in view against how much of its shape -
   /// and it always lands somewhere the farm is visible from.
-  QSlider* tilt_slider_ = nullptr;
+  QSlider* pan_slider_ = nullptr;
+
+  /// One box per layer of the scene, in the order the layers are stacked:
+  /// weather above, then the pasture, the root zone, and the ground below it.
+  /// Held so the row can be enabled and disabled with the terrain view.
+  std::vector<QCheckBox*> layer_boxes_;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;
