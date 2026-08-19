@@ -42,7 +42,16 @@ class MapWindow : public QMainWindow {
   /// Which field the map is showing. Each carries its own units and its own
   /// colour ramp, because a stress coefficient and a pasture cover are not
   /// comparable quantities and should not share a scale.
-  enum class Field : int { Cover = 0, SoilWater, WaterStress, LegumeFraction, Slope };
+  enum class Field : int {
+    Cover = 0,
+    SoilWater,
+    AvailableWater,
+    WaterStress,
+    IrrigationToday,
+    IrrigationToDate,
+    LegumeFraction,
+    Slope
+  };
 
   /// What the colour scale spans.
   ///
@@ -122,6 +131,10 @@ class MapWindow : public QMainWindow {
   /// that sizes the window makes the map jump wider and narrower while it
   /// plays.
   void show_day_for_check(int day) { show_day(day); }
+
+  /// Show a field by name, for the headless path. Returns false when no field
+  /// goes by that name.
+  bool select_field(const std::string& name);
 
   /// The range of a field over the run, for the headless path.
   ///
@@ -309,6 +322,19 @@ class MapWindow : public QMainWindow {
   /// the radiation a face receives (Gillingham et al.). A quantity that
   /// changes the answer and cannot be seen is worth a colour ramp of its own.
   std::vector<core::Raster<double>> slope_;
+
+  /// The share of each cell's water still there, 0 to 1. The same fact as the
+  /// soil water depth read the way a farmer reads it, and the map that makes
+  /// an irrigation trigger legible: the rule fires at a percentage, so a map
+  /// in millimetres cannot show why it fired.
+  std::vector<core::Raster<double>> available_water_;
+
+  /// Where the water went, on the day and over the run.
+  ///
+  /// A mean over the farm cannot show these: the whole point of a rule that
+  /// waters cell by cell is that some ground gets water and some does not.
+  std::vector<core::Raster<double>> irrigation_today_;
+  std::vector<core::Raster<double>> irrigation_to_date_;
 
   /// What the run watered, day by day, as a mean over the farm in mm, and what
   /// the year came to. Empty when nothing was irrigated.

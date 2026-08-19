@@ -77,6 +77,18 @@ FieldStyle style_of(MapWindow::Field field) {
       return {"Water stress", "Water stress (1 = unstressed)", viz::Ramp::Viridis, true, 0.0, 1.0};
     case MapWindow::Field::LegumeFraction:
       return {"Legume fraction", "Legume share of green DM", viz::Ramp::Viridis, true, 0.0, 1.0};
+    case MapWindow::Field::AvailableWater:
+      return {"Soil moisture",
+              "Water left of what the soil can hold",
+              viz::Ramp::Viridis,
+              true,
+              0.0,
+              1.0};
+    case MapWindow::Field::IrrigationToday:
+      return {"Irrigation today", "Water put on today (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+    case MapWindow::Field::IrrigationToDate:
+      return {
+          "Irrigation to date", "Water put on so far (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
     case MapWindow::Field::Slope:
       return {"Slope", "Slope (degrees)", viz::Ramp::Viridis, false, 0.0, 0.0};
     case MapWindow::Field::Cover:
@@ -99,8 +111,11 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   window->AddRenderer(scene_.renderer());
 
   field_box_ = new QComboBox(this);
+  // Ordered as the causal chain runs, so the list itself reads as the story:
+  // the ground dries, the rule fires, the water lands, the stress lifts.
   for (const MapWindow::Field field :
-       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction, Field::Slope}) {
+       {Field::Cover, Field::AvailableWater, Field::IrrigationToday, Field::IrrigationToDate,
+        Field::WaterStress, Field::SoilWater, Field::LegumeFraction, Field::Slope}) {
     field_box_->addItem(style_of(field).label, static_cast<int>(field));
   }
 
@@ -443,6 +458,9 @@ void MapWindow::change_exaggeration(int index) {
 void MapWindow::clear_series() {
   weather_.clear();
   slope_.clear();
+  available_water_.clear();
+  irrigation_today_.clear();
+  irrigation_to_date_.clear();
   irrigation_mm_.clear();
   irrigation_tally_ = {};
   cover_.clear();
@@ -470,7 +488,24 @@ const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
 void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date) {
   cover_.push_back(grid.cover_kg_dm());
   soil_water_.push_back(grid.soil_water_mm());
+  available_water_.push_back(grid.available_water_fraction());
   water_stress_.push_back(grid.water_stress());
+
+  // Today's water, and the running total behind it. The total is accumulated
+  // here rather than asked of the grid, because the grid holds a day and not a
+  // season - it would have to keep a tally for a picture, which is the wrong
+  // reason for a model to remember anything.
+  core::Raster<double> today = grid.last_irrigation_mm();
+  core::Raster<double> so_far = today;
+  if (!irrigation_to_date_.empty()) {
+    const core::Raster<double>& before = irrigation_to_date_.back();
+    for (std::size_t cell = 0; cell < so_far.size() && cell < before.size(); ++cell) {
+      so_far.values()[cell] += before.values()[cell];
+    }
+  }
+  irrigation_today_.push_back(std::move(today));
+  irrigation_to_date_.push_back(std::move(so_far));
+
   legume_fraction_.push_back(grid.legume_fraction());
   dates_.push_back(date);
   mean_cover_.push_back(grid.mean_cover_kg_dm());
@@ -657,7 +692,8 @@ bool MapWindow::farm_moved(const core::Raster<double>& raster) const {
 
 void MapWindow::adopt_series() {
   for (const Field field :
-       {Field::Cover, Field::SoilWater, Field::WaterStress, Field::LegumeFraction, Field::Slope}) {
+       {Field::Cover, Field::SoilWater, Field::AvailableWater, Field::WaterStress,
+        Field::IrrigationToday, Field::IrrigationToDate, Field::LegumeFraction, Field::Slope}) {
     double lowest = std::numeric_limits<double>::max();
     double highest = std::numeric_limits<double>::lowest();
     for (const core::Raster<double>& frame : series_of(field)) {
@@ -739,6 +775,12 @@ const std::vector<core::Raster<double>>& MapWindow::series_of(Field field) const
       return slope_;
     case Field::SoilWater:
       return soil_water_;
+    case Field::AvailableWater:
+      return available_water_;
+    case Field::IrrigationToday:
+      return irrigation_today_;
+    case Field::IrrigationToDate:
+      return irrigation_to_date_;
     case Field::WaterStress:
       return water_stress_;
     case Field::LegumeFraction:
@@ -992,6 +1034,15 @@ void MapWindow::show_weather(std::size_t day, double clearness) {
 void MapWindow::change_scale(int mode) {
   scale_mode_ = static_cast<ScaleMode>(scale_box_->itemData(mode).toInt());
   refresh();
+}
+
+bool MapWindow::select_field(const std::string& name) {
+  const int index = field_box_->findText(QString::fromStdString(name), Qt::MatchFixedString);
+  if (index < 0) {
+    return false;
+  }
+  field_box_->setCurrentIndex(index);
+  return true;
 }
 
 void MapWindow::change_field(int field) {

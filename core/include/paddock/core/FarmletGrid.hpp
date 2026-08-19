@@ -102,6 +102,19 @@ class FarmletGrid {
   [[nodiscard]] Raster<double> cover_kg_dm() const;
   [[nodiscard]] Raster<double> soil_water_mm() const;
   [[nodiscard]] Raster<double> water_stress() const;
+
+  /// How much of the water each cell can hold is still there, 0 to 1.
+  ///
+  /// The same fact as `depletion_mm` read from the other end, and the end a
+  /// person uses: a paddock is at 40% rather than 60% depleted.
+  [[nodiscard]] Raster<double> available_water_fraction() const;
+
+  /// The water put on each cell on the last day stepped, mm.
+  ///
+  /// **What the grid was handed, not what it decided** - it decides nothing.
+  /// Recorded so a map can show where the water went, which is the one thing
+  /// an irrigation rule does that a mean over the farm cannot show.
+  [[nodiscard]] Raster<double> last_irrigation_mm() const;
   [[nodiscard]] Raster<double> legume_fraction() const;
 
   /// Per-hectare means, compensated: the closing stocks the conservation tests
@@ -122,6 +135,9 @@ class FarmletGrid {
   std::size_t rows_ = 0;
   GeoTransform transform_{};
   std::vector<Farmlet> cells_;
+
+  /// The water applied on the last day stepped, one entry per cell.
+  std::vector<double> last_irrigation_mm_;
   double latitude_degrees_ = 0.0;
   /// Null until set_terrain: every cell is level ground.
   std::unique_ptr<SlopeRadiationTable> radiation_;

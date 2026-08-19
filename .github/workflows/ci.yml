@@ -485,6 +485,13 @@ jobs:
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate | grep -q "paddock-gui: irrigated "
 
+      # And that the irrigation maps draw. A field that only a person clicking
+      # can reach is a field nothing can check, and these are the ones that
+      # show where the water went - which a mean over the farm cannot.
+      - name: Draw where the water went
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --field "Irrigation to date" | grep -q "showing Irrigation to date"
+
       # The sun and the sky, which a screenshot of the render window cannot
       # show: the weather line lives in a label around it, and a farm that
       # falls six metres in a kilometre looks much the same under any sun.

@@ -89,6 +89,7 @@ void print_usage() {
             << "                 panel would, and check the camera followed it onto the\n"
                "                 new farm. Exits non-zero if it did not\n"
             << "  --irrigate     Turn irrigation on, as the panel would\n"
+            << "  --field NAME   Draw a named field, as the list under the map does\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
             << "                 on screen, because exaggeration makes every slope look\n"
             << "                 steeper than it is\n";
@@ -272,6 +273,18 @@ int main(int argc, char** argv) {
                     << '\n';
           return 1;
         }
+      }
+
+      // Which field to draw, so that a map mode is reachable by something
+      // other than a person clicking.
+      if (const auto field_flag = std::find(args.begin(), args.end(), "--field");
+          field_flag != args.end() && std::next(field_flag) != args.end()) {
+        const std::string field(*std::next(field_flag));
+        if (!window.select_field(field)) {
+          std::cerr << "paddock-gui: no field called '" << field << "'" << '\n';
+          return 2;
+        }
+        std::cout << "paddock-gui: showing " << field << '\n';
       }
 
       const auto panel_flag = std::find(args.begin(), args.end(), "--panel-shot");
