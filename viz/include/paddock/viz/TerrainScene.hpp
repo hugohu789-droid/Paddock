@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -142,43 +143,59 @@ class TerrainScene {
   /// water.
   void show_irrigation(const core::Raster<double>& applied_mm);
 
-  /// What the scene draws, from the sky down to the ground the model does not
-  /// track. Ordered as the profile is ordered, so a list of them reads as a
-  /// section through the farm.
+  /// The two layers the scene owns itself. Everything else in the stack is
+  /// handed to it by show_stack.
   enum class Layer : std::uint8_t {
-    Weather,   ///< Sun, cloud, rain and wind, above everything.
-    Pasture,   ///< The sward, drawn on the ground surface. The map's own field.
-    RootZone,  ///< The soil the water balance is about, coloured by how full it is.
-    Subsoil,   ///< Ground below the root zone. Context, and carries no data.
+    Weather,  ///< Sun, cloud, rain and wind, above everything.
+    Pasture,  ///< The ground surface, its fences and its stock: the map itself.
   };
 
-  /// Shows or hides one layer. Hiding a layer removes it from the scene
-  /// entirely rather than drawing it faintly, so what is on screen is only ever
-  /// the layers that were asked for.
   void show_layer(Layer layer, bool visible);
   [[nodiscard]] bool layer_shown(Layer layer) const;
 
-  /// Draws the soil under the pasture, given the share of available water left
-  /// in each cell, 0 to 1.
+  /// One sheet of the stack: what to draw, how to colour it, and what to call
+  /// it.
+  struct StackEntry {
+    core::Raster<double> values;
+    ColourScale colours;
+    std::string name;
+  };
+
+  /// Draws a stack of fields under the pasture, one sheet each, in the order
+  /// given.
   ///
-  /// **The root zone is coloured, not filled to a level.** The water balance
-  /// here is a single-layer store - FAO-56's bucket - and it does not know
-  /// where in the profile the water sits. A water table drawn across the middle
-  /// of the soil would be the picture inventing a depth the model has no
-  /// opinion about, so how full the store is is shown by colour across the
-  /// whole layer, which is exactly what one number per cell supports.
+  /// **Held apart rather than pressed into a section.** The separation is what
+  /// the stack is for: seven fields for the same day, all readable at once, so
+  /// that a dry patch in the soil moisture sheet can be seen against the growth
+  /// sheet directly below the ground it explains. Pushed together they would
+  /// hide each other and only the top one would be legible. It is a drawing
+  /// choice and stands in for no depth - these are not soil horizons, they are
+  /// seven ways of looking at the same piece of country.
   ///
-  /// **The subsoil carries no data at all, and is drawn plainly for that
-  /// reason.** Nothing in the model is below the root zone. It is there so the
-  /// root zone reads as a layer in a profile rather than a sheet hanging in the
-  /// air, and it is a flat earth colour so that nobody reads a value off it.
+  /// Every sheet carries the measured ground, so a rise in the country rises
+  /// through the whole stack, and every sheet carries the paddock fences -
+  /// dimmer than the top one, because down there they are for locating a cell
+  /// rather than for reading.
   ///
-  /// **The thicknesses are drawing choices and are sized against the farm.** A
-  /// root zone is half a metre and this farm is a kilometre and a half across;
-  /// drawn to scale the whole profile is thinner than the line around a
-  /// paddock. The same choice as the cloud, which carries a measured coverage
-  /// at a height and thickness picked to be seen.
-  void show_profile(const core::Raster<double>& available_water_fraction);
+  /// Each is coloured by its own scale. They are different quantities in
+  /// different units and a shared ramp would invite a comparison that means
+  /// nothing.
+  void show_stack(const std::vector<StackEntry>& entries);
+
+  /// What to call the top sheet.
+  ///
+  /// Separate from the title given to show(), which is the legend's - two lines
+  /// naming a unit and a scale. Beside the sheet that is a paragraph; what is
+  /// wanted there is the short name the map mode goes by, the same kind of name
+  /// the sheets below carry.
+  void name_top_layer(const std::string& name);
+
+  /// Shows or hides one sheet of the stack, by its position in it.
+  void show_stack_layer(std::size_t index, bool visible);
+
+  [[nodiscard]] std::size_t stack_size() const noexcept { return stack_.size(); }
+
+  [[nodiscard]] bool stack_layer_shown(std::size_t index) const;
 
   /// How many spray uprights and pieces of equipment were drawn. Here so the
   /// picture can be checked without rendering it: these are the two things
@@ -289,10 +306,16 @@ class TerrainScene {
   /// it is why one face of a slope grows more grass than the other.
   std::vector<vtkNew<vtkBillboardTextActor3D>> compass_;
 
+  /// The name beside the top sheet. The rest of the stack carries its own, one
+  /// per sheet. A billboard for the same reason the compass points are: a flat
+  /// label turns edge-on and vanishes when the scene is spun, which is exactly
+  /// when somebody needs to know which sheet is which.
+  vtkNew<vtkBillboardTextActor3D> pasture_label_;
+
   void place_compass();
 
-  /// Puts a name beside each layer at the height that layer is drawn.
-  void place_layer_labels(double gap);
+  /// Builds the fence rings for one sheet of the stack, at its own height.
+  void build_stack_fences(vtkPolyData* into, double lift) const;
 
   /// The weather drawn over the farm: the sun, a sheet of cloud, falling rain,
   /// and a mark for the wind's strength. All of them are glyphs, all of them
@@ -342,21 +365,20 @@ class TerrainScene {
   /// the equipment does not.
   vtkNew<vtkPolyData> spray_lines_;
   vtkNew<vtkActor> spray_actor_;
-  /// The soil under the pasture: the root zone the water balance is about, and
-  /// inert ground below it. Each is a copy of the surface moved down, so the
-  /// profile follows the shape of the country rather than sitting flat under a
-  /// farm that rises and falls.
-  /// A name beside each layer, so a stack of sheets is readable without
-  /// counting down from the top. Billboards for the same reason the compass
-  /// points are: a flat label turns edge-on and vanishes when the scene is
-  /// spun, which is exactly when somebody needs to know which sheet is which.
-  std::vector<vtkNew<vtkBillboardTextActor3D>> layer_labels_;
 
-  vtkNew<vtkStructuredGrid> root_zone_;
-  vtkNew<vtkLookupTable> root_zone_colours_;
-  vtkNew<vtkActor> root_zone_actor_;
-  vtkNew<vtkStructuredGrid> subsoil_;
-  vtkNew<vtkActor> subsoil_actor_;
+  /// One sheet of the stack. Held by pointer because vtkNew cannot be copied
+  /// or moved, and the stack is built from whatever it is handed.
+  struct StackedSheet {
+    vtkNew<vtkStructuredGrid> grid;
+    vtkNew<vtkLookupTable> colours;
+    vtkNew<vtkActor> actor;
+    vtkNew<vtkPolyData> fences;
+    vtkNew<vtkActor> fence_actor;
+    vtkNew<vtkBillboardTextActor3D> label;
+    bool shown = false;
+  };
+
+  std::vector<std::unique_ptr<StackedSheet>> stack_;
 
   vtkNew<vtkPolyData> pivot_lines_;
   vtkNew<vtkActor> pivot_actor_;

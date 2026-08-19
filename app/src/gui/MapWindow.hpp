@@ -316,9 +316,13 @@ class MapWindow : public QMainWindow {
   QSlider* pan_slider_ = nullptr;
 
   /// One box per layer of the scene, in the order the layers are stacked:
-  /// weather above, then the pasture, the root zone, and the ground below it.
-  /// Held so the row can be enabled and disabled with the terrain view.
+  /// weather above, the pasture on the ground, and then a sheet for each field
+  /// of kStackedFields. Held so the row can be enabled and disabled with the
+  /// terrain view.
   std::vector<QCheckBox*> layer_boxes_;
+
+  /// Fills the terrain view's stack with today's values for kStackedFields.
+  void refresh_stack(std::size_t day);
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;

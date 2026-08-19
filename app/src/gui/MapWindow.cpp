@@ -18,6 +18,7 @@
 #include <array>
 #include <cstddef>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -44,6 +45,23 @@ namespace {
 /// How wide the setup dock opens, in pixels. Comfortably past the panel's own
 /// minimum, so the form is not on the edge of scrolling the moment it opens.
 constexpr int kOpeningPanelWidth = 520;
+
+/// The fields drawn as sheets under the pasture, top to bottom.
+///
+/// **Ordered as the causal chain runs, the same as the map-mode list.** What
+/// grew sits directly under the pasture it made; under that the moisture that
+/// allowed it; under that the water put on and the water put on so far; under
+/// that the stress the shortfall caused; and the legume share last, which is
+/// the one that moves over seasons rather than days.
+///
+/// Slope is not here: it has one frame for the whole run, and a sheet that
+/// never changes while the others do would read as a fault. Soil water is not
+/// here either - it is the same fact as soil moisture in millimetres instead of
+/// a share, and two sheets of one quantity is a stack padded out.
+constexpr std::array<MapWindow::Field, 6> kStackedFields{
+    MapWindow::Field::Growth,          MapWindow::Field::AvailableWater,
+    MapWindow::Field::IrrigationToday, MapWindow::Field::IrrigationToDate,
+    MapWindow::Field::WaterStress,     MapWindow::Field::LegumeFraction};
 
 /// How far the pointer may move between press and release and still count as a
 /// click rather than a drag. A hand moves a little on a mouse button.
@@ -238,53 +256,31 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   auto* layers = new QHBoxLayout;
   layers->addWidget(new QLabel("Layers", this));
 
-  struct LayerBox {
-    viz::TerrainScene::Layer layer;
-    const char* name;
-    const char* explanation;
-    bool on;
-  };
-
-  const std::array<LayerBox, 4> boxes{{
-      {viz::TerrainScene::Layer::Weather, "Weather",
-       "The day's sun, cloud, rain and wind, drawn above the farm.\n\nTurn it off to read the "
-       "map exactly: cloud is translucent, and anything translucent over the paddocks shifts "
-       "the colour you are matching against the legend.",
-       true},
-      {viz::TerrainScene::Layer::Pasture, "Pasture",
-       "The sward on the ground surface, coloured by whichever field is chosen, with the "
-       "fences and the stock that stand on it.",
-       true},
-      {viz::TerrainScene::Layer::RootZone, "Root zone",
-       "The soil the water balance is about, coloured by how much of its available water is "
-       "left - pale when dry, dark when full.\n\nColoured rather than filled to a level: this "
-       "is a single-layer store and it does not know where in the profile the water sits.",
-       false},
-      {viz::TerrainScene::Layer::Subsoil, "Ground below",
-       "Ground beneath the root zone.\n\nIt carries no data and is drawn flat for that reason "
-       "- nothing in the model is below the root zone. It is here so the root zone reads as a "
-       "layer in a profile rather than a sheet hanging in the air.",
-       false},
-  }};
-  for (const LayerBox& box : boxes) {
-    auto* check = new QCheckBox(box.name, this);
-    check->setChecked(box.on);
-    check->setToolTip(box.explanation);
-    const viz::TerrainScene::Layer layer = box.layer;
-    connect(check, &QCheckBox::toggled, this, [this, layer](bool on) {
-      terrain_.show_layer(layer, on);
+  // **The stack, top to bottom, and the row reads as the stack does.**
+  //
+  // Weather above the farm, the pasture on the ground, and then one sheet per
+  // field: what grew, the moisture that allowed it, the water put on, the water
+  // put on so far, the stress the shortfall caused, and the clover. Left to
+  // right is top to bottom, so somebody who has never seen the window can tell
+  // which sheet is which without turning any of them on.
+  //
+  // Only the first two start ticked. A farm opens as a farm; the stack is
+  // something to turn on when a question needs it.
+  const auto add_box = [this, layers](const QString& name, const QString& explanation, bool on,
+                                      const std::function<void(bool)>& toggled) {
+    auto* check = new QCheckBox(name, this);
+    check->setChecked(on);
+    check->setToolTip(explanation);
+    connect(check, &QCheckBox::toggled, this, [this, toggled](bool ticked) {
+      toggled(ticked);
       // **Turning a layer on reframes the scene; turning one off does not.**
       //
-      // The camera is placed from the bounds of what can be seen, and a hidden
-      // layer is not in them - so a stack revealed after the view was framed
-      // hung off the bottom of the window and the ground below the root zone
-      // was not on screen at all. Ticking a box to see something and having
-      // nothing appear is the box not working.
-      //
-      // Hiding does not reframe, because then every tick would move the view
-      // and somebody who had zoomed in on a corner would lose it for switching
-      // the sky off.
-      if (on) {
+      // The camera is placed from the bounds of what can be seen and a hidden
+      // sheet is not in them, so a stack revealed after the view was framed
+      // hangs off the bottom of the window. Ticking a box and seeing nothing is
+      // the box not working. Hiding does not reframe, or somebody who had
+      // zoomed in on a corner would lose it for switching the sky off.
+      if (ticked) {
         terrain_.reset_camera();
         pan_slider_->setValue(0);
       }
@@ -294,6 +290,26 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
     });
     layer_boxes_.push_back(check);
     layers->addWidget(check);
+  };
+
+  add_box("Weather",
+          "The day's sun, cloud, rain and wind, drawn above the farm.\n\nTurn it off to read "
+          "the map exactly: cloud is translucent, and anything translucent over the paddocks "
+          "shifts the colour you are matching against the legend.",
+          true, [this](bool on) { terrain_.show_layer(viz::TerrainScene::Layer::Weather, on); });
+  add_box("Pasture",
+          "The ground surface, coloured by whichever field the map mode names, with the fences "
+          "and the stock that stand on it.",
+          true, [this](bool on) { terrain_.show_layer(viz::TerrainScene::Layer::Pasture, on); });
+
+  for (std::size_t i = 0; i < kStackedFields.size(); ++i) {
+    const FieldStyle style = style_of(kStackedFields[i]);
+    add_box(QString(style.label),
+            QString("%1, drawn as a sheet under the pasture, on the same ground and with the "
+                    "same fences - dimmer, because down there they are for finding a paddock "
+                    "rather than for reading.")
+                .arg(style.legend),
+            false, [this, i](bool on) { terrain_.show_stack_layer(i, on); });
   }
   layers->addStretch(1);
 
@@ -1090,9 +1106,8 @@ void MapWindow::refresh() {
   // available water left rather than the depth in millimetres: the profile is
   // drawn as a section and "how full is it" is the question a section answers,
   // where millimetres would need a legend the layer does not have.
-  if (day < available_water_.size()) {
-    terrain_.show_profile(available_water_[day]);
-  }
+  terrain_.name_top_layer(style.label);
+  refresh_stack(day);
 
   const viz::ColourScale colours(style.ramp, lowest, highest);
   if (showing_terrain_) {
@@ -1210,6 +1225,34 @@ void MapWindow::slide_view(int percent) {
 
 void MapWindow::select_view(bool terrain) {
   view_box_->setCurrentIndex(terrain ? 1 : 0);
+}
+
+void MapWindow::refresh_stack(std::size_t day) {
+  std::vector<viz::TerrainScene::StackEntry> entries;
+  entries.reserve(kStackedFields.size());
+  for (const Field field : kStackedFields) {
+    const std::vector<core::Raster<double>>& series = series_of(field);
+    if (series.empty()) {
+      continue;
+    }
+    const core::Raster<double>& raster = series[std::min(day, series.size() - 1)];
+    const FieldStyle style = style_of(field);
+
+    // **Each sheet keeps its own scale over the whole run.** These are
+    // different quantities in different units, so one shared ramp would invite
+    // a comparison that means nothing - and a sheet rescaled to its own day
+    // would change colour while its values held still, which is the opposite of
+    // what a stack watched over a year is for.
+    std::pair<double, double> range =
+        style.has_natural_range ? std::pair<double, double>{style.natural_low, style.natural_high}
+                                : whole_run_range(field);
+    if (range.second <= range.first) {
+      range.second = range.first + 1.0;
+    }
+    entries.push_back(
+        {raster, viz::ColourScale(style.ramp, range.first, range.second), style.label});
+  }
+  terrain_.show_stack(entries);
 }
 
 void MapWindow::show_all_layers() {

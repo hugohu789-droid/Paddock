@@ -85,14 +85,33 @@ constexpr int kSoilColours = 64;
 /// its water store is a single bucket in millimetres. The same kind of choice
 /// as the cloud, which carries a measured coverage at a height picked to be
 /// seen.
-constexpr double kLayerSeparation = 0.13;
+constexpr double kLayerSeparation = 0.17;
+
+/// How strongly the fences show on the sheets below the top one.
+///
+/// Faint on purpose. On the pasture a fence is read - which paddock, which mob.
+/// Down the stack it is there so the same piece of ground can be found on
+/// another sheet, and drawn at full strength a grid of white lines over seven
+/// coloured sheets is what the eye lands on instead of the colour.
+constexpr double kStackFenceOpacity = 0.28;
 
 constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
 
 }  // namespace
 
 TerrainScene::TerrainScene() {
-  renderer_->SetBackground(0.10, 0.11, 0.13);
+  // **A graded background rather than a flat near-black.**
+  //
+  // Flat black is what a renderer does when nobody has chosen, and it cost
+  // twice here: white text on it has no edge to sit against, and a scene whose
+  // subject is a sky reads as a hole rather than as air. This is the pairing
+  // VTK's own viewers have used for years - dark and cool at the top, lighter
+  // and warmer towards the horizon - which is dark enough for the sun and the
+  // cloud to carry, and light enough at the bottom that a label has something
+  // to be legible against.
+  renderer_->GradientBackgroundOn();
+  renderer_->SetBackground2(0.06, 0.08, 0.13);
+  renderer_->SetBackground(0.20, 0.23, 0.29);
 
   // The scene's own light, replacing the headlight VTK would otherwise supply.
   // A headlight sits at the camera and lights whatever you look at from where
@@ -191,51 +210,16 @@ TerrainScene::TerrainScene() {
   pivot_actor_->GetProperty()->SetLineWidth(2.0);
   pivot_actor_->SetVisibility(0);
 
-  // ------------------------------------------------------------ the profile
-  //
-  // **Dry earth to wet earth, and deliberately not the water ramp used on the
-  // maps.** The flat map's soil-moisture field is a data layer read against a
-  // legend; this is a section through the ground, and it has to look like
-  // ground. A blue slab under the paddocks reads as a pond.
-  root_zone_colours_->SetNumberOfTableValues(kSoilColours);
-  root_zone_colours_->SetTableRange(0.0, 1.0);
-  for (int i = 0; i < kSoilColours; ++i) {
-    const double wet = static_cast<double>(i) / (kSoilColours - 1);
-    // Pale, dusty tan when empty; dark and saturated when full. The hue barely
-    // moves - wet soil is darker soil, not bluer soil.
-    root_zone_colours_->SetTableValue(i, 0.72 - (0.36 * wet), 0.58 - (0.31 * wet),
-                                      0.42 - (0.20 * wet), 1.0);
-  }
-  root_zone_colours_->Build();
-
-  vtkNew<vtkStructuredGridGeometryFilter> root_geometry;
-  root_geometry->SetInputData(root_zone_);
-  vtkNew<vtkPolyDataMapper> root_mapper;
-  root_mapper->SetInputConnection(root_geometry->GetOutputPort());
-  root_mapper->SetLookupTable(root_zone_colours_);
-  root_mapper->SetScalarRange(0.0, 1.0);
-  root_mapper->SetScalarModeToUsePointData();
-  root_mapper->SetColorModeToMapScalars();
-  root_zone_actor_->SetMapper(root_mapper);
-  root_zone_actor_->GetProperty()->SetInterpolationToGouraud();
-
-  vtkNew<vtkStructuredGridGeometryFilter> subsoil_geometry;
-  subsoil_geometry->SetInputData(subsoil_);
-  vtkNew<vtkPolyDataMapper> subsoil_mapper;
-  subsoil_mapper->SetInputConnection(subsoil_geometry->GetOutputPort());
-  // **No scalars on this one, because it has none.** Nothing in the model is
-  // below the root zone. A flat colour is the honest way to draw ground the
-  // simulation says nothing about - anything varying would invite a reading.
-  subsoil_mapper->ScalarVisibilityOff();
-  subsoil_actor_->SetMapper(subsoil_mapper);
-  subsoil_actor_->GetProperty()->SetColor(0.34, 0.28, 0.23);
-
-  // Both start hidden. The profile is something to turn on when it is wanted:
-  // a farm opens as a farm, seen from above, not as a soil pit.
-  root_zone_actor_->SetVisibility(0);
-  subsoil_actor_->SetVisibility(0);
-  renderer_->AddActor(root_zone_actor_);
-  renderer_->AddActor(subsoil_actor_);
+  // The name beside the top sheet. The rest of the stack carries its own, one
+  // per sheet, written when the stack is built.
+  pasture_label_->GetTextProperty()->SetFontSize(22);
+  pasture_label_->GetTextProperty()->SetJustificationToRight();
+  pasture_label_->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
+  pasture_label_->GetTextProperty()->SetOpacity(1.0);
+  pasture_label_->GetTextProperty()->ShadowOn();
+  pasture_label_->GetTextProperty()->SetBold(1);
+  pasture_label_->UseBoundsOff();
+  renderer_->AddActor(pasture_label_);
 
   surface_mapper_->SetLookupTable(lookup_);
   surface_mapper_->SetScalarModeToUsePointData();
@@ -361,6 +345,7 @@ void TerrainScene::show(const core::Raster<double>& field, const core::Raster<do
   surface_mapper_->SetScalarRange(scale.minimum(), scale.maximum());
 
   legend_->SetTitle(title.c_str());
+
   legend_->SetLookupTable(lookup_);
   const std::string format = tick_label_format(scale.minimum(), scale.maximum(), kLegendLabels);
   legend_->SetLabelFormat(format.c_str());
@@ -719,7 +704,12 @@ void TerrainScene::place_compass() {
       // moment somebody has spun the scene and cannot tell which way is up.
       mark->GetTextProperty()->SetFontSize(34);
       mark->GetTextProperty()->SetJustificationToCentered();
-      mark->GetTextProperty()->SetColor(0.88, 0.91, 0.96);
+      mark->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
+      // A shadow, because these are drawn over whatever the scene happens to put
+      // behind them - sky at one bearing, a coloured sheet at another. White on
+      // white is unreadable and this is the cheap fix for it.
+      mark->GetTextProperty()->ShadowOn();
+
       mark->GetTextProperty()->SetOpacity(1.0);
 
       // **A label must not change how the camera frames the farm.** These sit
@@ -779,143 +769,23 @@ std::size_t TerrainScene::pivot_line_count() const {
   return static_cast<std::size_t>(pivot_lines_->GetNumberOfLines());
 }
 
-void TerrainScene::show_profile(const core::Raster<double>& available_water_fraction) {
-  if (!has_field_) {
-    return;
-  }
-
-  const auto cols = static_cast<int>(field_.cols());
-  const auto rows = static_cast<int>(field_.rows());
-
-  // How far to hold the layers apart. Against the farm, not in metres - see
-  // kLayerSeparation.
-  const double span = std::max(sky_width_, sky_height_);
-  const double gap = span * kLayerSeparation;
-
-  vtkNew<vtkPoints> root_points;
-  root_points->SetNumberOfPoints(static_cast<vtkIdType>(cols) * rows);
-  vtkNew<vtkDoubleArray> wetness;
-  wetness->SetNumberOfComponents(1);
-  wetness->SetNumberOfTuples(static_cast<vtkIdType>(cols) * rows);
-  vtkNew<vtkPoints> subsoil_points;
-  subsoil_points->SetNumberOfPoints(static_cast<vtkIdType>(cols) * rows);
-
-  // Walked exactly as the surface is: row 0 of a Paddock raster is the
-  // northernmost and VTK's y increases north, so the rows go from the south
-  // edge up. A profile built the other way round would sit under a mirrored
-  // farm, which looks perfectly plausible.
-  for (int row = 0; row < rows; ++row) {
-    const int source_row = rows - 1 - row;
-    for (int col = 0; col < cols; ++col) {
-      const auto c = static_cast<std::size_t>(col);
-      const auto r = static_cast<std::size_t>(source_row);
-      const core::Point2D centre = field_.cell_centre(c, r);
-      const vtkIdType index = (static_cast<vtkIdType>(row) * cols) + col;
-      // **Every layer carries the same ground.** Each is the measured surface
-      // moved straight down, so a rise in the country rises in all three and
-      // the stack reads as one piece of land seen three ways rather than as
-      // three unrelated sheets.
-      const double ground = elevation_(c, r) * exaggeration_;
-      root_points->SetPoint(index, centre.easting, centre.northing, ground - gap);
-      subsoil_points->SetPoint(index, centre.easting, centre.northing, ground - (2.0 * gap));
-      const double left =
-          (c < available_water_fraction.cols() && r < available_water_fraction.rows())
-              ? available_water_fraction(c, r)
-              : 0.0;
-      wetness->SetTuple1(index, std::clamp(left, 0.0, 1.0));
-    }
-  }
-
-  root_zone_->SetDimensions(cols, rows, 1);
-  root_zone_->SetPoints(root_points);
-  root_zone_->GetPointData()->SetScalars(wetness);
-  root_zone_->Modified();
-
-  place_layer_labels(gap);
-
-  subsoil_->SetDimensions(cols, rows, 1);
-  subsoil_->SetPoints(subsoil_points);
-  subsoil_->Modified();
-}
-
-void TerrainScene::place_layer_labels(double gap) {
-  // Off the south-western corner, clear of the paddocks, and at the height of
-  // the layer each one names.
-  //
-  // Not squarely west: the compass puts its W at the middle of that edge, and
-  // the two sets of words sat on top of each other. South of it, and further
-  // out, keeps both readable - and these can sit as far out as they like,
-  // because like the compass they are kept out of the camera's bounds.
-  const double span = std::max(sky_width_, sky_height_);
-  const double west = sky_east_ - (sky_width_ / 2.0) - (span * 0.16);
-  const double south = sky_north_ - (sky_height_ * 0.38);
-  const double ground = highest_m_ * exaggeration_;
-
-  const std::array<std::pair<const char*, double>, 3> marks{{
-      {"Pasture", ground},
-      {"Root zone", ground - gap},
-      {"Ground below", ground - (2.0 * gap)},
-  }};
-
-  if (layer_labels_.size() != marks.size()) {
-    layer_labels_.clear();
-    layer_labels_.resize(marks.size());
-    for (auto& mark : layer_labels_) {
-      mark->GetTextProperty()->SetFontSize(22);
-      mark->GetTextProperty()->SetJustificationToRight();
-      mark->GetTextProperty()->SetColor(0.86, 0.89, 0.94);
-      // Out of the bounds, like the compass: a label outside the farm that
-      // counted towards them would push the camera back every time the view was
-      // reset, drawing the farm smaller so the word "Pasture" could fit.
-      mark->UseBoundsOff();
-      renderer_->AddActor(mark);
-    }
-  }
-
-  // A name shows exactly when its layer does. Built visible and left that way,
-  // the root zone and the ground below - which both start hidden - had their
-  // names floating in empty air over a farm with nothing under it.
-  const std::array<vtkActor*, 3> owners{
-      {surface_actor_.Get(), root_zone_actor_.Get(), subsoil_actor_.Get()}};
-  for (std::size_t i = 0; i < marks.size(); ++i) {
-    layer_labels_[i]->SetInput(marks[i].first);
-    layer_labels_[i]->SetPosition(west, south, marks[i].second);
-    layer_labels_[i]->SetVisibility(owners[i]->GetVisibility());
-  }
-}
-
 void TerrainScene::show_layer(Layer layer, bool visible) {
-  // A layer's name goes with it. A word left floating beside nothing is worse
-  // than no word at all.
-  const auto label_visible = [this](std::size_t which, bool on) {
-    if (which < layer_labels_.size()) {
-      layer_labels_[which]->SetVisibility(on ? 1 : 0);
-    }
-  };
-
+  const int on = visible ? 1 : 0;
   switch (layer) {
     case Layer::Weather:
       show_weather(visible);
       return;
     case Layer::Pasture:
-      surface_actor_->SetVisibility(visible ? 1 : 0);
+      surface_actor_->SetVisibility(on);
       // The fences and the stock belong to the pasture: they are things on the
-      // paddocks, and left hanging over a hidden surface they would float above
-      // the soil with nothing under them.
-      fence_actor_->SetVisibility(visible ? 1 : 0);
-      grazed_actor_->SetVisibility(visible ? 1 : 0);
+      // paddocks, and left hanging over a hidden surface they would float with
+      // nothing under them.
+      fence_actor_->SetVisibility(on);
+      grazed_actor_->SetVisibility(on);
       for (auto& mob : mob_actors_) {
-        mob->SetVisibility(visible ? 1 : 0);
+        mob->SetVisibility(on);
       }
-      label_visible(0, visible);
-      return;
-    case Layer::RootZone:
-      root_zone_actor_->SetVisibility(visible ? 1 : 0);
-      label_visible(1, visible);
-      return;
-    case Layer::Subsoil:
-      subsoil_actor_->SetVisibility(visible ? 1 : 0);
-      label_visible(2, visible);
+      pasture_label_->SetVisibility(on);
       return;
   }
 }
@@ -926,12 +796,203 @@ bool TerrainScene::layer_shown(Layer layer) const {
       return weather_shown_;
     case Layer::Pasture:
       return surface_actor_->GetVisibility() != 0;
-    case Layer::RootZone:
-      return root_zone_actor_->GetVisibility() != 0;
-    case Layer::Subsoil:
-      return subsoil_actor_->GetVisibility() != 0;
   }
   return false;
+}
+
+void TerrainScene::show_stack_layer(std::size_t index, bool visible) {
+  if (index >= stack_.size()) {
+    return;
+  }
+  StackedSheet& sheet = *stack_[index];
+  sheet.shown = visible;
+  const int on = visible ? 1 : 0;
+  sheet.actor->SetVisibility(on);
+  sheet.fence_actor->SetVisibility(on);
+  // A name goes with its sheet. A word floating beside nothing is worse than no
+  // word.
+  sheet.label->SetVisibility(on);
+}
+
+bool TerrainScene::stack_layer_shown(std::size_t index) const {
+  return index < stack_.size() && stack_[index]->shown;
+}
+
+void TerrainScene::build_stack_fences(vtkPolyData* into, double lift) const {
+  vtkNew<vtkPoints> points;
+  vtkNew<vtkCellArray> lines;
+  const double step = elevation_.empty() ? 0.0 : elevation_.transform().cell_size;
+
+  for (const core::Polygon& boundary : boundaries_) {
+    const std::vector<core::Point2D>& vertices = boundary.vertices();
+    if (vertices.size() < 3) {
+      continue;
+    }
+    const vtkIdType first = points->GetNumberOfPoints();
+    vtkIdType placed = 0;
+    for (std::size_t i = 0; i < vertices.size(); ++i) {
+      const core::Point2D& from = vertices[i];
+      const core::Point2D& to = vertices[(i + 1) % vertices.size()];
+      const double length = std::hypot(to.easting - from.easting, to.northing - from.northing);
+      const auto steps =
+          step > 0.0 ? std::max<std::size_t>(1, static_cast<std::size_t>(length / step)) : 1;
+      // Walked in steps for the same reason the fences on top are: a paddock
+      // side is a hundred metres and the ground rises and falls between its
+      // corners, so a straight line between two draped corners comes out
+      // dashed.
+      for (std::size_t s = 0; s < steps; ++s) {
+        const double fraction = static_cast<double>(s) / static_cast<double>(steps);
+        const core::Point2D along{from.easting + ((to.easting - from.easting) * fraction),
+                                  from.northing + ((to.northing - from.northing) * fraction)};
+        points->InsertNextPoint(along.easting, along.northing,
+                                (height_at(along) * exaggeration_) - lift);
+        ++placed;
+      }
+    }
+    lines->InsertNextCell(static_cast<int>(placed + 1));
+    for (vtkIdType i = 0; i < placed; ++i) {
+      lines->InsertCellPoint(first + i);
+    }
+    lines->InsertCellPoint(first);
+  }
+
+  into->SetPoints(points);
+  into->SetLines(lines);
+  into->Modified();
+}
+
+void TerrainScene::name_top_layer(const std::string& name) {
+  // **Named after what it is showing, not after grass.** The top sheet carries
+  // whichever field the map mode names, so a fixed label reading "Pasture"
+  // would be wrong the moment somebody chose slope - and wrong beside six
+  // sheets that do carry their own names correctly.
+  pasture_label_->SetInput(name.c_str());
+}
+
+void TerrainScene::show_stack(const std::vector<StackEntry>& entries) {
+  if (!has_field_) {
+    return;
+  }
+
+  const auto cols = static_cast<int>(field_.cols());
+  const auto rows = static_cast<int>(field_.rows());
+  const double span = std::max(sky_width_, sky_height_);
+  const double gap = span * kLayerSeparation;
+  const double ground = highest_m_ * exaggeration_;
+
+  // **Well off the western side, and further out than it looks like it needs.**
+  //
+  // These are drawn in the scene, so a label close to the farm is not merely
+  // beside it - it is behind or in front of whichever sheet the camera has put
+  // there, and the words came out cut in half by the very stack they were
+  // naming. Out here they clear the whole stack at any bearing, and they can
+  // afford to: like the compass they are kept out of the camera's bounds, so
+  // moving them costs nothing in how the farm is framed.
+  const double label_east = sky_east_ - (sky_width_ / 2.0) - (span * 0.42);
+  const double label_north = sky_north_;
+  pasture_label_->SetPosition(label_east, label_north, ground);
+
+  // Sheets are built once and then refilled. Rebuilding the actors every day
+  // would rebuild them three hundred times a run, and a renderer accumulating
+  // actors is the fault that framed every scene from stale bounds.
+  while (stack_.size() < entries.size()) {
+    auto sheet = std::make_unique<StackedSheet>();
+
+    vtkNew<vtkStructuredGridGeometryFilter> geometry;
+    geometry->SetInputData(sheet->grid);
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputConnection(geometry->GetOutputPort());
+    mapper->SetLookupTable(sheet->colours);
+    mapper->SetScalarModeToUsePointData();
+    mapper->SetColorModeToMapScalars();
+    sheet->actor->SetMapper(mapper);
+    sheet->actor->GetProperty()->SetInterpolationToGouraud();
+    // **Unlit, unlike the pasture.** The top surface is lit so its relief
+    // reads; these are read against a legend, and a light falling across them
+    // would shade one end of the farm darker than the other - a difference in
+    // the value that is not in the value.
+    sheet->actor->GetProperty()->LightingOff();
+    sheet->actor->SetVisibility(0);
+    renderer_->AddActor(sheet->actor);
+
+    vtkNew<vtkPolyDataMapper> fence_mapper;
+    fence_mapper->SetInputData(sheet->fences);
+    fence_mapper->ScalarVisibilityOff();
+    sheet->fence_actor->SetMapper(fence_mapper);
+    // **Dimmer than the fences on top, and that is the point.** Up there they
+    // are read - which paddock, which mob. Down here they are for finding the
+    // same piece of ground on another sheet, and drawn as brightly they would
+    // fight the colour that is the reason to look.
+    sheet->fence_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    sheet->fence_actor->GetProperty()->SetLineWidth(1.0);
+    sheet->fence_actor->GetProperty()->SetOpacity(kStackFenceOpacity);
+    sheet->fence_actor->GetProperty()->LightingOff();
+    sheet->fence_actor->SetVisibility(0);
+    renderer_->AddActor(sheet->fence_actor);
+
+    sheet->label->GetTextProperty()->SetFontSize(22);
+    sheet->label->GetTextProperty()->SetJustificationToRight();
+    sheet->label->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
+    sheet->label->GetTextProperty()->SetOpacity(1.0);
+    sheet->label->GetTextProperty()->SetBold(1);
+    sheet->label->GetTextProperty()->ShadowOn();
+    // Out of the camera's bounds, like the compass: a word beside the farm that
+    // counted towards them would push the view back every time it was reset.
+    sheet->label->UseBoundsOff();
+    sheet->label->SetVisibility(0);
+    renderer_->AddActor(sheet->label);
+
+    stack_.push_back(std::move(sheet));
+  }
+
+  for (std::size_t i = 0; i < stack_.size(); ++i) {
+    StackedSheet& sheet = *stack_[i];
+    if (i >= entries.size()) {
+      sheet.shown = false;
+      sheet.actor->SetVisibility(0);
+      sheet.fence_actor->SetVisibility(0);
+      sheet.label->SetVisibility(0);
+      continue;
+    }
+    const StackEntry& entry = entries[i];
+    const double lift = gap * static_cast<double>(i + 1);
+
+    vtkNew<vtkPoints> points;
+    points->SetNumberOfPoints(static_cast<vtkIdType>(cols) * rows);
+    vtkNew<vtkDoubleArray> values;
+    values->SetNumberOfComponents(1);
+    values->SetNumberOfTuples(static_cast<vtkIdType>(cols) * rows);
+
+    // Walked exactly as the surface is: row 0 of a Paddock raster is the
+    // northernmost and VTK's y increases north. Built the other way round, a
+    // sheet would sit under a mirrored farm, which looks perfectly plausible.
+    for (int row = 0; row < rows; ++row) {
+      const int source_row = rows - 1 - row;
+      for (int col = 0; col < cols; ++col) {
+        const auto c = static_cast<std::size_t>(col);
+        const auto r = static_cast<std::size_t>(source_row);
+        const core::Point2D centre = field_.cell_centre(c, r);
+        const vtkIdType index = (static_cast<vtkIdType>(row) * cols) + col;
+        points->SetPoint(index, centre.easting, centre.northing,
+                         (elevation_(c, r) * exaggeration_) - lift);
+        const bool inside = c < entry.values.cols() && r < entry.values.rows();
+        values->SetTuple1(index, inside ? entry.values(c, r) : 0.0);
+      }
+    }
+
+    sheet.grid->SetDimensions(cols, rows, 1);
+    sheet.grid->SetPoints(points);
+    sheet.grid->GetPointData()->SetScalars(values);
+    sheet.grid->Modified();
+
+    fill_lookup_table(sheet.colours, entry.colours);
+    sheet.actor->GetMapper()->SetScalarRange(sheet.colours->GetTableRange());
+
+    build_stack_fences(sheet.fences, lift);
+
+    sheet.label->SetInput(entry.name.c_str());
+    sheet.label->SetPosition(label_east, label_north, ground - lift);
+  }
 }
 
 void TerrainScene::show_irrigation(const core::Raster<double>& applied_mm) {
