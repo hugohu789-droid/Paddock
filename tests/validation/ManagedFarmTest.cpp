@@ -21,6 +21,7 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
 #include <string>
 
 #include <paddock/config/ScenarioRun.hpp>
@@ -55,6 +56,37 @@ RunSummary run(int head, const core::ManagementPolicy& policy, std::string label
   ScenarioBundle bundle = load_scenario(bundle_path());
   bundle.mobs.front().head = head;
   return run_managed_scenario(bundle, policy, pasture_diet(), std::move(label));
+}
+
+// The claim [management] makes: a bundle that names its farmer's rules runs the
+// same way as one handed those rules by its caller.
+//
+// If these two diverged, the section would be decoration - a manifest that says
+// what the farm was run under while the farm was run under something else.
+TEST(ManagedFarmTest, ABundlesOwnRulesGiveTheSameRunAsThoseRulesPassedIn) {
+  const ScenarioBundle bundle = load_scenario(bundle_path());
+  ASSERT_TRUE(bundle.management.has_value())
+      << "this test is about the bundle carrying a policy, and it carries none";
+
+  const RunSummary from_bundle = run_managed_scenario(bundle, pasture_diet(), "from the bundle");
+  const RunSummary passed_in =
+      run_managed_scenario(bundle, *bundle.management, pasture_diet(), "passed in");
+
+  EXPECT_EQ(from_bundle.cover_kg_dm_per_ha, passed_in.cover_kg_dm_per_ha);
+  EXPECT_EQ(from_bundle.liveweight_kg, passed_in.liveweight_kg);
+  EXPECT_DOUBLE_EQ(from_bundle.bought_feed_kg_dm(), passed_in.bought_feed_kg_dm());
+  EXPECT_EQ(from_bundle.days_short, passed_in.days_short);
+  EXPECT_EQ(from_bundle.moves, passed_in.moves);
+}
+
+// And a bundle that names none says so rather than inventing one. Inventing the
+// rules a farm was run under is the thing this section exists to stop.
+TEST(ManagedFarmTest, ABundleWithNoRulesRefusesToBeRunByAFarmer) {
+  ScenarioBundle bundle = load_scenario(bundle_path());
+  bundle.management.reset();
+
+  EXPECT_THROW(static_cast<void>(run_managed_scenario(bundle, pasture_diet(), "no policy")),
+               std::runtime_error);
 }
 
 // The two things the farmer is not allowed to let happen. At a stocking rate the

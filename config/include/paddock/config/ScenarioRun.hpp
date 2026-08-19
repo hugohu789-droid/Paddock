@@ -116,6 +116,19 @@ using DayObserver = std::function<void(const core::Farm&, const core::FarmDay&)>
                                               const core::ManagementPolicy& policy,
                                               const core::DietQuality& diet, std::string label);
 
+/// Runs a bundle under the farmer its own manifest describes.
+///
+/// This is what `[management]` is for. Until it existed the calendar was in the
+/// bundle and the farmer's judgement was in whatever code started the run, so a
+/// managed result could be reproduced only by somebody who also had that code -
+/// which is not what a bundle is supposed to be.
+///
+/// Throws when the bundle names no policy. The alternative is to invent one,
+/// and inventing the rules a farm was run under is exactly what this section
+/// exists to stop.
+[[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
+                                              const core::DietQuality& diet, std::string label);
+
 /// As above, reporting each day to `each_day` as it is stepped.
 [[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
                                               const core::ManagementPolicy& policy,

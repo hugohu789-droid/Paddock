@@ -117,7 +117,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
   const toml::table root = detail::parse_file(manifest_path);
   detail::reject_unknown_keys(root,
                               {"scenario", "run", "weather", "soil", "sward", "initial_state",
-                               "grid", "terrain", "mob", "grazing_period"},
+                               "grid", "terrain", "management", "mob", "grazing_period"},
                               manifest_path, "the manifest");
 
   const toml::table& scenario = detail::require_table(root, "scenario", manifest_path);
@@ -274,6 +274,56 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                        "unknown terrain kind '" + terrain_kind +
                            "'. Known kinds are: flat, synthetic, snapshot");
     }
+  }
+
+  // What the farmer will not allow, when the bundle says. Optional: a run given
+  // a policy by its caller is still a valid run, and every bundle written
+  // before this section existed is one.
+  if (const toml::table* management = root["management"].as_table(); management != nullptr) {
+    detail::reject_unknown_keys(
+        *management,
+        {"minimum_cover_kg_dm_per_ha", "rotation_cover_threshold_kg_dm_per_ha",
+         "target_liveweight_gain_kg_per_day", "maximum_graze_days", "minimum_spell_days",
+         "supplement_me_mj_per_kg_dm", "may_buy_feed"},
+        manifest_path, "[management]");
+
+    core::ManagementPolicy policy;
+    policy.minimum_cover_kg_dm_per_ha =
+        detail::optional_double(*management, "minimum_cover_kg_dm_per_ha",
+                                policy.minimum_cover_kg_dm_per_ha, manifest_path);
+    policy.rotation_cover_threshold_kg_dm_per_ha =
+        detail::optional_double(*management, "rotation_cover_threshold_kg_dm_per_ha",
+                                policy.rotation_cover_threshold_kg_dm_per_ha, manifest_path);
+    policy.target_liveweight_gain_kg_per_day =
+        detail::optional_double(*management, "target_liveweight_gain_kg_per_day",
+                                policy.target_liveweight_gain_kg_per_day, manifest_path);
+    policy.maximum_graze_days = static_cast<int>(detail::optional_double(
+        *management, "maximum_graze_days", policy.maximum_graze_days, manifest_path));
+    policy.minimum_spell_days = static_cast<int>(detail::optional_double(
+        *management, "minimum_spell_days", policy.minimum_spell_days, manifest_path));
+    policy.supplement_me_mj_per_kg_dm =
+        detail::optional_double(*management, "supplement_me_mj_per_kg_dm",
+                                policy.supplement_me_mj_per_kg_dm, manifest_path);
+    policy.may_buy_feed =
+        detail::optional_bool(*management, "may_buy_feed", policy.may_buy_feed, manifest_path);
+
+    // The one contradiction worth refusing rather than running. A floor at or
+    // above the threshold tells the farmer to start rotating only once the
+    // sward is already below the cover being protected, which is not a strict
+    // policy - it is two rules that cannot both hold.
+    if (policy.minimum_cover_kg_dm_per_ha >= policy.rotation_cover_threshold_kg_dm_per_ha) {
+      detail::throw_in(*management, manifest_path,
+                       "'minimum_cover_kg_dm_per_ha' is at or above "
+                       "'rotation_cover_threshold_kg_dm_per_ha', so the farm would be told to "
+                       "start rotating only after the sward is already below the cover it is "
+                       "meant to protect");
+    }
+    if (policy.supplement_me_mj_per_kg_dm <= 0.0) {
+      detail::throw_in(*management, manifest_path,
+                       "'supplement_me_mj_per_kg_dm' must be positive; feed with no energy in it "
+                       "would be bought forever without ever filling anything");
+    }
+    bundle.management = policy;
   }
 
   // The stock, if any. A species is referenced the way every other input is:
@@ -555,7 +605,11 @@ core::Farmer ScenarioBundle::make_farmer() const {
   if (grazing.empty()) {
     throw std::runtime_error("scenario '" + name + "' has no grazing calendar");
   }
-  return core::Farmer(grazing);
+  core::Farmer farmer(grazing);
+  if (management.has_value()) {
+    farmer.set_policy(*management);
+  }
+  return farmer;
 }
 
 ScenarioBundle load_scenario(const std::string& bundle_directory) {

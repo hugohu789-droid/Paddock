@@ -119,3 +119,22 @@ to = "2024-06-30"
 system = "rotational"
 maximum_graze_days = 3
 minimum_spell_days = 35
+
+# What the farmer will not allow, and what they may do about it.
+#
+# The calendar above says which system applies when. This says what the farmer
+# is holding to while running it, and the two are not alternatives: a calendar
+# without a policy leaves the most consequential judgement - whether to graze
+# the sward out or buy feed - to whatever code happened to start the run.
+#
+# These are the values tests/validation/ManagedFarmTest.cpp exercises the model
+# at, which is the only reason to prefer them to any other round number: they
+# are the ones the loop is known to settle under.
+[management]
+minimum_cover_kg_dm_per_ha = 1600.0
+rotation_cover_threshold_kg_dm_per_ha = 2200.0
+target_liveweight_gain_kg_per_day = 0.0
+maximum_graze_days = 3
+minimum_spell_days = 35
+supplement_me_mj_per_kg_dm = 10.0
+may_buy_feed = true

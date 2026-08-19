@@ -255,7 +255,8 @@ SetupPanel::Choices SetupPanel::choices() const {
   return chosen;
 }
 
-void SetupPanel::adopt_bundle(const std::string& directory, int head, double liveweight_kg) {
+void SetupPanel::adopt_bundle(const std::string& directory, int head, double liveweight_kg,
+                              const core::ManagementPolicy* policy) {
   const int index = scenario_box_->findData(QString::fromStdString(directory));
   if (index >= 0) {
     scenario_box_->setCurrentIndex(index);
@@ -265,6 +266,11 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
   }
   if (liveweight_kg > 0.0) {
     liveweight_box_->setValue(liveweight_kg);
+  }
+  if (policy != nullptr) {
+    cover_floor_box_->setValue(policy->minimum_cover_kg_dm_per_ha);
+    rotation_box_->setValue(policy->rotation_cover_threshold_kg_dm_per_ha);
+    may_buy_box_->setChecked(policy->may_buy_feed);
   }
 }
 

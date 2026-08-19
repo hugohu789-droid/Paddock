@@ -163,7 +163,8 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // explore from: the user can always get back to the published run.
   const int head = bundle.mobs.empty() ? 0 : bundle.mobs.front().head;
   const double liveweight = bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg;
-  setup_->adopt_bundle(bundle_directory, head, liveweight);
+  setup_->adopt_bundle(bundle_directory, head, liveweight,
+                       bundle.management.has_value() ? &*bundle.management : nullptr);
 
   resize(1400, 860);
   start_run();

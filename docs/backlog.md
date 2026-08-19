@@ -138,7 +138,7 @@ what lets a farmer write one without touching TOML.
 
 | # | Item | Note |
 |---|---|---|
-| B18 | Grazing calendar in TOML | The calendar can only be built in code today. This is the last step to putting the plan in a farmer's hands, and it is what B7's editor would ultimately write |
+| ~~B18~~ | ~~Grazing calendar in TOML~~ | **Was already done, and the entry was stale**: B6 put `[[grazing_period]]` in the manifest, and the parser reads every field the calendar type has. The same gap was real one object over - `ManagementPolicy` existed only as a function argument, so a managed run could be reproduced only by somebody who also had the code that started it. A `[management]` section closes that, and B7's editor would write both |
 | B19 | Open-Meteo weather adapter | Default source, agreed earlier; VCSN as an option with its licence unverified |
 | B20 | Ship `proj.db` with the Windows package | Otherwise a packaged build cannot do NZTM |
 | B21 | Dataset and document licences | Open item 7. Gates what may be redistributed with a release, and now also covers the OVERSEER manual's no-promotion clause |

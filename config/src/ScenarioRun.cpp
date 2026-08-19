@@ -56,6 +56,17 @@ int RunSummary::days_feed_was_bought() const {
   return days;
 }
 
+RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::DietQuality& diet,
+                                std::string label) {
+  if (!bundle.management.has_value()) {
+    throw std::runtime_error(
+        "scenario '" + bundle.name +
+        "' names no [management], so there is nothing to say what its farmer would not allow. "
+        "Add the section, or run it with a policy of your own.");
+  }
+  return run_managed_scenario(bundle, *bundle.management, diet, std::move(label));
+}
+
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label) {
   return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{});

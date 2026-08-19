@@ -140,3 +140,14 @@ to = "2024-06-30"
 system = "rotational"
 maximum_graze_days = 3
 minimum_spell_days = 35
+
+# The same rules canterbury-grazed carries, so the two differ in their ground
+# and their stocking and in nothing else.
+[management]
+minimum_cover_kg_dm_per_ha = 1600.0
+rotation_cover_threshold_kg_dm_per_ha = 2200.0
+target_liveweight_gain_kg_per_day = 0.0
+maximum_graze_days = 3
+minimum_spell_days = 35
+supplement_me_mj_per_kg_dm = 10.0
+may_buy_feed = true

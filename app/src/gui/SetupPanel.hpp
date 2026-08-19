@@ -63,13 +63,20 @@ class SetupPanel : public QWidget {
 
   [[nodiscard]] Choices choices() const;
 
-  /// Selects the bundle in `directory` if the panel found it, and takes the
-  /// head count and opening weight from the stock that bundle carries.
+  /// Selects the bundle in `directory` if the panel found it, and takes its
+  /// settings: the head count and opening weight of the stock it carries, and
+  /// the rules its farmer works to when it names them.
+  ///
+  /// The panel opens showing what the bundle says, so pressing Run without
+  /// touching anything reproduces the published scenario rather than whatever
+  /// this form happened to default to. `policy` is null for a bundle that names
+  /// none, and the panel keeps its own defaults.
   ///
   /// The window does this rather than the panel loading bundles itself: a
   /// scenario that fails to load is a thing the window has to report anyway,
   /// and having two places that can fail at it would mean two ways of saying so.
-  void adopt_bundle(const std::string& directory, int head, double liveweight_kg);
+  void adopt_bundle(const std::string& directory, int head, double liveweight_kg,
+                    const core::ManagementPolicy* policy = nullptr);
 
   /// Chooses the ground by its position in the list, for the screenshot path.
   /// A view of terrain that only a person clicking can reach is a view nothing
