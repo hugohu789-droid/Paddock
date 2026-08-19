@@ -56,6 +56,11 @@ core::ManagementPolicy default_policy() {
   return policy;
 }
 
+/// A stocking rate this farm carries without strain, so that what the target
+/// gain does is not hidden behind a mob that is short of feed whatever it is
+/// asked for. 300 head is the rate the lightly stocked case below uses.
+constexpr int kComfortableHead = 300;
+
 RunSummary run(int head, const core::ManagementPolicy& policy, std::string label) {
   ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = head;
@@ -306,4 +311,55 @@ TEST(ManagedFarmTest, EveryPurchaseSaysWhenAndWhyItWasMade) {
 }
 
 }  // namespace
+
+// The farmer's target gain has to reach the animals.
+//
+// It used to reach only the decision about how much feed to BUY, and on a farm
+// with grass to spare that is no decision at all: nothing was bought, the mob
+// ate to maintenance, and a year later every ewe stood on exactly her opening
+// weight with the target sitting in the panel doing nothing. The failure was
+// silent and looked like a model that simply held stock steady.
+TEST(ManagedFarmTest, AskingForGainGetsGainWhenTheGrassAllowsIt) {
+  core::ManagementPolicy holding = default_policy();
+  holding.target_liveweight_gain_kg_per_day = 0.0;
+
+  core::ManagementPolicy growing = default_policy();
+  growing.target_liveweight_gain_kg_per_day = 0.1;
+
+  const RunSummary held = run(kComfortableHead, holding, "holding");
+  const RunSummary grown = run(kComfortableHead, growing, "growing");
+
+  EXPECT_NEAR(held.liveweight_change_kg(), 0.0, 1.0)
+      << "asked to hold weight, the mob should end the year near where it started";
+  EXPECT_GT(grown.liveweight_change_kg(), held.liveweight_change_kg() + 5.0)
+      << "held " << held.liveweight_change_kg() << " kg, grown " << grown.liveweight_change_kg()
+      << " kg";
+
+  GTEST_LOG_(INFO) << "liveweight change over the year: holding " << held.liveweight_change_kg()
+                   << " kg, target 0.1 kg/day " << grown.liveweight_change_kg() << " kg";
+}
+
+// And that it is paid for. Feeding for gain takes more grass off the farm, so
+// something has to give: less cover, more bought feed, or both. A run that
+// produced gain out of the same feed would be gain from nowhere.
+TEST(ManagedFarmTest, GainIsPaidForInGrassOrInBoughtFeed) {
+  const core::ManagementPolicy holding = default_policy();
+  core::ManagementPolicy growing = default_policy();
+  growing.target_liveweight_gain_kg_per_day = 0.1;
+
+  const RunSummary held = run(kComfortableHead, holding, "holding");
+  const RunSummary grown = run(kComfortableHead, growing, "growing");
+
+  EXPECT_GT(grown.eaten_kg_dm, held.eaten_kg_dm)
+      << "a mob fed for gain has to eat more: held " << held.eaten_kg_dm << " kg DM, grown "
+      << grown.eaten_kg_dm << " kg DM";
+
+  const bool cover_fell = grown.mean_cover_kg_dm_per_ha() < held.mean_cover_kg_dm_per_ha();
+  const bool bought_more = grown.bought_feed_kg_dm() > held.bought_feed_kg_dm();
+  EXPECT_TRUE(cover_fell || bought_more)
+      << "the extra feed came from nowhere: cover " << held.mean_cover_kg_dm_per_ha() << " to "
+      << grown.mean_cover_kg_dm_per_ha() << " kg DM/ha, bought " << held.bought_feed_kg_dm()
+      << " to " << grown.bought_feed_kg_dm() << " kg DM";
+}
+
 }  // namespace paddock::config

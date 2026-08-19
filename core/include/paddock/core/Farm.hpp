@@ -117,6 +117,15 @@ class Farm {
   /// agronomic point of the system and the reason it grows less.
   void spread_mob(std::size_t mob);
 
+  /// Say what a mob is being fed for, in kg/head/day.
+  ///
+  /// The farm holds it rather than the farmer, because it is the mob's demand
+  /// that it changes and demand is computed here. A mob nobody sets one on
+  /// holds weight, which is what an unmanaged farm does. See
+  /// Mob::target_gain_kg_per_day for why this is not the same field as the
+  /// change the mob actually made.
+  void set_target_gain(std::size_t mob, double kg_per_day);
+
   /// Which mob has a paddock, or kNobody. A paddock carries at most one mob
   /// here: two mobs sharing ground is a real practice, but it needs a rule for
   /// how they divide the feed, and inventing one would be inventing a result.

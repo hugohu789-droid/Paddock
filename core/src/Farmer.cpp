@@ -117,6 +117,15 @@ Farmer::Day Farmer::manage(Farm& farm, const Date& date, const DietQuality& diet
   Day day;
   day.chosen_system = system_for(farm, date);
 
+  // Say what the stock are being fed for, before anything works out what to
+  // offer them. This is the farmer's target reaching the animals at last: it
+  // used to enter only the decision about how much feed to BUY, so on a farm
+  // with grass to spare it changed nothing at all and a mob sat on its opening
+  // weight for a year.
+  for (std::size_t index = 0; index < farm.mobs().size(); ++index) {
+    farm.set_target_gain(index, policy_.target_liveweight_gain_kg_per_day);
+  }
+
   // Put the stock where the chosen system wants them. Under set stocking that
   // is the whole farm; under rotation it is one paddock each, moved on the
   // graze length or early if they ran out.
