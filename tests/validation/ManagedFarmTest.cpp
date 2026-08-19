@@ -67,8 +67,12 @@ RunSummary run(int head, const core::ManagementPolicy& policy, std::string label
 // what the farm was run under while the farm was run under something else.
 TEST(ManagedFarmTest, ABundlesOwnRulesGiveTheSameRunAsThoseRulesPassedIn) {
   const ScenarioBundle bundle = load_scenario(bundle_path());
-  ASSERT_TRUE(bundle.management.has_value())
-      << "this test is about the bundle carrying a policy, and it carries none";
+  // if-and-FAIL rather than ASSERT_TRUE, so the assertion is visible to more
+  // than a person: clang-tidy's optional analysis cannot see through a gtest
+  // macro, and it disagrees across platforms about whether it can.
+  if (!bundle.management.has_value()) {
+    FAIL() << "this test is about the bundle carrying a policy, and it carries none";
+  }
 
   const RunSummary from_bundle = run_managed_scenario(bundle, pasture_diet(), "from the bundle");
   const RunSummary passed_in =

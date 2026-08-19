@@ -131,10 +131,13 @@ TEST(ScenarioBundleTest, TheShippedBundleLoadsWithItsHashesIntact) {
 TEST(ScenarioBundleTest, AGrazedBundleCarriesTheRulesItsFarmerWorksTo) {
   const ScenarioBundle bundle = load_scenario(grazed_bundle());
 
-  ASSERT_TRUE(bundle.management.has_value());
-  EXPECT_DOUBLE_EQ(bundle.management->minimum_cover_kg_dm_per_ha, 1600.0);
-  EXPECT_DOUBLE_EQ(bundle.management->rotation_cover_threshold_kg_dm_per_ha, 2200.0);
-  EXPECT_TRUE(bundle.management->may_buy_feed);
+  if (!bundle.management.has_value()) {
+    FAIL() << "a grazed bundle should carry the rules its farmer works to";
+  }
+  const core::ManagementPolicy& policy = *bundle.management;
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_kg_dm_per_ha, 1600.0);
+  EXPECT_DOUBLE_EQ(policy.rotation_cover_threshold_kg_dm_per_ha, 2200.0);
+  EXPECT_TRUE(policy.may_buy_feed);
 
   // A calendar and a policy are different things and a bundle with stock has
   // both: the calendar says which system applies when, the policy says what
