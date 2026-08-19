@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -122,6 +123,30 @@ class TerrainScene {
   /// again. Neither answer serves both jobs, so both are offered.
   void show_weather(bool visible);
 
+  /// Draws the irrigation that was put on today, one depth per cell in the
+  /// same order as the field.
+  ///
+  /// **The picture follows the water; it never decides it.** What is drawn is
+  /// read from the depths handed in - where they are non-zero, and how deep -
+  /// so a paddock that got nothing shows nothing. Nothing here feeds back into
+  /// the model.
+  ///
+  /// **There is no rotating arm, and its absence is the honest choice.** A real
+  /// centre pivot waters the sector it is passing over; this model waters
+  /// whichever ground the rule found dry, all of it on the same day. An arm
+  /// sweeping round would be an animation with no state behind it, saying
+  /// something about how the water arrived that the model does not know. What
+  /// is drawn instead is the equipment that does not move - the hub, and the
+  /// circle it reaches - with spray standing over the ground that actually got
+  /// water.
+  void show_irrigation(const core::Raster<double>& applied_mm);
+
+  /// How many spray uprights and pieces of equipment were drawn. Here so the
+  /// picture can be checked without rendering it: these are the two things
+  /// show_irrigation decides, and both are decidable from the geometry alone.
+  [[nodiscard]] std::size_t spray_line_count() const;
+  [[nodiscard]] std::size_t pivot_line_count() const;
+
   /// Tilt the camera to look down at this many degrees above the horizon,
   /// keeping where it is looking and how far away it is.
   ///
@@ -130,6 +155,10 @@ class TerrainScene {
   /// adjust deliberately - how much of the farm is in view against how much of
   /// its shape - so it gets a control that always lands somewhere sensible.
   void look_from_above(double degrees);
+
+  /// The ground under a point on the screen, in the scene's own coordinates,
+  /// or nothing when the point missed the surface. See MapScene::ground_at.
+  [[nodiscard]] std::optional<core::Point2D> ground_at(int x, int y) const;
 
   [[nodiscard]] double view_elevation_degrees() const;
 
@@ -257,6 +286,14 @@ class TerrainScene {
   vtkNew<vtkActor> rain_actor_;
   vtkNew<vtkPolyData> wind_marks_;
   vtkNew<vtkActor> wind_actor_;
+
+  /// Spray standing over watered ground, and the pivot it comes from. Two
+  /// actors because they are two things: the spray moves with the water and
+  /// the equipment does not.
+  vtkNew<vtkPolyData> spray_lines_;
+  vtkNew<vtkActor> spray_actor_;
+  vtkNew<vtkPolyData> pivot_lines_;
+  vtkNew<vtkActor> pivot_actor_;
 
   /// The farm's extent, kept so the sky can be hung over it.
   double sky_east_ = 0.0;

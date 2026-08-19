@@ -14,6 +14,7 @@
 #include <vtkAppendPolyData.h>
 #include <vtkCamera.h>
 #include <vtkCellArray.h>
+#include <vtkCellPicker.h>
 #include <vtkContourFilter.h>
 #include <vtkDataSetMapper.h>
 #include <vtkDoubleArray.h>
@@ -62,6 +63,10 @@ constexpr double kMarkerSizeM = 8.0;
 
 constexpr double kPi = 3.14159265358979323846;
 
+/// Roughly how many spray uprights to draw, whatever the farm's size. A
+/// picture, not a count of anything: the water is in the map underneath.
+constexpr double kSprayUprights = 320.0;
+
 constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
 
 }  // namespace
@@ -98,6 +103,8 @@ TerrainScene::TerrainScene() {
   sun_actor_->SetMapper(nullptr);
   for (const auto& pair : {std::make_pair(sun_disc_.Get(), sun_actor_.Get()),
                            std::make_pair(rain_lines_.Get(), rain_actor_.Get()),
+                           std::make_pair(spray_lines_.Get(), spray_actor_.Get()),
+                           std::make_pair(pivot_lines_.Get(), pivot_actor_.Get()),
                            std::make_pair(wind_marks_.Get(), wind_actor_.Get())}) {
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(pair.first);
@@ -147,6 +154,22 @@ TerrainScene::TerrainScene() {
   rain_actor_->GetProperty()->SetLineWidth(1.5);
   wind_actor_->GetProperty()->SetColor(0.80, 0.85, 0.92);
   wind_actor_->GetProperty()->SetLineWidth(2.0);
+
+  // **Spray must not read as rain, so it differs in every way it can.** Rain is
+  // a cool blue, thin, long, high up and spread over the whole farm, because
+  // the day's rainfall is one number for all of it. Spray is near-white, short,
+  // thick, close to the ground and only over the cells that got water. Somebody
+  // glancing at the scene has to be able to say which water is which without
+  // reading a legend.
+  spray_actor_->GetProperty()->SetColor(0.92, 0.98, 1.00);
+  spray_actor_->GetProperty()->SetLineWidth(2.5);
+  spray_actor_->GetProperty()->SetOpacity(0.75);
+  spray_actor_->SetVisibility(0);
+
+  // The equipment: a steel grey that is plainly a machine rather than weather.
+  pivot_actor_->GetProperty()->SetColor(0.72, 0.74, 0.78);
+  pivot_actor_->GetProperty()->SetLineWidth(2.0);
+  pivot_actor_->SetVisibility(0);
 
   surface_mapper_->SetLookupTable(lookup_);
   surface_mapper_->SetScalarModeToUsePointData();
@@ -657,6 +680,187 @@ void TerrainScene::place_compass() {
   }
 }
 
+std::optional<core::Point2D> TerrainScene::ground_at(int x, int y) const {
+  if (!has_field_) {
+    return std::nullopt;
+  }
+
+  // A cell picker rather than a prop picker, because what is wanted is the
+  // point on the ground and not merely which actor was hit. Restricted to the
+  // field: without that the picker happily returns a point on a fence line, a
+  // stock marker or - in the terrain view - the underside of a cloud, and a
+  // click on a sheep would report the ground somewhere above the paddock.
+  vtkNew<vtkCellPicker> picker;
+  picker->SetTolerance(0.0005);
+  picker->InitializePickList();
+  picker->AddPickList(surface_actor_);
+  picker->PickFromListOn();
+
+  if (picker->Pick(x, y, 0.0, renderer_) == 0) {
+    return std::nullopt;
+  }
+
+  std::array<double, 3> position{};
+  picker->GetPickPosition(position.data());
+  return core::Point2D{position[0], position[1]};
+}
+
+std::size_t TerrainScene::spray_line_count() const {
+  return static_cast<std::size_t>(spray_lines_->GetNumberOfLines());
+}
+
+std::size_t TerrainScene::pivot_line_count() const {
+  return static_cast<std::size_t>(pivot_lines_->GetNumberOfLines());
+}
+
+void TerrainScene::show_irrigation(const core::Raster<double>& applied_mm) {
+  vtkNew<vtkPoints> spray;
+  vtkNew<vtkCellArray> spray_cells;
+  vtkNew<vtkPoints> frame;
+  vtkNew<vtkCellArray> frame_cells;
+
+  const auto finish = [&]() {
+    spray_lines_->SetPoints(spray);
+    spray_lines_->SetLines(spray_cells);
+    spray_lines_->Modified();
+    pivot_lines_->SetPoints(frame);
+    pivot_lines_->SetLines(frame_cells);
+    pivot_lines_->Modified();
+    const bool anything = spray->GetNumberOfPoints() > 0;
+    spray_actor_->SetVisibility(weather_shown_ && anything ? 1 : 0);
+    pivot_actor_->SetVisibility(weather_shown_ && anything ? 1 : 0);
+  };
+
+  if (!has_field_ || applied_mm.empty()) {
+    finish();
+    return;
+  }
+
+  const core::GeoTransform& transform = applied_mm.transform();
+  const double cell = transform.cell_size;
+
+  // Where the water went, and how far out it reached. Both are read from the
+  // depths rather than from any setting: a pivot drawn at a radius somebody
+  // typed in would keep its circle when the water stopped reaching that far.
+  double east_sum = 0.0;
+  double north_sum = 0.0;
+  double watered_cells = 0.0;
+  double deepest = 0.0;
+  for (std::size_t row = 0; row < applied_mm.rows(); ++row) {
+    for (std::size_t col = 0; col < applied_mm.cols(); ++col) {
+      const double depth = applied_mm(col, row);
+      if (depth <= 0.0) {
+        continue;
+      }
+      east_sum += transform.origin_easting + ((static_cast<double>(col) + 0.5) * cell);
+      north_sum += transform.origin_northing - ((static_cast<double>(row) + 0.5) * cell);
+      watered_cells += 1.0;
+      deepest = std::max(deepest, depth);
+    }
+  }
+  if (watered_cells <= 0.0 || deepest <= 0.0) {
+    finish();
+    return;
+  }
+
+  const double hub_east = east_sum / watered_cells;
+  const double hub_north = north_sum / watered_cells;
+
+  // How high the ground is under the hub, so the equipment stands on the farm
+  // rather than through it. Taken from the drawn surface, which already
+  // carries the exaggeration.
+  const double ground = highest_m_ * exaggeration_;
+
+  // **Sized against the farm, not in metres.** A pivot mast is about five
+  // metres tall and this farm is a kilometre and a half across: drawn to scale
+  // it is three pixels, and the first attempt at this produced a dotted texture
+  // that read as noise on the pasture rather than as water. These are symbols,
+  // the same way the sun in this scene is a symbol, and they are sized to be
+  // read.
+  const double span = std::max(sky_width_, sky_height_);
+  const double mast = span * 0.045;
+
+  double reach = 0.0;
+  for (std::size_t row = 0; row < applied_mm.rows(); ++row) {
+    for (std::size_t col = 0; col < applied_mm.cols(); ++col) {
+      if (applied_mm(col, row) <= 0.0) {
+        continue;
+      }
+      const double east = transform.origin_easting + ((static_cast<double>(col) + 0.5) * cell);
+      const double north = transform.origin_northing - ((static_cast<double>(row) + 0.5) * cell);
+      reach = std::max(reach, std::hypot(east - hub_east, north - hub_north));
+    }
+  }
+
+  // The mast, drawn with the circle or not at all - see the test below.
+  if (reach > 0.0 && (2.0 * reach) < std::min(sky_width_, sky_height_)) {
+    const vtkIdType first = frame->GetNumberOfPoints();
+    frame->InsertNextPoint(hub_east, hub_north, ground);
+    frame->InsertNextPoint(hub_east, hub_north, ground + mast);
+    frame_cells->InsertNextCell(2);
+    frame_cells->InsertCellPoint(first);
+    frame_cells->InsertCellPoint(first + 1);
+  }
+
+  // **The circle is drawn only when it describes a pivot.**
+  //
+  // A centre pivot waters a circle inside a paddock. When the rule found every
+  // cell dry it waters the whole farm on the same day, and a circle round all
+  // of it would be claiming one machine covers eighty hectares - which no
+  // pivot does; a farm that size is watered by several, or by something that is
+  // not a pivot at all. So the equipment is drawn when its circle fits within
+  // the farm and left off when it does not, and the spray - which is only ever
+  // over ground that got water - carries the picture on its own.
+  const bool fits = reach > 0.0 && (2.0 * reach) < std::min(sky_width_, sky_height_);
+  if (fits) {
+    constexpr int kSegments = 72;
+    const vtkIdType first = frame->GetNumberOfPoints();
+    for (int i = 0; i < kSegments; ++i) {
+      const double angle = (2.0 * kPi * i) / kSegments;
+      frame->InsertNextPoint(hub_east + (reach * std::cos(angle)),
+                             hub_north + (reach * std::sin(angle)), ground + (mast * 0.6));
+    }
+    frame_cells->InsertNextCell(kSegments + 1);
+    for (int i = 0; i < kSegments; ++i) {
+      frame_cells->InsertCellPoint(first + i);
+    }
+    frame_cells->InsertCellPoint(first);
+  }
+
+  // The spray: uprights over watered ground, each one as tall as the depth that
+  // cell was given.
+  //
+  // **Thinned so the pasture underneath still shows.** One upright per cell
+  // draws fifteen hundred of them on this farm and the map disappears under a
+  // white thicket - the reader loses the very thing the spray is meant to be
+  // read against. The stride is chosen from how much ground was watered rather
+  // than fixed, so a small watered patch keeps every cell and a whole farm gets
+  // a scatter: in both cases it is the shape of the watered ground that is
+  // legible, which is what a mean over the farm cannot show.
+  const auto stride = static_cast<std::size_t>(
+      std::max(1.0, std::round(std::sqrt(watered_cells / kSprayUprights))));
+
+  for (std::size_t row = 0; row < applied_mm.rows(); row += stride) {
+    for (std::size_t col = 0; col < applied_mm.cols(); col += stride) {
+      const double depth = applied_mm(col, row);
+      if (depth <= 0.0) {
+        continue;
+      }
+      const double east = transform.origin_easting + ((static_cast<double>(col) + 0.5) * cell);
+      const double north = transform.origin_northing - ((static_cast<double>(row) + 0.5) * cell);
+      const double height = mast * (0.35 + (0.55 * std::clamp(depth / deepest, 0.0, 1.0)));
+      const vtkIdType first = spray->GetNumberOfPoints();
+      spray->InsertNextPoint(east, north, ground);
+      spray->InsertNextPoint(east, north, ground + height);
+      spray_cells->InsertNextCell(2);
+      spray_cells->InsertCellPoint(first);
+      spray_cells->InsertCellPoint(first + 1);
+    }
+  }
+
+  finish();
+}
+
 void TerrainScene::look_from_above(double degrees) {
   vtkCamera* camera = renderer_->GetActiveCamera();
   if (camera == nullptr) {
@@ -711,6 +915,13 @@ void TerrainScene::show_weather(bool visible) {
   cloud_volume_->SetVisibility(on);
   rain_actor_->SetVisibility(on);
   wind_actor_->SetVisibility(on);
+
+  // The pivot only ever shows on a day that had water, so turning the weather
+  // back on must not conjure it onto a dry day. Whether there is anything to
+  // show is decided by the geometry, which is empty when nothing was watered.
+  const int watered = spray_lines_->GetNumberOfLines() > 0 ? on : 0;
+  spray_actor_->SetVisibility(watered);
+  pivot_actor_->SetVisibility(watered);
 }
 
 void TerrainScene::show_sky(double latitude_degrees, int day_of_year, double solar_hour,

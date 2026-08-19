@@ -336,6 +336,70 @@ TEST(TerrainSceneTest, TheCompassDoesNotChangeWhatTheCameraFrames) {
   EXPECT_NEAR(bounds[3] - bounds[2], 5.0 * kCellSize, 1e-6);
 }
 
+// Nothing drawn on a day nothing was watered. A pivot standing over a dry farm
+// would be the picture claiming something the model did not do.
+TEST(TerrainSceneTest, ADryDayDrawsNoIrrigation) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  scene.show_irrigation(raster(16, 12, 0.0));
+  EXPECT_EQ(scene.spray_line_count(), 0U);
+  EXPECT_EQ(scene.pivot_line_count(), 0U);
+}
+
+// Water put on draws spray, and the spray follows the water rather than the
+// farm: a patch that got water shows it and the rest of the farm does not.
+TEST(TerrainSceneTest, SprayStandsOnlyOverGroundThatGotWater) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  core::Raster<double> applied = raster(16, 12, 0.0);
+  for (std::size_t row = 4; row < 8; ++row) {
+    for (std::size_t col = 4; col < 8; ++col) {
+      applied(col, row) = 20.0;
+    }
+  }
+  scene.show_irrigation(applied);
+  const std::size_t patch = scene.spray_line_count();
+  EXPECT_GT(patch, 0U);
+
+  // Twice the ground, and more of it drawn. Not exactly twice: the spray is
+  // thinned by how much was watered, on purpose, so that a whole farm does not
+  // disappear under a white thicket.
+  for (std::size_t row = 4; row < 8; ++row) {
+    for (std::size_t col = 8; col < 12; ++col) {
+      applied(col, row) = 20.0;
+    }
+  }
+  scene.show_irrigation(applied);
+  EXPECT_GT(scene.spray_line_count(), patch);
+}
+
+// **The equipment is drawn only when it describes a pivot.** A circle round a
+// whole farm would be claiming one machine covers all of it, which no pivot
+// does - so a day that watered everything gets spray and no equipment, and a
+// day that watered one corner gets both.
+TEST(TerrainSceneTest, ThePivotIsDrawnOnlyWhenItsCircleFitsTheFarm) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+
+  core::Raster<double> corner = raster(16, 12, 0.0);
+  for (std::size_t row = 1; row < 3; ++row) {
+    for (std::size_t col = 1; col < 3; ++col) {
+      corner(col, row) = 20.0;
+    }
+  }
+  scene.show_irrigation(corner);
+  EXPECT_GT(scene.pivot_line_count(), 0U) << "a small watered patch is a pivot's worth of ground";
+
+  scene.show_irrigation(raster(16, 12, 20.0));
+  EXPECT_EQ(scene.pivot_line_count(), 0U) << "a whole farm is not one pivot";
+  EXPECT_GT(scene.spray_line_count(), 0U) << "but the water is still shown";
+}
+
 // **The cloud can be taken away.** A density field is translucent by
 // construction, and anything translucent between the camera and the paddocks
 // shifts a colour the reader is meant to match against the legend. Turning the

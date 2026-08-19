@@ -10,6 +10,7 @@
 #include <vtkAxisActor2D.h>
 #include <vtkCamera.h>
 #include <vtkCellArray.h>
+#include <vtkCellPicker.h>
 #include <vtkPoints.h>
 #include <vtkProperty.h>
 #include <vtkTextProperty.h>
@@ -266,6 +267,31 @@ void MapScene::show(const core::Raster<double>& raster, const ColourScale& scale
   legend_->SetLabelFormat(format.c_str());
 
   has_field_ = true;
+}
+
+std::optional<core::Point2D> MapScene::ground_at(int x, int y) const {
+  if (!has_field_) {
+    return std::nullopt;
+  }
+
+  // A cell picker rather than a prop picker, because what is wanted is the
+  // point on the ground and not merely which actor was hit. Restricted to the
+  // field: without that the picker happily returns a point on a fence line, a
+  // stock marker or - in the terrain view - the underside of a cloud, and a
+  // click on a sheep would report the ground somewhere above the paddock.
+  vtkNew<vtkCellPicker> picker;
+  picker->SetTolerance(0.0005);
+  picker->InitializePickList();
+  picker->AddPickList(actor_);
+  picker->PickFromListOn();
+
+  if (picker->Pick(x, y, 0.0, renderer_) == 0) {
+    return std::nullopt;
+  }
+
+  std::array<double, 3> position{};
+  picker->GetPickPosition(position.data());
+  return core::Point2D{position[0], position[1]};
 }
 
 core::BoundingBox MapScene::field_bounds() const {

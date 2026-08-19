@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 #include <vtkActor.h>
@@ -90,6 +91,17 @@ class MapScene {
   /// to compare against. This is how that stays fixed without a person looking
   /// at a picture.
   [[nodiscard]] core::BoundingBox field_bounds() const;
+
+  /// The ground under a point on the screen, in the map's own coordinates,
+  /// or nothing when the point missed the farm.
+  ///
+  /// `x` and `y` are VTK display pixels, measured from the bottom left - Qt
+  /// measures from the top, and the caller flips. Returning the coordinate
+  /// rather than a paddock index is deliberate: the scene draws ground and
+  /// knows nothing about who owns it, and a renderer that started resolving
+  /// ownership would be a second answer to a question the model already
+  /// answers.
+  [[nodiscard]] std::optional<core::Point2D> ground_at(int x, int y) const;
 
   /// How many closed rings each fence layer holds. For tests, and for telling
   /// an empty layer from one that failed to build.
