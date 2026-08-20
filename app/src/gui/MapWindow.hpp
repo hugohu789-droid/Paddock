@@ -476,6 +476,14 @@ class MapWindow : public QMainWindow {
   /// which of the others to turn off.
   std::vector<std::size_t> chart_order_;
 
+  /// Whether the days that were irrigated are marked under the plot.
+  ///
+  /// **A box of its own, because it appeared without being asked for.** Two
+  /// quantities were ticked and three things showed up in the key; the third
+  /// was this row of marks, which needs no axis and so was never part of the
+  /// two. Everything drawn is now something somebody chose.
+  QCheckBox* irrigated_days_box_ = nullptr;
+
   /// Adds or removes a quantity from the plot, displacing the oldest when a
   /// third is asked for.
   void choose_series(std::size_t which, bool wanted);

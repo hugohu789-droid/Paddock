@@ -237,20 +237,41 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
   }
 
   // The key, from the same colours the series were just given.
-  key_.clear();
-  const auto swatch = [](const QColor& colour, const QString& name) {
-    return QString("<span style='color:%1'>&#9632;</span>&nbsp;%2")
+  // **Lines and marks get different glyphs, and are kept apart.**
+  //
+  // Listed alike, two lines and one row of marks read as three lines - and the
+  // first person shown it counted three quantities where two had been chosen.
+  // A dash is a line and a dot is an event, which is what they look like on the
+  // chart, and the word "on" separates what is plotted from what merely
+  // happened.
+  const auto entry = [](const QColor& colour, const QString& glyph, const QString& name) {
+    return QString("<span style='color:%1'>%2</span>&nbsp;%3")
         .arg(colour.name())
+        .arg(glyph)
         .arg(name.toHtmlEscaped());
   };
+
+  QString plotted;
   for (const Line& line : lines) {
     // With the unit, because the axis no longer carries it.
     const QString named =
         line.unit.isEmpty() ? line.name : QString("%1 (%2)").arg(line.name).arg(line.unit);
-    key_ += (key_.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") + swatch(line.colour, named);
+    plotted += (plotted.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") +
+               entry(line.colour, "&#9473;&#9473;", named);
   }
+
+  QString happened;
   for (const Events& marks : events) {
-    key_ += (key_.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") + swatch(marks.colour, marks.name);
+    happened += (happened.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") +
+                entry(marks.colour, "&#9679;", marks.name);
+  }
+
+  key_ = plotted;
+  if (!happened.isEmpty()) {
+    key_ += (key_.isEmpty() ? ""
+                            : "&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8A98B4'>|</span>"
+                              "&nbsp;&nbsp;&nbsp;&nbsp;") +
+            QString("<span style='color:#8A98B4'>days:</span>&nbsp;") + happened;
   }
   emit keyChanged(key_);
 

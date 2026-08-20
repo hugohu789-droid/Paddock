@@ -127,7 +127,10 @@ constexpr std::array<ChartSeries, 6> kChartSeries{{
     {"Soil moisture", "Moisture", "of capacity", MapWindow::Field::AvailableWater, 68, 130, 175,
      true},
     {"Growth", "Growth", "kg DM/ha", MapWindow::Field::Growth, 168, 200, 90, false},
-    {"Irrigation", "Water on", "mm", MapWindow::Field::IrrigationToday, 60, 160, 235, false},
+    // **Not called "Irrigation", because the row of marks below already is.**
+    // Both would have appeared in the key at once, under one name, one a line
+    // and one a set of dots.
+    {"Water applied", "Water on", "mm", MapWindow::Field::IrrigationToday, 120, 190, 245, false},
     {"Water stress", "Stress", "of capacity", MapWindow::Field::WaterStress, 214, 132, 74, false},
     {"Legume", "Clover", "of capacity", MapWindow::Field::LegumeFraction, 176, 140, 220, false},
 }};
@@ -595,6 +598,18 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
       chart_boxes_[i]->setChecked(true);
     }
   }
+  // Not one of the two: a row of marks reads off no axis, so it costs neither
+  // of them. It is a box all the same, because everything on the chart should
+  // be something that was chosen.
+  irrigated_days_box_ = new QCheckBox("Irrigated days", this);
+  irrigated_days_box_->setChecked(true);
+  irrigated_days_box_->setToolTip(
+      "Marks the days water was put on, under the plot.\n\nMarks rather than a line: a day was "
+      "irrigated or it was not, and a line joining the days it happened on would slope through "
+      "the days between - water on days that had none.");
+  connect(irrigated_days_box_, &QCheckBox::toggled, this, [this] { refresh_chart(); });
+  picker->addWidget(irrigated_days_box_);
+
   picker->addStretch(1);
 
   auto* chart_column = new QVBoxLayout;
@@ -1791,11 +1806,13 @@ void MapWindow::refresh_chart() {
   // why two carry every quantity above.
   std::vector<SeasonChart::Events> events;
 
-  std::vector<bool> watered(dates_.size(), false);
-  for (std::size_t day = 0; day < irrigation_mm_.size() && day < watered.size(); ++day) {
-    watered[day] = irrigation_mm_[day] > 0.0;
+  if (irrigated_days_box_ != nullptr && irrigated_days_box_->isChecked()) {
+    std::vector<bool> watered(dates_.size(), false);
+    for (std::size_t day = 0; day < irrigation_mm_.size() && day < watered.size(); ++day) {
+      watered[day] = irrigation_mm_[day] > 0.0;
+    }
+    events.push_back({"Irrigated", QColor(60, 160, 235), std::move(watered)});
   }
-  events.push_back({"Irrigation", QColor(60, 160, 235), std::move(watered)});
 
   // **Mob moves are not drawn, and the reason is density.**
   //
