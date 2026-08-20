@@ -8,11 +8,13 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QString>
 #include <QWidget>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -85,6 +87,15 @@ class SetupPanel : public QWidget {
   /// does not restore would make the run differ from the one the comparison
   /// table reported. A test holds the round trip.
   void adopt_choices(const Choices& chosen);
+
+  /// Puts another button on the row that carries Reset and Run.
+  ///
+  /// **One row of actions, not two.** The window's scenario buttons used to sit
+  /// on a line of their own directly under this one, which read as two separate
+  /// sets of controls when they are one: four things a person can do to what is
+  /// on screen. The panel owns the row because the row is part of the panel; the
+  /// window keeps its buttons and their meaning.
+  void add_action(QPushButton* button);
 
   /// How the panel is set, as label and value, for a comparison's header.
   ///
@@ -258,6 +269,43 @@ class SetupPanel : public QWidget {
   /// and a person setting a farm up had nothing to press. The two are different
   /// actions on different things and now have a button each.
   QPushButton* run_button_ = nullptr;
+
+  /// Puts the panel back the way the bundle published it.
+  QPushButton* reset_button_ = nullptr;
+
+  /// The row those buttons sit on, kept so the window can add its own.
+  QHBoxLayout* actions_ = nullptr;
+
+  /// Gives every button on that row the width of the widest of them.
+  void even_actions();
+
+  /// The settings as the bundle published them, taken the moment it was
+  /// adopted.
+  ///
+  /// **"Default" means what this bundle says, not a figure invented here.** The
+  /// panel opens showing the bundle's own stock, its own farmer's rules and its
+  /// own ground, so that pressing Run without touching anything reproduces the
+  /// published scenario. That is the state worth being able to get back to: a
+  /// factory default would be somebody's guess, and returning to it would
+  /// quietly replace a published run with an invented one.
+  std::optional<Choices> as_published_;
+
+  /// The same state written out as describe() gives it, so "has anything
+  /// changed" is one string comparison rather than an operator== over a dozen
+  /// model types that a new field could silently escape.
+  std::vector<std::pair<std::string, std::string>> published_description_;
+
+  /// Whether the panel now says something different from what it published.
+  [[nodiscard]] bool differs_from_published() const;
+
+  /// Lights the Reset button when there is something to undo, and puts it out
+  /// when there is not. Called from wherever either could have changed: a
+  /// widget being edited, a bundle being adopted, a run starting or finishing.
+  void refresh_reset();
+
+  /// Whether the model is stepping. Held because Reset is refused while it is,
+  /// and the panel is asked to refresh from places that do not know.
+  bool running_ = false;
 
   bool ready_ = false;
   bool can_report_ = false;

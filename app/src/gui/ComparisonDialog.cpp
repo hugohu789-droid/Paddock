@@ -12,15 +12,14 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QMessageBox>
-#include <QPageSize>
-#include <QPdfWriter>
 #include <QPushButton>
-#include <QTextDocument>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <cstddef>
 #include <string>
 #include <utility>
+
+#include "PagePrinter.hpp"
 
 namespace paddock::app {
 
@@ -226,15 +225,9 @@ void ComparisonDialog::save_pdf() {
   // whatever size the window happened to be. This is the same table, the same
   // summary and the same caveats, in the order they are meant to be read, at a
   // size a page can hold.
-  QPdfWriter writer(path);
-  writer.setPageSize(QPageSize(QPageSize::A4));
-  writer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
-  writer.setTitle("Paddock scenario comparison");
-
-  QTextDocument document;
-  document.setPageSize(QSizeF(writer.width(), writer.height()));
-  document.setHtml(as_page(table_));
-  document.print(&writer);
+  if (!print_html_to_pdf(path, as_page(table_), "Paddock scenario comparison")) {
+    QMessageBox::warning(this, "Save report", "Could not write " + path);
+  }
 }
 
 void ComparisonDialog::copy_markdown() {

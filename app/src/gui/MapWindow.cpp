@@ -50,6 +50,7 @@
 
 #include "../AttachElevation.hpp"
 #include "ComparisonDialog.hpp"
+#include "PagePrinter.hpp"
 #include "ReportDialog.hpp"
 
 namespace paddock::app {
@@ -67,9 +68,11 @@ constexpr int kOpeningPanelWidth = 520;
 constexpr int kMostScenarios = 5;
 
 /// How the side of the window is divided between the panel and the list, as
-/// layout stretch. Four to one, so the list is about a fifth of the height.
+/// layout stretch. Two to one, so the list holds a third of the height: at a
+/// fifth it showed two rows of the five it can carry, and a list that cannot
+/// show what is in it is a list somebody has to scroll to trust.
 constexpr int kPanelShare = 4;
-constexpr int kScenarioListShare = 1;
+constexpr int kScenarioListShare = 2;
 
 /// How the window divides, as a share of the height it has.
 ///
@@ -98,6 +101,18 @@ constexpr std::size_t kMostPlotted = 2;
 /// The fewest scenarios a comparison needs. One is a simulation, and the panel
 /// runs that.
 constexpr std::size_t kFewestCompared = 2;
+
+/// Room between the chart's tick boxes, in pixels.
+constexpr int kPickerSpacing = 14;
+
+/// Room around the scenario row and the list under it, in pixels.
+///
+/// The same numbers the setup panel puts around Reset and Run, because these
+/// sit directly below that row: two rows of buttons at two different indents
+/// read as two unrelated things, when they are one column of controls down the
+/// side of the window.
+constexpr int kSideMargin = 10;
+constexpr int kSideSpacing = 8;
 
 /// What the chart can draw, and which side of it each reads off.
 ///
@@ -576,8 +591,11 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // One box per quantity, in the same order the chart draws them. The first two
   // are ticked because they are the pair a farm is usually read by: what is
   // growing, and whether there is water for it.
+  // Room between the boxes, so a row of seven reads as seven choices rather
+  // than as a run of words.
   auto* picker = new QHBoxLayout;
   picker->setContentsMargins(8, 2, 8, 0);
+  picker->setSpacing(kPickerSpacing);
   picker->addWidget(new QLabel("Plot", this));
   for (const ChartSeries& series : kChartSeries) {
     auto* box = new QCheckBox(series.label, this);
@@ -676,11 +694,14 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // a fifth of the height and the panel the rest, because the panel is where
   // the work is and the list is a record of it - and a list given equal room
   // would be four empty rows most of the time.
-  add_scenario_button_ = new QPushButton("Add Scenario", this);
+  add_scenario_button_ = new QPushButton("Add scenario", this);
   add_scenario_button_->setToolTip(
-      "Keeps the panel as it stands now, under a name you give it.\n\nUp to " +
+      "Add scenario\n\nKeeps the panel as it stands now, under a name you give it, and puts it in "
+      "the list below.\n\nWhat is kept is the settings, not the run: every scenario is simulated "
+      "again when Compare is pressed, so a table is never built out of answers from different "
+      "versions of the model. Up to " +
       QString::number(kMostScenarios) +
-      " scenarios; the comparison runs every one of them on the same weather.");
+      " of them, because a table wider than that stops being read across.");
 
   // **One button runs whatever is in the list.**
   //
@@ -693,44 +714,61 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // button called Run, which on a one-scenario list meant "run that one" and on
   // a longer one meant "compare them" - two different actions behind one word.
   // Running one scenario is the panel's job now.
-  compare_button_ = new QPushButton("Run comparison", this);
+  // One word each, on a row four wide. What they do at length is in the
+  // tooltips, which is where a sentence belongs.
+  compare_button_ = new QPushButton("Compare", this);
   compare_button_->setToolTip(
-      "Runs every scenario in the list and puts the results in one table.\n\nNeeds two: one "
-      "scenario is a simulation, and the panel above already runs that. Each is a full year "
-      "over the same recorded weather, so a difference between them is a difference between "
-      "the rules rather than between the seasons they met.");
+      "Run comparison\n\nRuns every scenario in the list and puts the results in one table: what "
+      "differs between them, then pasture, stock, management and bought feed side by "
+      "side.\n\nNeeds two, because one scenario is a simulation and Run beside this already does "
+      "that. Each is a full year over the same recorded weather, so a difference between them is "
+      "a difference between the rules rather than between the seasons they met.");
   compare_button_->setEnabled(false);
-
-  report_button_ = new QPushButton("Comparison report", this);
-  report_button_->setToolTip(
-      "Opens the report on the last comparison: the table, what differed between the scenarios, "
-      "and what the numbers say.\n\nFrom there it can be saved as a PDF or a CSV, or copied as "
-      "Markdown. The report on a single run is under the readings beside the chart.");
-  report_button_->setEnabled(false);
 
   scenario_list_ = new QListWidget(this);
   scenario_list_->setToolTip(
       "Choose one to load it back into the panel and draw it on the map, so a row of the "
       "comparison can be looked at rather than only read.");
 
-  auto* scenario_buttons = new QHBoxLayout;
-  scenario_buttons->addWidget(add_scenario_button_);
-  scenario_buttons->addStretch(1);
-  scenario_buttons->addWidget(compare_button_);
-  scenario_buttons->addWidget(report_button_);
+  // **On the panel's own row, beside Reset and Run.** These act on the list
+  // rather than on the form, but they are still four things a person can do to
+  // what is on screen, and four buttons on one line say that where two lines of
+  // two said there were two separate sets of them.
+  setup_->add_action(add_scenario_button_);
+  setup_->add_action(compare_button_);
+
+  // **A box with rows in it does not say what the rows are.** Named like the
+  // panel's own sections above it, so the side of the window reads as one
+  // column: Farm, Stock, Management, Irrigation, and then what has been kept.
+  auto* scenario_heading = new QLabel("Scenarios", this);
+  scenario_heading->setObjectName("sectionHeading");
+  scenario_heading->setToolTip(
+      "The setups kept with Add scenario. Choose one to load it back into the panel and draw it "
+      "on the map, so a row of a comparison can be looked at rather than only read.");
+  scenario_heading->setContentsMargins(kSideMargin, kSideSpacing, kSideMargin, 0);
+
+  // The list stands in from the edges as far as the buttons above it do, so the
+  // column has one left edge rather than three.
+  auto* scenario_row = new QHBoxLayout;
+  scenario_row->setContentsMargins(kSideMargin, kSideSpacing / 2, kSideMargin, kSideMargin);
+  scenario_row->addWidget(scenario_list_);
 
   auto* side = new QVBoxLayout;
   side->setContentsMargins(0, 0, 0, 0);
+  // **Nothing between the rows but the margins they carry themselves.** The
+  // layout's own spacing put a gap under the panel that made the scenario row
+  // look like the top of something new, when it belongs with the Run button
+  // directly above it.
+  side->setSpacing(0);
   side->addWidget(setup_, kPanelShare);
-  side->addLayout(scenario_buttons);
-  side->addWidget(scenario_list_, kScenarioListShare);
+  side->addWidget(scenario_heading);
+  side->addLayout(scenario_row, kScenarioListShare);
 
   auto* side_panel = new QWidget(this);
   side_panel->setLayout(side);
 
   connect(add_scenario_button_, &QPushButton::clicked, this, &MapWindow::add_scenario);
   connect(compare_button_, &QPushButton::clicked, this, &MapWindow::run_comparison);
-  connect(report_button_, &QPushButton::clicked, this, &MapWindow::open_comparison_report);
   connect(setup_, &SetupPanel::readinessChanged, this, &MapWindow::refresh_scenario_list);
   connect(setup_, &SetupPanel::resultsReady, results_label_, &QLabel::setText);
   connect(setup_, &SetupPanel::readinessChanged, this,
@@ -1005,8 +1043,34 @@ void MapWindow::adopt_run(RunProducts products) {
   announce(QString("%1 days simulated").arg(dates_.size()), true);
 }
 
+bool MapWindow::save_run_pdf(const std::string& path, std::string& failure) {
+  failure.clear();
+  if (!last_run_.has_value() || !last_bundle_.has_value()) {
+    failure = "there is no finished run to write a report on";
+    return false;
+  }
+  // A run carrying no stock is still worth a report: what the ground grew
+  // ungrazed, what the water did, and whether the budgets closed are the same
+  // questions on an empty farm. The report leaves out the sections that would
+  // have nothing in them, so nothing here has to.
+  config::ReportOptions options;
+  options.farm_name = last_bundle_->name;
+  options.policy = &last_policy_;
+  options.ground_caveat = no_ground_reason_;
+  if (!print_markdown_to_pdf(
+          QString::fromStdString(path),
+          QString::fromStdString(config::render_report(*last_bundle_, *last_run_, options)),
+          "Paddock run report")) {
+    failure = "could not write " + path;
+    return false;
+  }
+  return true;
+}
+
 void MapWindow::open_report() {
-  if (!last_run_.has_value() || !last_bundle_.has_value() || !last_run_had_stock_) {
+  // Stock or no stock: a pasture-only run has a pasture, a water balance and
+  // budgets to show, and the report leaves out what it cannot fill.
+  if (!last_run_.has_value() || !last_bundle_.has_value()) {
     return;
   }
   config::ReportOptions options;
@@ -1887,9 +1951,6 @@ void MapWindow::refresh_scenario_list() {
   // the single case, so nothing is out of reach - which is what makes it fair
   // to disable this rather than have it mean something else.
   compare_button_->setEnabled(scenarios_.size() >= kFewestCompared);
-  // A report needs a run behind it. Offering one before anything has been run
-  // would open a window describing nothing.
-  report_button_->setEnabled(last_report_.has_value());
 }
 
 void MapWindow::add_scenario() {

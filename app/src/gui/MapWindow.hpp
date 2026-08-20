@@ -342,6 +342,18 @@ class MapWindow : public QMainWindow {
   /// with no reason is the kind of silence that costs an afternoon.
   [[nodiscard]] std::string comparison_markdown(QString& failure);
 
+  /// Writes the report on the run currently drawn to a PDF.
+  ///
+  /// Here so a page can be looked at without a person clicking through two
+  /// dialogues - and a PDF is the one thing in this window whose faults are
+  /// invisible until somebody opens the file.
+  ///
+  /// False with `failure` set when there is no finished run to report on, or
+  /// when the file could not be written. The reason is passed back rather than
+  /// printed here, because the only caller is the command line and it owns what
+  /// goes to the terminal.
+  [[nodiscard]] bool save_run_pdf(const std::string& path, std::string& failure);
+
   /// Whether the pivots are turning.
   ///
   /// Exposed because this is the one thing about the irrigation picture that a
@@ -494,7 +506,6 @@ class MapWindow : public QMainWindow {
   QListWidget* scenario_list_ = nullptr;
   QPushButton* add_scenario_button_ = nullptr;
   QPushButton* compare_button_ = nullptr;
-  QPushButton* report_button_ = nullptr;
 
   /// Opens the report on the run currently drawn, as opposed to the comparison
   /// of several. Under the readings it expands on.

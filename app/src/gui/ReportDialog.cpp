@@ -7,13 +7,12 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QMessageBox>
-#include <QPageSize>
-#include <QPdfWriter>
 #include <QPushButton>
-#include <QTextDocument>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <utility>
+
+#include "PagePrinter.hpp"
 
 namespace paddock::app {
 
@@ -57,15 +56,9 @@ void ReportDialog::save_pdf() {
   // picture of the window would carry whatever was scrolled into view and
   // nothing else. Rendering the report again gives the whole of it, in the
   // order it is meant to be read.
-  QPdfWriter writer(path);
-  writer.setPageSize(QPageSize(QPageSize::A4));
-  writer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
-  writer.setTitle("Paddock run report");
-
-  QTextDocument document;
-  document.setPageSize(QSizeF(writer.width(), writer.height()));
-  document.setMarkdown(markdown_);
-  document.print(&writer);
+  if (!print_markdown_to_pdf(path, markdown_, "Paddock run report")) {
+    QMessageBox::warning(this, "Save report", "Could not write " + path);
+  }
 }
 
 void ReportDialog::save() {

@@ -94,6 +94,7 @@ void print_usage() {
             << "  --day N        Move the timeline to day N before drawing\n"
             << "  --pan N        Slide the terrain view, -100 to 100\n"
             << "  --layers       Show every layer of the scene\n"
+            << "  --report-pdf F   Write this run's report to a PDF\n"
             << "  --compare      Run a rain-fed and an irrigated scenario and print the table\n"
             << "  --window-shot F  Save the whole window, controls included\n"
             << "  --field NAME   Draw a named field, as the list under the map does\n"
@@ -140,6 +141,7 @@ int main(int argc, char** argv) {
                        std::find(args.begin(), args.end(), "--panel-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--inspect") != args.end() ||
                        std::find(args.begin(), args.end(), "--compare") != args.end() ||
+                       std::find(args.begin(), args.end(), "--report-pdf") != args.end() ||
                        std::find(args.begin(), args.end(), "--window-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--smoke") != args.end();
     // Must be set before the QApplication exists, or the widget and the render
@@ -325,6 +327,20 @@ int main(int argc, char** argv) {
           return 1;
         }
         std::cout << table;
+      }
+
+      if (const auto pdf_flag = std::find(args.begin(), args.end(), "--report-pdf");
+          pdf_flag != args.end() && std::next(pdf_flag) != args.end()) {
+        const std::string pdf(*std::next(pdf_flag));
+        // The reason comes back from the window rather than being guessed at
+        // here: "could not write it" and "there is nothing worth writing" send
+        // somebody looking in two different places.
+        std::string failure;
+        if (!window.save_run_pdf(pdf, failure)) {
+          std::cerr << "paddock-gui: " << failure << '\n';
+          return 1;
+        }
+        std::cout << "paddock-gui: wrote " << pdf << '\n';
       }
 
       // Which day to show, so a check can land on one where something

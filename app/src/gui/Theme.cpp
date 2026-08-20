@@ -72,15 +72,26 @@ void apply_theme(QApplication& application) {
           "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; "
           "  color: %DIM%; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; }"
 
+          // A heading over something that is not in a group box - the scenario
+          // list - set to match the group titles above, so the side of the
+          // window reads as one column of named sections.
+          "QLabel#sectionHeading { color: %DIM%; font-weight: 600; letter-spacing: 0.6px; }"
+
+          // One height for every button in the window. Left to itself a button
+          // is as tall as its own text, so a bold one - the default action -
+          // stood a few pixels taller than the plain ones beside it, and a row
+          // of them read as ragged rather than as a row.
           "QPushButton { background: %RAISED%; border: 1px solid %BORDER%; border-radius: 6px; "
-          "  padding: 6px 14px; color: %TEXT%; }"
+          "  padding: 6px 14px; min-height: 22px; color: %TEXT%; }"
           "QPushButton:hover:enabled { border-color: %ACCENT%; }"
           "QPushButton:pressed:enabled { background: %BORDER%; }"
           "QPushButton:default:enabled { background: %ACCENT%; border-color: %ACCENT%; "
           "  color: %BG%; font-weight: 600; }"
           "QPushButton:disabled { color: %DIM%; border-color: %SURFACE%; }"
+          // The flat ones are the "Advanced (2)" disclosures, which are links
+          // rather than buttons and are not held to the row height above.
           "QPushButton:flat { background: transparent; border: none; color: %DIM%; "
-          "  text-align: left; padding-left: 2px; }"
+          "  text-align: left; padding-left: 2px; min-height: 0; }"
           "QPushButton:flat:hover { color: %ACCENT%; }"
 
           "QComboBox, QAbstractSpinBox, QLineEdit { background: %BG%; border: 1px solid %BORDER%; "
@@ -110,8 +121,8 @@ void apply_theme(QApplication& application) {
           "QSlider::handle:vertical { background: %TEXT%; height: 12px; margin: 0 -5px; "
           "  border-radius: 6px; }"
 
-          "QCheckBox { spacing: 7px; }"
-          "QCheckBox::indicator { width: 15px; height: 15px; border-radius: 4px; "
+          "QCheckBox { spacing: 6px; }"
+          "QCheckBox::indicator { width: 13px; height: 13px; border-radius: 3px; "
           "  border: 1px solid %BORDER%; background: %BG%; }"
           "QCheckBox::indicator:checked { background: %ACCENT%; border-color: %ACCENT%; }"
           "QCheckBox:disabled { color: %DIM%; }"
