@@ -11,6 +11,7 @@
 #include <QPoint>
 #include <QPushButton>
 #include <QSlider>
+#include <QSplitter>
 #include <QTimer>
 #include <QVTKOpenGLNativeWidget.h>
 #include <array>
@@ -448,6 +449,13 @@ class MapWindow : public QMainWindow {
   /// when, and a farm adviser's two questions are which paddock and which
   /// month.
   SeasonChart* chart_ = nullptr;
+
+  /// The map over the readings. Kept so the map's share of the height can be
+  /// set once the window knows how tall it is.
+  QSplitter* scene_split_ = nullptr;
+
+  /// The coloured names of whatever the chart is drawing, above it.
+  QLabel* chart_key_ = nullptr;
 
   /// Fills the chart from the run that has just finished.
   void refresh_chart();

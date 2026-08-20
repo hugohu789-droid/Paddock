@@ -64,9 +64,21 @@ class SeasonChart : public QChartView {
   /// cannot disagree about which day is being looked at.
   void mark_day(int day);
 
+  /// A line of coloured names for whatever is drawn, as rich text.
+  ///
+  /// **Which colour is which is the one thing a chart cannot leave unsaid.**
+  /// The axis titles say which side each line reads off, but not which of the
+  /// two lines is which colour, and the rows of marks have no axis to be named
+  /// by at all. Built here from the same colours the series were given, so a
+  /// colour changed in one place cannot disagree with the key in another.
+  [[nodiscard]] QString colour_key() const;
+
   void clear();
 
  signals:
+  /// The colour key changed, because a new run was drawn.
+  void keyChanged(const QString& key);
+
   /// A day was clicked. The window moves the timeline to it, which is what
   /// makes the chart a way of getting somewhere rather than only of looking.
   void dayPicked(int day);
@@ -76,6 +88,7 @@ class SeasonChart : public QChartView {
 
  private:
   std::vector<QString> dates_;
+  QString key_;
   int marked_ = 0;
 
   QChart* chart_ = nullptr;

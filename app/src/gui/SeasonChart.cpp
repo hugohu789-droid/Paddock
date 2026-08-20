@@ -57,7 +57,12 @@ SeasonChart::SeasonChart(QWidget* parent) : QChartView(parent) {
   // rows of marks are named in the title. That is deterministic, and it costs
   // no width.
   chart_->legend()->setVisible(false);
-  chart_->setMargins(QMargins(2, 2, 2, 2));
+  // **Margins wide enough for the axes, which are drawn in them.**
+  //
+  // Squeezed to two pixels to save room, and the chart quietly stopped drawing
+  // its axis labels, its axis titles and its title - all of which live outside
+  // the plot area and inside the margin. The symptom was a chart with no
+  // numbers on it, and the cause was not the axes at all.
   // **The same dark as the window around it.** A white chart beside a dark
   // instrument panel reads as a document somebody pasted in, and next to a
   // night-dark scene it is the brightest thing on screen - which is the wrong
@@ -210,7 +215,26 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
     row -= kEventRowSpacing;
   }
 
+  // The key, from the same colours the series were just given.
+  key_.clear();
+  const auto swatch = [](const QColor& colour, const QString& name) {
+    return QString("<span style='color:%1'>&#9632;</span>&nbsp;%2")
+        .arg(colour.name())
+        .arg(name.toHtmlEscaped());
+  };
+  for (const Line& line : lines) {
+    key_ += (key_.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") + swatch(line.colour, line.name);
+  }
+  for (const Events& marks : events) {
+    key_ += (key_.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") + swatch(marks.colour, marks.name);
+  }
+  emit keyChanged(key_);
+
   place_marker();
+}
+
+QString SeasonChart::colour_key() const {
+  return key_;
 }
 
 void SeasonChart::place_marker() {

@@ -9,6 +9,7 @@
 #include <QDockWidget>
 #include <QEvent>
 #include <QEventLoop>
+#include <QFrame>
 #include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -18,6 +19,7 @@
 #include <QMouseEvent>
 #include <QRegularExpression>
 #include <QResizeEvent>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QVBoxLayout>
@@ -69,10 +71,21 @@ constexpr int kMostScenarios = 5;
 constexpr int kPanelShare = 4;
 constexpr int kScenarioListShare = 1;
 
-/// How the window opens, in pixels. The map is the thing being driven and
-/// everything under it is read, so the map gets the room; every handle moves.
-constexpr int kOpeningMapHeight = 560;
-constexpr int kOpeningLowerHeight = 260;
+/// How the window divides, as a share of the height it has.
+///
+/// **The map takes most of it, because the map is the thing.** Everything under
+/// it is read once and then glanced at; the farm is looked at continuously, and
+/// at a quarter of the window there was not enough of it to see. The handle
+/// still moves - these are opening proportions, not limits.
+constexpr double kMapShareOfHeight = 0.65;
+
+/// The least the map is ever given, in pixels, however the window is resized.
+/// Below this a farm a kilometre across is a smudge.
+constexpr int kSmallestMapHeight = 320;
+
+/// Roughly what the rows of controls under the splitter take, in pixels, so the
+/// share above is of the space the splitter actually has.
+constexpr int kControlsAllowance = 120;
 constexpr int kOpeningReadingsWidth = 620;
 constexpr int kOpeningChartWidth = 700;
 
@@ -451,19 +464,47 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // The readings move down here because on one line they were being truncated:
   // a weather line, a paddock and a farm summary each cut off mid-sentence at
   // the width of the window. Given a column they wrap.
+  // **The readings scroll.** Four lines that each wrap to three is more than
+  // any fixed strip holds, and the strip is now smaller because the map takes
+  // most of the height. Clipped text is worse than a scroll bar: a reader who
+  // cannot see there is more will not look for it.
   auto* readings = new QVBoxLayout;
-  readings->setContentsMargins(4, 4, 4, 4);
+  readings->setContentsMargins(10, 8, 10, 8);
+  readings->setSpacing(7);
   readings->addWidget(weather_label_);
   readings->addWidget(paddock_label_);
   readings->addWidget(summary_label_);
   readings->addWidget(results_label_);
   readings->addStretch(1);
-  auto* readings_holder = new QWidget(this);
-  readings_holder->setLayout(readings);
+
+  auto* readings_inner = new QWidget(this);
+  readings_inner->setLayout(readings);
+
+  auto* readings_holder = new QScrollArea(this);
+  readings_holder->setWidget(readings_inner);
+  readings_holder->setWidgetResizable(true);
+  readings_holder->setFrameShape(QFrame::NoFrame);
+  readings_holder->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+  // The chart with its colour key over it. Which colour is which is the one
+  // thing a chart cannot leave unsaid, and the axis titles cannot say it: they
+  // name the sides, not the lines, and the rows of marks have no axis at all.
+  chart_key_ = new QLabel(this);
+  chart_key_->setTextFormat(Qt::RichText);
+  chart_key_->setContentsMargins(8, 4, 8, 0);
+  connect(chart_, &SeasonChart::keyChanged, chart_key_, &QLabel::setText);
+
+  auto* chart_column = new QVBoxLayout;
+  chart_column->setContentsMargins(0, 0, 0, 0);
+  chart_column->setSpacing(0);
+  chart_column->addWidget(chart_key_);
+  chart_column->addWidget(chart_, 1);
+  auto* chart_holder = new QWidget(this);
+  chart_holder->setLayout(chart_column);
 
   auto* lower = new QSplitter(Qt::Horizontal, this);
   lower->addWidget(readings_holder);
-  lower->addWidget(chart_);
+  lower->addWidget(chart_holder);
   lower->setSizes({kOpeningReadingsWidth, kOpeningChartWidth});
 
   auto* split = new QSplitter(Qt::Vertical, this);
@@ -473,9 +514,9 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   split->setStretchFactor(1, 1);
   // Stretch alone is not enough: a splitter starts from its children's size
   // hints, and a render window asks for far less than a farm needs, so the map
-  // opened shorter than the strip under it. These are opening sizes, not
-  // limits - the handles still move.
-  split->setSizes({kOpeningMapHeight, kOpeningLowerHeight});
+  // opened shorter than the strip under it.
+  scene_holder->setMinimumHeight(kSmallestMapHeight);
+  scene_split_ = split;
 
   auto* layout = new QVBoxLayout;
   layout->addWidget(split, 1);
@@ -639,6 +680,14 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // narrower job. It is set before the first run so the opening frame is the
   // one that will be kept, rather than a flat map that redraws itself.
   view_box_->setCurrentIndex(1);
+
+  // Now that the window has its size, give the map its share of it. Done here
+  // rather than with fixed pixels so the proportion holds on a laptop and on a
+  // large display alike.
+  const int usable = height() - kControlsAllowance;
+  const auto for_map = static_cast<int>(usable * kMapShareOfHeight);
+  scene_split_->setSizes({std::max(for_map, kSmallestMapHeight), usable - for_map});
+
   start_run();
   scene_.reset_camera();
 }
@@ -868,6 +917,14 @@ bool MapWindow::save_panel_screenshot(const std::string& path) {
 }
 
 bool MapWindow::save_window_screenshot(const std::string& path) {
+  // **Let the deferred layouts run first.**
+  //
+  // A QChart lays itself out on the next turn of the event loop, so a grab
+  // taken straight after the data changed captures the layout from before it -
+  // the axes and title of a chart that no longer exists. That cost an afternoon
+  // of looking for a bug in the chart: the chart was right and the picture of
+  // it was one step behind.
+  QCoreApplication::processEvents(QEventLoop::AllEvents, kWaitSliceMs);
   // The map itself is drawn by OpenGL into a surface Qt does not own, so a
   // grab of the window leaves a hole where it is. That is the point here: what
   // is being checked is everything around the map.
