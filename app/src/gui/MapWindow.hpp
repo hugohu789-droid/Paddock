@@ -488,6 +488,10 @@ class MapWindow : public QMainWindow {
   QPushButton* compare_button_ = nullptr;
   QPushButton* report_button_ = nullptr;
 
+  /// Opens the report on the run currently drawn, as opposed to the comparison
+  /// of several. Under the readings it expands on.
+  QPushButton* run_report_button_ = nullptr;
+
   /// The last table produced, so the report can be reopened without running
   /// everything again. Empty until something has been run.
   std::optional<config::ComparisonTable> last_report_;

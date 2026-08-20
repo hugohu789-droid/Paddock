@@ -251,6 +251,14 @@ class SetupPanel : public QWidget {
   /// now live beside the scenario list, where a run is of the whole list rather
   /// than of whatever the form happens to show. The panel still knows whether
   /// what it holds is usable, and says so.
+  /// Runs whatever the panel is showing, on its own.
+  ///
+  /// **Back in the panel, because that is what it acts on.** It ran the panel
+  /// once, then moved out to the scenario list where it meant "run the list",
+  /// and a person setting a farm up had nothing to press. The two are different
+  /// actions on different things and now have a button each.
+  QPushButton* run_button_ = nullptr;
+
   bool ready_ = false;
   bool can_report_ = false;
   QLabel* problem_label_ = nullptr;

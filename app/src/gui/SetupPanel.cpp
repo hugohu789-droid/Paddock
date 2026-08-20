@@ -271,7 +271,16 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   layout->addWidget(farm_group);
   layout->addWidget(stock_group);
   layout->addWidget(management_group);
+  run_button_ = new QPushButton("Run this scenario", this);
+  run_button_->setDefault(true);
+  run_button_->setToolTip(
+      "Runs the farm as this panel describes it, and draws the year on the map.\n\nAdding it to "
+      "the scenario list keeps a copy of these settings; running the list is what compares "
+      "them.");
+  connect(run_button_, &QPushButton::clicked, this, &SetupPanel::runRequested);
+
   layout->addWidget(irrigation_group);
+  layout->addWidget(run_button_);
   layout->addWidget(problem_label_);
   layout->addStretch(1);
 
@@ -364,6 +373,7 @@ void SetupPanel::populate(const std::string& data_directory) {
 
   const bool have_scenario = scenario_box_->count() > 0;
   ready_ = have_scenario;
+  run_button_->setEnabled(ready_);
   emit readinessChanged();
   if (!have_scenario) {
     problem_label_->setText(
@@ -726,6 +736,7 @@ QString SetupPanel::caveat() const {
 void SetupPanel::refresh_readiness() {
   const QString blocking = problem();
   ready_ = blocking.isEmpty();
+  run_button_->setEnabled(ready_);
   emit readinessChanged();
 
   if (!blocking.isEmpty()) {
@@ -743,6 +754,8 @@ void SetupPanel::refresh_readiness() {
 
 void SetupPanel::set_running(bool running) {
   ready_ = !running && problem().isEmpty();
+  run_button_->setEnabled(ready_);
+  run_button_->setText(running ? "Running..." : "Run this scenario");
   emit readinessChanged();
   scenario_box_->setEnabled(!running);
   terrain_box_->setEnabled(!running);

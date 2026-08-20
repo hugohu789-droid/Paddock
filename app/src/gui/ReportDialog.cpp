@@ -7,7 +7,10 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QPageSize>
+#include <QPdfWriter>
 #include <QPushButton>
+#include <QTextDocument>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <utility>
@@ -25,7 +28,8 @@ ReportDialog::ReportDialog(QString markdown, QString suggested_filename, QWidget
   view_->setOpenExternalLinks(false);
 
   auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
-  QPushButton* save_button = buttons->addButton("Save as...", QDialogButtonBox::ActionRole);
+  QPushButton* pdf_button = buttons->addButton("Save as PDF", QDialogButtonBox::ActionRole);
+  QPushButton* save_button = buttons->addButton("Save as Markdown", QDialogButtonBox::ActionRole);
 
   auto* layout = new QVBoxLayout;
   layout->addWidget(view_, 1);
@@ -35,6 +39,33 @@ ReportDialog::ReportDialog(QString markdown, QString suggested_filename, QWidget
 
   connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
   connect(save_button, &QPushButton::clicked, this, &ReportDialog::save);
+  connect(pdf_button, &QPushButton::clicked, this, &ReportDialog::save_pdf);
+}
+
+void ReportDialog::save_pdf() {
+  QString suggested = suggested_filename_;
+  if (suggested.endsWith(".md", Qt::CaseInsensitive)) {
+    suggested.chop(3);
+  }
+  const QString path =
+      QFileDialog::getSaveFileName(this, "Save report", suggested + ".pdf", "PDF (*.pdf)");
+  if (path.isEmpty()) {
+    return;
+  }
+
+  // **Laid out for the page from the same Markdown, not screenshotted.** A
+  // picture of the window would carry whatever was scrolled into view and
+  // nothing else. Rendering the report again gives the whole of it, in the
+  // order it is meant to be read.
+  QPdfWriter writer(path);
+  writer.setPageSize(QPageSize(QPageSize::A4));
+  writer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
+  writer.setTitle("Paddock run report");
+
+  QTextDocument document;
+  document.setPageSize(QSizeF(writer.width(), writer.height()));
+  document.setMarkdown(markdown_);
+  document.print(&writer);
 }
 
 void ReportDialog::save() {

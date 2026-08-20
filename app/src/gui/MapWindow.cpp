@@ -95,6 +95,10 @@ constexpr int kControlsAllowance = 120;
 /// back to matching lines to axes by colour.
 constexpr std::size_t kMostPlotted = 2;
 
+/// The fewest scenarios a comparison needs. One is a simulation, and the panel
+/// runs that.
+constexpr std::size_t kFewestCompared = 2;
+
 /// What the chart can draw, and which side of it each reads off.
 ///
 /// **Two axes carry all of these.** Everything the model produces daily is
@@ -516,16 +520,47 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   readings->addWidget(paddock_label_);
   readings->addWidget(summary_label_);
   readings->addWidget(results_label_);
+
+  // **The report on this run, under the readings it summarises.** It was a
+  // button in the setup panel, which is where a run is arranged rather than
+  // where it is read; here it sits at the foot of the numbers it expands on.
+  run_report_button_ = new QPushButton("Export this run's report", this);
+  run_report_button_->setToolTip(
+      "The full report on the run on screen: what the farmer did, what the stock did, and "
+      "whether the budgets balanced.\n\nSaved as a PDF or as Markdown. The comparison of several "
+      "scenarios is the other report, beside the scenario list.");
+  run_report_button_->setEnabled(false);
+  connect(run_report_button_, &QPushButton::clicked, this, &MapWindow::open_report);
+
   readings->addStretch(1);
 
   auto* readings_inner = new QWidget(this);
   readings_inner->setLayout(readings);
 
-  auto* readings_holder = new QScrollArea(this);
-  readings_holder->setWidget(readings_inner);
-  readings_holder->setWidgetResizable(true);
-  readings_holder->setFrameShape(QFrame::NoFrame);
-  readings_holder->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  auto* readings_scroll = new QScrollArea(this);
+  readings_scroll->setWidget(readings_inner);
+  readings_scroll->setWidgetResizable(true);
+  readings_scroll->setFrameShape(QFrame::NoFrame);
+  readings_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+  // **The button sits outside the scrolling part, pinned at the foot.**
+  // Inside it, the readings pushed it below the fold and it could only be
+  // reached by scrolling to look for it - and a button nobody can see is worse
+  // than a line of text nobody can see, because there is nothing to hint that
+  // it is there.
+  auto* report_row = new QHBoxLayout;
+  report_row->setContentsMargins(10, 0, 10, 8);
+  report_row->addWidget(run_report_button_);
+  report_row->addStretch(1);
+
+  auto* readings_column = new QVBoxLayout;
+  readings_column->setContentsMargins(0, 0, 0, 0);
+  readings_column->setSpacing(0);
+  readings_column->addWidget(readings_scroll, 1);
+  readings_column->addLayout(report_row);
+
+  auto* readings_holder = new QWidget(this);
+  readings_holder->setLayout(readings_column);
 
   // The chart with its colour key over it. Which colour is which is the one
   // thing a chart cannot leave unsaid, and the axis titles cannot say it: they
@@ -639,19 +674,23 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // is one button. Two - a Run and a Run Comparison - would leave somebody with
   // a single scenario looking at a greyed-out button and wondering what they
   // had done wrong.
-  compare_button_ = new QPushButton("Run", this);
-  compare_button_->setDefault(true);
+  // **The scenario row is about the list, and says so.** It used to carry a
+  // button called Run, which on a one-scenario list meant "run that one" and on
+  // a longer one meant "compare them" - two different actions behind one word.
+  // Running one scenario is the panel's job now.
+  compare_button_ = new QPushButton("Run comparison", this);
   compare_button_->setToolTip(
-      "Runs every scenario in the list.\n\nEach is a full year over the same recorded weather, "
-      "so a difference between them is a difference between the rules rather than between the "
-      "seasons they met.");
+      "Runs every scenario in the list and puts the results in one table.\n\nNeeds two: one "
+      "scenario is a simulation, and the panel above already runs that. Each is a full year "
+      "over the same recorded weather, so a difference between them is a difference between "
+      "the rules rather than between the seasons they met.");
   compare_button_->setEnabled(false);
 
-  report_button_ = new QPushButton("Export report", this);
+  report_button_ = new QPushButton("Comparison report", this);
   report_button_->setToolTip(
-      "Opens the report on the last run: the table, what differed between the scenarios, and "
-      "what the numbers say.\n\nFrom there it can be saved as a PDF or a CSV, or copied as "
-      "Markdown.");
+      "Opens the report on the last comparison: the table, what differed between the scenarios, "
+      "and what the numbers say.\n\nFrom there it can be saved as a PDF or a CSV, or copied as "
+      "Markdown. The report on a single run is under the readings beside the chart.");
   report_button_->setEnabled(false);
 
   scenario_list_ = new QListWidget(this);
@@ -679,6 +718,8 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   connect(report_button_, &QPushButton::clicked, this, &MapWindow::open_comparison_report);
   connect(setup_, &SetupPanel::readinessChanged, this, &MapWindow::refresh_scenario_list);
   connect(setup_, &SetupPanel::resultsReady, results_label_, &QLabel::setText);
+  connect(setup_, &SetupPanel::readinessChanged, this,
+          [this] { run_report_button_->setEnabled(setup_->can_report()); });
   connect(scenario_list_, &QListWidget::currentRowChanged, this, &MapWindow::show_scenario);
 
   auto* dock = new QDockWidget("Run a scenario", this);
@@ -1825,8 +1866,10 @@ void MapWindow::refresh_scenario_list() {
 
   add_scenario_button_->setEnabled(static_cast<int>(scenarios_.size()) < kMostScenarios &&
                                    setup_->ready());
-  compare_button_->setEnabled(!scenarios_.empty());
-  compare_button_->setText(scenarios_.size() > 1 ? "Run comparison" : "Run");
+  // Two or more, because one is not a comparison. The panel's own Run covers
+  // the single case, so nothing is out of reach - which is what makes it fair
+  // to disable this rather than have it mean something else.
+  compare_button_->setEnabled(scenarios_.size() >= kFewestCompared);
   // A report needs a run behind it. Offering one before anything has been run
   // would open a window describing nothing.
   report_button_->setEnabled(last_report_.has_value());
