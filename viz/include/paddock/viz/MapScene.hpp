@@ -67,6 +67,20 @@ class MapScene {
   /// are not are ignored, so a stale day cannot crash the view.
   void show_grazed(const std::vector<std::size_t>& grazed);
 
+  /// Rings the paddock somebody is inspecting, or clears the ring when nothing
+  /// is selected.
+  ///
+  /// **A border, not a fill.** The colour inside a paddock is the layer being
+  /// looked at - cover, moisture, the water that went on - and a selection that
+  /// repainted it would hide the very number the inspector is reporting. A
+  /// white ring reads against every ramp the scene draws and takes nothing
+  /// away.
+  void show_selected(const std::vector<std::size_t>& selected);
+
+  /// How many rings the selection is drawing. One when a paddock is being
+  /// inspected, none otherwise; here so a test can see it without a screen.
+  [[nodiscard]] std::size_t selected_ring_count() const;
+
   /// Removes the fences, for a scene with no farm behind it.
   void clear_boundaries();
 
@@ -134,6 +148,10 @@ class MapScene {
   vtkNew<vtkPolyData> grazed_fences_;
   vtkNew<vtkPolyDataMapper> grazed_mapper_;
   vtkNew<vtkActor> grazed_actor_;
+
+  vtkNew<vtkPolyData> selected_fence_;
+  vtkNew<vtkPolyDataMapper> selected_mapper_;
+  vtkNew<vtkActor> selected_actor_;
 
   /// One layer per kind of animal, so each keeps its own colour without
   /// per-cell colouring, and a kind with no stock in it draws nothing.

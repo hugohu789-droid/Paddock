@@ -31,6 +31,7 @@
 #include <paddock/viz/MapScene.hpp>
 #include <paddock/viz/TerrainScene.hpp>
 
+#include "PaddockInspector.hpp"
 #include "SeasonChart.hpp"
 #include "SetupPanel.hpp"
 
@@ -221,6 +222,9 @@ class MapWindow : public QMainWindow {
     std::vector<double> mean_cover;
     std::string stock_summary;
     std::vector<std::vector<std::size_t>> grazed_each_day;
+    /// Days since each paddock was last grazed, as the farm counted them that
+    /// day. One entry per paddock, per day.
+    std::vector<std::vector<int>> rest_days_each_day;
     std::vector<std::vector<viz::MobMarker>> mobs_each_day;
     std::vector<core::Polygon> boundaries;
     std::vector<core::Paddock> paddocks;
@@ -231,6 +235,10 @@ class MapWindow : public QMainWindow {
     std::optional<config::ScenarioBundle> bundle;
     std::optional<core::Raster<double>> elevation;
     core::ManagementPolicy policy;
+    /// Whether this run was asked to irrigate, and on what rule. Kept so the
+    /// inspector can say "off in this scenario" rather than reading a farm that
+    /// simply never got dry enough as one that has no pivot.
+    core::IrrigationPolicy irrigation_policy;
     double latitude_degrees = 0.0;
     bool had_stock = false;
     std::string no_ground_reason;
@@ -591,7 +599,11 @@ class MapWindow : public QMainWindow {
   QLabel* weather_label_ = nullptr;
 
   /// What the paddock under the last click is doing, on the day being shown.
-  QLabel* paddock_label_ = nullptr;
+  PaddockInspector* inspector_ = nullptr;
+
+  /// The selected paddock's day, gathered from the run's own records. Empty
+  /// when nothing is selected or the run kept no mask to select from.
+  [[nodiscard]] std::optional<config::PaddockInspection> inspect_selected() const;
 
   /// What the last run came to, sent over by the panel. Beside the map it
   /// describes rather than in the corner the run was set up in.
@@ -708,6 +720,13 @@ class MapWindow : public QMainWindow {
 
  protected:
   bool eventFilter(QObject* watched, QEvent* event) override;
+
+  /// Escape clears the paddock selection.
+  ///
+  /// A selection has to be droppable, and clicking off the farm is a poor way
+  /// to do it: the ground fills most of the view, so "off the farm" is a small
+  /// target and hitting it by accident is easier than hitting it on purpose.
+  void keyPressEvent(QKeyEvent* event) override;
   void resizeEvent(QResizeEvent* event) override;
 
  private:
@@ -745,6 +764,10 @@ class MapWindow : public QMainWindow {
   /// what set stocking looks like and is worth being able to see.
   std::vector<core::Polygon> boundaries_;
   std::vector<std::vector<std::size_t>> grazed_each_day_;
+
+  /// The rest the farm had given each paddock, day by day. Kept for the
+  /// inspector, which reports it rather than working it out.
+  std::vector<std::vector<int>> rest_days_each_day_;
   std::vector<std::vector<viz::MobMarker>> mobs_each_day_;
 
   /// What the run was carrying, for the line under the map. Taken once: a mob's
@@ -760,6 +783,7 @@ class MapWindow : public QMainWindow {
   std::optional<config::RunSummary> last_run_;
   std::optional<config::ScenarioBundle> last_bundle_;
   core::ManagementPolicy last_policy_;
+  core::IrrigationPolicy last_irrigation_policy_;
 
   bool last_run_had_stock_ = false;
   std::string last_failure_;

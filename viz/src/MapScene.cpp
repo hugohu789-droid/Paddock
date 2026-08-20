@@ -35,6 +35,9 @@ constexpr int kLegendLabels = 5;
 /// go to.
 constexpr float kFenceWidth = 1.0F;
 constexpr float kGrazedFenceWidth = 3.0F;
+
+/// Thicker than the grazed ring, which it is often drawn on top of.
+constexpr float kSelectedFenceWidth = 5.0F;
 constexpr double kFenceOpacity = 0.45;
 
 /// How wide a mob's marker is drawn on the ground, in metres.
@@ -165,6 +168,16 @@ MapScene::MapScene() {
   grazed_actor_->GetProperty()->LightingOff();
   renderer_->AddActor(grazed_actor_);
 
+  selected_mapper_->SetInputData(selected_fence_);
+  selected_actor_->SetMapper(selected_mapper_);
+  // White and thicker than the amber, because the two can be on the same
+  // paddock at once - a mob is often standing on the one somebody clicked - and
+  // a selection that only differed by shade would be lost under it.
+  selected_actor_->GetProperty()->SetColor(1.0, 1.0, 1.0);
+  selected_actor_->GetProperty()->SetLineWidth(kSelectedFenceWidth);
+  selected_actor_->GetProperty()->LightingOff();
+  renderer_->AddActor(selected_actor_);
+
   // A layer per kind, built once. Which kinds exist is asked of MobMarkers
   // rather than listed here, so adding an animal does not need this loop found
   // and edited.
@@ -196,16 +209,28 @@ void MapScene::set_boundaries(const std::vector<core::Polygon>& boundaries) {
   }
   build_rings(boundaries_, all, fences_);
   build_rings(boundaries_, {}, grazed_fences_);
+  // A new set of fences is a new farm, and a ring left over from the old one
+  // would sit on whichever paddock happened to take that index.
+  build_rings(boundaries_, {}, selected_fence_);
 }
 
 void MapScene::show_grazed(const std::vector<std::size_t>& grazed) {
   build_rings(boundaries_, grazed, grazed_fences_);
 }
 
+void MapScene::show_selected(const std::vector<std::size_t>& selected) {
+  build_rings(boundaries_, selected, selected_fence_);
+}
+
+std::size_t MapScene::selected_ring_count() const {
+  return static_cast<std::size_t>(selected_fence_->GetNumberOfLines());
+}
+
 void MapScene::clear_boundaries() {
   boundaries_.clear();
   build_rings(boundaries_, {}, fences_);
   build_rings(boundaries_, {}, grazed_fences_);
+  build_rings(boundaries_, {}, selected_fence_);
 }
 
 void MapScene::show(const core::Raster<double>& raster, const ColourScale& scale,

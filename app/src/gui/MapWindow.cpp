@@ -13,6 +13,7 @@
 #include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -80,7 +81,7 @@ constexpr int kScenarioListShare = 2;
 /// it is read once and then glanced at; the farm is looked at continuously, and
 /// at a quarter of the window there was not enough of it to see. The handle
 /// still moves - these are opening proportions, not limits.
-constexpr double kMapShareOfHeight = 0.65;
+constexpr double kMapShareOfHeight = 0.60;
 
 /// The least the map is ever given, in pixels, however the window is resized.
 /// Below this a farm a kilometre across is a smudge.
@@ -149,8 +150,20 @@ constexpr std::array<ChartSeries, 6> kChartSeries{{
     {"Water stress", "Stress", "of capacity", MapWindow::Field::WaterStress, 214, 132, 74, false},
     {"Legume", "Clover", "of capacity", MapWindow::Field::LegumeFraction, 176, 140, 220, false},
 }};
-constexpr int kOpeningReadingsWidth = 620;
-constexpr int kOpeningChartWidth = 700;
+/// How the lower half is divided, left to right, in pixels.
+///
+/// **These add up to the room there actually is.** A splitter given sizes that
+/// do not fit scales all of them down in proportion, so asking for widths that
+/// sum to more than the window has is a way of getting three columns that are
+/// each a bit too narrow - which is how the inspector ended up wrapping "3685
+/// kg DM/ha" onto two lines.
+constexpr int kOpeningReadingsWidth = 330;
+
+/// Wide enough for "Growth today" and "4.3 kg DM/ha" on one line with room
+/// between them, which is what stops the panel reading as two columns of
+/// unrelated words.
+constexpr int kOpeningInspectorWidth = 340;
+constexpr int kOpeningChartWidth = 410;
 
 /// How far the floating notices sit in from the corner of the map, and how long
 /// the one in the corner stays. Long enough to be read on the way past, short
@@ -297,13 +310,11 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   weather_label_ = new QLabel(this);
   weather_label_->setTextFormat(Qt::RichText);
 
-  paddock_label_ = new QLabel(this);
-  paddock_label_->setTextFormat(Qt::RichText);
+  inspector_ = new PaddockInspector(this);
 
   results_label_ = new QLabel(this);
   results_label_->setTextFormat(Qt::RichText);
   results_label_->setWordWrap(true);
-  paddock_label_->setText("<b>Paddock</b> &nbsp; click the map to inspect one");
 
   // **These two lines must not set the width of the window.**
   //
@@ -326,7 +337,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // size hint is its text and a hint that reaches the layout drags the window
   // about as the run plays - the fault that made the map jump a few pixels
   // wider and narrower day by day.
-  for (QLabel* line : {weather_label_, summary_label_, paddock_label_, results_label_}) {
+  for (QLabel* line : {weather_label_, summary_label_, results_label_}) {
     line->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
     line->setWordWrap(true);
     line->setAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -535,7 +546,6 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   readings->setContentsMargins(10, 8, 10, 8);
   readings->setSpacing(7);
   readings->addWidget(weather_label_);
-  readings->addWidget(paddock_label_);
   readings->addWidget(summary_label_);
   readings->addWidget(results_label_);
 
@@ -639,10 +649,26 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   auto* chart_holder = new QWidget(this);
   chart_holder->setLayout(chart_column);
 
+  // **The inspector gets a column of its own.** It began as one line among the
+  // readings and outgrew them the moment it became a panel: a dozen rows under
+  // four headings do not fit in a strip that is a quarter of the window high,
+  // and what a reader saw was the top half of a paddock with the rest below the
+  // fold. Given a column it is a whole panel at a glance, which is the only way
+  // it is any use while the run is playing.
+  //
+  // Scrolled, because a narrow window can still take it below the fold, and a
+  // scroll bar is at least an admission that there is more.
+  auto* inspector_scroll = new QScrollArea(this);
+  inspector_scroll->setWidget(inspector_);
+  inspector_scroll->setWidgetResizable(true);
+  inspector_scroll->setFrameShape(QFrame::NoFrame);
+  inspector_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
   auto* lower = new QSplitter(Qt::Horizontal, this);
   lower->addWidget(readings_holder);
+  lower->addWidget(inspector_scroll);
   lower->addWidget(chart_holder);
-  lower->setSizes({kOpeningReadingsWidth, kOpeningChartWidth});
+  lower->setSizes({kOpeningReadingsWidth, kOpeningInspectorWidth, kOpeningChartWidth});
 
   auto* split = new QSplitter(Qt::Vertical, this);
   split->addWidget(scene_holder);
@@ -904,6 +930,7 @@ MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
     }
 
     products.policy = choices.policy;
+    products.irrigation_policy = choices.irrigation;
     products.latitude_degrees = bundle.latitude_degrees;
 
     // The slope of the ground the run was over, taken once. Flat ground has no
@@ -1006,6 +1033,7 @@ void MapWindow::adopt_run(RunProducts products) {
   mean_cover_ = std::move(products.mean_cover);
   stock_summary_ = std::move(products.stock_summary);
   grazed_each_day_ = std::move(products.grazed_each_day);
+  rest_days_each_day_ = std::move(products.rest_days_each_day);
   mobs_each_day_ = std::move(products.mobs_each_day);
   boundaries_ = std::move(products.boundaries);
   paddocks_ = std::move(products.paddocks);
@@ -1016,6 +1044,7 @@ void MapWindow::adopt_run(RunProducts products) {
   last_bundle_ = std::move(products.bundle);
   elevation_ = std::move(products.elevation);
   last_policy_ = products.policy;
+  last_irrigation_policy_ = products.irrigation_policy;
   latitude_degrees_ = products.latitude_degrees;
   last_run_had_stock_ = products.had_stock;
   no_ground_reason_ = std::move(products.no_ground_reason);
@@ -1287,6 +1316,14 @@ void MapWindow::simulate_managed(RunProducts& into, const config::ScenarioBundle
         std::sort(grazed.begin(), grazed.end());
         grazed.erase(std::unique(grazed.begin(), grazed.end()), grazed.end());
         into.grazed_each_day.push_back(std::move(grazed));
+
+        // **How long each paddock has been resting, as the farm counts it.**
+        // The inspector reports the rest a paddock has had, and the farm is
+        // already keeping that count for the farmer to choose on - so it is
+        // copied here rather than reconstructed later from the grazing history,
+        // which would be a second answer to a question the model has already
+        // answered.
+        into.rest_days_each_day.push_back(farm.days_since_grazed());
 
         // Where the stock stood, one marker per paddock each mob occupied. A
         // set stocked mob has the run of the farm and gets a mark on all of it,
@@ -1718,6 +1755,15 @@ void MapWindow::refresh() {
 // button spins the camera in the terrain view and taking it away would trade
 // one useful thing for another. Only a press that goes nowhere - press and
 // release within a few pixels - counts as asking about a paddock.
+void MapWindow::keyPressEvent(QKeyEvent* event) {
+  if (event->key() == Qt::Key_Escape && selected_paddock_.has_value()) {
+    selected_paddock_.reset();
+    show_selected_paddock();
+    return;
+  }
+  QMainWindow::keyPressEvent(event);
+}
+
 bool MapWindow::eventFilter(QObject* watched, QEvent* event) {
   if (watched == view_) {
     if (event->type() == QEvent::MouseButtonPress) {
@@ -2187,12 +2233,12 @@ std::string MapWindow::inspect_pixel(int x, int y) {
     }
   }
   show_selected_paddock();
-  // The label carries markup for the window; a caller reading it wants the
-  // words.
-  QString plain = paddock_label_->text();
-  plain.replace("&nbsp;", " ");
-  plain.remove(QRegularExpression("<[^>]*>"));
-  return plain.simplified().toStdString();
+  // **The same inspection the panel is showing, written as one line.** This
+  // used to scrape the panel's own markup, which made the window's wording part
+  // of what the command line prints. Both now render the same struct.
+  const std::optional<config::PaddockInspection> inspection = inspect_selected();
+  return inspection.has_value() ? config::inspection_line(*inspection)
+                                : std::string("that point missed the farm");
 }
 
 void MapWindow::inspect_at(int x, int y) {
@@ -2213,7 +2259,7 @@ void MapWindow::inspect_at(int x, int y) {
                                                   : scene_.ground_at(device_x, device_y);
   if (!ground.has_value()) {
     selected_paddock_.reset();
-    paddock_label_->setText("<b>Paddock</b> &nbsp; that click missed the farm");
+    inspector_->show_nothing_selected();
     return;
   }
 
@@ -2253,49 +2299,61 @@ std::optional<double> MapWindow::paddock_mean(const std::vector<core::Raster<dou
   return total / static_cast<double>(counted);
 }
 
-void MapWindow::show_selected_paddock() {
+std::optional<config::PaddockInspection> MapWindow::inspect_selected() const {
   if (!selected_paddock_.has_value() || !mask_.has_value()) {
-    paddock_label_->setText("<b>Paddock</b> &nbsp; click the map to inspect one");
-    return;
+    return std::nullopt;
   }
   const std::size_t index = *selected_paddock_;
   if (index >= paddocks_.size()) {
-    return;
+    return std::nullopt;
   }
+  // **The day on screen, not the last day run.** The whole point of holding a
+  // selection is that dragging the timeline walks this paddock through the
+  // year, so the rasters are indexed by what is being shown.
   const auto day = static_cast<std::size_t>(
       std::clamp(current_day_, 0, static_cast<int>(dates_.empty() ? 0 : dates_.size() - 1)));
 
-  const auto figure = [](const std::optional<double>& value, int places,
-                         const char* suffix) -> QString {
-    return value.has_value() ? QString("%1%2").arg(*value, 0, 'f', places).arg(suffix)
-                             : QString("-");
+  const auto at =
+      [day](const std::vector<core::Raster<double>>& series) -> const core::Raster<double>* {
+    return series.empty() ? nullptr : &series[std::min(day, series.size() - 1)];
   };
-  const std::optional<double> left = paddock_mean(available_water_, index, day);
 
-  // Stock are reported from the farm's own record of where they were, not from
-  // anything drawn: the markers are an illustration of a set stocked mob and
-  // the paddock list is what the model actually moved.
-  const bool grazed = day < grazed_each_day_.size() &&
-                      std::find(grazed_each_day_[day].begin(), grazed_each_day_[day].end(),
-                                index) != grazed_each_day_[day].end();
+  config::PaddockDay today;
+  today.cover = at(cover_);
+  today.growth = at(growth_);
+  today.available_water = at(available_water_);
+  today.water_stress = at(water_stress_);
+  today.irrigation_today = at(irrigation_today_);
+  today.irrigation_to_date = at(irrigation_to_date_);
 
-  paddock_label_->setText(
-      QString(
-          "<b>%1</b> &nbsp; %2 ha, %3 cells &nbsp;|&nbsp; cover %4 &nbsp;|&nbsp; grew %5 "
-          "&nbsp;|&nbsp; water left %6 &nbsp;|&nbsp; stress %7 &nbsp;|&nbsp; irrigation %8 today, "
-          "%9 so far &nbsp;|&nbsp; %10")
-          .arg(QString::fromStdString(paddocks_[index].name.empty()
-                                          ? "Paddock " + std::to_string(index + 1)
-                                          : paddocks_[index].name))
-          .arg(mask_->rasterised_hectares(index), 0, 'f', 1)
-          .arg(mask_->cell_counts()[index])
-          .arg(figure(paddock_mean(cover_, index, day), 0, " kg DM/ha"))
-          .arg(figure(paddock_mean(growth_, index, day), 1, " kg DM/ha today"))
-          .arg(left.has_value() ? QString("%1%").arg(*left * 100.0, 0, 'f', 0) : QString("-"))
-          .arg(figure(paddock_mean(water_stress_, index, day), 2, ""))
-          .arg(figure(paddock_mean(irrigation_today_, index, day), 1, " mm"))
-          .arg(figure(paddock_mean(irrigation_to_date_, index, day), 0, " mm"))
-          .arg(grazed ? "stock on it" : "no stock"));
+  // Stock and rest are the farm's own record of where the mobs were and how
+  // long each paddock had been left, not anything read off the picture: the
+  // markers are an illustration of a set stocked mob and this is the model.
+  config::PaddockDayRecord record;
+  record.grazed = day < grazed_each_day_.size() ? &grazed_each_day_[day] : nullptr;
+  record.rest_days = day < rest_days_each_day_.size() ? &rest_days_each_day_[day] : nullptr;
+  record.policy = &last_policy_;
+  record.irrigation_enabled = last_irrigation_policy_.enabled;
+
+  return config::inspect_paddock(index, paddocks_[index].name, *mask_, today, record);
+}
+
+void MapWindow::show_selected_paddock() {
+  // **The ring and the panel are set together, from one state.** Two paths to
+  // the same fact is how a window ends up outlining one paddock and describing
+  // another.
+  const std::vector<std::size_t> ring = selected_paddock_.has_value()
+                                            ? std::vector<std::size_t>{*selected_paddock_}
+                                            : std::vector<std::size_t>{};
+  scene_.show_selected(ring);
+  terrain_.show_selected(ring);
+
+  const std::optional<config::PaddockInspection> inspection = inspect_selected();
+  if (!inspection.has_value()) {
+    inspector_->show_nothing_selected();
+    return;
+  }
+  inspector_->show_paddock(*inspection, config::grazing_rule_sentence(last_policy_));
 }
 
 void MapWindow::show_day(int day) {
