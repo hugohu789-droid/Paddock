@@ -169,7 +169,11 @@ TEST(ScenarioComparisonTest, TheSummaryStatesDifferencesAndRecommendsNothing) {
   EXPECT_NE(words.find("-48 days"), std::string::npos) << "48 fewer stressed days";
 
   // Nothing that reads as advice.
-  for (const std::string& advice : {"should", "recommend", "best", "better choice"}) {
+  // `const char*`, not `const std::string&`: the list holds string literals, so
+  // a reference loop variable binds to a temporary string built for each turn -
+  // which gcc rejects under -Werror=range-loop-construct and MSVC says nothing
+  // about, so it only shows up in CI.
+  for (const char* advice : {"should", "recommend", "best", "better choice"}) {
     EXPECT_EQ(words.find(advice), std::string::npos) << "found '" << advice << "' in the summary";
   }
   EXPECT_NE(words.find("neither price is in this model"), std::string::npos);
@@ -194,7 +198,7 @@ TEST(ScenarioComparisonTest, BothRenderingsCarryTheSameNumbers) {
   const std::string markdown = as_markdown(table);
   const std::string csv = as_csv(table);
 
-  for (const std::string& expected : {"Rain-fed", "Irrigated", "9000", "12000", "369", "295.2"}) {
+  for (const char* expected : {"Rain-fed", "Irrigated", "9000", "12000", "369", "295.2"}) {
     EXPECT_NE(markdown.find(expected), std::string::npos) << "markdown is missing " << expected;
     EXPECT_NE(csv.find(expected), std::string::npos) << "csv is missing " << expected;
   }
