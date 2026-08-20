@@ -200,7 +200,7 @@ TerrainScene::TerrainScene() {
 
   // The name beside the top sheet. The rest of the stack carries its own, one
   // per sheet, written when the stack is built.
-  pasture_label_->GetTextProperty()->SetFontSize(22);
+  pasture_label_->GetTextProperty()->SetFontSize(18);
   pasture_label_->GetTextProperty()->SetJustificationToRight();
   pasture_label_->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
   pasture_label_->GetTextProperty()->SetOpacity(1.0);
@@ -668,7 +668,11 @@ void TerrainScene::place_compass() {
   // At the four edges of the farm, a little outside it and a little above, so
   // the letters do not sit on the paddocks they are labelling.
   const double span = std::max(sky_width_, sky_height_);
-  const double out = span * 0.10;
+  // **Further out than it was.** At a tenth of the span the letters sat over
+  // the paddocks at some bearings, so a compass point covered the ground it
+  // was there to orient somebody on. Moving them costs nothing: like the layer
+  // names they are kept out of the camera's bounds.
+  const double out = span * 0.22;
   const double up = (highest_m_ * exaggeration_) + (span * 0.06);
 
   const std::array<std::pair<const char*, std::array<double, 3>>, 4> marks{{
@@ -690,15 +694,19 @@ void TerrainScene::place_compass() {
       // - and a letter that is legible in a small window is a smudge in a large
       // one. Bright and opaque, because the one moment this is read is the
       // moment somebody has spun the scene and cannot tell which way is up.
-      mark->GetTextProperty()->SetFontSize(34);
+      // Smaller than it was. Thirty-four pixels is a heading; these are labels
+      // on a scene, and a compass that shouts competes with the farm it is
+      // there to orient somebody on.
+      mark->GetTextProperty()->SetFontSize(22);
       mark->GetTextProperty()->SetJustificationToCentered();
+      // Full white and bold. Against the sky's dark blue-grey the letters were
+      // near enough the background to be missed, which is the one thing a
+      // compass cannot afford to be. The shadow carries them over the pale
+      // sheets of the stack as well.
       mark->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
-      // A shadow, because these are drawn over whatever the scene happens to put
-      // behind them - sky at one bearing, a coloured sheet at another. White on
-      // white is unreadable and this is the cheap fix for it.
-      mark->GetTextProperty()->ShadowOn();
-
       mark->GetTextProperty()->SetOpacity(1.0);
+      mark->GetTextProperty()->SetBold(1);
+      mark->GetTextProperty()->ShadowOn();
 
       // **A label must not change how the camera frames the farm.** These sit
       // outside the paddocks on purpose, and left in the bounds they push the
@@ -926,7 +934,7 @@ void TerrainScene::show_stack(const std::vector<StackEntry>& entries) {
     sheet->fence_actor->SetVisibility(0);
     renderer_->AddActor(sheet->fence_actor);
 
-    sheet->label->GetTextProperty()->SetFontSize(22);
+    sheet->label->GetTextProperty()->SetFontSize(18);
     sheet->label->GetTextProperty()->SetJustificationToRight();
     sheet->label->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
     sheet->label->GetTextProperty()->SetOpacity(1.0);
