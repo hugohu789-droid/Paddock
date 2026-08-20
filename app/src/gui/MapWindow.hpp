@@ -467,6 +467,19 @@ class MapWindow : public QMainWindow {
   /// matching lines to axes by colour, which is the thing charts do worst.
   std::vector<QCheckBox*> chart_boxes_;
 
+  /// Which quantities are plotted, oldest choice first.
+  ///
+  /// **Two at a time, and a third displaces the first.** Kept in the order they
+  /// were chosen, because that decides which axis each gets and which one goes
+  /// when a third is asked for. Refusing the third instead would leave somebody
+  /// clicking a box that does nothing and having to work out for themselves
+  /// which of the others to turn off.
+  std::vector<std::size_t> chart_order_;
+
+  /// Adds or removes a quantity from the plot, displacing the oldest when a
+  /// third is asked for.
+  void choose_series(std::size_t which, bool wanted);
+
   /// Fills the chart from the run that has just finished.
   void refresh_chart();
 

@@ -87,6 +87,14 @@ constexpr int kSmallestMapHeight = 320;
 /// share above is of the space the splitter actually has.
 constexpr int kControlsAllowance = 120;
 
+/// How many quantities the chart draws at once.
+///
+/// **Two, so each can own an axis.** An axis carrying one quantity can be
+/// titled with its name, its unit and its own range; one carrying three has to
+/// be titled by unit and scaled to whichever runs highest, and the reader is
+/// back to matching lines to axes by colour.
+constexpr std::size_t kMostPlotted = 2;
+
 /// What the chart can draw, and which side of it each reads off.
 ///
 /// **Two axes carry all of these.** Everything the model produces daily is
@@ -107,20 +115,17 @@ struct ChartSeries {
   int red;
   int green;
   int blue;
-  bool on_right;
   bool on;
 };
 
 constexpr std::array<ChartSeries, 6> kChartSeries{{
-    {"Pasture cover", "Cover", "kg DM/ha", MapWindow::Field::Cover, 94, 168, 84, false, true},
+    {"Pasture cover", "Cover", "kg DM/ha", MapWindow::Field::Cover, 94, 168, 84, true},
     {"Soil moisture", "Moisture", "of capacity", MapWindow::Field::AvailableWater, 68, 130, 175,
-     true, true},
-    {"Growth", "Growth", "kg DM/ha", MapWindow::Field::Growth, 168, 200, 90, false, false},
-    {"Irrigation", "Water on", "mm", MapWindow::Field::IrrigationToday, 60, 160, 235, false, false},
-    {"Water stress", "Stress", "of capacity", MapWindow::Field::WaterStress, 214, 132, 74, true,
-     false},
-    {"Legume", "Clover", "of capacity", MapWindow::Field::LegumeFraction, 176, 140, 220, true,
-     false},
+     true},
+    {"Growth", "Growth", "kg DM/ha", MapWindow::Field::Growth, 168, 200, 90, false},
+    {"Irrigation", "Water on", "mm", MapWindow::Field::IrrigationToday, 60, 160, 235, false},
+    {"Water stress", "Stress", "of capacity", MapWindow::Field::WaterStress, 214, 132, 74, false},
+    {"Legume", "Clover", "of capacity", MapWindow::Field::LegumeFraction, 176, 140, 220, false},
 }};
 constexpr int kOpeningReadingsWidth = 620;
 constexpr int kOpeningChartWidth = 700;
@@ -538,10 +543,22 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   picker->addWidget(new QLabel("Plot", this));
   for (const ChartSeries& series : kChartSeries) {
     auto* box = new QCheckBox(series.label, this);
-    box->setChecked(series.on);
-    connect(box, &QCheckBox::toggled, this, [this] { refresh_chart(); });
+    box->setToolTip(QString("%1, as a mean over the farm each day.\n\nTwo at a time: choosing a "
+                            "third turns off whichever was chosen first, so each axis can carry "
+                            "one quantity with its own name and its own range.")
+                        .arg(series.name));
+    const std::size_t which = chart_boxes_.size();
+    connect(box, &QCheckBox::toggled, this,
+            [this, which](bool wanted) { choose_series(which, wanted); });
     chart_boxes_.push_back(box);
     picker->addWidget(box);
+  }
+  // Ticked after the boxes exist, so the opening pair goes through the same
+  // path a person clicking would rather than a second one that has to agree.
+  for (std::size_t i = 0; i < kChartSeries.size() && i < chart_boxes_.size(); ++i) {
+    if (kChartSeries.at(i).on) {
+      chart_boxes_[i]->setChecked(true);
+    }
   }
   picker->addStretch(1);
 
@@ -1656,6 +1673,34 @@ void MapWindow::refresh_irrigation(std::size_t day) {
   }
 }
 
+void MapWindow::choose_series(std::size_t which, bool wanted) {
+  const auto already = std::find(chart_order_.begin(), chart_order_.end(), which);
+
+  if (!wanted) {
+    if (already != chart_order_.end()) {
+      chart_order_.erase(already);
+    }
+    refresh_chart();
+    return;
+  }
+  if (already != chart_order_.end()) {
+    return;
+  }
+
+  chart_order_.push_back(which);
+  while (chart_order_.size() > kMostPlotted) {
+    const std::size_t oldest = chart_order_.front();
+    chart_order_.erase(chart_order_.begin());
+    // Unticked without coming back through here: the list is already correct,
+    // and a second pass would undo the choice just made.
+    if (oldest < chart_boxes_.size()) {
+      const QSignalBlocker quiet(chart_boxes_[oldest]);
+      chart_boxes_[oldest]->setChecked(false);
+    }
+  }
+  refresh_chart();
+}
+
 void MapWindow::refresh_chart() {
   if (dates_.empty()) {
     chart_->clear();
@@ -1683,18 +1728,20 @@ void MapWindow::refresh_chart() {
     return means;
   };
 
+  // In the order they were chosen: the first gets the left axis and the second
+  // the right, so any two quantities can be put beside each other.
   std::vector<SeasonChart::Line> lines;
-  for (std::size_t i = 0; i < kChartSeries.size() && i < chart_boxes_.size(); ++i) {
-    if (!chart_boxes_[i]->isChecked()) {
+  for (const std::size_t which : chart_order_) {
+    if (which >= kChartSeries.size()) {
       continue;
     }
-    const ChartSeries& wanted = kChartSeries.at(i);
+    const ChartSeries& wanted = kChartSeries.at(which);
     const std::vector<core::Raster<double>>& source = series_of(wanted.field);
     if (source.empty()) {
       continue;
     }
     lines.push_back({wanted.name, wanted.unit, QColor(wanted.red, wanted.green, wanted.blue),
-                     mean_each_day(source), wanted.on_right});
+                     mean_each_day(source)});
   }
 
   // **Events, not lines.** A day was irrigated or it was not, and a line

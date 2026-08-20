@@ -22,12 +22,16 @@ namespace paddock::app {
 /// the two questions a farm adviser asks - which paddock, and which month - need
 /// both.
 ///
-/// **Two real axes, not one shared one.** Pasture cover is thousands of
+/// **Two lines at most, and each owns an axis.** Pasture cover is thousands of
 /// kilograms and soil moisture is a fraction; drawn against a single scale one
 /// of them is a flat line along an edge, and drawn against a normalised scale
-/// neither can be read off at all. Cover takes the left axis in its own units
-/// and moisture the right in its own, which is what a chart with two quantities
-/// in it is supposed to do.
+/// neither can be read off at all.
+///
+/// Because there are never more than two, each axis belongs to one quantity
+/// outright: it carries that quantity's name, its unit and its own range. An
+/// axis shared by three would have to be titled by unit and scaled to whichever
+/// of them ran highest, and a reader would be back to matching lines to axes by
+/// colour.
 class SeasonChart : public QChartView {
   Q_OBJECT
 
@@ -38,9 +42,6 @@ class SeasonChart : public QChartView {
     QString unit;
     QColor colour;
     std::vector<double> values;
-    /// Which axis it belongs to. The left carries whatever is measured in the
-    /// farm's own working units; the right carries fractions.
-    bool on_right_axis = false;
   };
 
   /// Something that either happened on a day or did not.

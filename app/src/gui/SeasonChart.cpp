@@ -150,26 +150,30 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
   // too short for a legend, which this one can be when the strip under the map
   // is dragged small.
   left_axis_ = new QValueAxis(chart_);
-  // **Named by unit, not by series.** Several lines can share this axis now, so
-  // naming it after the first would be wrong the moment a second was ticked.
-  const auto unit_of = [&lines](bool right) {
-    for (const Line& line : lines) {
-      if (line.on_right_axis == right) {
-        return line.unit;
-      }
-    }
-    return QString();
-  };
-  left_axis_->setTitleText(unit_of(false));
+  // **Each axis is named after the one quantity on it.** At most two lines are
+  // ever drawn, so an axis never has to stand for more than one thing - it can
+  // carry the name, the unit and the range of that thing alone.
+  // **The name alone on the axis; the unit goes in the key.** An axis title is
+  // written down the side, and "Pasture cover (kg DM/ha)" is longer than a
+  // chart this height can show - it came out elided, which is a label that
+  // stops halfway through a word. The axis is drawn in its line's own colour
+  // and the key beside it gives the unit, so nothing is lost by shortening it.
+  const auto describe = [](const Line& line) { return line.name; };
+  left_axis_->setTitleText(lines.empty() ? QString() : describe(lines.front()));
   dress(left_axis_);
   chart_->addAxis(left_axis_, Qt::AlignLeft);
   right_axis_ = new QValueAxis(chart_);
-  right_axis_->setTitleText(unit_of(true));
+  right_axis_->setTitleText(lines.size() > 1 ? describe(lines[1]) : QString());
   dress(right_axis_);
   chart_->addAxis(right_axis_, Qt::AlignRight);
 
-  double left_highest = 0.0;
-  for (const Line& line : lines) {
+  // First chosen on the left, second on the right. Position rather than a fixed
+  // side, so any two quantities can be put beside each other - the pair
+  // somebody wants to compare is not something this can know in advance.
+  for (std::size_t i = 0; i < lines.size() && i < 2; ++i) {
+    const Line& line = lines[i];
+    QValueAxis* axis = (i == 0) ? left_axis_ : right_axis_;
+
     auto* series = new QLineSeries(chart_);
     series->setName(line.unit.isEmpty() ? line.name
                                         : QString("%1 (%2)").arg(line.name).arg(line.unit));
@@ -179,25 +183,28 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
     }
     chart_->addSeries(series);
     series->attachAxis(time_axis_);
-    series->attachAxis(line.on_right_axis ? right_axis_ : left_axis_);
-    if (!line.on_right_axis) {
-      const auto highest = std::max_element(line.values.begin(), line.values.end());
-      if (highest != line.values.end()) {
-        left_highest = std::max(left_highest, *highest);
-      }
-    }
+    series->attachAxis(axis);
+
+    // **From zero to this line's own highest.** Zero at the bottom rather than
+    // its lowest value: an axis that begins at 1,900 makes a farm that dropped
+    // a fifth of its cover look like one that dropped to nothing. Every
+    // quantity here is one that cannot go below zero, so nothing is cut off.
+    const auto highest = std::max_element(line.values.begin(), line.values.end());
+    const double top = highest == line.values.end() ? 1.0 : *highest;
+    axis->setRange(0.0, top > 0.0 ? top * 1.05 : 1.0);
+    axis->setLabelFormat(top < 10.0 ? "%.2f" : "%.0f");
+    axis->setLabelsColor(line.colour);
+    axis->setTitleBrush(QBrush(line.colour));
   }
+
+  // An axis with nothing on it is not drawn: an empty scale beside a chart is a
+  // reader looking for the line that belongs to it.
+  right_axis_->setVisible(lines.size() > 1);
 
   // The left axis starts at zero rather than at the lowest cover of the year.
   // A cover axis that begins at 1,900 makes a farm that dropped a fifth look
   // like one that dropped to nothing - the difference is real either way, and
   // the picture should not exaggerate it.
-  // Room for the tallest of whatever is on this axis. Zero at the bottom
-  // rather than the lowest value of the year: an axis that begins at 1,900
-  // makes a farm that dropped a fifth look like one that dropped to nothing.
-  left_axis_->setRange(0.0, left_highest > 0.0 ? left_highest * 1.05 : 1.0);
-  right_axis_->setRange(0.0, 1.0);
-  right_axis_->setLabelFormat("%.1f");
 
   // **The event rows get an axis of their own, and it is not drawn.**
   //
@@ -237,7 +244,10 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
         .arg(name.toHtmlEscaped());
   };
   for (const Line& line : lines) {
-    key_ += (key_.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") + swatch(line.colour, line.name);
+    // With the unit, because the axis no longer carries it.
+    const QString named =
+        line.unit.isEmpty() ? line.name : QString("%1 (%2)").arg(line.name).arg(line.unit);
+    key_ += (key_.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") + swatch(line.colour, named);
   }
   for (const Events& marks : events) {
     key_ += (key_.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") + swatch(marks.colour, marks.name);
