@@ -62,7 +62,16 @@ PaddockInspection inspect_paddock(std::size_t paddock, const std::string& name,
   inspection.irrigation_today_mm = paddock_mean(day.irrigation_today, mask, paddock);
   inspection.irrigation_to_date_mm = paddock_mean(day.irrigation_to_date, mask, paddock);
 
-  inspection.irrigation_enabled = record.irrigation_enabled;
+  inspection.morning_water_fraction = paddock_mean(day.morning_water, mask, paddock);
+  if (record.irrigation != nullptr) {
+    inspection.irrigation_enabled = record.irrigation->enabled;
+    // The policy is written in depletion - "start when half the water is gone" -
+    // and the panel reads in what is left, which is how the setup form asks for
+    // it. One subtraction, in one place, so the two cannot drift apart.
+    inspection.irrigation_trigger_fraction = 1.0 - record.irrigation->trigger_depletion_fraction;
+    inspection.irrigation_target_fraction = 1.0 - record.irrigation->target_depletion_fraction;
+  }
+  inspection.irrigation_held_back = record.held_back;
 
   if (record.grazed != nullptr) {
     inspection.stock_today =
@@ -115,27 +124,26 @@ std::string grazing_rule_sentence(const core::ManagementPolicy& policy) {
          "had less, and the run records that it happened.";
 }
 
-std::string irrigation_sentence(const PaddockInspection& inspection) {
+std::string irrigation_reason_phrase(const PaddockInspection& inspection) {
+  // Off is said by the status beside it, so there is nothing for a phrase to
+  // add.
   if (!inspection.irrigation_enabled) {
-    return "Irrigation is off in this scenario.";
+    return {};
   }
+
+  // **The figures around this phrase are all decision-time.** The schedule
+  // looks at the root zone before the day runs; what anyone sees tonight has
+  // had the rain, the grass and the water itself. A day watered at 45% often
+  // ends at 84%, and explaining it with the 84% would read as the farm watering
+  // ground that was already wet.
   const double today = inspection.irrigation_today_mm.value_or(0.0);
   if (today > 0.0) {
-    // The rule is exactly this - the schedule waters ground whose depletion has
-    // passed the trigger - so saying it is reporting the rule, not guessing at
-    // one.
-    return "Watered today: the soil had dried past the trigger.";
+    return inspection.morning_water_fraction.has_value() ? "at or below the trigger" : "";
   }
-  if (!inspection.available_water_fraction.has_value()) {
-    return "Not watered today.";
-  }
-  // **What the soil holds now, which is not what the schedule read.** The
-  // schedule decides in the morning, on the depletion as it stood then, and
-  // what is recorded here is the day's end. Saying the trigger was or was not
-  // met would be reading a decision off the wrong number, so this says what the
-  // figure is and leaves the reason to the run that made it.
-  return "Not watered today. Soil ended the day at " +
-         fixed(*inspection.available_water_fraction * 100.0, 0) + "% of capacity.";
+
+  // The run's own reason, when it recorded one. "The profile is still wetter
+  // than the trigger" is the schedule talking, not this file guessing.
+  return inspection.irrigation_held_back;
 }
 
 }  // namespace paddock::config

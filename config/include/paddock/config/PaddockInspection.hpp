@@ -48,6 +48,19 @@ struct PaddockInspection {
   std::optional<double> irrigation_to_date_mm;
   bool irrigation_enabled = false;
 
+  /// How full the root zone was when the schedule read it that morning, which
+  /// is the figure the decision was made on. Empty when the run kept none.
+  std::optional<double> morning_water_fraction;
+
+  /// The trigger and refill target the schedule was working to, as shares of
+  /// what the soil can hold.
+  double irrigation_trigger_fraction = 0.0;
+  double irrigation_target_fraction = 0.0;
+
+  /// Why the schedule held water back, in its own words, or empty when it held
+  /// none back. Recorded by the run rather than worked out afterwards.
+  std::string irrigation_held_back;
+
   bool stock_today = false;
 
   /// The rest this paddock had been given, as the farm counted it. Empty when
@@ -71,6 +84,8 @@ struct PaddockDay {
   const core::Raster<double>* water_stress = nullptr;
   const core::Raster<double>* irrigation_today = nullptr;
   const core::Raster<double>* irrigation_to_date = nullptr;
+  /// The soil as the schedule read it that morning, before the day ran.
+  const core::Raster<double>* morning_water = nullptr;
 };
 
 /// What the farm and its management said about this paddock today.
@@ -80,7 +95,11 @@ struct PaddockDayRecord {
   /// Days since each paddock was last grazed, as the farm counted them.
   const std::vector<int>* rest_days = nullptr;
   const core::ManagementPolicy* policy = nullptr;
-  bool irrigation_enabled = false;
+  /// The rule the schedule was working to. Null for a run that was never given
+  /// one, which reads as irrigation being off.
+  const core::IrrigationPolicy* irrigation = nullptr;
+  /// Why the schedule held water back that day, in its own words.
+  std::string held_back;
 };
 
 /// The mean of `raster` over the cells `mask` gives to `paddock`, or empty when
@@ -114,13 +133,17 @@ struct PaddockDayRecord {
 /// differently.
 [[nodiscard]] std::string inspection_line(const PaddockInspection& inspection);
 
-/// What can be said about today's water on this paddock, from what was
-/// recorded.
+/// The step between what the soil was this morning and what was done about it:
+/// why the schedule acted, or why it did not.
 ///
-/// Only three things are certain from a finished run: irrigation was off for
-/// the scenario, water was put on today, or none was. Why none was put on is
-/// the schedule's business and it does not travel this far, so this does not
-/// guess at it.
-[[nodiscard]] std::string irrigation_sentence(const PaddockInspection& inspection);
+/// **Read as one line of a chain.** The panel puts it between the morning
+/// figure and the water that went on, so it is a phrase rather than a sentence:
+/// "at or below the trigger", "the profile is still wetter than the trigger".
+/// The second of those is the schedule's own wording, recorded by the run -
+/// nothing here works out why water was held back, because the run already
+/// knows and a second opinion could disagree with it.
+///
+/// Empty when there is nothing to say.
+[[nodiscard]] std::string irrigation_reason_phrase(const PaddockInspection& inspection);
 
 }  // namespace paddock::config

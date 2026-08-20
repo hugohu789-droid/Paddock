@@ -221,6 +221,11 @@ class MapWindow : public QMainWindow {
     std::vector<std::string> dates;
     std::vector<double> mean_cover;
     std::string stock_summary;
+    /// How full the root zone was when the irrigation schedule read it that
+    /// morning, and why it held water back if it did. The decision was made on
+    /// these and on nothing the rest of the run keeps.
+    std::vector<core::Raster<double>> morning_water;
+    std::vector<std::string> held_back_each_day;
     std::vector<std::vector<std::size_t>> grazed_each_day;
     /// Days since each paddock was last grazed, as the farm counted them that
     /// day. One entry per paddock, per day.
@@ -764,6 +769,11 @@ class MapWindow : public QMainWindow {
   /// what set stocking looks like and is worth being able to see.
   std::vector<core::Polygon> boundaries_;
   std::vector<std::vector<std::size_t>> grazed_each_day_;
+
+  /// The soil as the irrigation schedule read it each morning, and its reason
+  /// for holding water back that day.
+  std::vector<core::Raster<double>> morning_water_;
+  std::vector<std::string> held_back_each_day_;
 
   /// The rest the farm had given each paddock, day by day. Kept for the
   /// inspector, which reports it rather than working it out.

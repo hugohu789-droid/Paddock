@@ -139,7 +139,12 @@ struct RunSummary {
 ///
 /// Taking the Farm by reference and keeping nothing means an observer that
 /// wants a day must copy what it wants there and then.
-using DayObserver = std::function<void(const core::Farm&, const core::FarmDay&)>;
+/// The schedule comes too, because what it decided this morning cannot be read
+/// off the farm this evening. An observer that wants to explain a dry day needs
+/// the soil the decision was made on and the reason water was held back, and
+/// both are gone by the time the day is over.
+using DayObserver =
+    std::function<void(const core::Farm&, const core::FarmDay&, const core::IrrigationSchedule&)>;
 
 /// Runs a bundle under a farmer who decides rather than follows.
 ///

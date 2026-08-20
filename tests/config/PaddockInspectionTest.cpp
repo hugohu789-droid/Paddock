@@ -63,6 +63,16 @@ core::ManagementPolicy policy() {
   return chosen;
 }
 
+/// Water below half of what the soil holds, refill to eighty-five per cent -
+/// which the policy states as depletion, the other way up.
+core::IrrigationPolicy watering() {
+  core::IrrigationPolicy chosen;
+  chosen.enabled = true;
+  chosen.trigger_depletion_fraction = 0.5;
+  chosen.target_depletion_fraction = 0.15;
+  return chosen;
+}
+
 bool contains(const std::string& text, const std::string& needle) {
   return text.find(needle) != std::string::npos;
 }
@@ -137,52 +147,90 @@ TEST(PaddockInspectionTest, EachPaddockIsAveragedOverItsOwnCells) {
 // Irrigation off in the scenario is said plainly, and nothing else is claimed.
 TEST(PaddockInspectionTest, IrrigationOffIsSaidPlainly) {
   const core::PaddockMask mask(shape(), two_paddocks());
+  const core::IrrigationPolicy off;
   PaddockDayRecord record;
-  record.irrigation_enabled = false;
+  record.irrigation = &off;
 
   const PaddockInspection inspection = inspect_paddock(0, "", mask, PaddockDay{}, record);
 
   EXPECT_FALSE(inspection.irrigation_enabled);
-  EXPECT_EQ(irrigation_sentence(inspection), "Irrigation is off in this scenario.");
+  // Nothing for a phrase to add: the panel's own status row says it is off, and
+  // a second sentence saying the same thing is noise.
+  EXPECT_TRUE(irrigation_reason_phrase(inspection).empty());
 }
 
-// Water on the ground today is reported as having happened.
-TEST(PaddockInspectionTest, WaterPutOnTodayIsReportedAsWatered) {
+// **A watered day is explained from the morning it was decided on.** The soil
+// was at 48% when the schedule looked, below the 50% trigger, and it refills to
+// 85% - which is the whole of the rule and every number in it is recorded.
+TEST(PaddockInspectionTest, AWateredDayIsExplainedFromThatMorning) {
   const core::PaddockMask mask(shape(), two_paddocks());
   const core::Raster<double> water = filled(20.1);
+  const core::Raster<double> morning = filled(0.48);
+  const core::IrrigationPolicy rules = watering();
 
   PaddockDay day;
   day.irrigation_today = &water;
+  day.morning_water = &morning;
   PaddockDayRecord record;
-  record.irrigation_enabled = true;
+  record.irrigation = &rules;
 
   const PaddockInspection inspection = inspect_paddock(0, "", mask, day, record);
 
   ASSERT_TRUE(inspection.irrigation_today_mm.has_value());
   EXPECT_NEAR(*inspection.irrigation_today_mm, 20.1, 1e-9);
-  EXPECT_TRUE(contains(irrigation_sentence(inspection), "Watered today"));
+  EXPECT_NEAR(inspection.irrigation_trigger_fraction, 0.5, 1e-9);
+  EXPECT_NEAR(inspection.irrigation_target_fraction, 0.85, 1e-9);
+
+  // The numbers the decision was made from travel as figures, so the panel can
+  // put them in a column and a reader can check the rule for themselves.
+  ASSERT_TRUE(inspection.morning_water_fraction.has_value());
+  EXPECT_NEAR(*inspection.morning_water_fraction, 0.48, 1e-9);
+
+  EXPECT_EQ(irrigation_reason_phrase(inspection), "at or below the trigger")
+      << "the step between what the soil was and what went on it";
 }
 
-// **A dry day is not explained by the water left at the end of it.** The
-// schedule decides in the morning on the depletion as it stood then, and the
-// figure kept here is the day's end - so the sentence reports the figure and
-// does not say the trigger was or was not met.
-TEST(PaddockInspectionTest, ADryDayReportsTheFigureRatherThanAReason) {
+// **The reason for a dry day is the schedule's own, not one worked out here.**
+TEST(PaddockInspectionTest, ADryDayGivesTheSchedulesOwnReason) {
   const core::PaddockMask mask(shape(), two_paddocks());
-  const core::Raster<double> left = filled(0.64);
+  const core::Raster<double> morning = filled(0.64);
+  const core::IrrigationPolicy rules = watering();
 
   PaddockDay day;
-  day.available_water = &left;
+  day.morning_water = &morning;
   PaddockDayRecord record;
-  record.irrigation_enabled = true;
+  record.irrigation = &rules;
+  record.held_back = "the profile is still wetter than the trigger";
 
   const PaddockInspection inspection = inspect_paddock(0, "", mask, day, record);
-  const std::string sentence = irrigation_sentence(inspection);
 
-  EXPECT_TRUE(contains(sentence, "Not watered today"));
-  EXPECT_TRUE(contains(sentence, "64%"));
-  EXPECT_FALSE(contains(sentence, "trigger"))
-      << "the sentence explained a decision from the wrong end of the day";
+  EXPECT_EQ(irrigation_reason_phrase(inspection), "the profile is still wetter than the trigger")
+      << "the schedule's own words, not a reason worked out here";
+  ASSERT_TRUE(inspection.morning_water_fraction.has_value());
+  EXPECT_NEAR(*inspection.morning_water_fraction, 0.64, 1e-9);
+  EXPECT_NEAR(inspection.irrigation_trigger_fraction, 0.5, 1e-9);
+}
+
+// **With no morning recorded, nothing is claimed about the decision.** The
+// water left at the end of the day is not what the schedule read, and a run
+// that kept only that gets a sentence with no explanation in it rather than one
+// that explains the day backwards.
+TEST(PaddockInspectionTest, WithoutTheMorningNoReasonIsGiven) {
+  const core::PaddockMask mask(shape(), two_paddocks());
+  const core::Raster<double> evening = filled(0.64);
+  const core::IrrigationPolicy rules = watering();
+
+  PaddockDay day;
+  day.available_water = &evening;
+  PaddockDayRecord record;
+  record.irrigation = &rules;
+
+  const PaddockInspection inspection = inspect_paddock(0, "", mask, day, record);
+
+  EXPECT_TRUE(irrigation_reason_phrase(inspection).empty())
+      << "a reason was offered for a decision nothing was recorded about";
+  EXPECT_FALSE(inspection.morning_water_fraction.has_value())
+      << "the evening figure was passed off as the morning the schedule read";
 }
 
 // The rest a paddock has had comes from the farm's own count.

@@ -37,8 +37,11 @@ QString row(const QString& name, const QString& value) {
 }
 
 QString section(const QString& title) {
+  // Three pixels, not six. The gap only has to say "a new group starts here",
+  // and four of them at six pixels was a line of text the panel could not
+  // spare - which is how the sentence at the foot ended up half below the fold.
   return QString(
-             "<tr><td colspan='2' style='padding-top:6px'><span style='color:#8A98B4'>%1</span>"
+             "<tr><td colspan='2' style='padding-top:3px'><span style='color:#8A98B4'>%1</span>"
              "</td></tr>")
       .arg(title);
 }
@@ -82,14 +85,19 @@ void PaddockInspector::show_paddock(const config::PaddockInspection& inspection,
 
   QString table = "<table width='100%' cellspacing='0' cellpadding='1'>";
 
-  // **The unit is on the heading, once.** Repeated down the value column it
-  // took more room than the numbers did, and in a column this narrow "3685 kg
-  // DM/ha" wrapped onto a second line - which turns a table into a paragraph.
-  table += section("Pasture &middot; kg DM/ha");
-  table += row("Cover", figure(inspection.cover_kg_dm_per_ha, 0, ""));
-  table += row("Growth today", figure(inspection.growth_kg_dm_per_ha, 1, ""));
+  // **Every value carries its unit.** They were on the section headings for a
+  // while, which was compact and wrong: "Rested 85" against "Spell 35" reads as
+  // a percentage as readily as a count of days, and a reader who has to work
+  // out what a number is has stopped reading the panel.
+  table += section("Pasture");
+  table += row("Cover", figure(inspection.cover_kg_dm_per_ha, 0, " kg DM/ha"));
+  table += row("Growth today", figure(inspection.growth_kg_dm_per_ha, 1, " kg DM/ha"));
 
-  table += section("Water");
+  // **Now, and then what was decided this morning - kept apart.** They are two
+  // states of the same soil and mixing them is how a panel comes to say the
+  // farm watered ground that was already at 84%: it was at 45% when the
+  // schedule looked, and the 84% is partly the water it put on.
+  table += section("Current");
   table += row("Available water", percent(inspection.available_water_fraction));
   // **Named for what it does.** One means the soil held everything the grass
   // asked for; below one is the model saying growth was held back. Called
@@ -97,31 +105,41 @@ void PaddockInspector::show_paddock(const config::PaddockInspection& inspection,
   table += row("Water growth factor", figure(inspection.water_growth_factor, 2, ""));
 
   if (inspection.irrigation_enabled) {
-    table += section("Irrigation &middot; mm");
-    table += row("Today", figure(inspection.irrigation_today_mm, 1, ""));
-    table += row("To date", figure(inspection.irrigation_to_date_mm, 0, ""));
+    table += section("Today's irrigation");
+    if (inspection.morning_water_fraction.has_value()) {
+      table += row("Before irrigation", percent(inspection.morning_water_fraction));
+    }
+    table += row("Trigger",
+                 QString("%1%").arg(inspection.irrigation_trigger_fraction * 100.0, 0, 'f', 0));
+    table += row("Applied", figure(inspection.irrigation_today_mm, 1, " mm"));
+    table +=
+        row("Target", QString("%1%").arg(inspection.irrigation_target_fraction * 100.0, 0, 'f', 0));
+    table += row("To date", figure(inspection.irrigation_to_date_mm, 0, " mm"));
   } else {
     table += section("Irrigation");
-    table += row("Status", "Off");
+    table += row("Status", "Off in this scenario");
   }
 
-  table += section("Grazing &middot; days");
+  table += section("Grazing");
   table += row("Stock today", inspection.stock_today ? "On it" : "None");
   if (inspection.rest_days.has_value()) {
-    table += row("Rested", QString::number(*inspection.rest_days));
+    table += row("Rested", QString("%1 days").arg(*inspection.rest_days));
   }
   if (inspection.minimum_spell_days > 0) {
-    table += row("Spell aimed at", QString::number(inspection.minimum_spell_days));
+    table += row("Minimum rest", QString("%1 days").arg(inspection.minimum_spell_days));
   }
   table += "</table>";
 
-  // **The water sentence is in the panel; the grazing rule is on hover.** One
-  // changes every day and is the reason the figures above it are what they are.
-  // The other is the same paragraph all year, and a paragraph that never
-  // changes stops being read after the second day while still taking the room
-  // that the day's numbers need.
-  table += QString("<p style='color:#8A98B4'>%1</p>")
-               .arg(QString::fromStdString(config::irrigation_sentence(inspection)));
+  // **The step between the figures, where there is one.** "at or below the
+  // trigger" belongs between what the soil was and what went on it, which is
+  // the order the schedule read them in. The grazing rule is on hover instead:
+  // it is the same paragraph all year, and one that never changes stops being
+  // read while still taking the room the day's numbers need.
+  const std::string why = config::irrigation_reason_phrase(inspection);
+  if (!why.empty()) {
+    table += QString("<p style='color:#8A98B4; margin-top:6px; margin-bottom:0px'>&darr; %1</p>")
+                 .arg(QString::fromStdString(why));
+  }
 
   body_->setText(table);
   body_->setToolTip(QString::fromStdString(grazing_rule));

@@ -77,6 +77,24 @@ void apply_theme(QApplication& application) {
           // window reads as one column of named sections.
           "QLabel#sectionHeading { color: %DIM%; font-weight: 600; letter-spacing: 0.6px; }"
 
+          // The three panels under the map, each in a card of its own. The
+          // chart already sat in one; the readings and the inspector did not,
+          // and loose text beside a framed chart reads as a caption rather than
+          // as a panel. Only the frame itself is styled - anything inside it
+          // keeps the window's own background.
+          "QFrame#panelCard { background: %SURFACE%; border: 1px solid %BORDER%; "
+          "  border-radius: 8px; }"
+          "QFrame#panelCard > QWidget { background: transparent; }"
+
+          // An action on the panel it sits in rather than a call to arms: the
+          // report button is one of these, in the corner of the readings it
+          // expands on. Lighter than the buttons that start a run, because it
+          // is not one.
+          "QPushButton#quietAction { background: transparent; border: 1px solid %BORDER%; "
+          "  border-radius: 6px; padding: 4px 10px; color: %DIM%; min-height: 18px; }"
+          "QPushButton#quietAction:hover:enabled { color: %TEXT%; border-color: %ACCENT%; }"
+          "QPushButton#quietAction:disabled { color: %SURFACE%; border-color: %SURFACE%; }"
+
           // One height for every button in the window. Left to itself a button
           // is as tall as its own text, so a bold one - the default action -
           // stood a few pixels taller than the plain ones beside it, and a row
