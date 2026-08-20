@@ -457,6 +457,16 @@ class MapWindow : public QMainWindow {
   /// The coloured names of whatever the chart is drawing, above it.
   QLabel* chart_key_ = nullptr;
 
+  /// Which quantities the chart is drawing. One box each, ticked by the person
+  /// looking.
+  ///
+  /// **Two axes carry all of them, so there is no need for more.** Everything
+  /// the model produces daily is either in the farm's own working units - kg
+  /// DM/ha, mm - or a share between nought and one. Left axis for the first,
+  /// right for the second. Four axes would mean two a side and a reader
+  /// matching lines to axes by colour, which is the thing charts do worst.
+  std::vector<QCheckBox*> chart_boxes_;
+
   /// Fills the chart from the run that has just finished.
   void refresh_chart();
 

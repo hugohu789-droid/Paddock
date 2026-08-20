@@ -117,8 +117,7 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
     clear();
     return;
   }
-  chart_->setTitle(
-      "The farm through the year   -   marks below: irrigation, then days the mob moved");
+  chart_->setTitle("The farm through the year   -   marks below are the days it was irrigated");
   marked_ = std::clamp(marked_, 0, static_cast<int>(dates_.size()) - 1);
 
   // Axes in the panel's own greys, so the chart is one instrument with the
@@ -134,7 +133,11 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
 
   time_axis_ = new QDateTimeAxis(chart_);
   time_axis_->setFormat("MMM");
-  time_axis_->setTickCount(7);
+  // Every month, with the names turned upright. Seven ticks across a year
+  // meant the axis named five of the twelve and left the reader counting
+  // between them; turned on their side, all thirteen boundaries fit.
+  time_axis_->setTickCount(13);
+  time_axis_->setLabelsAngle(-90);
   time_axis_->setTitleText("Month");
   dress(time_axis_);
   chart_->addAxis(time_axis_, Qt::AlignBottom);
@@ -147,13 +150,21 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
   // too short for a legend, which this one can be when the strip under the map
   // is dragged small.
   left_axis_ = new QValueAxis(chart_);
-  left_axis_->setTitleText(lines.empty() ? QString() : lines.front().name);
+  // **Named by unit, not by series.** Several lines can share this axis now, so
+  // naming it after the first would be wrong the moment a second was ticked.
+  const auto unit_of = [&lines](bool right) {
+    for (const Line& line : lines) {
+      if (line.on_right_axis == right) {
+        return line.unit;
+      }
+    }
+    return QString();
+  };
+  left_axis_->setTitleText(unit_of(false));
   dress(left_axis_);
   chart_->addAxis(left_axis_, Qt::AlignLeft);
   right_axis_ = new QValueAxis(chart_);
-  const auto on_right =
-      std::find_if(lines.begin(), lines.end(), [](const Line& line) { return line.on_right_axis; });
-  right_axis_->setTitleText(on_right == lines.end() ? QString() : on_right->name);
+  right_axis_->setTitleText(unit_of(true));
   dress(right_axis_);
   chart_->addAxis(right_axis_, Qt::AlignRight);
 
@@ -181,6 +192,9 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
   // A cover axis that begins at 1,900 makes a farm that dropped a fifth look
   // like one that dropped to nothing - the difference is real either way, and
   // the picture should not exaggerate it.
+  // Room for the tallest of whatever is on this axis. Zero at the bottom
+  // rather than the lowest value of the year: an axis that begins at 1,900
+  // makes a farm that dropped a fifth look like one that dropped to nothing.
   left_axis_->setRange(0.0, left_highest > 0.0 ? left_highest * 1.05 : 1.0);
   right_axis_->setRange(0.0, 1.0);
   right_axis_->setLabelFormat("%.1f");

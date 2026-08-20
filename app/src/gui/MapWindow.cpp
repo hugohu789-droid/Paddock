@@ -86,6 +86,42 @@ constexpr int kSmallestMapHeight = 320;
 /// Roughly what the rows of controls under the splitter take, in pixels, so the
 /// share above is of the space the splitter actually has.
 constexpr int kControlsAllowance = 120;
+
+/// What the chart can draw, and which side of it each reads off.
+///
+/// **Two axes carry all of these.** Everything the model produces daily is
+/// either in the farm's own working units - kilograms of dry matter a hectare,
+/// millimetres of water - or a share between nought and one. The first group
+/// reads off the left, the second off the right, and that is the whole of it.
+/// A third and fourth axis would mean two a side, with the reader matching
+/// lines to axes by colour, which is the thing a chart does worst.
+struct ChartSeries {
+  const char* name;
+  /// The short name the tick box carries. The row of them has to fit across a
+  /// pane that shares its width with the readings, and the key underneath
+  /// gives the full name against its colour - so the box only has to be
+  /// recognisable, not complete.
+  const char* label;
+  const char* unit;
+  MapWindow::Field field;
+  int red;
+  int green;
+  int blue;
+  bool on_right;
+  bool on;
+};
+
+constexpr std::array<ChartSeries, 6> kChartSeries{{
+    {"Pasture cover", "Cover", "kg DM/ha", MapWindow::Field::Cover, 94, 168, 84, false, true},
+    {"Soil moisture", "Moisture", "of capacity", MapWindow::Field::AvailableWater, 68, 130, 175,
+     true, true},
+    {"Growth", "Growth", "kg DM/ha", MapWindow::Field::Growth, 168, 200, 90, false, false},
+    {"Irrigation", "Water on", "mm", MapWindow::Field::IrrigationToday, 60, 160, 235, false, false},
+    {"Water stress", "Stress", "of capacity", MapWindow::Field::WaterStress, 214, 132, 74, true,
+     false},
+    {"Legume", "Clover", "of capacity", MapWindow::Field::LegumeFraction, 176, 140, 220, true,
+     false},
+}};
 constexpr int kOpeningReadingsWidth = 620;
 constexpr int kOpeningChartWidth = 700;
 
@@ -494,9 +530,25 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   chart_key_->setContentsMargins(8, 4, 8, 0);
   connect(chart_, &SeasonChart::keyChanged, chart_key_, &QLabel::setText);
 
+  // One box per quantity, in the same order the chart draws them. The first two
+  // are ticked because they are the pair a farm is usually read by: what is
+  // growing, and whether there is water for it.
+  auto* picker = new QHBoxLayout;
+  picker->setContentsMargins(8, 2, 8, 0);
+  picker->addWidget(new QLabel("Plot", this));
+  for (const ChartSeries& series : kChartSeries) {
+    auto* box = new QCheckBox(series.label, this);
+    box->setChecked(series.on);
+    connect(box, &QCheckBox::toggled, this, [this] { refresh_chart(); });
+    chart_boxes_.push_back(box);
+    picker->addWidget(box);
+  }
+  picker->addStretch(1);
+
   auto* chart_column = new QVBoxLayout;
   chart_column->setContentsMargins(0, 0, 0, 0);
   chart_column->setSpacing(0);
+  chart_column->addLayout(picker);
   chart_column->addWidget(chart_key_);
   chart_column->addWidget(chart_, 1);
   auto* chart_holder = new QWidget(this);
@@ -1617,7 +1669,7 @@ void MapWindow::refresh_chart() {
   }
 
   // The mean over the farm for each day. A chart of a whole run is about when,
-  // and where is what the map beside it is for.
+  // and where is what the map above it is for.
   const auto mean_each_day = [](const std::vector<core::Raster<double>>& series) {
     std::vector<double> means;
     means.reserve(series.size());
@@ -1632,13 +1684,23 @@ void MapWindow::refresh_chart() {
   };
 
   std::vector<SeasonChart::Line> lines;
-  // Cover on the left in kilograms, moisture on the right as a share. Two
-  // quantities with no common scale get an axis each rather than a shared one
-  // that would flatten whichever is smaller.
-  lines.push_back({"Pasture cover", "kg DM/ha", QColor(94, 168, 84), mean_each_day(cover_), false});
-  lines.push_back({"Soil moisture", "of capacity", QColor(68, 130, 175),
-                   mean_each_day(available_water_), true});
+  for (std::size_t i = 0; i < kChartSeries.size() && i < chart_boxes_.size(); ++i) {
+    if (!chart_boxes_[i]->isChecked()) {
+      continue;
+    }
+    const ChartSeries& wanted = kChartSeries.at(i);
+    const std::vector<core::Raster<double>>& source = series_of(wanted.field);
+    if (source.empty()) {
+      continue;
+    }
+    lines.push_back({wanted.name, wanted.unit, QColor(wanted.red, wanted.green, wanted.blue),
+                     mean_each_day(source), wanted.on_right});
+  }
 
+  // **Events, not lines.** A day was irrigated or it was not, and a line
+  // joining the days it happened on would slope through the days between - the
+  // picture inventing water on days that had none. They need no axis, which is
+  // why two carry every quantity above.
   std::vector<SeasonChart::Events> events;
 
   std::vector<bool> watered(dates_.size(), false);
@@ -1647,15 +1709,14 @@ void MapWindow::refresh_chart() {
   }
   events.push_back({"Irrigation", QColor(60, 160, 235), std::move(watered)});
 
-  // **Moves, not grazing.** Under a rotation some paddock is being grazed every
-  // day of the year, so a band marking "grazing happened" is a solid bar that
-  // says nothing. What happens on a day is the mob going somewhere else, and
-  // that is the rhythm worth seeing beside the cover it drives.
-  std::vector<bool> moved(dates_.size(), false);
-  for (std::size_t day = 1; day < grazed_each_day_.size() && day < moved.size(); ++day) {
-    moved[day] = grazed_each_day_[day] != grazed_each_day_[day - 1];
-  }
-  events.push_back({"Mob moved", QColor(232, 168, 56), std::move(moved)});
+  // **Mob moves are not drawn, and the reason is density.**
+  //
+  // Grazing was tried first and was a solid bar - under a rotation some paddock
+  // is being grazed every day of the year. Moves were tried instead, and on
+  // this farm the mob shifts about every third day: a hundred and twenty marks
+  // across a chart a few hundred pixels wide is a solid bar again. A band that
+  // is always full carries nothing, and the count it would have carried is in
+  // the readings beside the chart, where it is a number rather than a texture.
 
   chart_->show_run(dates, lines, events);
   chart_->mark_day(current_day_);
