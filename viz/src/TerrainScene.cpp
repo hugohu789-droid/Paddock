@@ -699,14 +699,17 @@ void TerrainScene::place_compass() {
       // there to orient somebody on.
       mark->GetTextProperty()->SetFontSize(22);
       mark->GetTextProperty()->SetJustificationToCentered();
-      // Full white and bold. Against the sky's dark blue-grey the letters were
-      // near enough the background to be missed, which is the one thing a
-      // compass cannot afford to be. The shadow carries them over the pale
-      // sheets of the stack as well.
       mark->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
-      mark->GetTextProperty()->SetOpacity(1.0);
-      mark->GetTextProperty()->SetBold(1);
+      // A shadow, because these are drawn over whatever the scene happens to put
+      // behind them - sky at one bearing, a coloured sheet at another. White on
+      // white is unreadable and this is the cheap fix for it. It carries them
+      // over the pale sheets of the stack as well.
       mark->GetTextProperty()->ShadowOn();
+
+      mark->GetTextProperty()->SetOpacity(1.0);
+      // Weight and colour are settled per mark below, where north is told apart
+      // from the other three. Setting either here as well would be two places
+      // answering one question, and the loop would win.
 
       // **A label must not change how the camera frames the farm.** These sit
       // outside the paddocks on purpose, and left in the bounds they push the

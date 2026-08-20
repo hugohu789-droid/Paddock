@@ -406,8 +406,17 @@ int main(int argc, char** argv) {
           return std::pair<int, int>{static_cast<int>(window.render_width() * across),
                                      static_cast<int>(window.render_height() * up)};
         };
-        const std::pair<int, int> north_west = at(0.30, 0.70);
-        const std::pair<int, int> south_east = at(0.70, 0.30);
+        // **Nearer the middle than the corners, because the map no longer has
+        // the window to itself.** The chart and the readings took a share of it,
+        // so the farm is drawn into a frame of a different shape and does not
+        // reach the corners: at three tenths and seven tenths both probes landed
+        // on the background and reported having missed the farm, which reads as
+        // a broken inspector rather than as a farm that stops before the edge.
+        // The check is unchanged in meaning - one point is still up and to the
+        // left of the other, and still has to come back further north and
+        // further west.
+        const std::pair<int, int> north_west = at(0.40, 0.60);
+        const std::pair<int, int> south_east = at(0.60, 0.40);
 
         for (const std::pair<const char*, std::pair<int, int>>& spot :
              {std::pair<const char*, std::pair<int, int>>{"centre", at(0.50, 0.50)},

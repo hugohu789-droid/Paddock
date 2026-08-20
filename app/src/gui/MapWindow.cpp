@@ -679,6 +679,8 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
 
   view_->installEventFilter(this);
 
+  view_->installEventFilter(this);
+
   auto* central = new QWidget(this);
   central->setLayout(layout);
   setCentralWidget(central);

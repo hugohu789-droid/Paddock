@@ -23,9 +23,9 @@
 namespace paddock::app {
 
 namespace {
-/// Room around the two buttons at the foot of the panel, in pixels. Flush to
-/// the edges they read as another row of the form; the gap is what makes them
-/// the thing it is for.
+/// Room around the buttons at the foot of the panel, in pixels. Flush to the
+/// edges they read as another row of the form; the gap is what makes them the
+/// thing it is for.
 constexpr int kActionMargin = 10;
 constexpr int kActionSpacing = 8;
 
