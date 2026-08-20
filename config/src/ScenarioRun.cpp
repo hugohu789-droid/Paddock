@@ -180,7 +180,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     }
 
     if (each_day) {
-      each_day(farm, farm_day);
+      each_day(farm, farm_day, schedule);
     }
   }
 

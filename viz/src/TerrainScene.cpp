@@ -53,6 +53,9 @@ constexpr double kFenceLift = 0.25;
 
 constexpr float kFenceWidth = 1.5F;
 constexpr float kGrazedFenceWidth = 4.0F;
+
+/// Thicker again, because the selection is often drawn over the grazing ring.
+constexpr float kSelectedFenceWidth = 6.0F;
 constexpr double kFenceOpacity = 0.5;
 
 /// The same marker size the flat map uses, so a mob is the same size in both.
@@ -245,6 +248,15 @@ TerrainScene::TerrainScene() {
   grazed_actor_->GetProperty()->SetLineWidth(kGrazedFenceWidth);
   grazed_actor_->GetProperty()->LightingOff();
   renderer_->AddActor(grazed_actor_);
+
+  selected_mapper_->SetInputData(selected_fence_);
+  selected_actor_->SetMapper(selected_mapper_);
+  // White and thicker than the amber grazing ring, which is often on the same
+  // paddock: a selection that differed only in shade would be lost under it.
+  selected_actor_->GetProperty()->SetColor(1.0, 1.0, 1.0);
+  selected_actor_->GetProperty()->SetLineWidth(kSelectedFenceWidth);
+  selected_actor_->GetProperty()->LightingOff();
+  renderer_->AddActor(selected_actor_);
 
   const std::size_t kinds = marker_kinds().size();
   mob_shapes_.resize(kinds);
@@ -497,17 +509,30 @@ void TerrainScene::rebuild_fences() {
   }
   build(all, fences_);
   build(grazed_, grazed_fences_);
+  build(selected_, selected_fence_);
 }
 
 void TerrainScene::set_boundaries(const std::vector<core::Polygon>& boundaries) {
   boundaries_ = boundaries;
   grazed_.clear();
+  // A new farm's paddock 3 is not the old farm's paddock 3, so a ring left
+  // behind would point at ground nobody chose.
+  selected_.clear();
   rebuild_fences();
 }
 
 void TerrainScene::show_grazed(const std::vector<std::size_t>& grazed) {
   grazed_ = grazed;
   rebuild_fences();
+}
+
+void TerrainScene::show_selected(const std::vector<std::size_t>& selected) {
+  selected_ = selected;
+  rebuild_fences();
+}
+
+std::size_t TerrainScene::selected_ring_count() const {
+  return static_cast<std::size_t>(selected_fence_->GetNumberOfLines());
 }
 
 void TerrainScene::clear_boundaries() {
@@ -781,6 +806,7 @@ void TerrainScene::show_layer(Layer layer, bool visible) {
       // nothing under them.
       fence_actor_->SetVisibility(on);
       grazed_actor_->SetVisibility(on);
+      selected_actor_->SetVisibility(on);
       for (auto& mob : mob_actors_) {
         mob->SetVisibility(on);
       }

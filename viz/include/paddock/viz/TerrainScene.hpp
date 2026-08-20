@@ -60,6 +60,14 @@ class TerrainScene {
   /// boundaries are fixed for a run and the grazed set is not.
   void set_boundaries(const std::vector<core::Polygon>& boundaries);
   void show_grazed(const std::vector<std::size_t>& grazed);
+
+  /// Rings the paddock somebody is inspecting, over whichever layer is showing.
+  /// A border rather than a fill, so the sheet's own colours - which are the
+  /// numbers the inspector is reporting - are left alone.
+  void show_selected(const std::vector<std::size_t>& selected);
+
+  /// How many rings the selection is drawing, for a test with no screen.
+  [[nodiscard]] std::size_t selected_ring_count() const;
   void clear_boundaries();
 
   /// Puts the stock on the ground, lifted onto the surface as the fences are.
@@ -470,6 +478,13 @@ class TerrainScene {
   vtkNew<vtkPolyData> grazed_fences_;
   vtkNew<vtkPolyDataMapper> grazed_mapper_;
   vtkNew<vtkActor> grazed_actor_;
+
+  /// The paddock being inspected, ringed. Drawn like the fences, over the
+  /// ground rather than into it, so it follows the relief at any exaggeration.
+  std::vector<std::size_t> selected_;
+  vtkNew<vtkPolyData> selected_fence_;
+  vtkNew<vtkPolyDataMapper> selected_mapper_;
+  vtkNew<vtkActor> selected_actor_;
 
   std::vector<MobMarker> mobs_;
   std::vector<vtkNew<vtkPolyData>> mob_shapes_;

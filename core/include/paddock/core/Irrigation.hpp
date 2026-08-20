@@ -172,6 +172,25 @@ class IrrigationSchedule {
   /// The water put on today, averaged over the farm, mm.
   [[nodiscard]] double last_mean_mm() const noexcept { return last_mean_mm_; }
 
+  /// How full each cell's root zone was when the schedule read it this
+  /// morning, as a share of what the soil can hold.
+  ///
+  /// **The number the decision was actually made on.** What a run otherwise
+  /// keeps is the soil at the end of the day, after the rain, the grass and any
+  /// water that went on - so explaining a dry day with it would be reading the
+  /// decision off the wrong end of the day. This is what the schedule saw.
+  [[nodiscard]] const std::vector<double>& last_available_fraction() const noexcept {
+    return last_available_fraction_;
+  }
+
+  /// Why water was held back, when the rule wanted some and something stopped
+  /// it. Empty when nothing was held back - including when nothing was wanted.
+  ///
+  /// One reason rather than one per cell: the limits that hold water back - the
+  /// return interval, the system's daily depth - are the same rule everywhere
+  /// on the farm, so the first cell that hits one speaks for the rest.
+  [[nodiscard]] const std::string& last_held_back() const noexcept { return last_held_back_; }
+
   /// How many cells were watered today.
   [[nodiscard]] std::size_t last_cells_watered() const noexcept { return last_cells_watered_; }
 
@@ -184,6 +203,8 @@ class IrrigationSchedule {
   IrrigationPolicy policy_;
   IrrigationSystem system_;
   std::vector<int> days_since_last_;
+  std::vector<double> last_available_fraction_;
+  std::string last_held_back_;
   std::vector<double> applied_mm_;
   IrrigationTally tally_;
   double last_mean_mm_ = 0.0;

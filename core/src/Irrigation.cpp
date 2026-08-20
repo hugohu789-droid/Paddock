@@ -112,6 +112,8 @@ IrrigationSchedule::IrrigationSchedule(IrrigationPolicy policy, IrrigationSystem
 const std::vector<double>& IrrigationSchedule::decide(const std::vector<double>& depletion_mm,
                                                       double total_available_water_mm) {
   applied_mm_.assign(days_since_last_.size(), 0.0);
+  last_available_fraction_.assign(days_since_last_.size(), 0.0);
+  last_held_back_.clear();
   last_mean_mm_ = 0.0;
   last_cells_watered_ = 0;
   if (days_since_last_.empty()) {
@@ -124,8 +126,17 @@ const std::vector<double>& IrrigationSchedule::decide(const std::vector<double>&
 
   for (std::size_t cell = 0; cell < days_since_last_.size(); ++cell) {
     const double dry = cell < depletion_mm.size() ? depletion_mm[cell] : 0.0;
+    // Kept before anything is decided or applied: this is the soil the
+    // schedule is deciding on, which is not the soil anyone will see tonight.
+    last_available_fraction_[cell] =
+        total_available_water_mm > 0.0
+            ? std::clamp(1.0 - (dry / total_available_water_mm), 0.0, 1.0)
+            : 0.0;
     const IrrigationDecision decision =
         decide_irrigation(dry, total_available_water_mm, days_since_last_[cell], policy_, system_);
+    if (last_held_back_.empty() && !decision.held_back.empty()) {
+      last_held_back_ = decision.held_back;
+    }
     if (decision.irrigate) {
       applied_mm_[cell] = decision.effective_mm;
       days_since_last_[cell] = 0;

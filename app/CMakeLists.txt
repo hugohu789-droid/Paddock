@@ -50,6 +50,8 @@ if(PADDOCK_BUILD_GUI)
     src/gui/ComparisonDialog.cpp
     src/gui/ComparisonDialog.hpp
     src/gui/MapWindow.cpp
+    src/gui/PaddockInspector.cpp
+    src/gui/PaddockInspector.hpp
     src/gui/PagePrinter.cpp
     src/gui/PagePrinter.hpp
     src/gui/MapWindow.hpp
