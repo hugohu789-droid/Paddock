@@ -93,6 +93,7 @@ void print_usage() {
             << "  --day N        Move the timeline to day N before drawing\n"
             << "  --pan N        Slide the terrain view, -100 to 100\n"
             << "  --layers       Show every layer of the scene\n"
+            << "  --compare      Run a rain-fed and an irrigated scenario and print the table\n"
             << "  --window-shot F  Save the whole window, controls included\n"
             << "  --field NAME   Draw a named field, as the list under the map does\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
@@ -137,6 +138,7 @@ int main(int argc, char** argv) {
     const bool smoke = !screenshot.empty() ||
                        std::find(args.begin(), args.end(), "--panel-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--inspect") != args.end() ||
+                       std::find(args.begin(), args.end(), "--compare") != args.end() ||
                        std::find(args.begin(), args.end(), "--window-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--smoke") != args.end();
     // Must be set before the QApplication exists, or the widget and the render
@@ -292,6 +294,29 @@ int main(int argc, char** argv) {
           return 2;
         }
         std::cout << "paddock-gui: showing " << field << '\n';
+      }
+
+      // **A comparison, end to end, from the command line.**
+      //
+      // The largest thing this window does - five runs, a table of differences
+      // and a paragraph about them - is the one thing no screenshot of the map
+      // can show. Two scenarios that differ only in whether the farm irrigates
+      // is the comparison the project exists to make, so it is the one checked:
+      // if irrigation stops changing what the farm grows, this says so.
+      if (std::find(args.begin(), args.end(), "--compare") != args.end()) {
+        window.select_irrigation(false);
+        window.keep_scenario("Rain-fed");
+        window.select_irrigation(true);
+        window.keep_scenario("Irrigated");
+
+        QString why;
+        const std::string table = window.comparison_markdown(why);
+        if (table.empty()) {
+          std::cerr << "paddock-gui: the comparison produced nothing: " << why.toStdString()
+                    << '\n';
+          return 1;
+        }
+        std::cout << table;
       }
 
       // Which day to show, so a check can land on one where something

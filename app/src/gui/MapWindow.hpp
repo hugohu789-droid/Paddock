@@ -6,6 +6,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
+#include <QListWidget>
 #include <QMainWindow>
 #include <QPoint>
 #include <QPushButton>
@@ -19,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include <paddock/config/ScenarioComparison.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/ScenarioRun.hpp>
 #include <paddock/core/Farmer.hpp>
@@ -28,6 +30,7 @@
 #include <paddock/viz/MapScene.hpp>
 #include <paddock/viz/TerrainScene.hpp>
 
+#include "SeasonChart.hpp"
 #include "SetupPanel.hpp"
 
 namespace paddock::app {
@@ -257,6 +260,23 @@ class MapWindow : public QMainWindow {
   /// stack can be drawn by something other than a person clicking four times.
   void show_all_layers();
 
+  /// Adds the panel as it stands as a named scenario, as the button would but
+  /// without asking for the name.
+  ///
+  /// Here so the comparison can be exercised by something other than a person
+  /// clicking: a run of five scenarios, a table and a paragraph is the largest
+  /// thing in this window and none of it is in a screenshot of the map.
+  void keep_scenario(const QString& name);
+
+  /// Turns irrigation on or off in the panel, as the tick box would.
+  void select_irrigation(bool on);
+
+  /// Runs every stored scenario and returns the table as Markdown. Empty when
+  /// there are fewer than two, or when a run failed.
+  /// `failure` names what went wrong when the result is empty. An empty string
+  /// with no reason is the kind of silence that costs an afternoon.
+  [[nodiscard]] std::string comparison_markdown(QString& failure);
+
   /// Whether the pivots are turning.
   ///
   /// Exposed because this is the one thing about the irrigation picture that a
@@ -331,6 +351,68 @@ class MapWindow : public QMainWindow {
   /// of kStackedFields. Held so the row can be enabled and disabled with the
   /// terrain view.
   std::vector<QCheckBox*> layer_boxes_;
+
+  /// One scenario somebody is comparing: what they called it, how the panel was
+  /// set when they added it, and what it came to when it was last run.
+  ///
+  /// The settings are kept rather than the run, because a run is the answer and
+  /// the settings are the question. Re-running is cheap - a year over this farm
+  /// is under half a second - and a stored answer would go stale the moment the
+  /// weather or the bundle changed underneath it.
+  struct StoredScenario {
+    QString name;
+    SetupPanel::Choices choices;
+    std::optional<config::RunSummary> result;
+    double hectares = 0.0;
+    /// How the panel was set, as label and value, for the comparison's header.
+    std::vector<std::pair<std::string, std::string>> settings;
+  };
+
+  std::vector<StoredScenario> scenarios_;
+
+  /// The run against time, beside the map. The map answers where, this answers
+  /// when, and a farm adviser's two questions are which paddock and which
+  /// month.
+  SeasonChart* chart_ = nullptr;
+
+  /// Fills the chart from the run that has just finished.
+  void refresh_chart();
+
+  QListWidget* scenario_list_ = nullptr;
+  QPushButton* add_scenario_button_ = nullptr;
+  QPushButton* compare_button_ = nullptr;
+  QPushButton* report_button_ = nullptr;
+
+  /// The last table produced, so the report can be reopened without running
+  /// everything again. Empty until something has been run.
+  std::optional<config::ComparisonTable> last_report_;
+
+  /// Opens the report on the last run.
+  void open_comparison_report();
+
+  /// Snapshots the panel as a scenario. Refuses past the limit rather than
+  /// silently dropping one.
+  void add_scenario();
+
+  /// Runs every stored scenario and shows the table.
+  void run_comparison();
+
+  /// Runs every stored scenario. Names the first failure in `failure` and stops
+  /// there: a table with one scenario missing is worse than none, because the
+  /// gap is not visible in it.
+  ///
+  /// `flat_ground` collects the reason any scenario had to be drawn flat. A
+  /// farm that ran without its survey is comparable with one that did, but
+  /// nobody should have to guess which happened.
+  [[nodiscard]] std::vector<config::ComparedScenario> run_scenarios(
+      QString& failure, std::vector<std::string>& flat_ground);
+
+  /// Loads the chosen scenario back into the panel and runs it, so the map
+  /// beside the list is showing the scenario the list has selected.
+  void show_scenario(int index);
+
+  /// Redraws the list from scenarios_.
+  void refresh_scenario_list();
 
   /// Fills the terrain view's stack with today's values for kStackedFields.
   void refresh_stack(std::size_t day);

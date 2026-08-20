@@ -155,18 +155,28 @@ ComparisonTable compare(const std::vector<ComparedScenario>& scenarios) {
             return process_flow(scenario.summary.ledger, core::Budget::DryMatter, "pasture_growth",
                                 true);
           });
-  add_row(table, "Pasture", "Mean cover", "kg DM/ha", 0, scenarios,
-          [](const ComparedScenario& scenario) {
-            return scenario.summary.mean_cover_kg_dm_per_ha();
-          });
+  add_row(
+      table, "Pasture", "Mean cover", "kg DM/ha", 0, scenarios,
+      [](const ComparedScenario& scenario) { return scenario.summary.mean_cover_kg_dm_per_ha(); });
   add_row(table, "Pasture", "Lowest cover", "kg DM/ha", 0, scenarios,
           [](const ComparedScenario& scenario) {
             return scenario.summary.lowest_cover_kg_dm_per_ha();
           });
   add_row(table, "Pasture", "Closing cover", "kg DM/ha", 0, scenarios,
           [](const ComparedScenario& scenario) { return scenario.summary.closing_cover_kg_dm; });
+  // **Divided by the area, because the row above it is.**
+  //
+  // What the pasture grew comes from the ledger, which works per hectare - the
+  // grid averages its cells into it. What the stock ate comes from the mob's
+  // energy requirement, which is the whole mob over the whole farm. Two rows in
+  // one table on two different bases is worse than either: the first thing
+  // anybody does with them is subtract one from the other, and on an eighty
+  // hectare farm that is wrong by eighty times.
   add_row(table, "Pasture", "Eaten", "kg DM/ha", 0, scenarios,
-          [](const ComparedScenario& scenario) { return scenario.summary.eaten_kg_dm; });
+          [](const ComparedScenario& scenario) {
+            return scenario.hectares > 0.0 ? scenario.summary.eaten_kg_dm / scenario.hectares
+                                           : scenario.summary.eaten_kg_dm;
+          });
   add_row(table, "Pasture", "Days growth held back by dry soil", "days", 0, scenarios,
           [](const ComparedScenario& scenario) {
             return static_cast<double>(scenario.summary.days_water_stressed());
@@ -175,22 +185,18 @@ ComparisonTable compare(const std::vector<ComparedScenario>& scenarios) {
   // ------------------------------------------------------------------ water
   add_row(table, "Water", "Rainfall", "mm", 0, scenarios,
           [](const ComparedScenario& scenario) { return rainfall_mm(scenario.summary); });
-  add_row(table, "Water", "Irrigations", "", 0, scenarios,
-          [](const ComparedScenario& scenario) {
-            return static_cast<double>(scenario.summary.irrigation.events);
-          });
-  add_row(table, "Water", "Irrigation applied", "mm", 0, scenarios,
-          [](const ComparedScenario& scenario) {
-            return scenario.summary.irrigation.effective_mm;
-          });
-  add_row(table, "Water", "Water pumped", "ML", 1, scenarios,
-          [](const ComparedScenario& scenario) {
-            return scenario.summary.irrigation.pumped_megalitres(scenario.hectares);
-          });
-  add_row(table, "Water", "Drainage", "mm", 0, scenarios,
-          [](const ComparedScenario& scenario) {
-            return process_flow(scenario.summary.ledger, core::Budget::Water, "drainage", false);
-          });
+  add_row(table, "Water", "Irrigations", "", 0, scenarios, [](const ComparedScenario& scenario) {
+    return static_cast<double>(scenario.summary.irrigation.events);
+  });
+  add_row(
+      table, "Water", "Irrigation applied", "mm", 0, scenarios,
+      [](const ComparedScenario& scenario) { return scenario.summary.irrigation.effective_mm; });
+  add_row(table, "Water", "Water pumped", "ML", 1, scenarios, [](const ComparedScenario& scenario) {
+    return scenario.summary.irrigation.pumped_megalitres(scenario.hectares);
+  });
+  add_row(table, "Water", "Drainage", "mm", 0, scenarios, [](const ComparedScenario& scenario) {
+    return process_flow(scenario.summary.ledger, core::Budget::Water, "drainage", false);
+  });
   add_row(table, "Water", "Evapotranspiration", "mm", 0, scenarios,
           [](const ComparedScenario& scenario) {
             return process_flow(scenario.summary.ledger, core::Budget::Water, "evapotranspiration",
@@ -198,10 +204,9 @@ ComparisonTable compare(const std::vector<ComparedScenario>& scenarios) {
           });
 
   // -------------------------------------------------------- stock, and feed
-  add_row(table, "Stock", "Closing liveweight", "kg/head", 1, scenarios,
-          [](const ComparedScenario& scenario) {
-            return scenario.summary.closing_liveweight_kg();
-          });
+  add_row(
+      table, "Stock", "Closing liveweight", "kg/head", 1, scenarios,
+      [](const ComparedScenario& scenario) { return scenario.summary.closing_liveweight_kg(); });
   add_row(table, "Stock", "Liveweight change", "kg/head", 1, scenarios,
           [](const ComparedScenario& scenario) { return scenario.summary.liveweight_change_kg(); });
   add_row(table, "Stock", "Days feed was short", "days", 0, scenarios,
@@ -209,7 +214,12 @@ ComparisonTable compare(const std::vector<ComparedScenario>& scenarios) {
             return static_cast<double>(scenario.summary.days_short);
           });
   add_row(table, "Stock", "Bought feed", "kg DM/ha", 0, scenarios,
-          [](const ComparedScenario& scenario) { return scenario.summary.bought_feed_kg_dm(); });
+          [](const ComparedScenario& scenario) {
+            // Bought feed is a mob quantity too - see the note on Eaten.
+            return scenario.hectares > 0.0
+                       ? scenario.summary.bought_feed_kg_dm() / scenario.hectares
+                       : scenario.summary.bought_feed_kg_dm();
+          });
 
   // -------------------------------------------------------------- nitrogen
   add_row(table, "Nitrogen", "Fixed by legume", "kg N/ha", 1, scenarios,
@@ -237,6 +247,9 @@ ComparisonTable compare(const std::vector<ComparedScenario>& scenarios) {
   table.caveats.emplace_back(
       "Every scenario runs on the same recorded weather. A difference here is a difference "
       "between the rules, not between the seasons they met.");
+  table.caveats.emplace_back(
+      "The sward is not yet calibrated against measured New Zealand yields, so read the "
+      "differences between these scenarios rather than the absolute figures.");
 
   return table;
 }
@@ -356,7 +369,9 @@ std::string summarise(const ComparisonTable& table) {
       }
       std::string clause = found->name;
       clause[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(clause[0])));
-      clauses.push_back(clause + " " + change);
+      clause += " ";
+      clause += change;
+      clauses.push_back(std::move(clause));
     }
     if (clauses.empty()) {
       out << "no measured difference.";

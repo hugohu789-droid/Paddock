@@ -63,14 +63,6 @@ constexpr double kMarkerSizeM = 8.0;
 
 constexpr double kPi = 3.14159265358979323846;
 
-/// Roughly how many spray uprights to draw, whatever the farm's size. A
-/// picture, not a count of anything: the water is in the map underneath.
-constexpr double kSprayUprights = 320.0;
-
-/// Steps in the soil ramp. Enough that the ground shades smoothly rather than
-/// banding, which would read as layers within the layer.
-constexpr int kSoilColours = 64;
-
 /// How far apart the layers are drawn, as a share of the farm's span.
 ///
 /// **This is a separation, not a depth, and the difference matters.** The

@@ -16,15 +16,17 @@ namespace {
 
 /// Finds a row by name, so a test says which quantity it means rather than
 /// counting down the table.
-const MetricRow& row_named(const ComparisonTable& table, const std::string& name) {
+MetricRow row_named(const ComparisonTable& table, const std::string& name) {
   for (const MetricRow& row : table.metrics) {
     if (row.name == name) {
       return row;
     }
   }
   ADD_FAILURE() << "no row called '" << name << "'";
-  static const MetricRow kMissing;
-  return kMissing;
+  // Returned by value, and empty. A reference would need somewhere to point,
+  // and the only somewhere is a static - which is a shared mutable thing living
+  // for the whole test binary because one lookup went wrong.
+  return {};
 }
 
 /// A run with the few numbers these tests read, and nothing else.
@@ -43,6 +45,7 @@ ComparedScenario made(std::string name, double grown, double irrigation_mm, int 
   scenario.summary.irrigation.events = events;
   scenario.summary.irrigation.effective_mm = irrigation_mm;
   scenario.summary.irrigation.pumped_m3_per_ha = irrigation_mm * 10.0;
+  scenario.summary.eaten_kg_dm = 96000.0;
   scenario.summary.water_stress.assign(366, 1.0);
   for (int day = 0; day < stressed_days; ++day) {
     scenario.summary.water_stress[static_cast<std::size_t>(day)] = 0.4;
@@ -67,9 +70,9 @@ TEST(ScenarioComparisonTest, StressedDaysAreTheDaysBelowOne) {
 // The table carries every scenario, in the order it was given, because the
 // first is the one the summary reads everything else against.
 TEST(ScenarioComparisonTest, TheTableKeepsTheOrderItWasGiven) {
-  const ComparisonTable table = compare({made("Rain-fed", 9000.0, 0.0, 0, 60),
-                                         made("Irrigated", 12000.0, 369.0, 20, 12),
-                                         made("Heavily irrigated", 12600.0, 520.0, 28, 4)});
+  const ComparisonTable table =
+      compare({made("Rain-fed", 9000.0, 0.0, 0, 60), made("Irrigated", 12000.0, 369.0, 20, 12),
+               made("Heavily irrigated", 12600.0, 520.0, 28, 4)});
   ASSERT_EQ(table.scenarios.size(), 3U);
   EXPECT_EQ(table.scenarios[0], "Rain-fed");
   EXPECT_EQ(table.scenarios[2], "Heavily irrigated");
@@ -92,6 +95,21 @@ TEST(ScenarioComparisonTest, TheNumbersAreTheOnesTheRunRecorded) {
   // is 295.2 ML. Arithmetic rather than a model, and worth pinning: a table
   // that got this wrong would misstate a consent by a factor of ten.
   EXPECT_NEAR(row_named(table, "Water pumped").values[1], 295.2, 0.05);
+}
+
+// **What the stock ate and what the pasture grew must be on the same basis.**
+// Growth comes from the ledger, which works per hectare; intake comes from the
+// mob's energy requirement, which is the whole farm. Left as they arrive, the
+// first thing anybody does is subtract one from the other, and on eighty
+// hectares that is wrong by eighty times.
+TEST(ScenarioComparisonTest, DryMatterRowsShareOneBasis) {
+  const ComparisonTable table =
+      compare({made("Rain-fed", 9000.0, 0.0, 0, 60), made("Irrigated", 12000.0, 369.0, 20, 12)});
+
+  // 96,000 kg DM over 80 ha.
+  EXPECT_NEAR(row_named(table, "Eaten").values[0], 1200.0, 0.5);
+  EXPECT_DOUBLE_EQ(row_named(table, "Pasture grown").values[0], 9000.0);
+  EXPECT_EQ(row_named(table, "Eaten").unit, row_named(table, "Pasture grown").unit);
 }
 
 // **A header that does not say what differs invites the reader to assume it was
@@ -132,10 +150,9 @@ TEST(ScenarioComparisonTest, TheTableSaysWhatItCannotSay) {
       compare({made("Rain-fed", 9000.0, 0.0, 0, 60), made("Irrigated", 12000.0, 369.0, 20, 12)});
 
   ASSERT_FALSE(table.caveats.empty());
-  const bool mentions_leaching =
-      std::any_of(table.caveats.begin(), table.caveats.end(), [](const std::string& caveat) {
-        return caveat.find("leaching") != std::string::npos;
-      });
+  const bool mentions_leaching = std::any_of(
+      table.caveats.begin(), table.caveats.end(),
+      [](const std::string& caveat) { return caveat.find("leaching") != std::string::npos; });
   EXPECT_TRUE(mentions_leaching);
 }
 
@@ -187,8 +204,8 @@ TEST(ScenarioComparisonTest, BothRenderingsCarryTheSameNumbers) {
 
 // A name with a comma in it must not split a CSV row into two.
 TEST(ScenarioComparisonTest, ACommaInAScenarioNameDoesNotBreakTheCsv) {
-  const ComparisonTable table = compare(
-      {made("Dry, as now", 9000.0, 0.0, 0, 60), made("Irrigated", 12000.0, 369.0, 20, 12)});
+  const ComparisonTable table =
+      compare({made("Dry, as now", 9000.0, 0.0, 0, 60), made("Irrigated", 12000.0, 369.0, 20, 12)});
   const std::string csv = as_csv(table);
   EXPECT_NE(csv.find("\"Dry, as now\""), std::string::npos);
 }

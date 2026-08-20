@@ -9,9 +9,14 @@
 #include <QDockWidget>
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QRegularExpression>
+#include <QSignalBlocker>
+#include <QSplitter>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <algorithm>
@@ -31,12 +36,14 @@
 #include <vtkRenderer.h>
 #include <vtkWindowToImageFilter.h>
 
+#include <paddock/config/ScenarioComparison.hpp>
 #include <paddock/config/ScenarioReport.hpp>
 #include <paddock/core/FarmletGrid.hpp>
 #include <paddock/core/Solar.hpp>
 #include <paddock/core/Weather.hpp>
 
 #include "../AttachElevation.hpp"
+#include "ComparisonDialog.hpp"
 #include "ReportDialog.hpp"
 
 namespace paddock::app {
@@ -45,6 +52,25 @@ namespace {
 /// How wide the setup dock opens, in pixels. Comfortably past the panel's own
 /// minimum, so the form is not on the edge of scrolling the moment it opens.
 constexpr int kOpeningPanelWidth = 520;
+
+/// The most scenarios a comparison holds.
+///
+/// Five, because a table wider than that stops being read across: the eye has
+/// to carry a row from one column to another, and past five columns it starts
+/// carrying the wrong one. It is a limit on the table, not on the model.
+constexpr int kMostScenarios = 5;
+
+/// How the side of the window is divided between the panel and the list, as
+/// layout stretch. Four to one, so the list is about a fifth of the height.
+constexpr int kPanelShare = 4;
+constexpr int kScenarioListShare = 1;
+
+/// How the window opens, in pixels. The map is the thing being driven and
+/// everything under it is read, so the map gets the room; every handle moves.
+constexpr int kOpeningMapHeight = 560;
+constexpr int kOpeningLowerHeight = 260;
+constexpr int kOpeningReadingsWidth = 620;
+constexpr int kOpeningChartWidth = 700;
 
 /// How often the spray's wave is redrawn, and how far it moves each time.
 /// Twenty-five frames a second, a full sweep in four seconds: fast enough to
@@ -198,9 +224,17 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // where the person using it put it. Word wrapping would fix the width and
   // move the problem to the height, which is worse - the map would grow and
   // shrink instead.
+  // **They wrap now, and no longer set the width of anything.**
+  //
+  // On one line these were truncated mid-sentence; in a column of their own
+  // they have somewhere to go. Ignored horizontally still, because a label's
+  // size hint is its text and a hint that reaches the layout drags the window
+  // about as the run plays - the fault that made the map jump a few pixels
+  // wider and narrower day by day.
   for (QLabel* line : {weather_label_, summary_label_, paddock_label_}) {
-    line->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-    line->setWordWrap(false);
+    line->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+    line->setWordWrap(true);
+    line->setAlignment(Qt::AlignTop | Qt::AlignLeft);
   }
 
   view_box_ = new QComboBox(this);
@@ -368,19 +402,66 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
     view_->renderWindow()->Render();
   });
 
-  // The scene and its slider sit side by side; the weather line spans both.
-  auto* scene_row = new QHBoxLayout;
-  scene_row->addWidget(view_, 1);
-  scene_row->addWidget(pan_slider_);
+  // **The map and the year, side by side.**
+  //
+  // The scene shows one day over the whole farm; the chart shows the whole run
+  // at one place on it. Neither answers the other's question, and a window that
+  // offered only the first made somebody scrub the timeline to find out when
+  // anything happened.
+  //
+  // The map takes three quarters: it is the thing being driven, and the chart
+  // is read rather than manipulated. A splitter, so anybody who disagrees can
+  // move it.
+  chart_ = new SeasonChart(this);
+  connect(chart_, &SeasonChart::dayPicked, this, &MapWindow::go_to_day);
+
+  auto* scene_side = new QHBoxLayout;
+  scene_side->setContentsMargins(0, 0, 0, 0);
+  scene_side->addWidget(view_, 1);
+  scene_side->addWidget(pan_slider_);
+  auto* scene_holder = new QWidget(this);
+  scene_holder->setLayout(scene_side);
+
+  // **The map above, and under it what was read off it.**
+  //
+  // The lower half divides again: the day's readings on the left, the whole run
+  // on the right. They are the two ways of asking the same question - what is
+  // happening, and when did it happen - and the map above them is the third,
+  // which is where.
+  //
+  // The readings move down here because on one line they were being truncated:
+  // a weather line, a paddock and a farm summary each cut off mid-sentence at
+  // the width of the window. Given a column they wrap.
+  auto* readings = new QVBoxLayout;
+  readings->setContentsMargins(4, 4, 4, 4);
+  readings->addWidget(weather_label_);
+  readings->addWidget(paddock_label_);
+  readings->addWidget(summary_label_);
+  readings->addStretch(1);
+  auto* readings_holder = new QWidget(this);
+  readings_holder->setLayout(readings);
+
+  auto* lower = new QSplitter(Qt::Horizontal, this);
+  lower->addWidget(readings_holder);
+  lower->addWidget(chart_);
+  lower->setSizes({kOpeningReadingsWidth, kOpeningChartWidth});
+
+  auto* split = new QSplitter(Qt::Vertical, this);
+  split->addWidget(scene_holder);
+  split->addWidget(lower);
+  split->setStretchFactor(0, 3);
+  split->setStretchFactor(1, 1);
+  // Stretch alone is not enough: a splitter starts from its children's size
+  // hints, and a render window asks for far less than a farm needs, so the map
+  // opened shorter than the strip under it. These are opening sizes, not
+  // limits - the handles still move.
+  split->setSizes({kOpeningMapHeight, kOpeningLowerHeight});
 
   auto* layout = new QVBoxLayout;
-  layout->addWidget(weather_label_);
-  layout->addLayout(scene_row, 1);
+  layout->addWidget(split, 1);
   layout->addLayout(playing);
   layout->addLayout(choices);
   layout->addLayout(layers);
-  layout->addWidget(paddock_label_);
-  layout->addWidget(summary_label_);
 
   view_->installEventFilter(this);
 
@@ -391,8 +472,70 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // The setup panel docks rather than opening as a dialog, so the map stays
   // visible while a run is being set up. A farm is chosen by looking at it.
   setup_ = new SetupPanel(data_directory_, this);
+
+  // **The panel, then the two buttons, then the scenarios.**
+  //
+  // Top to bottom is the order somebody works in: set the farm up, keep that
+  // setup as a scenario, and see the list of what has been kept. The list takes
+  // a fifth of the height and the panel the rest, because the panel is where
+  // the work is and the list is a record of it - and a list given equal room
+  // would be four empty rows most of the time.
+  add_scenario_button_ = new QPushButton("Add Scenario", this);
+  add_scenario_button_->setToolTip(
+      "Keeps the panel as it stands now, under a name you give it.\n\nUp to " +
+      QString::number(kMostScenarios) +
+      " scenarios; the comparison runs every one of them on the same weather.");
+
+  // **One button runs whatever is in the list.**
+  //
+  // One scenario is a simulation and several are a comparison, but that is a
+  // difference in what comes out rather than in what the person is doing, so it
+  // is one button. Two - a Run and a Run Comparison - would leave somebody with
+  // a single scenario looking at a greyed-out button and wondering what they
+  // had done wrong.
+  compare_button_ = new QPushButton("Run", this);
+  compare_button_->setDefault(true);
+  compare_button_->setToolTip(
+      "Runs every scenario in the list.\n\nEach is a full year over the same recorded weather, "
+      "so a difference between them is a difference between the rules rather than between the "
+      "seasons they met.");
+  compare_button_->setEnabled(false);
+
+  report_button_ = new QPushButton("Export report", this);
+  report_button_->setToolTip(
+      "Opens the report on the last run: the table, what differed between the scenarios, and "
+      "what the numbers say.\n\nFrom there it can be saved as a PDF or a CSV, or copied as "
+      "Markdown.");
+  report_button_->setEnabled(false);
+
+  scenario_list_ = new QListWidget(this);
+  scenario_list_->setToolTip(
+      "Choose one to load it back into the panel and draw it on the map, so a row of the "
+      "comparison can be looked at rather than only read.");
+
+  auto* scenario_buttons = new QHBoxLayout;
+  scenario_buttons->addWidget(add_scenario_button_);
+  scenario_buttons->addStretch(1);
+  scenario_buttons->addWidget(compare_button_);
+  scenario_buttons->addWidget(report_button_);
+
+  auto* side = new QVBoxLayout;
+  side->setContentsMargins(0, 0, 0, 0);
+  side->addWidget(setup_, kPanelShare);
+  side->addLayout(scenario_buttons);
+  side->addWidget(scenario_list_, kScenarioListShare);
+
+  auto* side_panel = new QWidget(this);
+  side_panel->setLayout(side);
+
+  connect(add_scenario_button_, &QPushButton::clicked, this, &MapWindow::add_scenario);
+  connect(compare_button_, &QPushButton::clicked, this, &MapWindow::run_comparison);
+  connect(report_button_, &QPushButton::clicked, this, &MapWindow::open_comparison_report);
+  connect(setup_, &SetupPanel::readinessChanged, this, &MapWindow::refresh_scenario_list);
+  connect(scenario_list_, &QListWidget::currentRowChanged, this, &MapWindow::show_scenario);
+
   auto* dock = new QDockWidget("Run a scenario", this);
-  dock->setWidget(setup_);
+  dock->setWidget(side_panel);
   dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
   addDockWidget(Qt::LeftDockWidgetArea, dock);
 
@@ -552,6 +695,7 @@ void MapWindow::start_run() {
     selected_paddock_.reset();
 
     adopt_series();
+    refresh_chart();
     if (last_run_.has_value()) {
       const double hectares = bundle.grid.has_value()
                                   ? static_cast<double>(bundle.grid->cols * bundle.grid->rows) *
@@ -1129,6 +1273,7 @@ void MapWindow::refresh() {
   }
   show_weather(day, clearness);
   show_selected_paddock();
+  chart_->mark_day(static_cast<int>(day));
 
   // Where today's water landed, drawn over the ground it landed on. The scene
   // is handed the depths and works out the picture; it decides no water.
@@ -1289,6 +1434,63 @@ void MapWindow::refresh_irrigation(std::size_t day) {
   }
 }
 
+void MapWindow::refresh_chart() {
+  if (dates_.empty()) {
+    chart_->clear();
+    return;
+  }
+
+  std::vector<QString> dates;
+  dates.reserve(dates_.size());
+  for (const std::string& date : dates_) {
+    dates.push_back(QString::fromStdString(date));
+  }
+
+  // The mean over the farm for each day. A chart of a whole run is about when,
+  // and where is what the map beside it is for.
+  const auto mean_each_day = [](const std::vector<core::Raster<double>>& series) {
+    std::vector<double> means;
+    means.reserve(series.size());
+    for (const core::Raster<double>& raster : series) {
+      double total = 0.0;
+      for (const double value : raster.values()) {
+        total += value;
+      }
+      means.push_back(raster.empty() ? 0.0 : total / static_cast<double>(raster.size()));
+    }
+    return means;
+  };
+
+  std::vector<SeasonChart::Line> lines;
+  // Cover on the left in kilograms, moisture on the right as a share. Two
+  // quantities with no common scale get an axis each rather than a shared one
+  // that would flatten whichever is smaller.
+  lines.push_back({"Pasture cover", "kg DM/ha", QColor(94, 168, 84), mean_each_day(cover_), false});
+  lines.push_back({"Soil moisture", "of capacity", QColor(68, 130, 175),
+                   mean_each_day(available_water_), true});
+
+  std::vector<SeasonChart::Events> events;
+
+  std::vector<bool> watered(dates_.size(), false);
+  for (std::size_t day = 0; day < irrigation_mm_.size() && day < watered.size(); ++day) {
+    watered[day] = irrigation_mm_[day] > 0.0;
+  }
+  events.push_back({"Irrigation", QColor(60, 160, 235), std::move(watered)});
+
+  // **Moves, not grazing.** Under a rotation some paddock is being grazed every
+  // day of the year, so a band marking "grazing happened" is a solid bar that
+  // says nothing. What happens on a day is the mob going somewhere else, and
+  // that is the rhythm worth seeing beside the cover it drives.
+  std::vector<bool> moved(dates_.size(), false);
+  for (std::size_t day = 1; day < grazed_each_day_.size() && day < moved.size(); ++day) {
+    moved[day] = grazed_each_day_[day] != grazed_each_day_[day - 1];
+  }
+  events.push_back({"Mob moved", QColor(232, 168, 56), std::move(moved)});
+
+  chart_->show_run(dates, lines, events);
+  chart_->mark_day(current_day_);
+}
+
 void MapWindow::refresh_stack(std::size_t day) {
   std::vector<viz::TerrainScene::StackEntry> entries;
   entries.reserve(kStackedFields.size());
@@ -1324,6 +1526,191 @@ double MapWindow::irrigation_today_mm() const {
 
 bool MapWindow::irrigation_animating() const {
   return spray_timer_ != nullptr && spray_timer_->isActive();
+}
+
+void MapWindow::refresh_scenario_list() {
+  const QSignalBlocker quiet(scenario_list_);
+  const int chosen = scenario_list_->currentRow();
+  scenario_list_->clear();
+  for (const StoredScenario& scenario : scenarios_) {
+    scenario_list_->addItem(scenario.name);
+  }
+  if (chosen >= 0 && chosen < scenario_list_->count()) {
+    scenario_list_->setCurrentRow(chosen);
+  }
+
+  add_scenario_button_->setEnabled(static_cast<int>(scenarios_.size()) < kMostScenarios &&
+                                   setup_->ready());
+  compare_button_->setEnabled(!scenarios_.empty());
+  compare_button_->setText(scenarios_.size() > 1 ? "Run comparison" : "Run");
+  // A report needs a run behind it. Offering one before anything has been run
+  // would open a window describing nothing.
+  report_button_->setEnabled(last_report_.has_value());
+}
+
+void MapWindow::add_scenario() {
+  if (static_cast<int>(scenarios_.size()) >= kMostScenarios) {
+    return;
+  }
+
+  // **The person names it, and the name matters.** "Irrigated" and "as we farm
+  // it now" carry what a scenario was for; "Scenario 2" carries nothing, and a
+  // table of five of those cannot be read at all.
+  bool named = false;
+  const QString name = QInputDialog::getText(
+                           this, "Add scenario", "What is this scenario called?", QLineEdit::Normal,
+                           QString("Scenario %1").arg(scenarios_.size() + 1), &named)
+                           .trimmed();
+  if (!named || name.isEmpty()) {
+    return;
+  }
+
+  StoredScenario scenario;
+  scenario.name = name;
+  scenario.choices = setup_->choices();
+  scenario.settings = setup_->describe();
+  scenarios_.push_back(std::move(scenario));
+
+  refresh_scenario_list();
+  scenario_list_->setCurrentRow(static_cast<int>(scenarios_.size()) - 1);
+}
+
+void MapWindow::show_scenario(int index) {
+  if (index < 0 || index >= static_cast<int>(scenarios_.size())) {
+    return;
+  }
+  // Loaded back into the panel and run, so the map beside the list is showing
+  // the scenario the list has selected - a row of a comparison can be looked at
+  // rather than only read.
+  setup_->adopt_choices(scenarios_[static_cast<std::size_t>(index)].choices);
+  start_run();
+}
+
+std::vector<config::ComparedScenario> MapWindow::run_scenarios(
+    QString& failure, std::vector<std::string>& flat_ground) {
+  // **Every scenario is run again now, rather than remembered from when it was
+  // added.** A stored result would go stale the moment the bundle or the
+  // weather changed underneath it, and a table of five answers from five
+  // different versions of the model is worse than no table. A year over this
+  // farm is under half a second, so there is nothing to save by keeping them.
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+  std::vector<config::ComparedScenario> compared;
+  failure.clear();
+  for (StoredScenario& scenario : scenarios_) {
+    try {
+      // **Loaded exactly as a single run loads it, elevation and all.**
+      // config::load_scenario alone leaves a farm that names a survey with no
+      // reader for it, and the bundle then refuses to run - which is right for
+      // a library and wrong here, where the window already knows how to attach
+      // one and how to fall back to flat when the file is not on this machine.
+      config::ScenarioBundle bundle = config::load_scenario(scenario.choices.scenario_directory);
+      if (const std::string reason = attach_elevation(bundle, scenario.choices.scenario_directory);
+          !reason.empty()) {
+        flat_ground.push_back(scenario.name.toStdString() + " ran on flat ground: " + reason);
+      }
+      const double hectares = bundle.grid.has_value()
+                                  ? static_cast<double>(bundle.grid->cols * bundle.grid->rows) *
+                                        bundle.grid->cell_size_m * bundle.grid->cell_size_m /
+                                        10000.0
+                                  : 0.0;
+
+      core::DietQuality diet;
+      diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
+      diet.digestibility_percent = kPastureDigestibility;
+
+      config::ComparedScenario entry;
+      entry.name = scenario.name.toStdString();
+      entry.hectares = hectares;
+      entry.settings = scenario.settings;
+      entry.summary = config::run_managed_scenario(bundle, scenario.choices.policy, diet,
+                                                   entry.name, nullptr, scenario.choices.irrigation,
+                                                   scenario.choices.irrigation_system);
+      scenario.hectares = hectares;
+      scenario.result = entry.summary;
+      compared.push_back(std::move(entry));
+    } catch (const std::exception& error) {
+      failure = QString("%1 could not be run: %2").arg(scenario.name).arg(error.what());
+      break;
+    }
+  }
+  QApplication::restoreOverrideCursor();
+
+  return compared;
+}
+
+void MapWindow::run_comparison() {
+  if (scenarios_.empty()) {
+    return;
+  }
+  QString failure;
+  std::vector<std::string> flat_ground;
+  const std::vector<config::ComparedScenario> compared = run_scenarios(failure, flat_ground);
+  if (!failure.isEmpty()) {
+    QMessageBox::warning(this, "Comparison", failure);
+    return;
+  }
+
+  config::ComparisonTable table = config::compare(compared);
+  // Under the table with the rest of what it cannot say. A farm that ran
+  // without its measured ground is still comparable with one that did, but the
+  // reader has to be told which happened.
+  for (std::string& reason : flat_ground) {
+    table.caveats.push_back(std::move(reason));
+  }
+  last_report_ = std::move(table);
+  refresh_scenario_list();
+
+  // The scenario the list has selected is the one drawn, so the map agrees with
+  // whichever row somebody is looking at.
+  if (scenario_list_->currentRow() < 0 && !scenarios_.empty()) {
+    scenario_list_->setCurrentRow(0);
+  } else {
+    show_scenario(scenario_list_->currentRow());
+  }
+
+  open_comparison_report();
+}
+
+void MapWindow::open_comparison_report() {
+  if (!last_report_.has_value()) {
+    return;
+  }
+  ComparisonDialog dialog(*last_report_, this);
+  dialog.exec();
+}
+
+void MapWindow::select_irrigation(bool on) {
+  setup_->select_irrigation(on);
+}
+
+void MapWindow::keep_scenario(const QString& name) {
+  if (static_cast<int>(scenarios_.size()) >= kMostScenarios) {
+    return;
+  }
+  StoredScenario scenario;
+  scenario.name = name;
+  scenario.choices = setup_->choices();
+  scenario.settings = setup_->describe();
+  scenarios_.push_back(std::move(scenario));
+  refresh_scenario_list();
+}
+
+std::string MapWindow::comparison_markdown(QString& failure) {
+  failure.clear();
+  if (scenarios_.empty()) {
+    failure = "there are no scenarios to run";
+    return {};
+  }
+  std::vector<std::string> flat_ground;
+  const std::vector<config::ComparedScenario> compared = run_scenarios(failure, flat_ground);
+  if (!failure.isEmpty()) {
+    return {};
+  }
+  config::ComparisonTable table = config::compare(compared);
+  for (std::string& reason : flat_ground) {
+    table.caveats.push_back(std::move(reason));
+  }
+  return config::as_markdown(table) + "\n" + config::summarise(table) + "\n";
 }
 
 void MapWindow::show_all_layers() {

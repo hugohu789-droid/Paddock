@@ -6,12 +6,15 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QString>
 #include <QWidget>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <paddock/config/ScenarioRun.hpp>
@@ -67,7 +70,28 @@ class SetupPanel : public QWidget {
   /// window, not fail to open one.
   explicit SetupPanel(const std::string& data_directory, QWidget* parent = nullptr);
 
+  /// Whether the panel holds something that could be run.
+  [[nodiscard]] bool ready() const noexcept { return ready_; }
+
+  /// Whether a run of it would have a report worth opening.
+  [[nodiscard]] bool can_report() const noexcept { return can_report_; }
+
   [[nodiscard]] Choices choices() const;
+
+  /// Puts the panel back the way `chosen` describes.
+  ///
+  /// The inverse of choices(), and it has to stay the inverse: a scenario
+  /// selected from the list is loaded through here and run, so anything this
+  /// does not restore would make the run differ from the one the comparison
+  /// table reported. A test holds the round trip.
+  void adopt_choices(const Choices& chosen);
+
+  /// How the panel is set, as label and value, for a comparison's header.
+  ///
+  /// Written as a person reads it rather than as the model stores it - "below
+  /// 50% of available water" and not a depletion fraction of 0.5 - because the
+  /// header exists to tell somebody what they changed.
+  [[nodiscard]] std::vector<std::pair<std::string, std::string>> describe() const;
 
   /// Selects the bundle in `directory` if the panel found it, and takes its
   /// settings: the head count and opening weight of the stock it carries, and
@@ -139,6 +163,9 @@ class SetupPanel : public QWidget {
   void runRequested();
   void reportRequested();
 
+  /// The panel's readiness changed, so whatever drives it should look again.
+  void readinessChanged();
+
   /// A different farm was chosen, with the directory it lives in.
   ///
   /// Separate from runRequested because choosing a farm is not the same as
@@ -172,6 +199,19 @@ class SetupPanel : public QWidget {
   QComboBox* scenario_box_ = nullptr;
   QComboBox* terrain_box_ = nullptr;
 
+  /// The rows each group hides until somebody asks for them.
+  ///
+  /// **Normal is what changes the answer; advanced is what most people leave
+  /// alone.** A panel that shows every setting at once is a panel where the two
+  /// that matter are as hard to find as the twenty that do not - and this one
+  /// now has to share its side of the window with a list of scenarios.
+  std::vector<QWidget*> advanced_rows_;
+  std::vector<QPushButton*> advanced_buttons_;
+
+  /// Builds a group whose advanced rows fold away, given the rows to hide.
+  /// `form` must already hold every row; the ones named are the ones that go.
+  void fold_away(QGroupBox* group, QFormLayout* form, const std::vector<QWidget*>& advanced);
+
   /// Irrigation, as few controls as the thing needs to be understood.
   ///
   /// The trigger and the target are put to a person as "how much water is
@@ -195,8 +235,15 @@ class SetupPanel : public QWidget {
   QComboBox* preference_box_ = nullptr;
   QComboBox* floor_purchase_box_ = nullptr;
   QCheckBox* may_buy_box_ = nullptr;
-  QPushButton* run_button_ = nullptr;
-  QPushButton* report_button_ = nullptr;
+  /// Whether the panel describes something that can be run, and whether the
+  /// run it describes would have a report worth opening.
+  ///
+  /// **State rather than a button, because the buttons moved.** Run and Report
+  /// now live beside the scenario list, where a run is of the whole list rather
+  /// than of whatever the form happens to show. The panel still knows whether
+  /// what it holds is usable, and says so.
+  bool ready_ = false;
+  bool can_report_ = false;
   QLabel* problem_label_ = nullptr;
   QLabel* results_label_ = nullptr;
 
