@@ -129,6 +129,73 @@ TEST(FarmletGridTest, ShallowSoilDriesFirstAndGrowsLess) {
   EXPECT_LT(cover(0, 0), cover(east, 0)) << "and should therefore carry less cover";
 }
 
+// The growth map is what the model said, not a second calculation of it.
+//
+// A uniform grid must report exactly what one farmlet's own DailyRecord
+// returned, bit for bit. Working growth out here from cover differences would
+// pass a looser test and still be a second answer that could drift from the
+// first - and it would be wrong the moment anything grazes, because cover falls
+// for a reason that has nothing to do with growing.
+TEST(FarmletGridTest, TheGrowthMapIsTheRecordTheModelReturned) {
+  FarmletGrid grid(uniform_soils(), test_sward_parameters(), initial_state(), kLatitude);
+  Farmlet single(test_soil_parameters(), test_sward_parameters(), initial_state(), kLatitude);
+  const SyntheticWeatherSource weather(test_site_parameters(), kSeed);
+
+  double grew = 0.0;
+  for (const DailyWeather& day :
+       weather.fetch(DateRange{Date{2023, 9, 1}, Date{2023, 11, 30}}).records) {
+    grid.step(day);
+    grew = single.step(day).growth_kg_dm;
+  }
+
+  // Without this the comparison below passes on two zeroes, which is exactly
+  // what a growth map that was never filled in would report.
+  ASSERT_GT(grew, 0.0) << "spring should have grown something to compare";
+
+  const std::vector<double> grown = values_of(grid.last_growth_kg_dm());
+  ASSERT_EQ(grown.size(), kCols * kRows);
+  for (const double value : grown) {
+    EXPECT_EQ(bit_patterns(std::vector<double>{value}), bit_patterns(std::vector<double>{grew}));
+  }
+}
+
+// **Growth is the production side on its own, and that is why it earns a map.**
+// The shallow western soil runs short of water and grows less for it. Cover
+// shows the same thing here only because nothing is grazing; the moment stock
+// are on the farm, cover moves for two reasons at once and this does not.
+TEST(FarmletGridTest, TheGrowthMapShowsWhichGroundIsProducing) {
+  FarmletGrid grid(graded_soils(), test_sward_parameters(), initial_state(), kLatitude);
+  const SyntheticWeatherSource weather(test_site_parameters(), kSeed);
+
+  for (const DailyWeather& day :
+       weather.fetch(DateRange{Date{2024, 1, 1}, Date{2024, 3, 31}}).records) {
+    grid.step(day);
+  }
+
+  const Raster<double> grown = grid.last_growth_kg_dm();
+  const std::size_t east = kCols - 1;
+  EXPECT_LT(grown(0, 0), grown(east, 0)) << "the shallow western edge should be growing less";
+  EXPECT_GE(grown(0, 0), 0.0) << "and growth is never negative - that would be decay";
+}
+
+// Water put on today shows up as growth in the days after it, which is the
+// chain the irrigation maps exist to make visible. Two identical farms, one
+// watered, and the watered one is growing more by the end.
+TEST(FarmletGridTest, WateredGroundGrowsMoreThanGroundLeftDry) {
+  FarmletGrid dry(uniform_soils(), test_sward_parameters(), initial_state(), kLatitude);
+  FarmletGrid watered(uniform_soils(), test_sward_parameters(), initial_state(), kLatitude);
+  const SyntheticWeatherSource weather(test_site_parameters(), kSeed);
+
+  const std::vector<double> ten_mm(kCols * kRows, 10.0);
+  for (const DailyWeather& day :
+       weather.fetch(DateRange{Date{2024, 1, 1}, Date{2024, 2, 29}}).records) {
+    dry.step(day);
+    watered.step(day, nullptr, ten_mm);
+  }
+
+  EXPECT_GT(watered.last_growth_kg_dm()(0, 0), dry.last_growth_kg_dm()(0, 0));
+}
+
 TEST(FarmletGridTest, TheBudgetsCloseAcrossTheGrid) {
   FarmletGrid grid(graded_soils(), test_sward_parameters(), initial_state(), kLatitude);
   BudgetLedger ledger;

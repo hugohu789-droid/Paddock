@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include <vtkCamera.h>
 #include <vtkColorTransferFunction.h>
 #include <vtkIdList.h>
 #include <vtkVolume.h>
@@ -288,35 +289,65 @@ TEST(TerrainSceneTest, TheCloudMovesToTheNewFarmButNotBetweenDays) {
   EXPECT_NEAR(moved.second - first.second, 10000.0, 1.0);
 }
 
-// The tilt control puts the camera where it was asked to, and keeps the
-// bearing the mouse left it on.
-TEST(TerrainSceneTest, TheTiltGoesWhereItIsAsked) {
+// The slider slides the view, and coming back to the middle puts it back
+// exactly. A control that does not return to where it started is one people
+// stop touching.
+TEST(TerrainSceneTest, TheViewSlidesAndComesBack) {
   TerrainScene scene;
-  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
              "cover");
   scene.reset_camera();
 
-  for (const double wanted : {15.0, 40.0, 75.0}) {
-    scene.look_from_above(wanted);
-    EXPECT_NEAR(scene.view_elevation_degrees(), wanted, 0.01) << "asked for " << wanted;
+  std::array<double, 3> framed{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(framed.data());
+
+  scene.pan_vertically(0.5);
+  std::array<double, 3> moved{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(moved.data());
+  EXPECT_GT(std::abs(moved[2] - framed[2]), 1.0) << "half a screenful should be visible movement";
+  EXPECT_NEAR(scene.vertical_pan(), 0.5, 1e-9);
+
+  scene.pan_vertically(0.0);
+  std::array<double, 3> back{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(back.data());
+  for (std::size_t i = 0; i < back.size(); ++i) {
+    EXPECT_NEAR(back[i], framed[i], 1e-6) << "axis " << i;
   }
 }
 
-// **It cannot reach straight down.** At 90 degrees the view up and the view
-// direction line up, the camera basis collapses and the window goes black -
-// this scene has drawn one before, and a slider that could reach it would be a
-// control whose end stop is a fault.
-TEST(TerrainSceneTest, TheTiltCannotCollapseTheCamera) {
+// **It says where it is, not how far to go.** Asked for the same position
+// twice, the view must not move the second time - a slider held still while
+// anything else called in would otherwise walk the scene off the screen.
+TEST(TerrainSceneTest, AskingForTheSamePositionTwiceMovesNothing) {
   TerrainScene scene;
-  scene.show(raster(8, 6, 2500.0), sloping(8, 6), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
              "cover");
   scene.reset_camera();
 
-  scene.look_from_above(90.0);
-  EXPECT_LT(scene.view_elevation_degrees(), 89.0);
+  scene.pan_vertically(0.4);
+  std::array<double, 3> once{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(once.data());
 
-  scene.look_from_above(-30.0);
-  EXPECT_GT(scene.view_elevation_degrees(), 0.0) << "and never from under the ground";
+  scene.pan_vertically(0.4);
+  std::array<double, 3> twice{};
+  scene.renderer()->GetActiveCamera()->GetFocalPoint(twice.data());
+  for (std::size_t i = 0; i < once.size(); ++i) {
+    EXPECT_DOUBLE_EQ(twice[i], once[i]) << "axis " << i;
+  }
+}
+
+// Reframing the scene is the view the slider calls zero, so the slide it
+// remembers has to go with it.
+TEST(TerrainSceneTest, ReframingForgetsTheSlide) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.reset_camera();
+  scene.pan_vertically(0.6);
+  EXPECT_NEAR(scene.vertical_pan(), 0.6, 1e-9);
+
+  scene.reset_camera();
+  EXPECT_NEAR(scene.vertical_pan(), 0.0, 1e-9);
 }
 
 // **The compass must not change how the farm is framed.** The letters sit
@@ -334,6 +365,106 @@ TEST(TerrainSceneTest, TheCompassDoesNotChangeWhatTheCameraFrames) {
   // Still the surface's own extent: points sit at cell centres, so 7 x 5 cells.
   EXPECT_NEAR(bounds[1] - bounds[0], 7.0 * kCellSize, 1e-6);
   EXPECT_NEAR(bounds[3] - bounds[2], 5.0 * kCellSize, 1e-6);
+}
+
+namespace {
+
+// A helper: the day's irrigation as the scene wants it.
+TerrainScene::IrrigationToday watering(const core::Raster<double>& applied,
+                                       std::vector<double> per_paddock) {
+  TerrainScene::IrrigationToday today;
+  today.applied_mm = applied;
+  today.paddock_mm = std::move(per_paddock);
+  return today;
+}
+
+/// A square paddock in the middle of the test farm.
+core::Polygon middle_paddock() {
+  core::GeoTransform transform;
+  transform.origin_easting = kOriginEasting;
+  transform.origin_northing = kOriginNorthing;
+  transform.cell_size = kCellSize;
+  const double west = kOriginEasting + (2.0 * kCellSize);
+  const double south = kOriginNorthing - (10.0 * kCellSize);
+  const double side = 6.0 * kCellSize;
+  return core::Polygon(
+      {{west, south}, {west + side, south}, {west + side, south + side}, {west, south + side}});
+}
+
+}  // namespace
+
+// A pivot appears on a paddock that was watered, and on no other.
+TEST(TerrainSceneTest, APivotStandsOnEveryWateredPaddock) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.set_boundaries({middle_paddock()});
+  scene.show_spray(true);
+
+  scene.show_irrigation(watering(raster(16, 12, 0.0), {0.0}));
+  EXPECT_EQ(scene.pivot_count(), 0U) << "a dry day waters nothing, so it drives nothing";
+
+  scene.show_irrigation(watering(raster(16, 12, 20.0), {20.0}));
+  EXPECT_EQ(scene.pivot_count(), 1U);
+  EXPECT_GT(scene.spray_line_count(), 0U);
+}
+
+// **The arm turns, and turning is all it does.** It carries no quantity - the
+// depth is on the paddock inspector - so what has to hold is that the geometry
+// moves and comes back round, and that it does not grow or shrink on the way.
+TEST(TerrainSceneTest, TheArmTurnsAndComesBackRound) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.set_boundaries({middle_paddock()});
+  scene.show_spray(true);
+  scene.show_irrigation(watering(raster(16, 12, 20.0), {20.0}));
+
+  const auto tip = [&scene] {
+    vtkPoints* points = scene.spray_points();
+    std::array<double, 3> point{};
+    // Point 3 is the far end of the arm: mast bottom, mast top, arm start, arm
+    // end.
+    points->GetPoint(3, point.data());
+    return point;
+  };
+
+  const std::size_t lines = scene.spray_line_count();
+  const std::array<double, 3> start = tip();
+
+  scene.set_spray_phase(0.25);
+  const std::array<double, 3> quarter = tip();
+  EXPECT_GT(std::hypot(quarter[0] - start[0], quarter[1] - start[1]), 1.0)
+      << "a quarter turn should have moved the far end of the arm";
+  EXPECT_EQ(scene.spray_line_count(), lines) << "turning must not add or drop geometry";
+
+  scene.set_spray_phase(1.0);
+  const std::array<double, 3> full = tip();
+  EXPECT_NEAR(full[0], start[0], 1e-6);
+  EXPECT_NEAR(full[1], start[1], 1e-6);
+}
+
+// The arm stays inside the paddock it stands on. One that swept across the
+// fence would be watering ground the model gave to somebody else.
+TEST(TerrainSceneTest, TheArmStaysInsideItsPaddock) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  const core::Polygon paddock = middle_paddock();
+  scene.set_boundaries({paddock});
+  scene.show_spray(true);
+  scene.show_irrigation(watering(raster(16, 12, 20.0), {20.0}));
+
+  for (const double phase : {0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875}) {
+    scene.set_spray_phase(phase);
+    vtkPoints* points = scene.spray_points();
+    for (vtkIdType i = 0; i < points->GetNumberOfPoints(); ++i) {
+      std::array<double, 3> point{};
+      points->GetPoint(i, point.data());
+      EXPECT_TRUE(paddock.contains({point[0], point[1]}))
+          << "phase " << phase << ", point " << i << " left the paddock";
+    }
+  }
 }
 
 // **The cloud can be taken away.** A density field is translucent by

@@ -7,12 +7,18 @@
 #include <QCheckBox>
 #include <QDir>
 #include <QDockWidget>
+#include <QEvent>
 #include <QHBoxLayout>
+#include <QLabel>
+#include <QMouseEvent>
+#include <QRegularExpression>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -34,6 +40,39 @@
 #include "ReportDialog.hpp"
 
 namespace paddock::app {
+
+namespace {
+/// How wide the setup dock opens, in pixels. Comfortably past the panel's own
+/// minimum, so the form is not on the edge of scrolling the moment it opens.
+constexpr int kOpeningPanelWidth = 520;
+
+/// How often the spray's wave is redrawn, and how far it moves each time.
+/// Twenty-five frames a second, a full sweep in four seconds: fast enough to
+/// read as water moving, slow enough that it is not a strobe over the paddocks.
+constexpr int kSprayFrameInterval = 40;
+constexpr double kSprayPhaseStep = 0.01;
+
+/// The fields drawn as sheets under the pasture, top to bottom.
+///
+/// **Ordered as the causal chain runs, the same as the map-mode list.** What
+/// grew sits directly under the pasture it made; under that the moisture that
+/// allowed it; under that the water put on and the water put on so far; under
+/// that the stress the shortfall caused; and the legume share last, which is
+/// the one that moves over seasons rather than days.
+///
+/// Slope is not here: it has one frame for the whole run, and a sheet that
+/// never changes while the others do would read as a fault. Soil water is not
+/// here either - it is the same fact as soil moisture in millimetres instead of
+/// a share, and two sheets of one quantity is a stack padded out.
+constexpr std::array<MapWindow::Field, 6> kStackedFields{
+    MapWindow::Field::Growth,          MapWindow::Field::AvailableWater,
+    MapWindow::Field::IrrigationToday, MapWindow::Field::IrrigationToDate,
+    MapWindow::Field::WaterStress,     MapWindow::Field::LegumeFraction};
+
+/// How far the pointer may move between press and release and still count as a
+/// click rather than a drag. A hand moves a little on a mouse button.
+constexpr int kClickSlopPixels = 4;
+}  // namespace
 
 namespace {
 
@@ -72,7 +111,7 @@ struct FieldStyle {
 FieldStyle style_of(MapWindow::Field field) {
   switch (field) {
     case MapWindow::Field::SoilWater:
-      return {"Soil water", "Soil water (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+      return {"Soil water", "Soil water (mm)", viz::Ramp::SoilWater, false, 0.0, 0.0};
     case MapWindow::Field::WaterStress:
       return {"Water stress", "Water stress (1 = unstressed)", viz::Ramp::Viridis, true, 0.0, 1.0};
     case MapWindow::Field::LegumeFraction:
@@ -80,15 +119,22 @@ FieldStyle style_of(MapWindow::Field field) {
     case MapWindow::Field::AvailableWater:
       return {"Soil moisture",
               "Water left of what the soil can hold",
-              viz::Ramp::Viridis,
+              viz::Ramp::SoilWater,
               true,
               0.0,
               1.0};
     case MapWindow::Field::IrrigationToday:
-      return {"Irrigation today", "Water put on today (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+      return {"Irrigation today", "Water put on today (mm)", viz::Ramp::SoilWater, false, 0.0, 0.0};
     case MapWindow::Field::IrrigationToDate:
       return {
-          "Irrigation to date", "Water put on so far (mm)", viz::Ramp::Viridis, false, 0.0, 0.0};
+          "Irrigation to date", "Water put on so far (mm)", viz::Ramp::SoilWater, false, 0.0, 0.0};
+    case MapWindow::Field::Growth:
+      return {"Growth today",
+              "Pasture grown today (kg DM/ha)",
+              viz::Ramp::PastureGreen,
+              false,
+              0.0,
+              0.0};
     case MapWindow::Field::Slope:
       return {"Slope", "Slope (degrees)", viz::Ramp::Viridis, false, 0.0, 0.0};
     case MapWindow::Field::Cover:
@@ -114,8 +160,9 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // Ordered as the causal chain runs, so the list itself reads as the story:
   // the ground dries, the rule fires, the water lands, the stress lifts.
   for (const MapWindow::Field field :
-       {Field::Cover, Field::AvailableWater, Field::IrrigationToday, Field::IrrigationToDate,
-        Field::WaterStress, Field::SoilWater, Field::LegumeFraction, Field::Slope}) {
+       {Field::Cover, Field::Growth, Field::AvailableWater, Field::IrrigationToday,
+        Field::IrrigationToDate, Field::WaterStress, Field::SoilWater, Field::LegumeFraction,
+        Field::Slope}) {
     field_box_->addItem(style_of(field).label, static_cast<int>(field));
   }
 
@@ -133,6 +180,10 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   weather_label_ = new QLabel(this);
   weather_label_->setTextFormat(Qt::RichText);
 
+  paddock_label_ = new QLabel(this);
+  paddock_label_->setTextFormat(Qt::RichText);
+  paddock_label_->setText("<b>Paddock</b> &nbsp; click the map to inspect one");
+
   // **These two lines must not set the width of the window.**
   //
   // Both change length as the run plays: "dry" becomes "12.3 mm", a
@@ -147,7 +198,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // where the person using it put it. Word wrapping would fix the width and
   // move the problem to the height, which is worse - the map would grow and
   // shrink instead.
-  for (QLabel* line : {weather_label_, summary_label_}) {
+  for (QLabel* line : {weather_label_, summary_label_, paddock_label_}) {
     line->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     line->setWordWrap(false);
   }
@@ -174,53 +225,164 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   height_box_->addItem("Heights x20", 20);
   height_box_->setEnabled(false);
 
-  weather_box_ = new QCheckBox("Weather", this);
-  weather_box_->setChecked(true);
-  weather_box_->setToolTip(
-      "Draw the day's sun, cloud and rain over the farm.\n\n"
-      "Turn it off to read the map exactly: cloud is translucent, and anything translucent "
-      "over the paddocks shifts the colour you are matching against the legend.");
-  connect(weather_box_, &QCheckBox::toggled, this, [this](bool on) {
-    terrain_.show_weather(on);
-    refresh();
-  });
+  // **Two rows, because one did not fit.**
+  //
+  // Five drop-downs, a checkbox, a button, a timeline and a date on a single
+  // line came to more than the window was wide, and the timeline - the control
+  // people actually drag - was the one squeezed to nothing, because it is the
+  // only one that gives up space. Splitting them puts the whole width under the
+  // timeline and keeps the day's date where it can be read.
+  //
+  // The playing controls go on top, nearest the map they move: play, the
+  // timeline, the date. What is being drawn goes underneath, because those are
+  // set once and then left alone.
+  auto* playing = new QHBoxLayout;
+  playing->addWidget(play_button_);
+  playing->addWidget(timeline_, 1);
+  playing->addWidget(date_label_);
 
-  auto* controls = new QHBoxLayout;
-  controls->addWidget(view_box_);
-  controls->addWidget(weather_box_);
-  controls->addWidget(height_box_);
-  controls->addWidget(field_box_);
-  controls->addWidget(scale_box_);
-  controls->addWidget(play_button_);
-  controls->addWidget(timeline_, 1);
-  controls->addWidget(date_label_);
+  auto* choices = new QHBoxLayout;
+  choices->addWidget(view_box_);
+  choices->addWidget(height_box_);
+  choices->addWidget(field_box_);
+  choices->addWidget(scale_box_);
+  choices->addStretch(1);
 
-  tilt_slider_ = new QSlider(Qt::Vertical, this);
-  tilt_slider_->setRange(5, 85);
-  tilt_slider_->setValue(40);
-  tilt_slider_->setToolTip(
-      "How far above the horizon the view looks from.\n\n"
-      "Low is a photograph from the gate and shows the shape of the ground; high is closer "
-      "to a map and shows the whole farm. It cannot reach straight down, where the camera "
-      "has nothing to keep it upright.");
-  connect(tilt_slider_, &QSlider::valueChanged, this, [this](int degrees) {
+  // **The layers, in the order they are stacked, from the sky down.**
+  //
+  // Read left to right this row is a section through the farm: weather above
+  // it, the sward on the surface, the root zone the water balance is about,
+  // and the ground below that. The order is the profile's, not a list of
+  // features, so somebody who has never seen the window can tell which is on
+  // top of which without turning any of them on.
+  //
+  // The weather box moves in here from the row above, where it sat among the
+  // drop-downs as though it were a different kind of thing. It is the top
+  // layer, and it belongs with the rest of them.
+  auto* layers = new QHBoxLayout;
+  layers->addWidget(new QLabel("Layers", this));
+
+  // **The stack, top to bottom, and the row reads as the stack does.**
+  //
+  // Weather above the farm, the pasture on the ground, and then one sheet per
+  // field: what grew, the moisture that allowed it, the water put on, the water
+  // put on so far, the stress the shortfall caused, and the clover. Left to
+  // right is top to bottom, so somebody who has never seen the window can tell
+  // which sheet is which without turning any of them on.
+  //
+  // Only the first two start ticked. A farm opens as a farm; the stack is
+  // something to turn on when a question needs it.
+  const auto add_box = [this, layers](const QString& name, const QString& explanation, bool on,
+                                      const std::function<void(bool)>& toggled) {
+    auto* check = new QCheckBox(name, this);
+    check->setChecked(on);
+    check->setToolTip(explanation);
+    connect(check, &QCheckBox::toggled, this, [this, toggled](bool ticked) {
+      toggled(ticked);
+      // **Turning a layer on reframes the scene; turning one off does not.**
+      //
+      // The camera is placed from the bounds of what can be seen and a hidden
+      // sheet is not in them, so a stack revealed after the view was framed
+      // hangs off the bottom of the window. Ticking a box and seeing nothing is
+      // the box not working. Hiding does not reframe, or somebody who had
+      // zoomed in on a corner would lose it for switching the sky off.
+      if (ticked) {
+        terrain_.reset_camera();
+        pan_slider_->setValue(0);
+      }
+      if (showing_terrain_) {
+        view_->renderWindow()->Render();
+      }
+    });
+    layer_boxes_.push_back(check);
+    layers->addWidget(check);
+  };
+
+  add_box("Weather",
+          "The day's sun, cloud, rain and wind, drawn above the farm.\n\nTurn it off to read "
+          "the map exactly: cloud is translucent, and anything translucent over the paddocks "
+          "shifts the colour you are matching against the legend.",
+          true, [this](bool on) { terrain_.show_layer(viz::TerrainScene::Layer::Weather, on); });
+  add_box("Pasture",
+          "The ground surface, coloured by whichever field the map mode names, with the fences "
+          "and the stock that stand on it.",
+          true, [this](bool on) { terrain_.show_layer(viz::TerrainScene::Layer::Pasture, on); });
+
+  for (std::size_t i = 0; i < kStackedFields.size(); ++i) {
+    const FieldStyle style = style_of(kStackedFields[i]);
+    add_box(QString(style.label),
+            QString("%1, drawn as a sheet under the pasture, on the same ground and with the "
+                    "same fences - dimmer, because down there they are for finding a paddock "
+                    "rather than for reading.")
+                .arg(style.legend),
+            false, [this, i](bool on) {
+              terrain_.show_stack_layer(i, on);
+              // Today's irrigation brings its spray with it. The sheet says
+              // where the water went; the spray puts it over the paddocks it
+              // went onto, which is the same fact seen from the farm rather
+              // than from a legend.
+              if (kStackedFields.at(i) == Field::IrrigationToday) {
+                terrain_.show_spray(on);
+                // **And the day has to be handed over again, or nothing turns.**
+                //
+                // Starting and stopping the animation is refresh_irrigation's
+                // job, because that is where the day's water is known. Ticking
+                // the box only told the scene it was wanted; the timer stayed
+                // stopped until something else happened to redraw a day, so the
+                // arms stood still on the very day somebody had just asked to
+                // watch.
+                refresh_irrigation(static_cast<std::size_t>(std::max(0, current_day_)));
+              }
+            });
+  }
+  layers->addStretch(1);
+
+  // **Slides the view up and down, and that is what it is for.**
+  //
+  // The camera is framed around everything drawn, and the sun and cloud sit
+  // well above the farm - so zooming in on a farm that sits at the bottom of
+  // that volume walks the pasture off the bottom of the window. Dragging it
+  // back with the mouse also turns the scene, which loses the bearing the
+  // compass was added to keep. This moves what is on screen and nothing else.
+  //
+  // Zero in the middle, so the control shows at a glance whether the view has
+  // been moved, and returns to the framing exactly by coming back to the centre.
+  pan_slider_ = new QSlider(Qt::Vertical, this);
+  pan_slider_->setRange(-100, 100);
+  pan_slider_->setValue(0);
+  pan_slider_->setTickPosition(QSlider::TicksBothSides);
+  pan_slider_->setTickInterval(50);
+  pan_slider_->setToolTip(
+      "Slide the view up and down.\n\n"
+      "Up looks towards the sky, down towards the paddocks. Zoomed in, the farm can sit "
+      "below the bottom of the window because the sun and cloud are drawn well above it; "
+      "this brings it back without turning the scene. The middle is where the view was "
+      "framed.");
+  connect(pan_slider_, &QSlider::valueChanged, this, [this](int position) {
     if (!showing_terrain_) {
       return;
     }
-    terrain_.look_from_above(degrees);
+    // A whole screenful at each end, which is enough to bring a farm back from
+    // either edge without letting the slider throw it clean out of sight.
+    terrain_.pan_vertically(position / 100.0);
     view_->renderWindow()->Render();
   });
 
-  // The scene and its tilt sit side by side; the weather line spans both.
+  // The scene and its slider sit side by side; the weather line spans both.
   auto* scene_row = new QHBoxLayout;
   scene_row->addWidget(view_, 1);
-  scene_row->addWidget(tilt_slider_);
+  scene_row->addWidget(pan_slider_);
 
   auto* layout = new QVBoxLayout;
   layout->addWidget(weather_label_);
   layout->addLayout(scene_row, 1);
-  layout->addLayout(controls);
+  layout->addLayout(playing);
+  layout->addLayout(choices);
+  layout->addLayout(layers);
+  layout->addWidget(paddock_label_);
   layout->addWidget(summary_label_);
+
+  view_->installEventFilter(this);
 
   auto* central = new QWidget(this);
   central->setLayout(layout);
@@ -233,6 +395,16 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   dock->setWidget(setup_);
   dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
   addDockWidget(Qt::LeftDockWidgetArea, dock);
+
+  spray_timer_ = new QTimer(this);
+  spray_timer_->setInterval(kSprayFrameInterval);
+  connect(spray_timer_, &QTimer::timeout, this, [this] {
+    spray_phase_ = std::fmod(spray_phase_ + kSprayPhaseStep, 1.0);
+    terrain_.set_spray_phase(spray_phase_);
+    if (showing_terrain_) {
+      view_->renderWindow()->Render();
+    }
+  });
 
   timer_ = new QTimer(this);
   timer_->setInterval(kFrameInterval);
@@ -268,10 +440,25 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
                        bundle.management.has_value() ? &*bundle.management : nullptr,
                        bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
 
-  // Wide enough for the controls row and the weather line, and a floor under
-  // it so the window cannot be dragged narrower than its own controls.
-  setMinimumWidth(1100);
-  resize(1400, 860);
+  // The dock opens wider than its own minimum, so the form has room before
+  // anything has to scroll. Qt sizes a dock from its widget's hint otherwise,
+  // and that hint is the minimum - which is the width at which the panel is
+  // merely legible rather than comfortable.
+  resizeDocks({dock}, {kOpeningPanelWidth}, Qt::Horizontal);
+
+  // Wide enough for the panel beside the map, and a floor under it so the
+  // window cannot be dragged narrower than the two of them together. The
+  // controls no longer set this, because they are on two rows now and the
+  // timeline gives up whatever width it is left.
+  setMinimumWidth(kOpeningPanelWidth + 620);
+  resize(kOpeningPanelWidth + 1080, 940);
+
+  // **Opens in three dimensions.** The farm is a piece of country with layers
+  // under it, and that is what the window is for; the flat map is the view to
+  // switch to when a value has to be read off a legend exactly, which is the
+  // narrower job. It is set before the first run so the opening frame is the
+  // one that will be kept, rather than a flat map that redraws itself.
+  view_box_->setCurrentIndex(1);
   start_run();
   scene_.reset_camera();
 }
@@ -355,6 +542,15 @@ void MapWindow::start_run() {
       irrigation_mm_ = last_run_->irrigation_mm;
       irrigation_tally_ = last_run_->irrigation;
     }
+    // Who owns which cell. Built here rather than during the run because the
+    // fences do not move, and from the run's own raster so that the mask is over
+    // exactly the cells the model stepped.
+    mask_.reset();
+    if (!paddocks_.empty() && !cover_.empty()) {
+      mask_.emplace(cover_.front(), paddocks_);
+    }
+    selected_paddock_.reset();
+
     adopt_series();
     if (last_run_.has_value()) {
       const double hectares = bundle.grid.has_value()
@@ -415,6 +611,13 @@ bool MapWindow::save_panel_screenshot(const std::string& path) {
   return setup_->grab().save(QString::fromStdString(path), "PNG");
 }
 
+bool MapWindow::save_window_screenshot(const std::string& path) {
+  // The map itself is drawn by OpenGL into a surface Qt does not own, so a
+  // grab of the window leaves a hole where it is. That is the point here: what
+  // is being checked is everything around the map.
+  return grab().save(QString::fromStdString(path), "PNG");
+}
+
 bool MapWindow::save_screenshot(const std::string& path) {
   vtkRenderWindow* window = view_->renderWindow();
   if (window == nullptr) {
@@ -456,7 +659,13 @@ void MapWindow::change_view(int index) {
   }
   showing_terrain_ = terrain;
   height_box_->setEnabled(terrain);
-  tilt_slider_->setEnabled(terrain);
+  pan_slider_->setEnabled(terrain);
+  // The layers are a section through a three-dimensional scene. The flat map
+  // has no profile to stack, so the row greys out rather than offering
+  // switches that would do nothing.
+  for (QCheckBox* box : layer_boxes_) {
+    box->setEnabled(terrain);
+  }
 
   vtkRenderWindow* window = view_->renderWindow();
   if (window != nullptr) {
@@ -466,7 +675,9 @@ void MapWindow::change_view(int index) {
   refresh();
   if (showing_terrain_) {
     terrain_.reset_camera();
-    terrain_.look_from_above(tilt_slider_->value());
+    // The framing is the view the slider calls zero, so the control has to say
+    // so - left where it was it would sit somewhere it no longer means.
+    pan_slider_->setValue(0);
   } else {
     scene_.reset_camera();
   }
@@ -484,6 +695,10 @@ void MapWindow::clear_series() {
   available_water_.clear();
   irrigation_today_.clear();
   irrigation_to_date_.clear();
+  growth_.clear();
+  paddocks_.clear();
+  mask_.reset();
+  selected_paddock_.reset();
   irrigation_mm_.clear();
   irrigation_tally_ = {};
   cover_.clear();
@@ -526,6 +741,7 @@ void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date)
       so_far.values()[cell] += before.values()[cell];
     }
   }
+  growth_.push_back(grid.last_growth_kg_dm());
   irrigation_today_.push_back(std::move(today));
   irrigation_to_date_.push_back(std::move(so_far));
 
@@ -553,6 +769,7 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
           for (const core::Paddock& paddock : farm.paddocks()) {
             boundaries_.push_back(paddock.boundary);
           }
+          paddocks_ = farm.paddocks();
         }
 
         // Where the stock were. Taken from the farm rather than from the day's
@@ -714,9 +931,9 @@ bool MapWindow::farm_moved(const core::Raster<double>& raster) const {
 }
 
 void MapWindow::adopt_series() {
-  for (const Field field :
-       {Field::Cover, Field::SoilWater, Field::AvailableWater, Field::WaterStress,
-        Field::IrrigationToday, Field::IrrigationToDate, Field::LegumeFraction, Field::Slope}) {
+  for (const Field field : {Field::Cover, Field::SoilWater, Field::AvailableWater,
+                            Field::WaterStress, Field::IrrigationToday, Field::IrrigationToDate,
+                            Field::Growth, Field::LegumeFraction, Field::Slope}) {
     double lowest = std::numeric_limits<double>::max();
     double highest = std::numeric_limits<double>::lowest();
     for (const core::Raster<double>& frame : series_of(field)) {
@@ -804,6 +1021,8 @@ const std::vector<core::Raster<double>>& MapWindow::series_of(Field field) const
       return irrigation_today_;
     case Field::IrrigationToDate:
       return irrigation_to_date_;
+    case Field::Growth:
+      return growth_;
     case Field::WaterStress:
       return water_stress_;
     case Field::LegumeFraction:
@@ -909,6 +1128,18 @@ void MapWindow::refresh() {
   if (have_weather) {
   }
   show_weather(day, clearness);
+  show_selected_paddock();
+
+  // Where today's water landed, drawn over the ground it landed on. The scene
+  // is handed the depths and works out the picture; it decides no water.
+  refresh_irrigation(day);
+
+  // The soil under the pasture, on the day being shown. Handed the share of
+  // available water left rather than the depth in millimetres: the profile is
+  // drawn as a section and "how full is it" is the question a section answers,
+  // where millimetres would need a legend the layer does not have.
+  terrain_.name_top_layer(style.label);
+  refresh_stack(day);
 
   const viz::ColourScale colours(style.ramp, lowest, highest);
   if (showing_terrain_) {
@@ -973,6 +1204,257 @@ void MapWindow::refresh() {
           .arg(raster.transform().cell_size, 0, 'f', 0)
           .arg(raster.transform().cell_size * raster.transform().cell_size / 10000.0, 0, 'f', 4));
   view_->renderWindow()->Render();
+}
+
+// **A click inspects; a drag still turns the scene.**
+//
+// The event is examined and passed on rather than consumed, because the same
+// button spins the camera in the terrain view and taking it away would trade
+// one useful thing for another. Only a press that goes nowhere - press and
+// release within a few pixels - counts as asking about a paddock.
+bool MapWindow::eventFilter(QObject* watched, QEvent* event) {
+  if (watched == view_) {
+    if (event->type() == QEvent::MouseButtonPress) {
+      auto* press = dynamic_cast<QMouseEvent*>(event);
+      if (press != nullptr && press->button() == Qt::LeftButton) {
+        pressed_at_ = press->pos();
+      }
+    } else if (event->type() == QEvent::MouseButtonRelease) {
+      auto* release = dynamic_cast<QMouseEvent*>(event);
+      if (release != nullptr && release->button() == Qt::LeftButton &&
+          (release->pos() - pressed_at_).manhattanLength() <= kClickSlopPixels) {
+        inspect_at(release->pos().x(), release->pos().y());
+      }
+    }
+  }
+  return QMainWindow::eventFilter(watched, event);
+}
+
+std::optional<core::Point2D> MapWindow::ground_under(int x, int y) const {
+  return showing_terrain_ ? terrain_.ground_at(x, y) : scene_.ground_at(x, y);
+}
+
+int MapWindow::render_width() const {
+  vtkRenderWindow* window = view_ != nullptr ? view_->renderWindow() : nullptr;
+  return window != nullptr ? window->GetSize()[0] : 0;
+}
+
+int MapWindow::render_height() const {
+  vtkRenderWindow* window = view_ != nullptr ? view_->renderWindow() : nullptr;
+  return window != nullptr ? window->GetSize()[1] : 0;
+}
+
+void MapWindow::go_to_day(int day) {
+  if (dates_.empty()) {
+    return;
+  }
+  timeline_->setValue(std::clamp(day, 0, static_cast<int>(dates_.size()) - 1));
+}
+
+void MapWindow::slide_view(int percent) {
+  pan_slider_->setValue(std::clamp(percent, pan_slider_->minimum(), pan_slider_->maximum()));
+}
+
+void MapWindow::select_view(bool terrain) {
+  view_box_->setCurrentIndex(terrain ? 1 : 0);
+}
+
+void MapWindow::refresh_irrigation(std::size_t day) {
+  if (day >= irrigation_today_.size()) {
+    return;
+  }
+  viz::TerrainScene::IrrigationToday today;
+  today.applied_mm = irrigation_today_[day];
+  // Averaged over the cells the mask gives each paddock, which is the same
+  // partition the model grazed - a bar worked out over a different set of cells
+  // would be a second answer to a question already answered.
+  today.paddock_mm.assign(paddocks_.size(), 0.0);
+  for (std::size_t index = 0; index < paddocks_.size(); ++index) {
+    today.paddock_mm[index] = paddock_mean(irrigation_today_, index, day).value_or(0.0);
+  }
+
+  terrain_.show_irrigation(today);
+
+  // The wave only runs when there is spray to run it over. A timer ticking
+  // against an empty scene is work nobody asked for, and on a laptop it is
+  // work somebody pays for.
+  const bool anything = std::any_of(today.paddock_mm.begin(), today.paddock_mm.end(),
+                                    [](double depth) { return depth > 0.0; });
+  if (anything && showing_terrain_ && terrain_.spray_shown()) {
+    if (!spray_timer_->isActive()) {
+      spray_timer_->start();
+    }
+  } else if (spray_timer_->isActive()) {
+    spray_timer_->stop();
+  }
+}
+
+void MapWindow::refresh_stack(std::size_t day) {
+  std::vector<viz::TerrainScene::StackEntry> entries;
+  entries.reserve(kStackedFields.size());
+  for (const Field field : kStackedFields) {
+    const std::vector<core::Raster<double>>& series = series_of(field);
+    if (series.empty()) {
+      continue;
+    }
+    const core::Raster<double>& raster = series[std::min(day, series.size() - 1)];
+    const FieldStyle style = style_of(field);
+
+    // **Each sheet keeps its own scale over the whole run.** These are
+    // different quantities in different units, so one shared ramp would invite
+    // a comparison that means nothing - and a sheet rescaled to its own day
+    // would change colour while its values held still, which is the opposite of
+    // what a stack watched over a year is for.
+    std::pair<double, double> range =
+        style.has_natural_range ? std::pair<double, double>{style.natural_low, style.natural_high}
+                                : whole_run_range(field);
+    if (range.second <= range.first) {
+      range.second = range.first + 1.0;
+    }
+    entries.push_back(
+        {raster, viz::ColourScale(style.ramp, range.first, range.second), style.label});
+  }
+  terrain_.show_stack(entries);
+}
+
+double MapWindow::irrigation_today_mm() const {
+  const auto day = static_cast<std::size_t>(std::max(0, current_day_));
+  return day < irrigation_mm_.size() ? irrigation_mm_[day] : 0.0;
+}
+
+bool MapWindow::irrigation_animating() const {
+  return spray_timer_ != nullptr && spray_timer_->isActive();
+}
+
+void MapWindow::show_all_layers() {
+  for (QCheckBox* box : layer_boxes_) {
+    box->setChecked(true);
+  }
+}
+
+std::string MapWindow::inspect_pixel(int x, int y) {
+  const std::optional<core::Point2D> ground =
+      showing_terrain_ ? terrain_.ground_at(x, y) : scene_.ground_at(x, y);
+  if (!ground.has_value()) {
+    return "that point missed the farm";
+  }
+  selected_paddock_.reset();
+  for (std::size_t i = 0; i < paddocks_.size(); ++i) {
+    if (paddocks_[i].boundary.contains(*ground)) {
+      selected_paddock_ = i;
+      break;
+    }
+  }
+  show_selected_paddock();
+  // The label carries markup for the window; a caller reading it wants the
+  // words.
+  QString plain = paddock_label_->text();
+  plain.replace("&nbsp;", " ");
+  plain.remove(QRegularExpression("<[^>]*>"));
+  return plain.simplified().toStdString();
+}
+
+void MapWindow::inspect_at(int x, int y) {
+  if (view_ == nullptr || !mask_.has_value() || paddocks_.empty()) {
+    return;
+  }
+
+  // Qt measures y down from the top of the widget and VTK measures it up from
+  // the bottom, and both work in device pixels while Qt hands out logical ones.
+  // Getting either wrong picks a point that is plausibly on the farm and is not
+  // the one under the cursor, which is the hardest kind of mistake to see.
+  const double ratio = view_->devicePixelRatioF();
+  const int device_x = static_cast<int>(std::lround(x * ratio));
+  const int device_y = static_cast<int>(std::lround((view_->height() - y) * ratio));
+
+  const std::optional<core::Point2D> ground = showing_terrain_
+                                                  ? terrain_.ground_at(device_x, device_y)
+                                                  : scene_.ground_at(device_x, device_y);
+  if (!ground.has_value()) {
+    selected_paddock_.reset();
+    paddock_label_->setText("<b>Paddock</b> &nbsp; that click missed the farm");
+    return;
+  }
+
+  // Asked of the boundaries rather than of the mask, because a click lands on a
+  // point and the mask answers for whole cells: near a fence the two disagree,
+  // and the honest answer to "what did I click on" is the paddock the point is
+  // actually inside.
+  selected_paddock_.reset();
+  for (std::size_t i = 0; i < paddocks_.size(); ++i) {
+    if (paddocks_[i].boundary.contains(*ground)) {
+      selected_paddock_ = i;
+      break;
+    }
+  }
+  show_selected_paddock();
+}
+
+std::optional<double> MapWindow::paddock_mean(const std::vector<core::Raster<double>>& series,
+                                              std::size_t paddock, std::size_t day) const {
+  if (series.empty() || !mask_.has_value()) {
+    return std::nullopt;
+  }
+  const core::Raster<double>& raster = series[std::min(day, series.size() - 1)];
+  double total = 0.0;
+  std::size_t counted = 0;
+  for (std::size_t row = 0; row < raster.rows(); ++row) {
+    for (std::size_t col = 0; col < raster.cols(); ++col) {
+      if (mask_->owner(col, row) == paddock) {
+        total += raster(col, row);
+        ++counted;
+      }
+    }
+  }
+  if (counted == 0) {
+    return std::nullopt;
+  }
+  return total / static_cast<double>(counted);
+}
+
+void MapWindow::show_selected_paddock() {
+  if (!selected_paddock_.has_value() || !mask_.has_value()) {
+    paddock_label_->setText("<b>Paddock</b> &nbsp; click the map to inspect one");
+    return;
+  }
+  const std::size_t index = *selected_paddock_;
+  if (index >= paddocks_.size()) {
+    return;
+  }
+  const auto day = static_cast<std::size_t>(
+      std::clamp(current_day_, 0, static_cast<int>(dates_.empty() ? 0 : dates_.size() - 1)));
+
+  const auto figure = [](const std::optional<double>& value, int places,
+                         const char* suffix) -> QString {
+    return value.has_value() ? QString("%1%2").arg(*value, 0, 'f', places).arg(suffix)
+                             : QString("-");
+  };
+  const std::optional<double> left = paddock_mean(available_water_, index, day);
+
+  // Stock are reported from the farm's own record of where they were, not from
+  // anything drawn: the markers are an illustration of a set stocked mob and
+  // the paddock list is what the model actually moved.
+  const bool grazed = day < grazed_each_day_.size() &&
+                      std::find(grazed_each_day_[day].begin(), grazed_each_day_[day].end(),
+                                index) != grazed_each_day_[day].end();
+
+  paddock_label_->setText(
+      QString(
+          "<b>%1</b> &nbsp; %2 ha, %3 cells &nbsp;|&nbsp; cover %4 &nbsp;|&nbsp; grew %5 "
+          "&nbsp;|&nbsp; water left %6 &nbsp;|&nbsp; stress %7 &nbsp;|&nbsp; irrigation %8 today, "
+          "%9 so far &nbsp;|&nbsp; %10")
+          .arg(QString::fromStdString(paddocks_[index].name.empty()
+                                          ? "Paddock " + std::to_string(index + 1)
+                                          : paddocks_[index].name))
+          .arg(mask_->rasterised_hectares(index), 0, 'f', 1)
+          .arg(mask_->cell_counts()[index])
+          .arg(figure(paddock_mean(cover_, index, day), 0, " kg DM/ha"))
+          .arg(figure(paddock_mean(growth_, index, day), 1, " kg DM/ha today"))
+          .arg(left.has_value() ? QString("%1%").arg(*left * 100.0, 0, 'f', 0) : QString("-"))
+          .arg(figure(paddock_mean(water_stress_, index, day), 2, ""))
+          .arg(figure(paddock_mean(irrigation_today_, index, day), 1, " mm"))
+          .arg(figure(paddock_mean(irrigation_to_date_, index, day), 0, " mm"))
+          .arg(grazed ? "stock on it" : "no stock"));
 }
 
 void MapWindow::show_day(int day) {

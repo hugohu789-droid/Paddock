@@ -14,6 +14,7 @@
 #include <vtkAppendPolyData.h>
 #include <vtkCamera.h>
 #include <vtkCellArray.h>
+#include <vtkCellPicker.h>
 #include <vtkContourFilter.h>
 #include <vtkDataSetMapper.h>
 #include <vtkDoubleArray.h>
@@ -62,12 +63,47 @@ constexpr double kMarkerSizeM = 8.0;
 
 constexpr double kPi = 3.14159265358979323846;
 
+/// How far apart the layers are drawn, as a share of the farm's span.
+///
+/// **This is a separation, not a depth, and the difference matters.** The
+/// layers are held apart so that all of them can be watched at once - the
+/// pasture greening while the root zone dries under it - which is the whole
+/// point of stacking them. Pushed together into a section they would hide each
+/// other and only the top one would be readable.
+///
+/// It stands in for nothing. A pasture root zone is perhaps half a metre and
+/// this farm is a kilometre and a half across, so a profile drawn to scale is
+/// thinner than the line around a paddock; and the model has no depth at all -
+/// its water store is a single bucket in millimetres. The same kind of choice
+/// as the cloud, which carries a measured coverage at a height picked to be
+/// seen.
+constexpr double kLayerSeparation = 0.17;
+
+/// How strongly the fences show on the sheets below the top one.
+///
+/// Faint on purpose. On the pasture a fence is read - which paddock, which mob.
+/// Down the stack it is there so the same piece of ground can be found on
+/// another sheet, and drawn at full strength a grid of white lines over seven
+/// coloured sheets is what the eye lands on instead of the colour.
+constexpr double kStackFenceOpacity = 0.28;
+
 constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
 
 }  // namespace
 
 TerrainScene::TerrainScene() {
-  renderer_->SetBackground(0.10, 0.11, 0.13);
+  // **A graded background rather than a flat near-black.**
+  //
+  // Flat black is what a renderer does when nobody has chosen, and it cost
+  // twice here: white text on it has no edge to sit against, and a scene whose
+  // subject is a sky reads as a hole rather than as air. This is the pairing
+  // VTK's own viewers have used for years - dark and cool at the top, lighter
+  // and warmer towards the horizon - which is dark enough for the sun and the
+  // cloud to carry, and light enough at the bottom that a label has something
+  // to be legible against.
+  renderer_->GradientBackgroundOn();
+  renderer_->SetBackground2(0.06, 0.08, 0.13);
+  renderer_->SetBackground(0.20, 0.23, 0.29);
 
   // The scene's own light, replacing the headlight VTK would otherwise supply.
   // A headlight sits at the camera and lights whatever you look at from where
@@ -98,6 +134,7 @@ TerrainScene::TerrainScene() {
   sun_actor_->SetMapper(nullptr);
   for (const auto& pair : {std::make_pair(sun_disc_.Get(), sun_actor_.Get()),
                            std::make_pair(rain_lines_.Get(), rain_actor_.Get()),
+                           std::make_pair(spray_lines_.Get(), spray_actor_.Get()),
                            std::make_pair(wind_marks_.Get(), wind_actor_.Get())}) {
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(pair.first);
@@ -147,6 +184,30 @@ TerrainScene::TerrainScene() {
   rain_actor_->GetProperty()->SetLineWidth(1.5);
   wind_actor_->GetProperty()->SetColor(0.80, 0.85, 0.92);
   wind_actor_->GetProperty()->SetLineWidth(2.0);
+
+  // **Spray must not read as rain, so it differs in every way it can.** Rain is
+  // a cool blue, thin, long, high up and spread over the whole farm, because
+  // the day's rainfall is one number for all of it. Spray is near-white, short,
+  // thick, close to the ground and only over the cells that got water. Somebody
+  // glancing at the scene has to be able to say which water is which without
+  // reading a legend.
+  spray_actor_->GetProperty()->SetColor(0.72, 0.90, 1.00);
+  spray_actor_->GetProperty()->SetLineWidth(1.6);
+  spray_actor_->GetProperty()->SetOpacity(0.55);
+  spray_actor_->SetVisibility(0);
+
+  // Water: cool and translucent, so it reads as water rather than as line work.
+
+  // The name beside the top sheet. The rest of the stack carries its own, one
+  // per sheet, written when the stack is built.
+  pasture_label_->GetTextProperty()->SetFontSize(22);
+  pasture_label_->GetTextProperty()->SetJustificationToRight();
+  pasture_label_->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
+  pasture_label_->GetTextProperty()->SetOpacity(1.0);
+  pasture_label_->GetTextProperty()->ShadowOn();
+  pasture_label_->GetTextProperty()->SetBold(1);
+  pasture_label_->UseBoundsOff();
+  renderer_->AddActor(pasture_label_);
 
   surface_mapper_->SetLookupTable(lookup_);
   surface_mapper_->SetScalarModeToUsePointData();
@@ -272,6 +333,7 @@ void TerrainScene::show(const core::Raster<double>& field, const core::Raster<do
   surface_mapper_->SetScalarRange(scale.minimum(), scale.maximum());
 
   legend_->SetTitle(title.c_str());
+
   legend_->SetLookupTable(lookup_);
   const std::string format = tick_label_format(scale.minimum(), scale.maximum(), kLegendLabels);
   legend_->SetLabelFormat(format.c_str());
@@ -630,7 +692,12 @@ void TerrainScene::place_compass() {
       // moment somebody has spun the scene and cannot tell which way is up.
       mark->GetTextProperty()->SetFontSize(34);
       mark->GetTextProperty()->SetJustificationToCentered();
-      mark->GetTextProperty()->SetColor(0.88, 0.91, 0.96);
+      mark->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
+      // A shadow, because these are drawn over whatever the scene happens to put
+      // behind them - sky at one bearing, a coloured sheet at another. White on
+      // white is unreadable and this is the cheap fix for it.
+      mark->GetTextProperty()->ShadowOn();
+
       mark->GetTextProperty()->SetOpacity(1.0);
 
       // **A label must not change how the camera frames the farm.** These sit
@@ -657,51 +724,462 @@ void TerrainScene::place_compass() {
   }
 }
 
-void TerrainScene::look_from_above(double degrees) {
-  vtkCamera* camera = renderer_->GetActiveCamera();
-  if (camera == nullptr) {
-    return;
-  }
-  std::array<double, 3> focus{};
-  camera->GetFocalPoint(focus.data());
-  std::array<double, 3> at{};
-  camera->GetPosition(at.data());
-
-  const double east = at[0] - focus[0];
-  const double north = at[1] - focus[1];
-  const double up = at[2] - focus[2];
-  const double distance = std::sqrt((east * east) + (north * north) + (up * up));
-  if (distance <= 0.0) {
-    return;
+std::optional<core::Point2D> TerrainScene::ground_at(int x, int y) const {
+  if (!has_field_) {
+    return std::nullopt;
   }
 
-  // Keep the bearing the mouse left it on; change only how high the camera is.
-  const double flat = std::hypot(east, north);
-  const double bearing = flat > 0.0 ? std::atan2(east, north) : 0.0;
+  // A cell picker rather than a prop picker, because what is wanted is the
+  // point on the ground and not merely which actor was hit. Restricted to the
+  // field: without that the picker happily returns a point on a fence line, a
+  // stock marker or - in the terrain view - the underside of a cloud, and a
+  // click on a sheep would report the ground somewhere above the paddock.
+  vtkNew<vtkCellPicker> picker;
+  picker->SetTolerance(0.0005);
+  picker->InitializePickList();
+  picker->AddPickList(surface_actor_);
+  picker->PickFromListOn();
 
-  // Clamped short of straight down and short of the horizon: at 90 degrees the
-  // view up and the view direction line up and the camera basis collapses,
-  // which is a black window - this scene has drawn one before.
-  const double tilt = std::clamp(degrees, 5.0, 85.0) * kDegreesToRadians;
-  camera->SetPosition(focus[0] + (distance * std::cos(tilt) * std::sin(bearing)),
-                      focus[1] + (distance * std::cos(tilt) * std::cos(bearing)),
-                      focus[2] + (distance * std::sin(tilt)));
-  camera->SetViewUp(0.0, 0.0, 1.0);
-  renderer_->ResetCameraClippingRange();
+  if (picker->Pick(x, y, 0.0, renderer_) == 0) {
+    return std::nullopt;
+  }
+
+  std::array<double, 3> position{};
+  picker->GetPickPosition(position.data());
+  return core::Point2D{position[0], position[1]};
 }
 
-double TerrainScene::view_elevation_degrees() const {
+vtkPoints* TerrainScene::spray_points() const {
+  return spray_lines_->GetPoints();
+}
+
+std::size_t TerrainScene::spray_line_count() const {
+  return static_cast<std::size_t>(spray_lines_->GetNumberOfLines());
+}
+
+void TerrainScene::show_layer(Layer layer, bool visible) {
+  const int on = visible ? 1 : 0;
+  switch (layer) {
+    case Layer::Weather:
+      show_weather(visible);
+      return;
+    case Layer::Pasture:
+      surface_actor_->SetVisibility(on);
+      // The fences and the stock belong to the pasture: they are things on the
+      // paddocks, and left hanging over a hidden surface they would float with
+      // nothing under them.
+      fence_actor_->SetVisibility(on);
+      grazed_actor_->SetVisibility(on);
+      for (auto& mob : mob_actors_) {
+        mob->SetVisibility(on);
+      }
+      pasture_label_->SetVisibility(on);
+      return;
+  }
+}
+
+bool TerrainScene::layer_shown(Layer layer) const {
+  switch (layer) {
+    case Layer::Weather:
+      return weather_shown_;
+    case Layer::Pasture:
+      return surface_actor_->GetVisibility() != 0;
+  }
+  return false;
+}
+
+void TerrainScene::show_spray(bool visible) {
+  spray_wanted_ = visible;
+  // Whether there is anything to show is the geometry's business, and it is
+  // empty on a day that watered nothing - so asking for spray on a dry day
+  // still draws none.
+  spray_actor_->SetVisibility(!pivots_.empty() && visible ? 1 : 0);
+}
+
+void TerrainScene::show_stack_layer(std::size_t index, bool visible) {
+  if (index >= stack_.size()) {
+    return;
+  }
+  StackedSheet& sheet = *stack_[index];
+  sheet.shown = visible;
+  const int on = visible ? 1 : 0;
+  sheet.actor->SetVisibility(on);
+  sheet.fence_actor->SetVisibility(on);
+  // A name goes with its sheet. A word floating beside nothing is worse than no
+  // word.
+  sheet.label->SetVisibility(on);
+}
+
+bool TerrainScene::stack_layer_shown(std::size_t index) const {
+  return index < stack_.size() && stack_[index]->shown;
+}
+
+void TerrainScene::build_stack_fences(vtkPolyData* into, double lift) const {
+  vtkNew<vtkPoints> points;
+  vtkNew<vtkCellArray> lines;
+  const double step = elevation_.empty() ? 0.0 : elevation_.transform().cell_size;
+
+  for (const core::Polygon& boundary : boundaries_) {
+    const std::vector<core::Point2D>& vertices = boundary.vertices();
+    if (vertices.size() < 3) {
+      continue;
+    }
+    const vtkIdType first = points->GetNumberOfPoints();
+    vtkIdType placed = 0;
+    for (std::size_t i = 0; i < vertices.size(); ++i) {
+      const core::Point2D& from = vertices[i];
+      const core::Point2D& to = vertices[(i + 1) % vertices.size()];
+      const double length = std::hypot(to.easting - from.easting, to.northing - from.northing);
+      const auto steps =
+          step > 0.0 ? std::max<std::size_t>(1, static_cast<std::size_t>(length / step)) : 1;
+      // Walked in steps for the same reason the fences on top are: a paddock
+      // side is a hundred metres and the ground rises and falls between its
+      // corners, so a straight line between two draped corners comes out
+      // dashed.
+      for (std::size_t s = 0; s < steps; ++s) {
+        const double fraction = static_cast<double>(s) / static_cast<double>(steps);
+        const core::Point2D along{from.easting + ((to.easting - from.easting) * fraction),
+                                  from.northing + ((to.northing - from.northing) * fraction)};
+        points->InsertNextPoint(along.easting, along.northing,
+                                (height_at(along) * exaggeration_) - lift);
+        ++placed;
+      }
+    }
+    lines->InsertNextCell(static_cast<int>(placed + 1));
+    for (vtkIdType i = 0; i < placed; ++i) {
+      lines->InsertCellPoint(first + i);
+    }
+    lines->InsertCellPoint(first);
+  }
+
+  into->SetPoints(points);
+  into->SetLines(lines);
+  into->Modified();
+}
+
+void TerrainScene::name_top_layer(const std::string& name) {
+  // **Named after what it is showing, not after grass.** The top sheet carries
+  // whichever field the map mode names, so a fixed label reading "Pasture"
+  // would be wrong the moment somebody chose slope - and wrong beside six
+  // sheets that do carry their own names correctly.
+  pasture_label_->SetInput(name.c_str());
+}
+
+void TerrainScene::show_stack(const std::vector<StackEntry>& entries) {
+  if (!has_field_) {
+    return;
+  }
+
+  const auto cols = static_cast<int>(field_.cols());
+  const auto rows = static_cast<int>(field_.rows());
+  const double span = std::max(sky_width_, sky_height_);
+  const double gap = span * kLayerSeparation;
+  const double ground = highest_m_ * exaggeration_;
+
+  // **Well off the western side, and further out than it looks like it needs.**
+  //
+  // These are drawn in the scene, so a label close to the farm is not merely
+  // beside it - it is behind or in front of whichever sheet the camera has put
+  // there, and the words came out cut in half by the very stack they were
+  // naming. Out here they clear the whole stack at any bearing, and they can
+  // afford to: like the compass they are kept out of the camera's bounds, so
+  // moving them costs nothing in how the farm is framed.
+  const double label_east = sky_east_ - (sky_width_ / 2.0) - (span * 0.42);
+  const double label_north = sky_north_;
+  pasture_label_->SetPosition(label_east, label_north, ground);
+
+  // Sheets are built once and then refilled. Rebuilding the actors every day
+  // would rebuild them three hundred times a run, and a renderer accumulating
+  // actors is the fault that framed every scene from stale bounds.
+  while (stack_.size() < entries.size()) {
+    auto sheet = std::make_unique<StackedSheet>();
+
+    vtkNew<vtkStructuredGridGeometryFilter> geometry;
+    geometry->SetInputData(sheet->grid);
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputConnection(geometry->GetOutputPort());
+    mapper->SetLookupTable(sheet->colours);
+    mapper->SetScalarModeToUsePointData();
+    mapper->SetColorModeToMapScalars();
+    sheet->actor->SetMapper(mapper);
+    sheet->actor->GetProperty()->SetInterpolationToGouraud();
+    // **Unlit, unlike the pasture.** The top surface is lit so its relief
+    // reads; these are read against a legend, and a light falling across them
+    // would shade one end of the farm darker than the other - a difference in
+    // the value that is not in the value.
+    sheet->actor->GetProperty()->LightingOff();
+    sheet->actor->SetVisibility(0);
+    renderer_->AddActor(sheet->actor);
+
+    vtkNew<vtkPolyDataMapper> fence_mapper;
+    fence_mapper->SetInputData(sheet->fences);
+    fence_mapper->ScalarVisibilityOff();
+    sheet->fence_actor->SetMapper(fence_mapper);
+    // **Dimmer than the fences on top, and that is the point.** Up there they
+    // are read - which paddock, which mob. Down here they are for finding the
+    // same piece of ground on another sheet, and drawn as brightly they would
+    // fight the colour that is the reason to look.
+    sheet->fence_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    sheet->fence_actor->GetProperty()->SetLineWidth(1.0);
+    sheet->fence_actor->GetProperty()->SetOpacity(kStackFenceOpacity);
+    sheet->fence_actor->GetProperty()->LightingOff();
+    sheet->fence_actor->SetVisibility(0);
+    renderer_->AddActor(sheet->fence_actor);
+
+    sheet->label->GetTextProperty()->SetFontSize(22);
+    sheet->label->GetTextProperty()->SetJustificationToRight();
+    sheet->label->GetTextProperty()->SetColor(1.0, 1.0, 1.0);
+    sheet->label->GetTextProperty()->SetOpacity(1.0);
+    sheet->label->GetTextProperty()->SetBold(1);
+    sheet->label->GetTextProperty()->ShadowOn();
+    // Out of the camera's bounds, like the compass: a word beside the farm that
+    // counted towards them would push the view back every time it was reset.
+    sheet->label->UseBoundsOff();
+    sheet->label->SetVisibility(0);
+    renderer_->AddActor(sheet->label);
+
+    stack_.push_back(std::move(sheet));
+  }
+
+  for (std::size_t i = 0; i < stack_.size(); ++i) {
+    StackedSheet& sheet = *stack_[i];
+    if (i >= entries.size()) {
+      sheet.shown = false;
+      sheet.actor->SetVisibility(0);
+      sheet.fence_actor->SetVisibility(0);
+      sheet.label->SetVisibility(0);
+      continue;
+    }
+    const StackEntry& entry = entries[i];
+    const double lift = gap * static_cast<double>(i + 1);
+
+    vtkNew<vtkPoints> points;
+    points->SetNumberOfPoints(static_cast<vtkIdType>(cols) * rows);
+    vtkNew<vtkDoubleArray> values;
+    values->SetNumberOfComponents(1);
+    values->SetNumberOfTuples(static_cast<vtkIdType>(cols) * rows);
+
+    // Walked exactly as the surface is: row 0 of a Paddock raster is the
+    // northernmost and VTK's y increases north. Built the other way round, a
+    // sheet would sit under a mirrored farm, which looks perfectly plausible.
+    for (int row = 0; row < rows; ++row) {
+      const int source_row = rows - 1 - row;
+      for (int col = 0; col < cols; ++col) {
+        const auto c = static_cast<std::size_t>(col);
+        const auto r = static_cast<std::size_t>(source_row);
+        const core::Point2D centre = field_.cell_centre(c, r);
+        const vtkIdType index = (static_cast<vtkIdType>(row) * cols) + col;
+        points->SetPoint(index, centre.easting, centre.northing,
+                         (elevation_(c, r) * exaggeration_) - lift);
+        const bool inside = c < entry.values.cols() && r < entry.values.rows();
+        values->SetTuple1(index, inside ? entry.values(c, r) : 0.0);
+      }
+    }
+
+    sheet.grid->SetDimensions(cols, rows, 1);
+    sheet.grid->SetPoints(points);
+    sheet.grid->GetPointData()->SetScalars(values);
+    sheet.grid->Modified();
+
+    fill_lookup_table(sheet.colours, entry.colours);
+    sheet.actor->GetMapper()->SetScalarRange(sheet.colours->GetTableRange());
+
+    build_stack_fences(sheet.fences, lift);
+
+    sheet.label->SetInput(entry.name.c_str());
+    sheet.label->SetPosition(label_east, label_north, ground - lift);
+  }
+}
+
+void TerrainScene::lay_out_spray() {
+  vtkNew<vtkPoints> points;
+  vtkNew<vtkCellArray> lines;
+
+  // Where each arm is pointing. One angle for every pivot on the farm, because
+  // they are all being driven by the same clock - this is one day's watering,
+  // not a set of machines running to their own schedules.
+  const double angle = 2.0 * kPi * spray_phase_;
+  const double heading_east = std::sin(angle);
+  const double heading_north = std::cos(angle);
+
+  for (const Pivot& pivot : pivots_) {
+    // The mast, so the arm is plainly turning about something rather than
+    // sliding across the paddock.
+    const double mast = pivot.reach * 0.22;
+    {
+      const vtkIdType first = points->GetNumberOfPoints();
+      points->InsertNextPoint(pivot.easting, pivot.northing, pivot.ground);
+      points->InsertNextPoint(pivot.easting, pivot.northing, pivot.ground + mast);
+      lines->InsertNextCell(2);
+      lines->InsertCellPoint(first);
+      lines->InsertCellPoint(first + 1);
+    }
+
+    // The arm, drawn from the top of the mast out to the reach and sloping down
+    // to the ground at its far end, the way a span does.
+    const double tip_east = pivot.easting + (pivot.reach * heading_east);
+    const double tip_north = pivot.northing + (pivot.reach * heading_north);
+    {
+      const vtkIdType first = points->GetNumberOfPoints();
+      points->InsertNextPoint(pivot.easting, pivot.northing, pivot.ground + mast);
+      points->InsertNextPoint(tip_east, tip_north, pivot.ground + (mast * 0.55));
+      lines->InsertNextCell(2);
+      lines->InsertCellPoint(first);
+      lines->InsertCellPoint(first + 1);
+    }
+
+    // Water off the span: short falls at intervals along it, longest under the
+    // outer end where a pivot throws the most.
+    constexpr int kFalls = 7;
+    for (int i = 1; i <= kFalls; ++i) {
+      const double out = static_cast<double>(i) / kFalls;
+      const double east = pivot.easting + (pivot.reach * out * heading_east);
+      const double north = pivot.northing + (pivot.reach * out * heading_north);
+      const double top = pivot.ground + (mast * (1.0 - (0.45 * out)));
+      const vtkIdType first = points->GetNumberOfPoints();
+      points->InsertNextPoint(east, north, top);
+      points->InsertNextPoint(east, north, pivot.ground);
+      lines->InsertNextCell(2);
+      lines->InsertCellPoint(first);
+      lines->InsertCellPoint(first + 1);
+    }
+  }
+
+  spray_lines_->SetPoints(points);
+  spray_lines_->SetLines(lines);
+  spray_lines_->Modified();
+}
+
+void TerrainScene::set_spray_phase(double phase) {
+  if (pivots_.empty()) {
+    return;
+  }
+  spray_phase_ = std::fmod(phase, 1.0);
+  lay_out_spray();
+}
+
+void TerrainScene::show_irrigation(const IrrigationToday& today) {
+  pivots_.clear();
+
+  if (has_field_) {
+    for (std::size_t index = 0; index < boundaries_.size(); ++index) {
+      const double depth = index < today.paddock_mm.size() ? today.paddock_mm[index] : 0.0;
+      if (depth <= 0.0) {
+        continue;
+      }
+      const std::vector<core::Point2D>& vertices = boundaries_[index].vertices();
+      if (vertices.size() < 3) {
+        continue;
+      }
+
+      Pivot pivot;
+      const core::Point2D centre = boundaries_[index].centroid();
+      pivot.easting = centre.easting;
+      pivot.northing = centre.northing;
+      pivot.ground = highest_m_ * exaggeration_;
+
+      // Reach to the nearest side rather than to the farthest corner, so the
+      // circle the arm sweeps stays inside the paddock it belongs to. A pivot
+      // whose arm crossed the fence would be watering ground the model gave to
+      // somebody else.
+      double nearest = std::numeric_limits<double>::max();
+      for (std::size_t i = 0; i < vertices.size(); ++i) {
+        const core::Point2D& from = vertices[i];
+        const core::Point2D& to = vertices[(i + 1) % vertices.size()];
+        const double run_east = to.easting - from.easting;
+        const double run_north = to.northing - from.northing;
+        const double length = std::hypot(run_east, run_north);
+        if (length <= 0.0) {
+          continue;
+        }
+        // Distance from the centre to the line the side lies on.
+        const double away = std::abs((run_east * (from.northing - centre.northing)) -
+                                     (run_north * (from.easting - centre.easting))) /
+                            length;
+        nearest = std::min(nearest, away);
+      }
+      if (nearest == std::numeric_limits<double>::max() || nearest <= 0.0) {
+        continue;
+      }
+      pivot.reach = nearest * 0.85;
+      pivots_.push_back(pivot);
+    }
+  }
+
+  lay_out_spray();
+  spray_actor_->SetVisibility(spray_wanted_ && !pivots_.empty() ? 1 : 0);
+}
+
+void TerrainScene::pan_vertically(double fraction) {
   vtkCamera* camera = renderer_->GetActiveCamera();
   if (camera == nullptr) {
-    return 45.0;
+    return;
   }
+
+  // The slider says where it is, not how far to move, so only the difference
+  // from what has already been applied is acted on. Without this, holding the
+  // slider still while anything else called in would keep sliding the view.
+  const double step = fraction - panned_;
+  if (std::abs(step) < 1e-9) {
+    return;
+  }
+
   std::array<double, 3> focus{};
   camera->GetFocalPoint(focus.data());
   std::array<double, 3> at{};
   camera->GetPosition(at.data());
-  const double flat = std::hypot(at[0] - focus[0], at[1] - focus[1]);
-  const double up = at[2] - focus[2];
-  return flat > 0.0 ? std::atan2(up, flat) / kDegreesToRadians : 89.0;
+
+  // How much of the world the window shows, top to bottom, at the focal
+  // distance. A share of that is the unit a person means by "a bit further up":
+  // metres would move a large farm imperceptibly and throw a small one off the
+  // screen.
+  const double distance = std::sqrt(((at[0] - focus[0]) * (at[0] - focus[0])) +
+                                    ((at[1] - focus[1]) * (at[1] - focus[1])) +
+                                    ((at[2] - focus[2]) * (at[2] - focus[2])));
+  const double visible =
+      camera->GetParallelProjection() != 0
+          ? 2.0 * camera->GetParallelScale()
+          : 2.0 * distance * std::tan(camera->GetViewAngle() * 0.5 * kDegreesToRadians);
+  if (visible <= 0.0) {
+    return;
+  }
+
+  // Along the screen's own up direction, which is not the world's: the scene
+  // can be tilted, and sliding along the world z would drift sideways on
+  // screen as the view came down towards the horizon.
+  std::array<double, 3> up{};
+  camera->GetViewUp(up.data());
+  std::array<double, 3> forward{{focus[0] - at[0], focus[1] - at[1], focus[2] - at[2]}};
+  const double length =
+      std::sqrt((forward[0] * forward[0]) + (forward[1] * forward[1]) + (forward[2] * forward[2]));
+  if (length > 0.0) {
+    for (double& component : forward) {
+      component /= length;
+    }
+    // The part of view-up square to the view direction. VTK keeps these close
+    // to perpendicular but does not guarantee it, and an up vector leaning
+    // along the view would slide the camera towards the farm rather than over
+    // it.
+    const double along = (up[0] * forward[0]) + (up[1] * forward[1]) + (up[2] * forward[2]);
+    for (std::size_t i = 0; i < up.size(); ++i) {
+      up[i] -= along * forward[i];
+    }
+  }
+  const double up_length = std::sqrt((up[0] * up[0]) + (up[1] * up[1]) + (up[2] * up[2]));
+  if (up_length <= 0.0) {
+    return;
+  }
+
+  const double shift = step * visible;
+  for (std::size_t i = 0; i < up.size(); ++i) {
+    const double move = (up[i] / up_length) * shift;
+    focus[i] += move;
+    at[i] += move;
+  }
+  camera->SetFocalPoint(focus.data());
+  camera->SetPosition(at.data());
+  panned_ = fraction;
+  renderer_->ResetCameraClippingRange();
 }
 
 void TerrainScene::show_weather(bool visible) {
@@ -937,6 +1415,11 @@ void TerrainScene::reset_camera() {
   if (bounds[0] > bounds[1]) {
     return;
   }
+
+  // The view is back where the framing put it, so the slide is back to nothing.
+  // Left as it was, the next nudge of the slider would be measured from an
+  // offset that is no longer on screen.
+  panned_ = 0.0;
 
   const double centre_x = (bounds[0] + bounds[1]) / 2.0;
   const double centre_y = (bounds[2] + bounds[3]) / 2.0;

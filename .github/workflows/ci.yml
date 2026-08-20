@@ -492,6 +492,34 @@ jobs:
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --field "Irrigation to date" | grep -q "showing Irrigation to date"
 
+      # The paddock inspector, and the coordinate frame under it. A click runs
+      # from a screen pixel to the ground under it to the paddock containing it
+      # to the cells that paddock owns, and every one of those four steps can be
+      # wrong in a way that still returns a real paddock with believable
+      # numbers. paddock-gui checks that the map's north-west really does read
+      # further north and further west than its south-east, and exits non-zero
+      # when it does not, so this needs no grep of its own.
+      - name: Inspect a paddock, and check which way the ground runs
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --inspect | grep -q "paddock-gui: centre -> "
+
+      # The pivots turn, which is the one part of the irrigation picture a
+      # screenshot cannot show - and it is the part that broke. Ticking the
+      # layer told the scene the spray was wanted without handing it a day, so
+      # the arms stood still on exactly the day somebody had asked to watch.
+      # paddock-gui exits non-zero when a watered day is not animating, so this
+      # needs no grep of its own.
+      - name: Turn the pivots on a day that was watered
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --day 205 --layers | grep -q "paddock-gui: the pivots are turning"
+
+      # And that the growth layer draws. Growth is the production side on its
+      # own - cover moves for two reasons at once - so it is the map that shows
+      # which ground is paying its way.
+      - name: Draw what grew
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --field "Growth today" | grep -q "showing Growth today"
+
       # The sun and the sky, which a screenshot of the render window cannot
       # show: the weather line lives in a label around it, and a farm that
       # falls six metres in a kilometre looks much the same under any sun.

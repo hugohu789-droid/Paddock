@@ -34,6 +34,24 @@ enum class Ramp : std::uint8_t {
   /// red-green colour deficiency to read quantitatively, so it is offered for
   /// familiarity rather than for measurement.
   PastureGreen,
+
+  /// Dry ground to standing water: pale tan through to deep blue.
+  ///
+  /// **For water, because Viridis runs the wrong way round for it.** Viridis
+  /// puts its brightest yellow at the top of the scale, so a full profile in
+  /// midwinter came out glaring yellow - and yellow, on a map of moisture,
+  /// reads as parched. The first person shown it asked why the soil had gone so
+  /// yellow when in fact it was as wet as it gets. A map whose colour has to be
+  /// argued against the legend is a map that will be misread when nobody is
+  /// arguing.
+  ///
+  /// It runs along the blue-yellow axis, which is the axis that survives a
+  /// red-green deficiency, and it darkens steadily from one end to the other -
+  /// so it stays readable in greyscale and to the common forms of colour
+  /// blindness. It is not claimed to be perceptually uniform the way Viridis
+  /// is; where a reader has to measure a difference rather than see a pattern,
+  /// Viridis is still the right choice.
+  SoilWater,
 };
 
 [[nodiscard]] std::string ramp_name(Ramp ramp);

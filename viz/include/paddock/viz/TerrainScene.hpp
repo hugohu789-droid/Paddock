@@ -4,6 +4,9 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -122,16 +125,158 @@ class TerrainScene {
   /// again. Neither answer serves both jobs, so both are offered.
   void show_weather(bool visible);
 
-  /// Tilt the camera to look down at this many degrees above the horizon,
-  /// keeping where it is looking and how far away it is.
+  /// Draws the irrigation that was put on today, one depth per cell in the
+  /// same order as the field.
   ///
-  /// Rotating with the mouse is free, which is what makes it easy to end up
-  /// under the ground or edge-on to it. This is the one axis somebody wants to
-  /// adjust deliberately - how much of the farm is in view against how much of
-  /// its shape - so it gets a control that always lands somewhere sensible.
-  void look_from_above(double degrees);
+  /// **The picture follows the water; it never decides it.** What is drawn is
+  /// read from the depths handed in - where they are non-zero, and how deep -
+  /// so a paddock that got nothing shows nothing. Nothing here feeds back into
+  /// the model.
+  ///
+  /// **There is no rotating arm, and its absence is the honest choice.** A real
+  /// centre pivot waters the sector it is passing over; this model waters
+  /// whichever ground the rule found dry, all of it on the same day. An arm
+  /// sweeping round would be an animation with no state behind it, saying
+  /// something about how the water arrived that the model does not know. What
+  /// is drawn instead is the equipment that does not move - the hub, and the
+  /// circle it reaches - with spray standing over the ground that actually got
+  /// water.
+  /// What a day's irrigation looks like on the farm.
+  struct IrrigationToday {
+    /// Water that reached the root zone in each cell, mm. Used to decide which
+    /// paddocks are watering, not to say how much.
+    core::Raster<double> applied_mm;
 
-  [[nodiscard]] double view_elevation_degrees() const;
+    /// The same, averaged over each paddock, in the order the boundaries were
+    /// given. A paddock with anything in it gets a pivot; the depth itself is
+    /// not drawn.
+    std::vector<double> paddock_mm;
+  };
+
+  /// Draws a pivot on every paddock that was watered today.
+  ///
+  /// **The picture says which paddocks are watering, and nothing about how
+  /// much.** A hub at the centre and an arm sweeping round it, the way a centre
+  /// pivot works and the way a clock hand reads. Turning it into a gauge - an
+  /// angle or an arc standing for millimetres - was tried and taken out: the
+  /// motion loops while the timeline is paused, and a paused day has no time
+  /// passing in it, so a moving picture that meant a quantity would be claiming
+  /// something the model never said.
+  ///
+  /// The quantity is not lost. It is on the paddock inspector, in millimetres,
+  /// for today and for the run, which is where a number belongs: written down,
+  /// where it can be read twice.
+  void show_irrigation(const IrrigationToday& today);
+
+  /// Turns the pivot arms. `phase` runs 0 to 1 for a full revolution and wraps.
+  ///
+  /// Cheap on purpose: the arms are rebuilt from a handful of remembered hubs,
+  /// so this can be called at animation speed.
+  void set_spray_phase(double phase);
+
+  /// The two layers the scene owns itself. Everything else in the stack is
+  /// handed to it by show_stack.
+  enum class Layer : std::uint8_t {
+    Weather,  ///< Sun, cloud, rain and wind, above everything.
+    Pasture,  ///< The ground surface, its fences and its stock: the map itself.
+  };
+
+  void show_layer(Layer layer, bool visible);
+  [[nodiscard]] bool layer_shown(Layer layer) const;
+
+  /// One sheet of the stack: what to draw, how to colour it, and what to call
+  /// it.
+  struct StackEntry {
+    core::Raster<double> values;
+    ColourScale colours;
+    std::string name;
+  };
+
+  /// Draws a stack of fields under the pasture, one sheet each, in the order
+  /// given.
+  ///
+  /// **Held apart rather than pressed into a section.** The separation is what
+  /// the stack is for: seven fields for the same day, all readable at once, so
+  /// that a dry patch in the soil moisture sheet can be seen against the growth
+  /// sheet directly below the ground it explains. Pushed together they would
+  /// hide each other and only the top one would be legible. It is a drawing
+  /// choice and stands in for no depth - these are not soil horizons, they are
+  /// seven ways of looking at the same piece of country.
+  ///
+  /// Every sheet carries the measured ground, so a rise in the country rises
+  /// through the whole stack, and every sheet carries the paddock fences -
+  /// dimmer than the top one, because down there they are for locating a cell
+  /// rather than for reading.
+  ///
+  /// Each is coloured by its own scale. They are different quantities in
+  /// different units and a shared ramp would invite a comparison that means
+  /// nothing.
+  void show_stack(const std::vector<StackEntry>& entries);
+
+  /// What to call the top sheet.
+  ///
+  /// Separate from the title given to show(), which is the legend's - two lines
+  /// naming a unit and a scale. Beside the sheet that is a paragraph; what is
+  /// wanted there is the short name the map mode goes by, the same kind of name
+  /// the sheets below carry.
+  void name_top_layer(const std::string& name);
+
+  /// Shows or hides the spray standing over ground that was watered today.
+  ///
+  /// **Tied to the irrigation layer rather than to the weather.** It used to
+  /// come on with the sky, which put a thicket of white uprights over the
+  /// paddocks on every watering day, crossing the fences that are drawn there
+  /// too - and the first person to see it asked what the white lines meant.
+  /// Two things were wrong with that: it said the same thing the irrigation
+  /// sheet says, and it said it in the one place already carrying the fences
+  /// and the stock. Now it appears when somebody asks about irrigation, which
+  /// is when a picture of water landing on the paddocks is what they want.
+  void show_spray(bool visible);
+
+  /// Whether the spray has been asked for.
+  [[nodiscard]] bool spray_shown() const noexcept { return spray_wanted_; }
+
+  /// Shows or hides one sheet of the stack, by its position in it.
+  void show_stack_layer(std::size_t index, bool visible);
+
+  [[nodiscard]] std::size_t stack_size() const noexcept { return stack_.size(); }
+
+  [[nodiscard]] bool stack_layer_shown(std::size_t index) const;
+
+  /// How many spray uprights and pieces of equipment were drawn. Here so the
+  /// picture can be checked without rendering it: these are the two things
+  /// show_irrigation decides, and both are decidable from the geometry alone.
+  [[nodiscard]] std::size_t spray_line_count() const;
+
+  /// The spray's points, so the travelling wave can be checked without a
+  /// screenshot: what it does is move the tops, and nothing else.
+  [[nodiscard]] vtkPoints* spray_points() const;
+
+  /// How many pivots are drawn: one per paddock watering today.
+  [[nodiscard]] std::size_t pivot_count() const noexcept { return pivots_.size(); }
+
+  /// Slides the view up or down the screen without turning it.
+  ///
+  /// `fraction` is a share of the visible height: 1.0 moves a whole screenful,
+  /// positive towards the sky and negative towards the ground. The camera and
+  /// its focal point move together, so nothing rotates and the bearing the
+  /// mouse left the scene on is kept.
+  ///
+  /// **This exists because the sky is part of what the camera frames.** The sun
+  /// and the cloud sit well above the farm and the view is reset around all of
+  /// it, so zooming in on a farm that sits at the bottom of that volume walks
+  /// the pasture off the bottom of the window. Turning it back into view by
+  /// dragging with the mouse also turns the scene, which loses the bearing;
+  /// this changes what is on screen and nothing else.
+  void pan_vertically(double fraction);
+
+  /// How far the view has been slid from where reset_camera put it, as a share
+  /// of the visible height. Zero after a reset.
+  [[nodiscard]] double vertical_pan() const noexcept { return panned_; }
+
+  /// The ground under a point on the screen, in the scene's own coordinates,
+  /// or nothing when the point missed the surface. See MapScene::ground_at.
+  [[nodiscard]] std::optional<core::Point2D> ground_at(int x, int y) const;
 
   [[nodiscard]] bool weather_shown() const noexcept { return weather_shown_; }
 
@@ -213,7 +358,16 @@ class TerrainScene {
   /// it is why one face of a slope grows more grass than the other.
   std::vector<vtkNew<vtkBillboardTextActor3D>> compass_;
 
+  /// The name beside the top sheet. The rest of the stack carries its own, one
+  /// per sheet. A billboard for the same reason the compass points are: a flat
+  /// label turns edge-on and vanishes when the scene is spun, which is exactly
+  /// when somebody needs to know which sheet is which.
+  vtkNew<vtkBillboardTextActor3D> pasture_label_;
+
   void place_compass();
+
+  /// Builds the fence rings for one sheet of the stack, at its own height.
+  void build_stack_fences(vtkPolyData* into, double lift) const;
 
   /// The weather drawn over the farm: the sun, a sheet of cloud, falling rain,
   /// and a mark for the wind's strength. All of them are glyphs, all of them
@@ -258,6 +412,45 @@ class TerrainScene {
   vtkNew<vtkPolyData> wind_marks_;
   vtkNew<vtkActor> wind_actor_;
 
+  /// Spray standing over watered ground, and the pivot it comes from. Two
+  /// actors because they are two things: the spray moves with the water and
+  /// the equipment does not.
+  vtkNew<vtkPolyData> spray_lines_;
+  vtkNew<vtkActor> spray_actor_;
+
+  /// One sheet of the stack. Held by pointer because vtkNew cannot be copied
+  /// or moved, and the stack is built from whatever it is handed.
+  struct StackedSheet {
+    vtkNew<vtkStructuredGrid> grid;
+    vtkNew<vtkLookupTable> colours;
+    vtkNew<vtkActor> actor;
+    vtkNew<vtkPolyData> fences;
+    vtkNew<vtkActor> fence_actor;
+    vtkNew<vtkBillboardTextActor3D> label;
+    bool shown = false;
+  };
+
+  std::vector<std::unique_ptr<StackedSheet>> stack_;
+
+  /// Whether somebody has asked to see the spray. Kept because the geometry is
+  /// rebuilt every day and has to know, on a fresh day, whether to appear.
+  bool spray_wanted_ = false;
+
+  /// One pivot: where it stands and how far it reaches. Kept so the arm can be
+  /// turned without the geometry being worked out again every frame.
+  struct Pivot {
+    double easting = 0.0;
+    double northing = 0.0;
+    double ground = 0.0;
+    double reach = 0.0;
+  };
+
+  std::vector<Pivot> pivots_;
+  double spray_phase_ = 0.0;
+
+  /// Rebuilds the arms from pivots_ at the current phase.
+  void lay_out_spray();
+
   /// The farm's extent, kept so the sky can be hung over it.
   double sky_east_ = 0.0;
   double sky_north_ = 0.0;
@@ -288,6 +481,11 @@ class TerrainScene {
   double exaggeration_ = 1.0;
   double lowest_m_ = 0.0;
   double highest_m_ = 0.0;
+  /// How far the view has been slid, so the control can be absolute: a slider
+  /// says where it is, not how far to go, and applying its value as a step
+  /// every time it moved would run the view off the screen.
+  double panned_ = 0.0;
+
   bool has_field_ = false;
 };
 

@@ -61,6 +61,7 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger,
   for (std::size_t index = 0; index < irrigation_mm.size() && index < cells_.size(); ++index) {
     last_irrigation_mm_[index] = std::max(0.0, irrigation_mm[index]);
   }
+  last_growth_kg_dm_.assign(cells_.size(), 0.0);
 
   const auto water_for = [&irrigation_mm](std::size_t index) {
     return index < irrigation_mm.size() ? std::max(0.0, irrigation_mm[index]) : 0.0;
@@ -70,7 +71,10 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger,
     for (std::size_t row = 0; row < rows_; ++row) {
       for (std::size_t col = 0; col < cols_; ++col) {
         const std::size_t index = (row * cols_) + col;
-        cells_[index].step(weather, radiation_ratio(col, row, day), nullptr, water_for(index));
+        last_growth_kg_dm_[index] =
+            cells_[index]
+                .step(weather, radiation_ratio(col, row, day), nullptr, water_for(index))
+                .growth_kg_dm;
       }
     }
     return;
@@ -80,7 +84,10 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger,
   for (std::size_t row = 0; row < rows_; ++row) {
     for (std::size_t col = 0; col < cols_; ++col) {
       const std::size_t index = (row * cols_) + col;
-      cells_[index].step(weather, radiation_ratio(col, row, day), &scratch_, water_for(index));
+      last_growth_kg_dm_[index] =
+          cells_[index]
+              .step(weather, radiation_ratio(col, row, day), &scratch_, water_for(index))
+              .growth_kg_dm;
     }
   }
   ledger->add_scaled(scratch_, 1.0 / static_cast<double>(cells_.size()));
@@ -114,6 +121,14 @@ Raster<double> FarmletGrid::available_water_fraction() const {
     const double capacity = farmlet.soil().parameters().total_available_water_mm;
     return capacity > 0.0 ? farmlet.soil().water_mm() / capacity : 0.0;
   });
+}
+
+Raster<double> FarmletGrid::last_growth_kg_dm() const {
+  Raster<double> grown(cols_, rows_, transform_, 0.0);
+  for (std::size_t index = 0; index < last_growth_kg_dm_.size() && index < grown.size(); ++index) {
+    grown(index % cols_, index / cols_) = last_growth_kg_dm_[index];
+  }
+  return grown;
 }
 
 Raster<double> FarmletGrid::last_irrigation_mm() const {

@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QMainWindow>
+#include <QPoint>
 #include <QPushButton>
 #include <QSlider>
 #include <QTimer>
@@ -21,7 +22,9 @@
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/ScenarioRun.hpp>
 #include <paddock/core/Farmer.hpp>
+#include <paddock/core/PaddockMask.hpp>
 #include <paddock/core/Raster.hpp>
+#include <paddock/core/Terrain.hpp>
 #include <paddock/viz/MapScene.hpp>
 #include <paddock/viz/TerrainScene.hpp>
 
@@ -49,6 +52,7 @@ class MapWindow : public QMainWindow {
     WaterStress,
     IrrigationToday,
     IrrigationToDate,
+    Growth,
     LegumeFraction,
     Slope
   };
@@ -113,6 +117,13 @@ class MapWindow : public QMainWindow {
   /// perfectly wired and unreadable. Pure Qt widgets, so an ordinary grab
   /// captures them.
   bool save_panel_screenshot(const std::string& path);
+
+  /// The whole window, controls and panel included.
+  ///
+  /// The render window screenshot shows the map and nothing around it, so the
+  /// rows of controls under it - the ones that have twice been too wide for the
+  /// window - cannot be checked from a screenshot at all. This can.
+  bool save_window_screenshot(const std::string& path);
 
   /// Writes the current frame to a PNG.
   ///
@@ -224,6 +235,59 @@ class MapWindow : public QMainWindow {
   /// part nothing can check.
   [[nodiscard]] const std::string& weather_line() const noexcept { return weather_line_; }
 
+  /// Inspects the paddock under a point in the render window, given in VTK
+  /// display pixels from the bottom left, and returns what the readout says.
+  ///
+  /// Here so that the inspector can be exercised by something other than a
+  /// person clicking: the chain it runs - a screen point, the ground under it,
+  /// the paddock that contains it, the cells that paddock owns - has four
+  /// places to get a coordinate frame wrong, and every one of them produces a
+  /// plausible answer for the wrong piece of ground.
+  /// Moves the timeline to `day`, as dragging it would. Out-of-range days are
+  /// clamped rather than refused, so a caller asking for "the last day" need
+  /// not know how long the run was.
+  void go_to_day(int day);
+
+  /// Slides the terrain view, as the slider beside it would. `percent` runs
+  /// from -100 (a screenful down, towards the paddocks) to 100 (up, towards
+  /// the sky).
+  void slide_view(int percent);
+
+  /// Turns every layer of the scene on, as ticking each box would. Here so the
+  /// stack can be drawn by something other than a person clicking four times.
+  void show_all_layers();
+
+  /// Whether the pivots are turning.
+  ///
+  /// Exposed because this is the one thing about the irrigation picture that a
+  /// screenshot cannot show, and it is the thing that broke: ticking the layer
+  /// told the scene the spray was wanted but never handed it a day, so the
+  /// arms stood still on exactly the day somebody had asked to watch.
+  [[nodiscard]] bool irrigation_animating() const;
+
+  /// Water put on across the farm on the day being shown, mm.
+  [[nodiscard]] double irrigation_today_mm() const;
+
+  /// Switches between the flat map and the terrain view, as the drop-down
+  /// would.
+  void select_view(bool terrain);
+
+  /// Which of the two is showing.
+  [[nodiscard]] bool showing_terrain() const noexcept { return showing_terrain_; }
+
+  [[nodiscard]] std::string inspect_pixel(int x, int y);
+
+  /// The render window's size in device pixels, which is the frame
+  /// inspect_pixel counts in.
+  /// The ground under a point in the render window, or nothing when the point
+  /// missed the farm. Exposed so a caller can check the coordinate frame
+  /// itself rather than trusting that a plausible paddock name means the right
+  /// piece of ground was found.
+  [[nodiscard]] std::optional<core::Point2D> ground_under(int x, int y) const;
+
+  [[nodiscard]] int render_width() const;
+  [[nodiscard]] int render_height() const;
+
   /// What the run watered over the year. Reported by the headless path because
   /// a screenshot cannot show a season's water.
   [[nodiscard]] const core::IrrigationTally& irrigation() const noexcept {
@@ -252,7 +316,6 @@ class MapWindow : public QMainWindow {
   /// the reader is meant to match against the legend. On shows what the day
   /// was like. Neither serves both jobs, so it is a control rather than a
   /// decision made for somebody.
-  QCheckBox* weather_box_ = nullptr;
 
   /// How far above the horizon the three-dimensional view looks from.
   ///
@@ -261,7 +324,30 @@ class MapWindow : public QMainWindow {
   /// including under the ground; this is the one axis worth adjusting on
   /// purpose - how much of the farm is in view against how much of its shape -
   /// and it always lands somewhere the farm is visible from.
-  QSlider* tilt_slider_ = nullptr;
+  QSlider* pan_slider_ = nullptr;
+
+  /// One box per layer of the scene, in the order the layers are stacked:
+  /// weather above, the pasture on the ground, and then a sheet for each field
+  /// of kStackedFields. Held so the row can be enabled and disabled with the
+  /// terrain view.
+  std::vector<QCheckBox*> layer_boxes_;
+
+  /// Fills the terrain view's stack with today's values for kStackedFields.
+  void refresh_stack(std::size_t day);
+
+  /// Hands the terrain view the day's irrigation: where it landed, how much
+  /// each paddock got, and what a full bar means.
+  void refresh_irrigation(std::size_t day);
+
+  /// **Runs while the timeline is paused, and that is deliberate.**
+  ///
+  /// The spray's travelling wave says "this paddock is being watered today" -
+  /// a state, not a rate - so it keeps going on a day somebody is sitting on.
+  /// It carries no quantity; the bars round the paddocks do, and they are
+  /// still. Stopped whenever there is nothing to animate, so a farm that is not
+  /// being watered is not repainting itself sixty times a second for nothing.
+  QTimer* spray_timer_ = nullptr;
+  double spray_phase_ = 0.0;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;
@@ -272,6 +358,9 @@ class MapWindow : public QMainWindow {
   /// The day's weather, above the map rather than below it: it is the thing
   /// driving what the map shows, so it reads first.
   QLabel* weather_label_ = nullptr;
+
+  /// What the paddock under the last click is doing, on the day being shown.
+  QLabel* paddock_label_ = nullptr;
   QTimer* timer_ = nullptr;
 
   viz::MapScene scene_;
@@ -345,6 +434,47 @@ class MapWindow : public QMainWindow {
   std::vector<core::Raster<double>> irrigation_today_;
   std::vector<core::Raster<double>> irrigation_to_date_;
 
+  /// What the pasture grew each day, kg DM/ha. The production side on its own:
+  /// cover moves for two reasons at once and cannot answer which part of the
+  /// farm is paying its way.
+  std::vector<core::Raster<double>> growth_;
+
+  /// The paddocks this run was over, kept whole rather than as bare rings: the
+  /// inspector reports the name a farmer calls the paddock by, and a polygon
+  /// does not carry one.
+  std::vector<core::Paddock> paddocks_;
+
+  /// Which paddock owns each cell. Built once a run has finished, because the
+  /// fences do not move during it, and **it is the same partition the model
+  /// uses** - an inspector that decided ownership its own way could report a
+  /// paddock average over a different set of cells than the one the simulation
+  /// grazed.
+  std::optional<core::PaddockMask> mask_;
+
+  /// The paddock the last click landed in, if any. Nothing means the click
+  /// missed the farm, or nobody has clicked yet.
+  std::optional<std::size_t> selected_paddock_;
+
+  /// Where the left button went down, so a drag that turns the scene is not
+  /// mistaken for a click that asks about a paddock.
+  QPoint pressed_at_;
+
+  /// Resolves a click to a paddock and writes the readout.
+  void inspect_at(int x, int y);
+
+  /// Writes the readout for `selected_paddock_` on the day being shown. Called
+  /// again whenever the day or the run changes, so the numbers on screen are
+  /// never from a day other than the map beside them.
+  void show_selected_paddock();
+
+  /// The mean of `series` over the cells the mask gives `paddock`, on `day`.
+  [[nodiscard]] std::optional<double> paddock_mean(const std::vector<core::Raster<double>>& series,
+                                                   std::size_t paddock, std::size_t day) const;
+
+ protected:
+  bool eventFilter(QObject* watched, QEvent* event) override;
+
+ private:
   /// What the run watered, day by day, as a mean over the farm in mm, and what
   /// the year came to. Empty when nothing was irrigated.
   std::vector<double> irrigation_mm_;
@@ -394,6 +524,7 @@ class MapWindow : public QMainWindow {
   std::optional<config::RunSummary> last_run_;
   std::optional<config::ScenarioBundle> last_bundle_;
   core::ManagementPolicy last_policy_;
+
   bool last_run_had_stock_ = false;
   std::string last_failure_;
 

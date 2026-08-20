@@ -115,6 +115,21 @@ class FarmletGrid {
   /// Recorded so a map can show where the water went, which is the one thing
   /// an irrigation rule does that a mean over the farm cannot show.
   [[nodiscard]] Raster<double> last_irrigation_mm() const;
+
+  /// What the pasture grew on the last day stepped, kg DM/ha.
+  ///
+  /// **Growth, not cover.** Cover is the standing stock and moves for two
+  /// reasons at once - it falls where stock have been and rises where the grass
+  /// grew - so a cover map cannot answer which part of the farm is actually
+  /// producing. This is the production side on its own, before any grazing, and
+  /// it is the map that shows irrigation paying for itself: the watered ground
+  /// grows more the following days, and on a cover map that is hidden under
+  /// whatever the mob did.
+  ///
+  /// Recorded rather than recomputed. `Farmlet::step` already returns it in its
+  /// `DailyRecord`; working it out again from cover differences here would give
+  /// a second answer that could disagree with the first.
+  [[nodiscard]] Raster<double> last_growth_kg_dm() const;
   [[nodiscard]] Raster<double> legume_fraction() const;
 
   /// Per-hectare means, compensated: the closing stocks the conservation tests
@@ -138,6 +153,7 @@ class FarmletGrid {
 
   /// The water applied on the last day stepped, one entry per cell.
   std::vector<double> last_irrigation_mm_;
+  std::vector<double> last_growth_kg_dm_;
   double latitude_degrees_ = 0.0;
   /// Null until set_terrain: every cell is level ground.
   std::unique_ptr<SlopeRadiationTable> radiation_;
