@@ -14,6 +14,33 @@
 
 namespace paddock::config {
 
+namespace {
+
+/// The mean of a raster, or zero when it is empty.
+double mean_of(const core::Raster<double>& raster) {
+  if (raster.empty()) {
+    return 0.0;
+  }
+  double total = 0.0;
+  for (const double value : raster.values()) {
+    total += value;
+  }
+  return total / static_cast<double>(raster.size());
+}
+
+}  // namespace
+
+int RunSummary::days_water_stressed() const {
+  // **Below one, not below some threshold somebody picked.** FAO-56 Eq. 84 puts
+  // the coefficient at exactly one while the root zone still holds readily
+  // available water, so anything under it is the model saying growth was held
+  // back that day. A margin here would be a second opinion about when a farm is
+  // dry, and the model has already given the first.
+  return static_cast<int>(
+      std::count_if(water_stress.begin(), water_stress.end(),
+                    [](double coefficient) { return coefficient < 1.0; }));
+}
+
 double RunSummary::mean_cover_kg_dm_per_ha() const {
   if (cover_kg_dm_per_ha.empty()) {
     return 0.0;
@@ -123,6 +150,10 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     const std::vector<double>& water =
         schedule.decide(dryness.values(), farm.grid().total_available_water_mm());
     summary.irrigation_mm.push_back(schedule.last_mean_mm());
+    // Averaged over the farm, like the cover beside it. One number for a day is
+    // what a season-long comparison reads; where the stress fell is the map's
+    // job.
+    summary.water_stress.push_back(mean_of(farm.grid().water_stress()));
 
     const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger, water);
     if (farm_day.any_mob_short) {
