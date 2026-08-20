@@ -434,7 +434,7 @@ jobs:
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
           command -v ninja || scripts/ci-apt-install.sh ninja-build
-          scripts/ci-apt-install.sh qt6-base-dev libvtk9-qt-dev xvfb libgl1-mesa-dri \
+          scripts/ci-apt-install.sh qt6-base-dev qt6-charts-dev libvtk9-qt-dev xvfb libgl1-mesa-dri \
             clang-${LLVM_VERSION} clang-tidy-${LLVM_VERSION}
 
       # Built with clang rather than the default gcc, so the compile database
@@ -491,6 +491,16 @@ jobs:
       - name: Draw where the water went
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --field "Irrigation to date" | grep -q "showing Irrigation to date"
+
+      # **The comparison, end to end.** Five runs, a table of what differed and
+      # a paragraph about it is the largest thing this window does, and none of
+      # it is in a screenshot of the map. Two scenarios that differ only in
+      # whether the farm irrigates is the comparison the project exists to
+      # make, so it is the one checked: if irrigation stops changing what the
+      # farm grows, this says so.
+      - name: Compare a rain-fed farm with an irrigated one
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --compare | grep -q "Pasture grown (kg DM/ha)"
 
       # The paddock inspector, and the coordinate frame under it. A click runs
       # from a screen pixel to the ground under it to the paddock containing it

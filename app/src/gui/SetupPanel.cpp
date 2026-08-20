@@ -8,6 +8,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QGroupBox>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QStringList>
 #include <QVBoxLayout>
@@ -22,6 +23,12 @@
 namespace paddock::app {
 
 namespace {
+/// Room around the buttons at the foot of the panel, in pixels. Flush to the
+/// edges they read as another row of the form; the gap is what makes them the
+/// thing it is for.
+constexpr int kActionMargin = 10;
+constexpr int kActionSpacing = 8;
+
 /// The narrowest the setup panel is worth showing, in pixels.
 ///
 /// Measured against the form rather than chosen: the stock class row and the
@@ -164,21 +171,16 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
       "the stock are what gives. It is the counterfactual the bought-feed figure is measured "
       "against.");
 
-  run_button_ = new QPushButton("Run", this);
-  run_button_->setDefault(true);
-  report_button_ = new QPushButton("Report", this);
-  report_button_->setEnabled(false);
-
   problem_label_ = new QLabel(this);
   problem_label_->setWordWrap(true);
-  results_label_ = new QLabel(this);
-  results_label_->setWordWrap(true);
-  results_label_->setTextFormat(Qt::RichText);
 
   auto* farm_group = new QGroupBox("Farm", this);
   auto* farm_form = new QFormLayout;
   farm_form->addRow("Scenario", scenario_box_);
   farm_form->addRow("Ground", terrain_box_);
+  // Ground is advanced because a farm that brings its own measured survey
+  // overrides it anyway, and most of this list is invented country.
+  fold_away(farm_group, farm_form, {terrain_box_});
   farm_group->setLayout(farm_form);
 
   auto* stock_group = new QGroupBox("Stock", this);
@@ -186,6 +188,9 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   stock_form->addRow("Class", species_box_);
   stock_form->addRow("Head", head_box_);
   stock_form->addRow("Opening weight", liveweight_box_);
+  // The class and the number are what a person changes between scenarios;
+  // the opening weight is usually the bundle's own figure.
+  fold_away(stock_group, stock_form, {liveweight_box_});
   stock_group->setLayout(stock_form);
 
   // ------------------------------------------------------------- irrigation
@@ -243,6 +248,11 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   irrigation_form->addRow("Refill to", irrigation_target_box_);
   irrigation_form->addRow("Most at once", irrigation_maximum_box_);
   irrigation_form->addRow("Reaches the ground", irrigation_efficiency_box_);
+  // When to start and how far to refill are the rule; the depth per pass and
+  // what survives the wind are the plant, and this project has no New Zealand
+  // source for the second of those.
+  fold_away(irrigation_group, irrigation_form,
+            {irrigation_maximum_box_, irrigation_efficiency_box_});
   irrigation_group->setLayout(irrigation_form);
 
   auto* management_group = new QGroupBox("Management", this);
@@ -256,25 +266,51 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   management_form->addRow(may_buy_box_);
   management_form->addRow("At the floor", floor_purchase_box_);
   management_form->addRow("Bought feed energy", supplement_me_box_);
+  // The system and the two covers it turns on are the levers; the rotation
+  // lengths and the feed-buying rules are the detail behind them.
+  fold_away(management_group, management_form,
+            {graze_days_box_, spell_days_box_, target_gain_box_, may_buy_box_, floor_purchase_box_,
+             supplement_me_box_});
   management_group->setLayout(management_form);
-
-  auto* buttons = new QVBoxLayout;
-  buttons->addWidget(run_button_);
-  buttons->addWidget(report_button_);
-
-  auto* results_group = new QGroupBox("Results", this);
-  auto* results_layout = new QVBoxLayout;
-  results_layout->addWidget(results_label_);
-  results_group->setLayout(results_layout);
 
   auto* layout = new QVBoxLayout;
   layout->addWidget(farm_group);
   layout->addWidget(stock_group);
   layout->addWidget(management_group);
+  // **Short, because the row is four buttons wide.** "Reset to published" and
+  // "Run this scenario" said more, and at a quarter of the panel each they said
+  // it with the ends cut off. What they do at length is in the tooltip, where a
+  // sentence can be read rather than guessed at from a clipped one.
+  reset_button_ = new QPushButton("Reset", this);
+  reset_button_->setToolTip(
+      "Reset to published\n\nPuts every setting on this panel back the way the scenario bundle "
+      "publishes it: its own stock and head count, its own farmer's rules, its own ground and "
+      "irrigation.\n\nNot a factory default - there is no such thing here. It is what the panel "
+      "opened showing, so a run after Reset reproduces the published scenario rather than "
+      "something invented in this window. Offered only once a setting has actually been "
+      "changed.");
+  reset_button_->setEnabled(false);
+  connect(reset_button_, &QPushButton::clicked, this, [this] {
+    if (as_published_.has_value()) {
+      adopt_choices(*as_published_);
+      // The button is not switched off here. It follows from what the panel now
+      // says, like every other time: if putting the published settings back
+      // leaves the form describing something else, the button stays lit, and
+      // that is a fault worth seeing rather than hiding behind a grey button.
+      refresh_reset();
+    }
+  });
+
+  run_button_ = new QPushButton("Run", this);
+  run_button_->setDefault(true);
+  run_button_->setToolTip(
+      "Run this scenario\n\nRuns the farm exactly as this panel describes it - one whole "
+      "simulated year over the recorded weather - and draws it on the map, the timeline, the "
+      "chart and the readings.\n\nThis is one setup on its own. Add scenario keeps a copy of "
+      "these settings in the list, and Compare runs the list.");
+  connect(run_button_, &QPushButton::clicked, this, &SetupPanel::runRequested);
+
   layout->addWidget(irrigation_group);
-  layout->addLayout(buttons);
-  layout->addWidget(problem_label_);
-  layout->addWidget(results_group);
   layout->addStretch(1);
 
   // **The panel scrolls.** It grew past the height of a window when irrigation
@@ -300,7 +336,32 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
 
   auto* outer = new QVBoxLayout;
   outer->setContentsMargins(0, 0, 0, 0);
-  outer->addWidget(scroll);
+  // The rows carry their own margins, so the layout adds nothing between them.
+  // Its default spacing put a gap under the buttons that belonged to nothing.
+  outer->setSpacing(0);
+  // **The button and what it refuses are below the scrolling part, not in it.**
+  //
+  // Inside, they moved with the settings: a form long enough to scroll put Run
+  // out of sight, and a person who had just changed something had to scroll
+  // down to act on it. Worse, the line that says why a run is being refused
+  // scrolled away too, so the button could be greyed out with the reason
+  // nowhere on screen.
+  // Side by side, with room around them. Stacked and flush to the edges they
+  // read as part of the form above rather than as the two things it is for.
+  auto* actions = new QHBoxLayout;
+  actions->setContentsMargins(kActionMargin, kActionMargin, kActionMargin, 0);
+  actions->setSpacing(kActionSpacing);
+  // Equal shares, here and for whatever the window adds through add_action():
+  // four buttons of one width read as one row of choices, where four widths
+  // read as four unrelated controls that happen to be next to each other.
+  actions->addWidget(reset_button_, 1);
+  actions->addWidget(run_button_, 1);
+  actions_ = actions;
+
+  outer->addWidget(scroll, 1);
+  outer->addLayout(actions);
+  problem_label_->setContentsMargins(kActionMargin, 4, kActionMargin, kActionMargin);
+  outer->addWidget(problem_label_);
   setLayout(outer);
 
   // Wide enough for the form's own rows rather than a round number.
@@ -314,11 +375,31 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
 
   populate(data_directory);
 
-  connect(run_button_, &QPushButton::clicked, this, &SetupPanel::runRequested);
-  connect(report_button_, &QPushButton::clicked, this, &SetupPanel::reportRequested);
   connect(cover_floor_box_, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
   connect(rotation_box_, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
   connect(species_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
+  // **The opening weight follows the species, and only the species.**
+  //
+  // A ewe and a Friesian cow do not start a year at the same weight, so picking
+  // one should bring its figure with it - overwriting whatever the box held,
+  // which is the point.
+  //
+  // This used to sit at the end of refresh_readiness(), where every widget on
+  // the form reaches it. That put the species figure back after any edit at
+  // all - including an edit of the weight itself, which meant the field could
+  // be typed into but never changed, and including the moment a stored scenario
+  // was loaded, which quietly replaced the weight it was saved with. Fired here
+  // it happens on the one event it was ever about.
+  connect(species_box_, &QComboBox::currentIndexChanged, this, [this] {
+    // Not while the panel is being filled from a bundle: that is the bundle's
+    // own weight going in, and it is set after the species.
+    if (adopting_) {
+      return;
+    }
+    if (const config::SpeciesDefinition* species = selected_species(); species != nullptr) {
+      liveweight_box_->setValue(species->typical_liveweight_kg);
+    }
+  });
   connect(scenario_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(scenario_box_, &QComboBox::currentIndexChanged, this, [this](int index) {
     if (adopting_ || index < 0) {
@@ -329,6 +410,27 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   connect(terrain_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(graze_days_box_, &QSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
   connect(spell_days_box_, &QSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
+
+  // **Everything describe() reads has to report a change.**
+  //
+  // Only seven of these were connected, which was harmless while readiness only
+  // meant "is this runnable" - none of the others can make it unrunnable. It
+  // stopped being harmless the moment Reset appeared: changing the head count
+  // or turning irrigation on left the button grey, so the one action that could
+  // undo the change was refused because nothing had noticed it.
+  connect(head_box_, &QSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
+  connect(liveweight_box_, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
+  connect(target_gain_box_, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
+  connect(supplement_me_box_, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
+  connect(preference_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
+  connect(floor_purchase_box_, &QComboBox::currentIndexChanged, this,
+          &SetupPanel::refresh_readiness);
+  connect(may_buy_box_, &QCheckBox::toggled, this, &SetupPanel::refresh_readiness);
+  connect(irrigate_box_, &QCheckBox::toggled, this, &SetupPanel::refresh_readiness);
+  for (QDoubleSpinBox* box : {irrigation_trigger_box_, irrigation_target_box_,
+                              irrigation_maximum_box_, irrigation_efficiency_box_}) {
+    connect(box, &QDoubleSpinBox::valueChanged, this, &SetupPanel::refresh_readiness);
+  }
   refresh_readiness();
 }
 
@@ -367,12 +469,15 @@ void SetupPanel::populate(const std::string& data_directory) {
   }
 
   const bool have_scenario = scenario_box_->count() > 0;
-  run_button_->setEnabled(have_scenario);
+  ready_ = have_scenario;
+  run_button_->setEnabled(ready_);
+  emit readinessChanged();
   if (!have_scenario) {
     problem_label_->setText(
         QString("No scenario bundles under %1. Point the application at the repository's data "
                 "directory.")
             .arg(root.filePath("scenarios")));
+    problem_label_->setVisible(true);
   }
 }
 
@@ -386,6 +491,148 @@ const config::SpeciesDefinition* SetupPanel::selected_species() const {
                                     return species.name == name.toStdString();
                                   });
   return found == species_.end() ? nullptr : &*found;
+}
+
+namespace {
+
+/// Which entry of the ground list a terrain spec came from.
+///
+/// The mapping lives in choices(), where a list index becomes gradients. Going
+/// back the other way needs the gradients read as the index they came from, and
+/// doing it by their values rather than by remembering the index keeps the two
+/// directions from drifting apart.
+int terrain_choice(const config::TerrainSpec& terrain) {
+  if (terrain.kind != config::TerrainSpec::Kind::Synthetic) {
+    return 0;
+  }
+  if (terrain.surface.gradient_north < 0.0) {
+    return 1;
+  }
+  if (terrain.surface.gradient_north > 0.0) {
+    return 2;
+  }
+  return 3;
+}
+
+}  // namespace
+
+void SetupPanel::adopt_choices(const Choices& chosen) {
+  // **The exact inverse of choices(), field for field.** A scenario picked from
+  // the list is loaded through here and run again, so a setting this failed to
+  // restore would quietly produce a different run from the one the comparison
+  // table reported - and the table would still be on screen beside it.
+  if (const int index = scenario_box_->findData(QString::fromStdString(chosen.scenario_directory));
+      index >= 0) {
+    scenario_box_->setCurrentIndex(index);
+  }
+  if (chosen.species != nullptr) {
+    if (const int index = species_box_->findData(QString::fromStdString(chosen.species->name));
+        index >= 0) {
+      species_box_->setCurrentIndex(index);
+    }
+  }
+  head_box_->setValue(chosen.head);
+  liveweight_box_->setValue(chosen.liveweight_kg);
+
+  cover_floor_box_->setValue(chosen.policy.minimum_cover_kg_dm_per_ha);
+  rotation_box_->setValue(chosen.policy.rotation_cover_threshold_kg_dm_per_ha);
+  target_gain_box_->setValue(chosen.policy.target_liveweight_gain_kg_per_day);
+  graze_days_box_->setValue(chosen.policy.maximum_graze_days);
+  spell_days_box_->setValue(chosen.policy.minimum_spell_days);
+  supplement_me_box_->setValue(chosen.policy.supplement_me_mj_per_kg_dm);
+  may_buy_box_->setChecked(chosen.policy.may_buy_feed);
+  if (const int index = preference_box_->findData(static_cast<int>(chosen.policy.preference));
+      index >= 0) {
+    preference_box_->setCurrentIndex(index);
+  }
+  if (const int index =
+          floor_purchase_box_->findData(static_cast<int>(chosen.policy.floor_purchase));
+      index >= 0) {
+    floor_purchase_box_->setCurrentIndex(index);
+  }
+
+  irrigate_box_->setChecked(chosen.irrigation.enabled);
+  irrigation_trigger_box_->setValue(100.0 * (1.0 - chosen.irrigation.trigger_depletion_fraction));
+  irrigation_target_box_->setValue(100.0 * (1.0 - chosen.irrigation.target_depletion_fraction));
+  irrigation_maximum_box_->setValue(chosen.irrigation.maximum_application_mm);
+  irrigation_efficiency_box_->setValue(100.0 * chosen.irrigation_system.application_efficiency);
+
+  if (const int index = terrain_box_->findData(terrain_choice(chosen.terrain)); index >= 0) {
+    terrain_box_->setCurrentIndex(index);
+  }
+}
+
+std::vector<std::pair<std::string, std::string>> SetupPanel::describe() const {
+  const auto text = [](const QString& value) { return value.toStdString(); };
+  std::vector<std::pair<std::string, std::string>> settings;
+
+  settings.emplace_back("Farm", text(scenario_box_->currentText()));
+  settings.emplace_back("Ground", text(terrain_box_->currentText()));
+  settings.emplace_back("Stock", text(species_box_->currentText()));
+  settings.emplace_back("Head", text(QString::number(head_box_->value())));
+  settings.emplace_back("Opening weight", text(liveweight_box_->text()));
+  settings.emplace_back("Grazing", text(preference_box_->currentText()));
+  settings.emplace_back("Do not graze below", text(cover_floor_box_->text()));
+  settings.emplace_back("Rotate above", text(rotation_box_->text()));
+  settings.emplace_back("Graze for", text(graze_days_box_->text()));
+  settings.emplace_back("Rest for", text(spell_days_box_->text()));
+  settings.emplace_back("Target gain", text(target_gain_box_->text()));
+  settings.emplace_back("Buys feed", may_buy_box_->isChecked() ? "yes" : "no");
+  settings.emplace_back("At the floor", text(floor_purchase_box_->currentText()));
+  settings.emplace_back("Bought feed energy", text(supplement_me_box_->text()));
+
+  // **Irrigation reads as off rather than as five settings nobody used.** A
+  // scenario with irrigation switched off still has a trigger and a target in
+  // its boxes, and listing them beside a scenario that irrigates would put four
+  // spurious differences in a header whose whole job is to name the real one.
+  if (irrigate_box_->isChecked()) {
+    settings.emplace_back("Irrigation", "on");
+    settings.emplace_back("Water below", text(irrigation_trigger_box_->text()));
+    settings.emplace_back("Refill to", text(irrigation_target_box_->text()));
+    settings.emplace_back("Most at once", text(irrigation_maximum_box_->text()));
+    settings.emplace_back("Reaches the ground", text(irrigation_efficiency_box_->text()));
+  } else {
+    settings.emplace_back("Irrigation", "off");
+  }
+  return settings;
+}
+
+void SetupPanel::add_action(QPushButton* button) {
+  actions_->addWidget(button, 1);
+  even_actions();
+}
+
+void SetupPanel::even_actions() {
+  // **The widest one's width, given to all of them.** Equal stretch alone does
+  // not make equal buttons: a box layout hands out the spare room in proportion
+  // to what each button asked for, so a short label stays on a short button and
+  // the row comes out ragged. Equal minimums and equal stretch divide the row
+  // evenly.
+  int widest = 0;
+  for (int index = 0; index < actions_->count(); ++index) {
+    if (auto* button = qobject_cast<QPushButton*>(actions_->itemAt(index)->widget());
+        button != nullptr) {
+      widest = std::max(widest, button->sizeHint().width());
+    }
+  }
+  for (int index = 0; index < actions_->count(); ++index) {
+    if (auto* button = qobject_cast<QPushButton*>(actions_->itemAt(index)->widget());
+        button != nullptr) {
+      button->setMinimumWidth(widest);
+    }
+  }
+}
+
+bool SetupPanel::differs_from_published() const {
+  if (!as_published_.has_value()) {
+    return false;
+  }
+  // Compared through describe(), which is the panel written out as a person
+  // reads it. Comparing the Choices structs would mean an operator== over a
+  // dozen model types and a new field silently escaping it; the description is
+  // built from the widgets themselves, so a setting that is not in it is a
+  // setting nobody can see either.
+  return describe() != published_description_;
 }
 
 SetupPanel::Choices SetupPanel::choices() const {
@@ -490,6 +737,15 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
       floor_purchase_box_->setCurrentIndex(floor);
     }
   }
+
+  // Taken here, at the one moment the panel is certainly showing the bundle and
+  // nothing else. Read back through choices() rather than copied field by field
+  // so that what Reset restores is exactly what Run would have used.
+  as_published_ = choices();
+  published_description_ = describe();
+  // Nothing has been changed yet by definition, so this switches the button
+  // off - through the one rule rather than beside it.
+  refresh_reset();
 }
 
 void SetupPanel::show_measured_ground(bool measured) {
@@ -539,6 +795,47 @@ QString SetupPanel::problem() const {
   return {};
 }
 
+void SetupPanel::fold_away(QGroupBox* group, QFormLayout* form,
+                           const std::vector<QWidget*>& advanced) {
+  if (advanced.empty()) {
+    return;
+  }
+
+  // Every row that goes: the field, and the label beside it. Hiding the field
+  // alone leaves a label pointing at nothing, which looks like a rendering
+  // fault rather than a folded section.
+  std::vector<QWidget*> hidden;
+  for (QWidget* field : advanced) {
+    hidden.push_back(field);
+    if (QWidget* label = form->labelForField(field); label != nullptr) {
+      hidden.push_back(label);
+    }
+  }
+
+  auto* more = new QPushButton(QString("Advanced (%1)").arg(advanced.size()), group);
+  more->setFlat(true);
+  more->setCursor(Qt::PointingHandCursor);
+  more->setToolTip(
+      "Settings most runs leave alone. They are here rather than gone: a "
+      "figure somebody cannot see is a figure they cannot check.");
+  form->addRow(more);
+
+  for (QWidget* widget : hidden) {
+    widget->setVisible(false);
+  }
+  advanced_rows_.insert(advanced_rows_.end(), hidden.begin(), hidden.end());
+  advanced_buttons_.push_back(more);
+
+  connect(more, &QPushButton::clicked, this, [more, hidden, count = advanced.size()] {
+    const bool showing = !hidden.front()->isVisible();
+    for (QWidget* widget : hidden) {
+      widget->setVisible(showing);
+    }
+    more->setText(showing ? QString("Advanced (%1) - hide").arg(count)
+                          : QString("Advanced (%1)").arg(count));
+  });
+}
+
 QString SetupPanel::problem_with_irrigation() const {
   if (!irrigate_box_->isChecked()) {
     return {};
@@ -583,24 +880,58 @@ QString SetupPanel::caveat() const {
 
 void SetupPanel::refresh_readiness() {
   const QString blocking = problem();
-  run_button_->setEnabled(blocking.isEmpty());
+  ready_ = blocking.isEmpty();
+  run_button_->setEnabled(ready_);
+  emit readinessChanged();
+
+  // **Here, and above the early return below.** Every widget on the form
+  // reaches this function, which is what makes it the place that notices a
+  // setting has changed - and a panel that cannot be run is the state most in
+  // need of a way back to one that can.
+  refresh_reset();
 
   if (!blocking.isEmpty()) {
     problem_label_->setStyleSheet("font-weight: bold;");
     problem_label_->setText(blocking);
+    problem_label_->setVisible(true);
     return;
   }
   problem_label_->setStyleSheet({});
-  problem_label_->setText(caveat());
+  const QString note = caveat();
+  problem_label_->setText(note);
+  // **Nothing to say, no room taken.** An empty label still reserves a line of
+  // text, and that line sat between Run and the scenario list below it as a gap
+  // belonging to neither - which is what made the two rows of buttons read as
+  // two separate things.
+  problem_label_->setVisible(!note.isEmpty());
+}
 
-  if (const config::SpeciesDefinition* species = selected_species(); species != nullptr) {
-    liveweight_box_->setValue(species->typical_liveweight_kg);
+void SetupPanel::refresh_reset() {
+  // Nothing published yet means nothing to go back to: the panel has not been
+  // handed a bundle, so there is no such thing as "the way it came".
+  if (!as_published_.has_value()) {
+    return;
   }
+  // **Offered only when there is something to undo.** A Reset that is always
+  // available invites a click that does nothing, and a person who clicks it and
+  // sees no change learns to distrust it.
+  //
+  // This lived in set_running() alone, which is called when a run starts and
+  // when it ends - so changing a setting never reached it, and the button that
+  // undoes a change stayed grey until something else happened to run.
+  reset_button_->setEnabled(!running_ && differs_from_published());
 }
 
 void SetupPanel::set_running(bool running) {
-  run_button_->setEnabled(!running && problem().isEmpty());
+  running_ = running;
+  // Not while the model is stepping: the panel it would put back is the one
+  // that describes the run in flight.
+  refresh_reset();
+
+  ready_ = !running && problem().isEmpty();
+  run_button_->setEnabled(ready_);
   run_button_->setText(running ? "Running..." : "Run");
+  emit readinessChanged();
   scenario_box_->setEnabled(!running);
   terrain_box_->setEnabled(!running);
   species_box_->setEnabled(!running);
@@ -663,17 +994,23 @@ void SetupPanel::show_results(const config::RunSummary& run, bool has_stock,
   text += closes ? "Dry matter, nitrogen and water all balance."
                  : "<b>A budget did not close.</b> Treat this run as unsound.";
 
-  results_label_->setText(text);
-  report_button_->setEnabled(has_stock);
-  report_button_->setToolTip(has_stock
-                                 ? QString()
-                                 : QString("The report describes what a farmer did with stock, "
-                                           "and this scenario has none."));
+  emit resultsReady(text);
+  // **A finished run always has a report.** This used to follow the stock, on
+  // the grounds that the report was written around it. It is not: the pasture
+  // it grew, the water it held and whether the three budgets closed are the
+  // same questions on a farm with nothing on it, and the report now leaves out
+  // the sections that would otherwise be filled with zeroes.
+  can_report_ = true;
+  emit readinessChanged();
+  // The reason a report is unavailable belongs on the button that opens it, and
+  // that button now lives beside the scenario list. The panel reports the fact
+  // and lets whoever owns the button say why.
 }
 
 void SetupPanel::show_failure(const QString& message) {
-  results_label_->setText(QString("<b>The run failed.</b><br>%1").arg(message.toHtmlEscaped()));
-  report_button_->setEnabled(false);
+  emit resultsReady(QString("<b>The run failed.</b> %1").arg(message.toHtmlEscaped()));
+  can_report_ = false;
+  emit readinessChanged();
 }
 
 }  // namespace paddock::app

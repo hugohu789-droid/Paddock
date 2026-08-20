@@ -12,6 +12,8 @@
 #include <QVBoxLayout>
 #include <utility>
 
+#include "PagePrinter.hpp"
+
 namespace paddock::app {
 
 ReportDialog::ReportDialog(QString markdown, QString suggested_filename, QWidget* parent)
@@ -25,7 +27,8 @@ ReportDialog::ReportDialog(QString markdown, QString suggested_filename, QWidget
   view_->setOpenExternalLinks(false);
 
   auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
-  QPushButton* save_button = buttons->addButton("Save as...", QDialogButtonBox::ActionRole);
+  QPushButton* pdf_button = buttons->addButton("Save as PDF", QDialogButtonBox::ActionRole);
+  QPushButton* save_button = buttons->addButton("Save as Markdown", QDialogButtonBox::ActionRole);
 
   auto* layout = new QVBoxLayout;
   layout->addWidget(view_, 1);
@@ -35,6 +38,27 @@ ReportDialog::ReportDialog(QString markdown, QString suggested_filename, QWidget
 
   connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
   connect(save_button, &QPushButton::clicked, this, &ReportDialog::save);
+  connect(pdf_button, &QPushButton::clicked, this, &ReportDialog::save_pdf);
+}
+
+void ReportDialog::save_pdf() {
+  QString suggested = suggested_filename_;
+  if (suggested.endsWith(".md", Qt::CaseInsensitive)) {
+    suggested.chop(3);
+  }
+  const QString path =
+      QFileDialog::getSaveFileName(this, "Save report", suggested + ".pdf", "PDF (*.pdf)");
+  if (path.isEmpty()) {
+    return;
+  }
+
+  // **Laid out for the page from the same Markdown, not screenshotted.** A
+  // picture of the window would carry whatever was scrolled into view and
+  // nothing else. Rendering the report again gives the whole of it, in the
+  // order it is meant to be read.
+  if (!print_markdown_to_pdf(path, markdown_, "Paddock run report")) {
+    QMessageBox::warning(this, "Save report", "Could not write " + path);
+  }
 }
 
 void ReportDialog::save() {

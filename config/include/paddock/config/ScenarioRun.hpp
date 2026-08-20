@@ -54,6 +54,20 @@ struct RunSummary {
   std::vector<double> irrigation_mm;
   core::IrrigationTally irrigation;
 
+  /// FAO-56's water stress coefficient each day, averaged over the farm. One
+  /// where the root zone still holds readily available water, falling to zero
+  /// at wilting point.
+  ///
+  /// Kept because it is the number that turns a dry January into a feed
+  /// deficit rather than into a lower soil moisture reading - and because it is
+  /// what a comparison between a rain-fed farm and an irrigated one is
+  /// actually about. Worked out here rather than where it is reported, so two
+  /// ways of counting a dry year cannot disagree.
+  std::vector<double> water_stress;
+
+  /// Days the pasture's growth was held back by dry soil.
+  [[nodiscard]] int days_water_stressed() const;
+
   double eaten_kg_dm = 0.0;
 
   /// Days on which any mob could not get what it needed.

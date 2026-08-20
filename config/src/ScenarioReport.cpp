@@ -50,7 +50,14 @@ std::vector<Month> by_month(const RunSummary& run) {
     current.cover_total += cover;
     current.cover_low = std::min(current.cover_low, cover);
     current.cover_high = std::max(current.cover_high, cover);
-    current.closing_liveweight = run.liveweight_kg[day];
+    // **The liveweight series is not always as long as the year.** A run with
+    // no stock on it produces no liveweight at all, while its dates still cover
+    // every day, so indexing one by the other walked off the end of an empty
+    // vector - which is not a wrong number in a report but a crash before there
+    // is one. The month keeps the zero it was built with.
+    if (day < run.liveweight_kg.size()) {
+      current.closing_liveweight = run.liveweight_kg[day];
+    }
     ++current.days;
   }
 
@@ -170,6 +177,19 @@ void write_pasture(std::ostringstream& out, const RunSummary& run,
 
 void write_stock(std::ostringstream& out, const RunSummary& run, const std::vector<Month>& months) {
   out << "## The stock\n\n";
+
+  // **A farm can be run with nothing standing on it.** "What would this ground
+  // grow if it were not grazed" is a fair question, and the pasture, water and
+  // budget sections answer it. What this section must not do is answer it with
+  // liveweights: there is no herd, so "0.0 kg to 0.0 kg, a change of 0.00 kg"
+  // would be a figure invented to fill a table, and a table of invented figures
+  // is how a report stops being worth reading.
+  if (run.liveweight_kg.empty()) {
+    out << "None. Nothing grazed this farm, so the pasture above is what the ground grew "
+           "ungrazed, and there is no feed budget and no farmer's decisions to report: those "
+           "sections are left out rather than filled with zeroes.\n\n";
+    return;
+  }
 
   const double change = run.liveweight_change_kg();
   out << "Liveweight went from **" << fixed(run.opening_liveweight_kg(), 1) << " kg** to **"
@@ -357,8 +377,14 @@ std::string render_report(const ScenarioBundle& bundle, const RunSummary& run,
   write_what_was_simulated(out, bundle, options);
   write_pasture(out, run, months);
   write_stock(out, run, months);
-  write_management(out, run);
-  write_bought_feed(out, run);
+  // Both of these are about stock: what the farmer did with it and what it had
+  // to be fed. With none on the farm they would report a farmer who made no
+  // decisions and a feed bill of nothing, which reads as a finding rather than
+  // as an absence. The stock section above says they have been left out.
+  if (!run.liveweight_kg.empty()) {
+    write_management(out, run);
+    write_bought_feed(out, run);
+  }
   write_budgets(out, run);
   if (options.include_evidence_notes) {
     write_evidence_notes(out, bundle);

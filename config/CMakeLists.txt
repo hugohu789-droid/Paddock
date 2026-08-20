@@ -11,6 +11,7 @@ add_library(
   src/ConfigError.cpp
   src/FarmConfig.cpp
   src/PastureConfig.cpp
+  src/ScenarioComparison.cpp
   src/ScenarioConfig.cpp
   src/ScenarioReport.cpp
   src/ScenarioRun.cpp

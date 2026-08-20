@@ -6,10 +6,12 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
+#include <QListWidget>
 #include <QMainWindow>
 #include <QPoint>
 #include <QPushButton>
 #include <QSlider>
+#include <QSplitter>
 #include <QTimer>
 #include <QVTKOpenGLNativeWidget.h>
 #include <array>
@@ -19,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include <paddock/config/ScenarioComparison.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/ScenarioRun.hpp>
 #include <paddock/core/Farmer.hpp>
@@ -28,6 +31,7 @@
 #include <paddock/viz/MapScene.hpp>
 #include <paddock/viz/TerrainScene.hpp>
 
+#include "SeasonChart.hpp"
 #include "SetupPanel.hpp"
 
 namespace paddock::app {
@@ -195,19 +199,83 @@ class MapWindow : public QMainWindow {
   void advance_frame();
 
  private:
+  /// Everything one run produces, gathered in one place.
+  ///
+  /// **It exists so a run can happen off the interface thread.** The day
+  /// callback used to write straight into this window's members while the
+  /// window was drawing them, which was safe only because the run blocked
+  /// everything - and blocking everything is exactly the lag being fixed. A run
+  /// now fills one of these on a worker and the interface adopts it whole when
+  /// it is finished, so the two threads never touch the same vector.
+  struct RunProducts {
+    std::vector<core::Raster<double>> cover;
+    std::vector<core::Raster<double>> soil_water;
+    std::vector<core::Raster<double>> available_water;
+    std::vector<core::Raster<double>> water_stress;
+    std::vector<core::Raster<double>> irrigation_today;
+    std::vector<core::Raster<double>> irrigation_to_date;
+    std::vector<core::Raster<double>> growth;
+    std::vector<core::Raster<double>> legume_fraction;
+    std::vector<core::Raster<double>> slope;
+    std::vector<std::string> dates;
+    std::vector<double> mean_cover;
+    std::string stock_summary;
+    std::vector<std::vector<std::size_t>> grazed_each_day;
+    std::vector<std::vector<viz::MobMarker>> mobs_each_day;
+    std::vector<core::Polygon> boundaries;
+    std::vector<core::Paddock> paddocks;
+    std::vector<core::DailyWeather> weather;
+    std::vector<double> irrigation_mm;
+    core::IrrigationTally irrigation;
+    std::optional<config::RunSummary> summary;
+    std::optional<config::ScenarioBundle> bundle;
+    std::optional<core::Raster<double>> elevation;
+    core::ManagementPolicy policy;
+    double latitude_degrees = 0.0;
+    bool had_stock = false;
+    std::string no_ground_reason;
+    /// What went wrong, when something did. The run is discarded and the
+    /// interface says this instead.
+    std::string failure;
+    /// Whether the bundle brought its own survey, which the panel says out
+    /// loud because it means the ground list above it does not apply.
+    bool measured_ground = false;
+  };
+
+  /// Runs one scenario. **Static, and touching nothing of the window**, because
+  /// it runs on a worker thread.
+  [[nodiscard]] static RunProducts simulate(const SetupPanel::Choices& choices);
+
+  /// Takes a finished run and puts it on screen. Runs on the interface thread.
+  void adopt_run(RunProducts products);
+
+  /// Whether a run is in flight. A second one started over the top of the first
+  /// would have two workers writing one window.
+  bool running_ = false;
+
+  /// A run was asked for while one was already going.
+  ///
+  /// **Remembered rather than dropped.** Turning irrigation on fires the
+  /// panel's own re-run and then the caller asks for one too; a guard that
+  /// simply refused the second left the farm showing the settings from before
+  /// the change, silently. One is remembered and started when the first
+  /// finishes - more than one would be the same run queued twice.
+  bool rerun_wanted_ = false;
+
   /// Steps the bundle with its stock on it, under `policy`, keeping every day's
   /// rasters as it goes.
-  void simulate_managed(const config::ScenarioBundle& bundle, const core::ManagementPolicy& policy,
-                        const core::IrrigationPolicy& irrigation,
-                        const core::IrrigationSystem& system);
+  static void simulate_managed(RunProducts& into, const config::ScenarioBundle& bundle,
+                               const core::ManagementPolicy& policy,
+                               const core::IrrigationPolicy& irrigation,
+                               const core::IrrigationSystem& system);
 
   /// Steps the pasture alone, for a bundle that carries no stock. Both paths
   /// exist because `canterbury-baseline` has no mobs and is still worth looking
   /// at; only this one can be taken for such a bundle, and a managed run of it
   /// would have no mob to report on.
-  void simulate_pasture_only(const config::ScenarioBundle& bundle,
-                             const core::IrrigationPolicy& irrigation,
-                             const core::IrrigationSystem& system);
+  static void simulate_pasture_only(RunProducts& into, const config::ScenarioBundle& bundle,
+                                    const core::IrrigationPolicy& irrigation,
+                                    const core::IrrigationSystem& system);
 
   /// Empties the per-day series, so a second run does not append to the first.
   void clear_series();
@@ -215,7 +283,7 @@ class MapWindow : public QMainWindow {
   /// Whole-run colour ranges and the timeline, once a run has been captured.
   void adopt_series();
 
-  void keep_day(const core::FarmletGrid& grid, const std::string& date);
+  static void keep_day(RunProducts& into, const core::FarmletGrid& grid, const std::string& date);
 
   /// Which paddocks had stock on them on `day`, or empty for a run without.
   [[nodiscard]] const std::vector<std::size_t>& grazed_on(std::size_t day) const;
@@ -257,12 +325,51 @@ class MapWindow : public QMainWindow {
   /// stack can be drawn by something other than a person clicking four times.
   void show_all_layers();
 
+  /// Adds the panel as it stands as a named scenario, as the button would but
+  /// without asking for the name.
+  ///
+  /// Here so the comparison can be exercised by something other than a person
+  /// clicking: a run of five scenarios, a table and a paragraph is the largest
+  /// thing in this window and none of it is in a screenshot of the map.
+  void keep_scenario(const QString& name);
+
+  /// Turns irrigation on or off in the panel, as the tick box would.
+  void select_irrigation(bool on);
+
+  /// Runs every stored scenario and returns the table as Markdown. Empty when
+  /// there are fewer than two, or when a run failed.
+  /// `failure` names what went wrong when the result is empty. An empty string
+  /// with no reason is the kind of silence that costs an afternoon.
+  [[nodiscard]] std::string comparison_markdown(QString& failure);
+
+  /// Writes the report on the run currently drawn to a PDF.
+  ///
+  /// Here so a page can be looked at without a person clicking through two
+  /// dialogues - and a PDF is the one thing in this window whose faults are
+  /// invisible until somebody opens the file.
+  ///
+  /// False with `failure` set when there is no finished run to report on, or
+  /// when the file could not be written. The reason is passed back rather than
+  /// printed here, because the only caller is the command line and it owns what
+  /// goes to the terminal.
+  [[nodiscard]] bool save_run_pdf(const std::string& path, std::string& failure);
+
   /// Whether the pivots are turning.
   ///
   /// Exposed because this is the one thing about the irrigation picture that a
   /// screenshot cannot show, and it is the thing that broke: ticking the layer
   /// told the scene the spray was wanted but never handed it a day, so the
   /// arms stood still on exactly the day somebody had asked to watch.
+  /// Waits for a run in flight to finish, pumping the event loop while it
+  /// does.
+  ///
+  /// **For the command line, which is a batch mode.** A run is on a worker now
+  /// so the window keeps drawing, and every check in main() assumed it was over
+  /// the moment start_run returned - the first thing that happened was a smoke
+  /// test reporting a farm of zero days. A person clicking never needs this;
+  /// a script always does.
+  void wait_for_run() const;
+
   [[nodiscard]] bool irrigation_animating() const;
 
   /// Water put on across the farm on the day being shown, mm.
@@ -332,6 +439,130 @@ class MapWindow : public QMainWindow {
   /// terrain view.
   std::vector<QCheckBox*> layer_boxes_;
 
+  /// One scenario somebody is comparing: what they called it, how the panel was
+  /// set when they added it, and what it came to when it was last run.
+  ///
+  /// The settings are kept rather than the run, because a run is the answer and
+  /// the settings are the question. Re-running is cheap - a year over this farm
+  /// is under half a second - and a stored answer would go stale the moment the
+  /// weather or the bundle changed underneath it.
+  struct StoredScenario {
+    QString name;
+    SetupPanel::Choices choices;
+    std::optional<config::RunSummary> result;
+    double hectares = 0.0;
+    /// How the panel was set, as label and value, for the comparison's header.
+    std::vector<std::pair<std::string, std::string>> settings;
+  };
+
+  std::vector<StoredScenario> scenarios_;
+
+  /// The run against time, beside the map. The map answers where, this answers
+  /// when, and a farm adviser's two questions are which paddock and which
+  /// month.
+  SeasonChart* chart_ = nullptr;
+
+  /// The map over the readings. Kept so the map's share of the height can be
+  /// set once the window knows how tall it is.
+  QSplitter* scene_split_ = nullptr;
+
+  /// The coloured names of whatever the chart is drawing, above it.
+  QLabel* chart_key_ = nullptr;
+
+  /// Which quantities the chart is drawing. One box each, ticked by the person
+  /// looking.
+  ///
+  /// **Two axes carry all of them, so there is no need for more.** Everything
+  /// the model produces daily is either in the farm's own working units - kg
+  /// DM/ha, mm - or a share between nought and one. Left axis for the first,
+  /// right for the second. Four axes would mean two a side and a reader
+  /// matching lines to axes by colour, which is the thing charts do worst.
+  std::vector<QCheckBox*> chart_boxes_;
+
+  /// Which quantities are plotted, oldest choice first.
+  ///
+  /// **Two at a time, and a third displaces the first.** Kept in the order they
+  /// were chosen, because that decides which axis each gets and which one goes
+  /// when a third is asked for. Refusing the third instead would leave somebody
+  /// clicking a box that does nothing and having to work out for themselves
+  /// which of the others to turn off.
+  std::vector<std::size_t> chart_order_;
+
+  /// Whether the days that were irrigated are marked under the plot.
+  ///
+  /// **A box of its own, because it appeared without being asked for.** Two
+  /// quantities were ticked and three things showed up in the key; the third
+  /// was this row of marks, which needs no axis and so was never part of the
+  /// two. Everything drawn is now something somebody chose.
+  QCheckBox* irrigated_days_box_ = nullptr;
+
+  /// Adds or removes a quantity from the plot, displacing the oldest when a
+  /// third is asked for.
+  void choose_series(std::size_t which, bool wanted);
+
+  /// Fills the chart from the run that has just finished.
+  void refresh_chart();
+
+  QListWidget* scenario_list_ = nullptr;
+  QPushButton* add_scenario_button_ = nullptr;
+  QPushButton* compare_button_ = nullptr;
+
+  /// Opens the report on the run currently drawn, as opposed to the comparison
+  /// of several. Under the readings it expands on.
+  QPushButton* run_report_button_ = nullptr;
+
+  /// The last table produced, so the report can be reopened without running
+  /// everything again. Empty until something has been run.
+  std::optional<config::ComparisonTable> last_report_;
+
+  /// Opens the report on the last run.
+  void open_comparison_report();
+
+  /// Snapshots the panel as a scenario. Refuses past the limit rather than
+  /// silently dropping one.
+  void add_scenario();
+
+  /// Runs every stored scenario and shows the table.
+  void run_comparison();
+
+  /// Runs every stored scenario. Names the first failure in `failure` and stops
+  /// there: a table with one scenario missing is worse than none, because the
+  /// gap is not visible in it.
+  ///
+  /// `flat_ground` collects the reason any scenario had to be drawn flat. A
+  /// farm that ran without its survey is comparable with one that did, but
+  /// nobody should have to guess which happened.
+  [[nodiscard]] std::vector<config::ComparedScenario> run_scenarios(
+      QString& failure, std::vector<std::string>& flat_ground);
+
+  /// Loads the chosen scenario back into the panel and runs it, so the map
+  /// beside the list is showing the scenario the list has selected.
+  void show_scenario(int index);
+
+  /// Redraws the list from scenarios_.
+  void refresh_scenario_list();
+
+  /// What is happening, while it is happening, and what happened when it is
+  /// done.
+  ///
+  /// **A window that stops answering is indistinguishable from a broken one.**
+  /// The run moved to a worker so the interface keeps drawing; these say what
+  /// it is drawing about. The banner sits over the map while work is in flight;
+  /// the note appears in the top right when it finishes and fades.
+  QLabel* progress_label_ = nullptr;
+  QLabel* notice_label_ = nullptr;
+  QTimer* notice_timer_ = nullptr;
+
+  void show_progress(const QString& what);
+  void hide_progress();
+
+  /// Says what happened, in the corner, for a few seconds. `good` picks the
+  /// colour: a failure that looked like a success would be worse than silence.
+  void announce(const QString& what, bool good);
+
+  /// Keeps the two floating labels in their corners when the window resizes.
+  void place_notices();
+
   /// Fills the terrain view's stack with today's values for kStackedFields.
   void refresh_stack(std::size_t day);
 
@@ -361,6 +592,10 @@ class MapWindow : public QMainWindow {
 
   /// What the paddock under the last click is doing, on the day being shown.
   QLabel* paddock_label_ = nullptr;
+
+  /// What the last run came to, sent over by the panel. Beside the map it
+  /// describes rather than in the corner the run was set up in.
+  QLabel* results_label_ = nullptr;
   QTimer* timer_ = nullptr;
 
   viz::MapScene scene_;
@@ -473,6 +708,7 @@ class MapWindow : public QMainWindow {
 
  protected:
   bool eventFilter(QObject* watched, QEvent* event) override;
+  void resizeEvent(QResizeEvent* event) override;
 
  private:
   /// What the run watered, day by day, as a mean over the farm in mm, and what

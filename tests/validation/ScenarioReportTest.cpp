@@ -116,6 +116,39 @@ TEST(ScenarioReportTest, ItShowsTheYearMonthByMonth) {
       << "the budgets did not close, or the report failed to notice";
 }
 
+// A farm with nothing standing on it still runs, and the report still has to
+// survive being asked for.
+//
+// The month-by-month walk went along the dates and indexed the liveweight with
+// them. A run with no stock produces a full year of dates and no liveweight at
+// all, so that read off the front of an empty series - not a wrong number in a
+// report but an access violation before there was one. `paddock-gui
+// canterbury-baseline --report-pdf` found it, that bundle carrying no mobs.
+TEST(ScenarioReportTest, AReportOnAFarmCarryingNoStockDoesNotWalkOffTheLiveweight) {
+  ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
+  bundle.mobs.clear();
+
+  const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "no stock");
+  ASSERT_FALSE(run.dates.empty()) << "the run produced no days, so this proves nothing";
+  ASSERT_TRUE(run.liveweight_kg.empty())
+      << "the run kept a liveweight series for stock it never had, and this test no longer covers "
+         "the case it was written for";
+
+  const std::string report = render_report(bundle, run);
+  EXPECT_TRUE(contains(report, "## The pasture"));
+  EXPECT_TRUE(contains(report, "## Did the books balance"));
+
+  // What the ground grew ungrazed is the point of running a farm with nothing
+  // on it, so the report keeps those sections and says plainly why the others
+  // are missing - rather than reporting a herd that went from 0.0 kg to 0.0 kg
+  // and a farmer who made no decisions.
+  EXPECT_TRUE(contains(report, "Nothing grazed this farm"));
+  EXPECT_FALSE(contains(report, "Liveweight went from"))
+      << "the report invented a liveweight for stock the farm never carried";
+  EXPECT_FALSE(contains(report, "## What the farmer did"));
+  EXPECT_FALSE(contains(report, "## Bought feed"));
+}
+
 // The comparison report, which is the one a farmer would actually read.
 TEST(ScenarioReportTest, TheComparisonPutsFeedBoughtBesideConditionHeld) {
   ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());

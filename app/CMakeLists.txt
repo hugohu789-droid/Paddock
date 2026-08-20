@@ -27,7 +27,11 @@ set_target_properties(paddock PROPERTIES OUTPUT_NAME paddock)
 # paddock-gui: the 2D map view (ADR 0010). Built only when PADDOCK_BUILD_GUI is
 # on, so a headless machine never links Qt or VTK.
 if(PADDOCK_BUILD_GUI)
-  find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  # Charts is a separate Qt module and a separate package on Linux
+  # (libqt6charts6-dev). It is required rather than optional: a chart that
+  # appeared on some builds and not others would be a window that means
+  # different things on different machines.
+  find_package(Qt6 REQUIRED COMPONENTS Charts Concurrent Widgets)
   find_package(
     VTK REQUIRED
     COMPONENTS CommonCore
@@ -43,16 +47,25 @@ if(PADDOCK_BUILD_GUI)
   add_executable(
     paddock-gui
     src/gui/main.cpp
+    src/gui/ComparisonDialog.cpp
+    src/gui/ComparisonDialog.hpp
     src/gui/MapWindow.cpp
+    src/gui/PagePrinter.cpp
+    src/gui/PagePrinter.hpp
     src/gui/MapWindow.hpp
     src/gui/ReportDialog.cpp
     src/gui/ReportDialog.hpp
+    src/gui/SeasonChart.cpp
+    src/gui/SeasonChart.hpp
     src/gui/SetupPanel.cpp
-    src/gui/SetupPanel.hpp)
+    src/gui/SetupPanel.hpp
+    src/gui/Theme.cpp
+    src/gui/Theme.hpp)
 
   set_target_properties(paddock-gui PROPERTIES AUTOMOC ON)
 
-  target_link_libraries(paddock-gui PRIVATE Paddock::config Paddock::viz_vtk Qt6::Widgets
+  target_link_libraries(paddock-gui PRIVATE Paddock::config Paddock::viz_vtk Qt6::Charts
+                                            Qt6::Concurrent Qt6::Widgets
                                             ${VTK_LIBRARIES} Paddock::project_options)
 
   # A build with the geospatial stack can draw a farm on measured ground; one

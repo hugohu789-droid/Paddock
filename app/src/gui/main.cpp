@@ -26,6 +26,7 @@
 #include <paddock/config/ScenarioConfig.hpp>
 
 #include "MapWindow.hpp"
+#include "Theme.hpp"
 
 namespace {
 
@@ -93,6 +94,8 @@ void print_usage() {
             << "  --day N        Move the timeline to day N before drawing\n"
             << "  --pan N        Slide the terrain view, -100 to 100\n"
             << "  --layers       Show every layer of the scene\n"
+            << "  --report-pdf F   Write this run's report to a PDF\n"
+            << "  --compare      Run a rain-fed and an irrigated scenario and print the table\n"
             << "  --window-shot F  Save the whole window, controls included\n"
             << "  --field NAME   Draw a named field, as the list under the map does\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
@@ -137,12 +140,15 @@ int main(int argc, char** argv) {
     const bool smoke = !screenshot.empty() ||
                        std::find(args.begin(), args.end(), "--panel-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--inspect") != args.end() ||
+                       std::find(args.begin(), args.end(), "--compare") != args.end() ||
+                       std::find(args.begin(), args.end(), "--report-pdf") != args.end() ||
                        std::find(args.begin(), args.end(), "--window-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--smoke") != args.end();
     // Must be set before the QApplication exists, or the widget and the render
     // window disagree about the surface they share.
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
-    const QApplication application(argc, argv);
+    QApplication application(argc, argv);
+    paddock::app::apply_theme(application);
 
     // A leading flag means no bundle was named, so the default stands in.
     std::string bundle_path;
@@ -193,9 +199,14 @@ int main(int argc, char** argv) {
         heights = std::stoi(std::string(*std::next(heights_flag)));
       }
       window.show_configuration(ground, terrain, heights, irrigate);
+      window.wait_for_run();
     }
 
     if (smoke) {
+      // A run is on a worker now, so a batch mode has to wait for it before it
+      // reads anything. A person clicking never needs this; a script always
+      // does.
+      window.wait_for_run();
       if (const std::string& failure = window.last_failure(); !failure.empty()) {
         std::cerr << "paddock-gui: " << failure << '\n';
         return 1;
@@ -260,6 +271,7 @@ int main(int argc, char** argv) {
         // this check pass whether or not opening a farm moves the view. The run
         // draws its own frame.
         window.open_scenario(std::string(*std::next(then_flag)));
+        window.wait_for_run();
 
         const auto farm = window.drawn_farm();
         const auto focus = window.camera_focus();
@@ -292,6 +304,43 @@ int main(int argc, char** argv) {
           return 2;
         }
         std::cout << "paddock-gui: showing " << field << '\n';
+      }
+
+      // **A comparison, end to end, from the command line.**
+      //
+      // The largest thing this window does - five runs, a table of differences
+      // and a paragraph about them - is the one thing no screenshot of the map
+      // can show. Two scenarios that differ only in whether the farm irrigates
+      // is the comparison the project exists to make, so it is the one checked:
+      // if irrigation stops changing what the farm grows, this says so.
+      if (std::find(args.begin(), args.end(), "--compare") != args.end()) {
+        window.select_irrigation(false);
+        window.keep_scenario("Rain-fed");
+        window.select_irrigation(true);
+        window.keep_scenario("Irrigated");
+
+        QString why;
+        const std::string table = window.comparison_markdown(why);
+        if (table.empty()) {
+          std::cerr << "paddock-gui: the comparison produced nothing: " << why.toStdString()
+                    << '\n';
+          return 1;
+        }
+        std::cout << table;
+      }
+
+      if (const auto pdf_flag = std::find(args.begin(), args.end(), "--report-pdf");
+          pdf_flag != args.end() && std::next(pdf_flag) != args.end()) {
+        const std::string pdf(*std::next(pdf_flag));
+        // The reason comes back from the window rather than being guessed at
+        // here: "could not write it" and "there is nothing worth writing" send
+        // somebody looking in two different places.
+        std::string failure;
+        if (!window.save_run_pdf(pdf, failure)) {
+          std::cerr << "paddock-gui: " << failure << '\n';
+          return 1;
+        }
+        std::cout << "paddock-gui: wrote " << pdf << '\n';
       }
 
       // Which day to show, so a check can land on one where something
@@ -357,8 +406,17 @@ int main(int argc, char** argv) {
           return std::pair<int, int>{static_cast<int>(window.render_width() * across),
                                      static_cast<int>(window.render_height() * up)};
         };
-        const std::pair<int, int> north_west = at(0.30, 0.70);
-        const std::pair<int, int> south_east = at(0.70, 0.30);
+        // **Nearer the middle than the corners, because the map no longer has
+        // the window to itself.** The chart and the readings took a share of it,
+        // so the farm is drawn into a frame of a different shape and does not
+        // reach the corners: at three tenths and seven tenths both probes landed
+        // on the background and reported having missed the farm, which reads as
+        // a broken inspector rather than as a farm that stops before the edge.
+        // The check is unchanged in meaning - one point is still up and to the
+        // left of the other, and still has to come back further north and
+        // further west.
+        const std::pair<int, int> north_west = at(0.40, 0.60);
+        const std::pair<int, int> south_east = at(0.60, 0.40);
 
         for (const std::pair<const char*, std::pair<int, int>>& spot :
              {std::pair<const char*, std::pair<int, int>>{"centre", at(0.50, 0.50)},

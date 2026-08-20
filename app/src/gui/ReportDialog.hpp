@@ -26,6 +26,10 @@ class ReportDialog : public QDialog {
  private slots:
   void save();
 
+  /// Writes the report as a PDF: the one format that can be sent to somebody
+  /// who has neither this program nor a Markdown reader.
+  void save_pdf();
+
  private:
   QString markdown_;
   QString suggested_filename_;
