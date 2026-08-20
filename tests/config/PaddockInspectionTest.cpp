@@ -34,7 +34,7 @@ core::Raster<double> shape() {
   transform.origin_easting = 0.0;
   transform.origin_northing = 20.0;
   transform.cell_size = 10.0;
-  return core::Raster<double>(4, 2, transform, 0.0);
+  return {4, 2, transform, 0.0};
 }
 
 std::vector<core::Paddock> two_paddocks() {
@@ -88,14 +88,14 @@ TEST(PaddockInspectionTest, ItReportsTheDayItWasGiven) {
   PaddockDay day;
   day.cover = &cover;
   day.growth = &growth;
-  PaddockDayRecord record;
+  const PaddockDayRecord record;
 
   const PaddockInspection inspection = inspect_paddock(0, "West", mask, day, record);
 
   ASSERT_TRUE(inspection.cover_kg_dm_per_ha.has_value());
-  EXPECT_DOUBLE_EQ(*inspection.cover_kg_dm_per_ha, 3000.0);
+  EXPECT_DOUBLE_EQ(inspection.cover_kg_dm_per_ha.value_or(0.0), 3000.0);
   ASSERT_TRUE(inspection.growth_kg_dm_per_ha.has_value());
-  EXPECT_DOUBLE_EQ(*inspection.growth_kg_dm_per_ha, 45.0);
+  EXPECT_DOUBLE_EQ(inspection.growth_kg_dm_per_ha.value_or(0.0), 45.0);
   EXPECT_EQ(inspection.name, "West");
   EXPECT_EQ(inspection.cells, 4U);
 }
@@ -140,8 +140,8 @@ TEST(PaddockInspectionTest, EachPaddockIsAveragedOverItsOwnCells) {
 
   ASSERT_TRUE(west.cover_kg_dm_per_ha.has_value());
   ASSERT_TRUE(east.cover_kg_dm_per_ha.has_value());
-  EXPECT_DOUBLE_EQ(*west.cover_kg_dm_per_ha, 1000.0);
-  EXPECT_DOUBLE_EQ(*east.cover_kg_dm_per_ha, 4000.0);
+  EXPECT_DOUBLE_EQ(west.cover_kg_dm_per_ha.value_or(0.0), 1000.0);
+  EXPECT_DOUBLE_EQ(east.cover_kg_dm_per_ha.value_or(0.0), 4000.0);
 }
 
 // Irrigation off in the scenario is said plainly, and nothing else is claimed.
@@ -177,14 +177,14 @@ TEST(PaddockInspectionTest, AWateredDayIsExplainedFromThatMorning) {
   const PaddockInspection inspection = inspect_paddock(0, "", mask, day, record);
 
   ASSERT_TRUE(inspection.irrigation_today_mm.has_value());
-  EXPECT_NEAR(*inspection.irrigation_today_mm, 20.1, 1e-9);
+  EXPECT_NEAR(inspection.irrigation_today_mm.value_or(0.0), 20.1, 1e-9);
   EXPECT_NEAR(inspection.irrigation_trigger_fraction, 0.5, 1e-9);
   EXPECT_NEAR(inspection.irrigation_target_fraction, 0.85, 1e-9);
 
   // The numbers the decision was made from travel as figures, so the panel can
   // put them in a column and a reader can check the rule for themselves.
   ASSERT_TRUE(inspection.morning_water_fraction.has_value());
-  EXPECT_NEAR(*inspection.morning_water_fraction, 0.48, 1e-9);
+  EXPECT_NEAR(inspection.morning_water_fraction.value_or(0.0), 0.48, 1e-9);
 
   EXPECT_EQ(irrigation_reason_phrase(inspection), "at or below the trigger")
       << "the step between what the soil was and what went on it";
@@ -207,7 +207,7 @@ TEST(PaddockInspectionTest, ADryDayGivesTheSchedulesOwnReason) {
   EXPECT_EQ(irrigation_reason_phrase(inspection), "the profile is still wetter than the trigger")
       << "the schedule's own words, not a reason worked out here";
   ASSERT_TRUE(inspection.morning_water_fraction.has_value());
-  EXPECT_NEAR(*inspection.morning_water_fraction, 0.64, 1e-9);
+  EXPECT_NEAR(inspection.morning_water_fraction.value_or(0.0), 0.64, 1e-9);
   EXPECT_NEAR(inspection.irrigation_trigger_fraction, 0.5, 1e-9);
 }
 
@@ -249,7 +249,7 @@ TEST(PaddockInspectionTest, RestComesFromTheFarmsOwnCount) {
   const PaddockInspection east = inspect_paddock(1, "", mask, PaddockDay{}, record);
 
   ASSERT_TRUE(west.rest_days.has_value());
-  EXPECT_EQ(*west.rest_days, 12);
+  EXPECT_EQ(west.rest_days.value_or(0.0), 12);
   EXPECT_EQ(west.minimum_spell_days, 35);
   EXPECT_FALSE(west.stock_today);
   EXPECT_TRUE(east.stock_today) << "the farm listed this paddock as carrying stock";
