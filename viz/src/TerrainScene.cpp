@@ -143,7 +143,6 @@ TerrainScene::TerrainScene() {
   for (const auto& pair : {std::make_pair(sun_disc_.Get(), sun_actor_.Get()),
                            std::make_pair(rain_lines_.Get(), rain_actor_.Get()),
                            std::make_pair(spray_lines_.Get(), spray_actor_.Get()),
-                           std::make_pair(pivot_lines_.Get(), pivot_actor_.Get()),
                            std::make_pair(wind_marks_.Get(), wind_actor_.Get())}) {
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(pair.first);
@@ -205,10 +204,7 @@ TerrainScene::TerrainScene() {
   spray_actor_->GetProperty()->SetOpacity(0.55);
   spray_actor_->SetVisibility(0);
 
-  // The equipment: a steel grey that is plainly a machine rather than weather.
-  pivot_actor_->GetProperty()->SetColor(0.72, 0.74, 0.78);
-  pivot_actor_->GetProperty()->SetLineWidth(2.0);
-  pivot_actor_->SetVisibility(0);
+  // Water: cool and translucent, so it reads as water rather than as line work.
 
   // The name beside the top sheet. The rest of the stack carries its own, one
   // per sheet, written when the stack is built.
@@ -761,12 +757,12 @@ std::optional<core::Point2D> TerrainScene::ground_at(int x, int y) const {
   return core::Point2D{position[0], position[1]};
 }
 
-std::size_t TerrainScene::spray_line_count() const {
-  return static_cast<std::size_t>(spray_lines_->GetNumberOfLines());
+vtkPoints* TerrainScene::spray_points() const {
+  return spray_lines_->GetPoints();
 }
 
-std::size_t TerrainScene::pivot_line_count() const {
-  return static_cast<std::size_t>(pivot_lines_->GetNumberOfLines());
+std::size_t TerrainScene::spray_line_count() const {
+  return static_cast<std::size_t>(spray_lines_->GetNumberOfLines());
 }
 
 void TerrainScene::show_layer(Layer layer, bool visible) {
@@ -805,9 +801,7 @@ void TerrainScene::show_spray(bool visible) {
   // Whether there is anything to show is the geometry's business, and it is
   // empty on a day that watered nothing - so asking for spray on a dry day
   // still draws none.
-  const int anything = spray_lines_->GetNumberOfLines() > 0 && visible ? 1 : 0;
-  spray_actor_->SetVisibility(anything);
-  pivot_actor_->SetVisibility(anything);
+  spray_actor_->SetVisibility(!pivots_.empty() && visible ? 1 : 0);
 }
 
 void TerrainScene::show_stack_layer(std::size_t index, bool visible) {
@@ -1005,155 +999,123 @@ void TerrainScene::show_stack(const std::vector<StackEntry>& entries) {
   }
 }
 
-void TerrainScene::show_irrigation(const core::Raster<double>& applied_mm) {
-  vtkNew<vtkPoints> spray;
-  vtkNew<vtkCellArray> spray_cells;
-  vtkNew<vtkPoints> frame;
-  vtkNew<vtkCellArray> frame_cells;
+void TerrainScene::lay_out_spray() {
+  vtkNew<vtkPoints> points;
+  vtkNew<vtkCellArray> lines;
 
-  const auto finish = [&]() {
-    spray_lines_->SetPoints(spray);
-    spray_lines_->SetLines(spray_cells);
-    spray_lines_->Modified();
-    pivot_lines_->SetPoints(frame);
-    pivot_lines_->SetLines(frame_cells);
-    pivot_lines_->Modified();
-    // Shown only when irrigation is being asked about, and only on a day that
-    // had some: a pivot standing over a dry farm would be the picture claiming
-    // something the model did not do.
-    const bool anything = spray->GetNumberOfPoints() > 0;
-    spray_actor_->SetVisibility(spray_wanted_ && anything ? 1 : 0);
-    pivot_actor_->SetVisibility(spray_wanted_ && anything ? 1 : 0);
-  };
+  // Where each arm is pointing. One angle for every pivot on the farm, because
+  // they are all being driven by the same clock - this is one day's watering,
+  // not a set of machines running to their own schedules.
+  const double angle = 2.0 * kPi * spray_phase_;
+  const double heading_east = std::sin(angle);
+  const double heading_north = std::cos(angle);
 
-  if (!has_field_ || applied_mm.empty()) {
-    finish();
-    return;
+  for (const Pivot& pivot : pivots_) {
+    // The mast, so the arm is plainly turning about something rather than
+    // sliding across the paddock.
+    const double mast = pivot.reach * 0.22;
+    {
+      const vtkIdType first = points->GetNumberOfPoints();
+      points->InsertNextPoint(pivot.easting, pivot.northing, pivot.ground);
+      points->InsertNextPoint(pivot.easting, pivot.northing, pivot.ground + mast);
+      lines->InsertNextCell(2);
+      lines->InsertCellPoint(first);
+      lines->InsertCellPoint(first + 1);
+    }
+
+    // The arm, drawn from the top of the mast out to the reach and sloping down
+    // to the ground at its far end, the way a span does.
+    const double tip_east = pivot.easting + (pivot.reach * heading_east);
+    const double tip_north = pivot.northing + (pivot.reach * heading_north);
+    {
+      const vtkIdType first = points->GetNumberOfPoints();
+      points->InsertNextPoint(pivot.easting, pivot.northing, pivot.ground + mast);
+      points->InsertNextPoint(tip_east, tip_north, pivot.ground + (mast * 0.55));
+      lines->InsertNextCell(2);
+      lines->InsertCellPoint(first);
+      lines->InsertCellPoint(first + 1);
+    }
+
+    // Water off the span: short falls at intervals along it, longest under the
+    // outer end where a pivot throws the most.
+    constexpr int kFalls = 7;
+    for (int i = 1; i <= kFalls; ++i) {
+      const double out = static_cast<double>(i) / kFalls;
+      const double east = pivot.easting + (pivot.reach * out * heading_east);
+      const double north = pivot.northing + (pivot.reach * out * heading_north);
+      const double top = pivot.ground + (mast * (1.0 - (0.45 * out)));
+      const vtkIdType first = points->GetNumberOfPoints();
+      points->InsertNextPoint(east, north, top);
+      points->InsertNextPoint(east, north, pivot.ground);
+      lines->InsertNextCell(2);
+      lines->InsertCellPoint(first);
+      lines->InsertCellPoint(first + 1);
+    }
   }
 
-  const core::GeoTransform& transform = applied_mm.transform();
-  const double cell = transform.cell_size;
+  spray_lines_->SetPoints(points);
+  spray_lines_->SetLines(lines);
+  spray_lines_->Modified();
+}
 
-  // Where the water went, and how far out it reached. Both are read from the
-  // depths rather than from any setting: a pivot drawn at a radius somebody
-  // typed in would keep its circle when the water stopped reaching that far.
-  double east_sum = 0.0;
-  double north_sum = 0.0;
-  double watered_cells = 0.0;
-  double deepest = 0.0;
-  for (std::size_t row = 0; row < applied_mm.rows(); ++row) {
-    for (std::size_t col = 0; col < applied_mm.cols(); ++col) {
-      const double depth = applied_mm(col, row);
+void TerrainScene::set_spray_phase(double phase) {
+  if (pivots_.empty()) {
+    return;
+  }
+  spray_phase_ = std::fmod(phase, 1.0);
+  lay_out_spray();
+}
+
+void TerrainScene::show_irrigation(const IrrigationToday& today) {
+  pivots_.clear();
+
+  if (has_field_) {
+    for (std::size_t index = 0; index < boundaries_.size(); ++index) {
+      const double depth = index < today.paddock_mm.size() ? today.paddock_mm[index] : 0.0;
       if (depth <= 0.0) {
         continue;
       }
-      east_sum += transform.origin_easting + ((static_cast<double>(col) + 0.5) * cell);
-      north_sum += transform.origin_northing - ((static_cast<double>(row) + 0.5) * cell);
-      watered_cells += 1.0;
-      deepest = std::max(deepest, depth);
-    }
-  }
-  if (watered_cells <= 0.0 || deepest <= 0.0) {
-    finish();
-    return;
-  }
-
-  const double hub_east = east_sum / watered_cells;
-  const double hub_north = north_sum / watered_cells;
-
-  // How high the ground is under the hub, so the equipment stands on the farm
-  // rather than through it. Taken from the drawn surface, which already
-  // carries the exaggeration.
-  const double ground = highest_m_ * exaggeration_;
-
-  // **Sized against the farm, not in metres.** A pivot mast is about five
-  // metres tall and this farm is a kilometre and a half across: drawn to scale
-  // it is three pixels, and the first attempt at this produced a dotted texture
-  // that read as noise on the pasture rather than as water. These are symbols,
-  // the same way the sun in this scene is a symbol, and they are sized to be
-  // read.
-  const double span = std::max(sky_width_, sky_height_);
-  const double mast = span * 0.045;
-
-  double reach = 0.0;
-  for (std::size_t row = 0; row < applied_mm.rows(); ++row) {
-    for (std::size_t col = 0; col < applied_mm.cols(); ++col) {
-      if (applied_mm(col, row) <= 0.0) {
+      const std::vector<core::Point2D>& vertices = boundaries_[index].vertices();
+      if (vertices.size() < 3) {
         continue;
       }
-      const double east = transform.origin_easting + ((static_cast<double>(col) + 0.5) * cell);
-      const double north = transform.origin_northing - ((static_cast<double>(row) + 0.5) * cell);
-      reach = std::max(reach, std::hypot(east - hub_east, north - hub_north));
-    }
-  }
 
-  // The mast, drawn with the circle or not at all - see the test below.
-  if (reach > 0.0 && (2.0 * reach) < std::min(sky_width_, sky_height_)) {
-    const vtkIdType first = frame->GetNumberOfPoints();
-    frame->InsertNextPoint(hub_east, hub_north, ground);
-    frame->InsertNextPoint(hub_east, hub_north, ground + mast);
-    frame_cells->InsertNextCell(2);
-    frame_cells->InsertCellPoint(first);
-    frame_cells->InsertCellPoint(first + 1);
-  }
+      Pivot pivot;
+      const core::Point2D centre = boundaries_[index].centroid();
+      pivot.easting = centre.easting;
+      pivot.northing = centre.northing;
+      pivot.ground = highest_m_ * exaggeration_;
 
-  // **The circle is drawn only when it describes a pivot.**
-  //
-  // A centre pivot waters a circle inside a paddock. When the rule found every
-  // cell dry it waters the whole farm on the same day, and a circle round all
-  // of it would be claiming one machine covers eighty hectares - which no
-  // pivot does; a farm that size is watered by several, or by something that is
-  // not a pivot at all. So the equipment is drawn when its circle fits within
-  // the farm and left off when it does not, and the spray - which is only ever
-  // over ground that got water - carries the picture on its own.
-  const bool fits = reach > 0.0 && (2.0 * reach) < std::min(sky_width_, sky_height_);
-  if (fits) {
-    constexpr int kSegments = 72;
-    const vtkIdType first = frame->GetNumberOfPoints();
-    for (int i = 0; i < kSegments; ++i) {
-      const double angle = (2.0 * kPi * i) / kSegments;
-      frame->InsertNextPoint(hub_east + (reach * std::cos(angle)),
-                             hub_north + (reach * std::sin(angle)), ground + (mast * 0.6));
-    }
-    frame_cells->InsertNextCell(kSegments + 1);
-    for (int i = 0; i < kSegments; ++i) {
-      frame_cells->InsertCellPoint(first + i);
-    }
-    frame_cells->InsertCellPoint(first);
-  }
-
-  // The spray: uprights over watered ground, each one as tall as the depth that
-  // cell was given.
-  //
-  // **Thinned so the pasture underneath still shows.** One upright per cell
-  // draws fifteen hundred of them on this farm and the map disappears under a
-  // white thicket - the reader loses the very thing the spray is meant to be
-  // read against. The stride is chosen from how much ground was watered rather
-  // than fixed, so a small watered patch keeps every cell and a whole farm gets
-  // a scatter: in both cases it is the shape of the watered ground that is
-  // legible, which is what a mean over the farm cannot show.
-  const auto stride = static_cast<std::size_t>(
-      std::max(1.0, std::round(std::sqrt(watered_cells / kSprayUprights))));
-
-  for (std::size_t row = 0; row < applied_mm.rows(); row += stride) {
-    for (std::size_t col = 0; col < applied_mm.cols(); col += stride) {
-      const double depth = applied_mm(col, row);
-      if (depth <= 0.0) {
+      // Reach to the nearest side rather than to the farthest corner, so the
+      // circle the arm sweeps stays inside the paddock it belongs to. A pivot
+      // whose arm crossed the fence would be watering ground the model gave to
+      // somebody else.
+      double nearest = std::numeric_limits<double>::max();
+      for (std::size_t i = 0; i < vertices.size(); ++i) {
+        const core::Point2D& from = vertices[i];
+        const core::Point2D& to = vertices[(i + 1) % vertices.size()];
+        const double run_east = to.easting - from.easting;
+        const double run_north = to.northing - from.northing;
+        const double length = std::hypot(run_east, run_north);
+        if (length <= 0.0) {
+          continue;
+        }
+        // Distance from the centre to the line the side lies on.
+        const double away = std::abs((run_east * (from.northing - centre.northing)) -
+                                     (run_north * (from.easting - centre.easting))) /
+                            length;
+        nearest = std::min(nearest, away);
+      }
+      if (nearest == std::numeric_limits<double>::max() || nearest <= 0.0) {
         continue;
       }
-      const double east = transform.origin_easting + ((static_cast<double>(col) + 0.5) * cell);
-      const double north = transform.origin_northing - ((static_cast<double>(row) + 0.5) * cell);
-      const double height = mast * (0.35 + (0.55 * std::clamp(depth / deepest, 0.0, 1.0)));
-      const vtkIdType first = spray->GetNumberOfPoints();
-      spray->InsertNextPoint(east, north, ground);
-      spray->InsertNextPoint(east, north, ground + height);
-      spray_cells->InsertNextCell(2);
-      spray_cells->InsertCellPoint(first);
-      spray_cells->InsertCellPoint(first + 1);
+      pivot.reach = nearest * 0.85;
+      pivots_.push_back(pivot);
     }
   }
 
-  finish();
+  lay_out_spray();
+  spray_actor_->SetVisibility(spray_wanted_ && !pivots_.empty() ? 1 : 0);
 }
 
 void TerrainScene::pan_vertically(double fraction) {

@@ -46,6 +46,12 @@ namespace {
 /// minimum, so the form is not on the edge of scrolling the moment it opens.
 constexpr int kOpeningPanelWidth = 520;
 
+/// How often the spray's wave is redrawn, and how far it moves each time.
+/// Twenty-five frames a second, a full sweep in four seconds: fast enough to
+/// read as water moving, slow enough that it is not a strobe over the paddocks.
+constexpr int kSprayFrameInterval = 40;
+constexpr double kSprayPhaseStep = 0.01;
+
 /// The fields drawn as sheets under the pasture, top to bottom.
 ///
 /// **Ordered as the causal chain runs, the same as the map-mode list.** What
@@ -317,6 +323,15 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
               // than from a legend.
               if (kStackedFields.at(i) == Field::IrrigationToday) {
                 terrain_.show_spray(on);
+                // **And the day has to be handed over again, or nothing turns.**
+                //
+                // Starting and stopping the animation is refresh_irrigation's
+                // job, because that is where the day's water is known. Ticking
+                // the box only told the scene it was wanted; the timer stayed
+                // stopped until something else happened to redraw a day, so the
+                // arms stood still on the very day somebody had just asked to
+                // watch.
+                refresh_irrigation(static_cast<std::size_t>(std::max(0, current_day_)));
               }
             });
   }
@@ -380,6 +395,16 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   dock->setWidget(setup_);
   dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
   addDockWidget(Qt::LeftDockWidgetArea, dock);
+
+  spray_timer_ = new QTimer(this);
+  spray_timer_->setInterval(kSprayFrameInterval);
+  connect(spray_timer_, &QTimer::timeout, this, [this] {
+    spray_phase_ = std::fmod(spray_phase_ + kSprayPhaseStep, 1.0);
+    terrain_.set_spray_phase(spray_phase_);
+    if (showing_terrain_) {
+      view_->renderWindow()->Render();
+    }
+  });
 
   timer_ = new QTimer(this);
   timer_->setInterval(kFrameInterval);
@@ -1107,9 +1132,7 @@ void MapWindow::refresh() {
 
   // Where today's water landed, drawn over the ground it landed on. The scene
   // is handed the depths and works out the picture; it decides no water.
-  if (day < irrigation_today_.size()) {
-    terrain_.show_irrigation(irrigation_today_[day]);
-  }
+  refresh_irrigation(day);
 
   // The soil under the pasture, on the day being shown. Handed the share of
   // available water left rather than the depth in millimetres: the profile is
@@ -1236,6 +1259,36 @@ void MapWindow::select_view(bool terrain) {
   view_box_->setCurrentIndex(terrain ? 1 : 0);
 }
 
+void MapWindow::refresh_irrigation(std::size_t day) {
+  if (day >= irrigation_today_.size()) {
+    return;
+  }
+  viz::TerrainScene::IrrigationToday today;
+  today.applied_mm = irrigation_today_[day];
+  // Averaged over the cells the mask gives each paddock, which is the same
+  // partition the model grazed - a bar worked out over a different set of cells
+  // would be a second answer to a question already answered.
+  today.paddock_mm.assign(paddocks_.size(), 0.0);
+  for (std::size_t index = 0; index < paddocks_.size(); ++index) {
+    today.paddock_mm[index] = paddock_mean(irrigation_today_, index, day).value_or(0.0);
+  }
+
+  terrain_.show_irrigation(today);
+
+  // The wave only runs when there is spray to run it over. A timer ticking
+  // against an empty scene is work nobody asked for, and on a laptop it is
+  // work somebody pays for.
+  const bool anything = std::any_of(today.paddock_mm.begin(), today.paddock_mm.end(),
+                                    [](double depth) { return depth > 0.0; });
+  if (anything && showing_terrain_ && terrain_.spray_shown()) {
+    if (!spray_timer_->isActive()) {
+      spray_timer_->start();
+    }
+  } else if (spray_timer_->isActive()) {
+    spray_timer_->stop();
+  }
+}
+
 void MapWindow::refresh_stack(std::size_t day) {
   std::vector<viz::TerrainScene::StackEntry> entries;
   entries.reserve(kStackedFields.size());
@@ -1262,6 +1315,15 @@ void MapWindow::refresh_stack(std::size_t day) {
         {raster, viz::ColourScale(style.ramp, range.first, range.second), style.label});
   }
   terrain_.show_stack(entries);
+}
+
+double MapWindow::irrigation_today_mm() const {
+  const auto day = static_cast<std::size_t>(std::max(0, current_day_));
+  return day < irrigation_mm_.size() ? irrigation_mm_[day] : 0.0;
+}
+
+bool MapWindow::irrigation_animating() const {
+  return spray_timer_ != nullptr && spray_timer_->isActive();
 }
 
 void MapWindow::show_all_layers() {

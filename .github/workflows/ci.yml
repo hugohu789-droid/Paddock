@@ -503,6 +503,16 @@ jobs:
         run: |
           xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --inspect | grep -q "paddock-gui: centre -> "
 
+      # The pivots turn, which is the one part of the irrigation picture a
+      # screenshot cannot show - and it is the part that broke. Ticking the
+      # layer told the scene the spray was wanted without handing it a day, so
+      # the arms stood still on exactly the day somebody had asked to watch.
+      # paddock-gui exits non-zero when a watered day is not animating, so this
+      # needs no grep of its own.
+      - name: Turn the pivots on a day that was watered
+        run: |
+          xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --day 205 --layers | grep -q "paddock-gui: the pivots are turning"
+
       # And that the growth layer draws. Growth is the production side on its
       # own - cover moves for two reasons at once - so it is the map that shows
       # which ground is paying its way.

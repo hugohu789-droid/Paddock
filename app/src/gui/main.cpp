@@ -306,6 +306,19 @@ int main(int argc, char** argv) {
       if (std::find(args.begin(), args.end(), "--layers") != args.end()) {
         window.show_all_layers();
         std::cout << "paddock-gui: every layer shown" << '\n';
+
+        // **The one part of the irrigation picture a screenshot cannot show.**
+        // The pivots turn, and turning is the whole of what they say. Ticking
+        // the layer once told the scene the spray was wanted without handing it
+        // a day, so the arms stood still on exactly the day somebody had asked
+        // to watch - which no image of the scene would have caught.
+        if (window.irrigation_today_mm() > 0.0) {
+          if (!window.irrigation_animating()) {
+            std::cerr << "paddock-gui: this day was watered but the pivots are not turning" << '\n';
+            return 1;
+          }
+          std::cout << "paddock-gui: the pivots are turning" << '\n';
+        }
       }
 
       // How far to slide the view, so the control can be checked without a

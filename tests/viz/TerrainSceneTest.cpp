@@ -367,68 +367,104 @@ TEST(TerrainSceneTest, TheCompassDoesNotChangeWhatTheCameraFrames) {
   EXPECT_NEAR(bounds[3] - bounds[2], 5.0 * kCellSize, 1e-6);
 }
 
-// Nothing drawn on a day nothing was watered. A pivot standing over a dry farm
-// would be the picture claiming something the model did not do.
-TEST(TerrainSceneTest, ADryDayDrawsNoIrrigation) {
-  TerrainScene scene;
-  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
-             "cover");
+namespace {
 
-  scene.show_irrigation(raster(16, 12, 0.0));
-  EXPECT_EQ(scene.spray_line_count(), 0U);
-  EXPECT_EQ(scene.pivot_line_count(), 0U);
+// A helper: the day's irrigation as the scene wants it.
+TerrainScene::IrrigationToday watering(const core::Raster<double>& applied,
+                                       std::vector<double> per_paddock) {
+  TerrainScene::IrrigationToday today;
+  today.applied_mm = applied;
+  today.paddock_mm = std::move(per_paddock);
+  return today;
 }
 
-// Water put on draws spray, and the spray follows the water rather than the
-// farm: a patch that got water shows it and the rest of the farm does not.
-TEST(TerrainSceneTest, SprayStandsOnlyOverGroundThatGotWater) {
-  TerrainScene scene;
-  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
-             "cover");
-
-  core::Raster<double> applied = raster(16, 12, 0.0);
-  for (std::size_t row = 4; row < 8; ++row) {
-    for (std::size_t col = 4; col < 8; ++col) {
-      applied(col, row) = 20.0;
-    }
-  }
-  scene.show_irrigation(applied);
-  const std::size_t patch = scene.spray_line_count();
-  EXPECT_GT(patch, 0U);
-
-  // Twice the ground, and more of it drawn. Not exactly twice: the spray is
-  // thinned by how much was watered, on purpose, so that a whole farm does not
-  // disappear under a white thicket.
-  for (std::size_t row = 4; row < 8; ++row) {
-    for (std::size_t col = 8; col < 12; ++col) {
-      applied(col, row) = 20.0;
-    }
-  }
-  scene.show_irrigation(applied);
-  EXPECT_GT(scene.spray_line_count(), patch);
+/// A square paddock in the middle of the test farm.
+core::Polygon middle_paddock() {
+  core::GeoTransform transform;
+  transform.origin_easting = kOriginEasting;
+  transform.origin_northing = kOriginNorthing;
+  transform.cell_size = kCellSize;
+  const double west = kOriginEasting + (2.0 * kCellSize);
+  const double south = kOriginNorthing - (10.0 * kCellSize);
+  const double side = 6.0 * kCellSize;
+  return core::Polygon(
+      {{west, south}, {west + side, south}, {west + side, south + side}, {west, south + side}});
 }
 
-// **The equipment is drawn only when it describes a pivot.** A circle round a
-// whole farm would be claiming one machine covers all of it, which no pivot
-// does - so a day that watered everything gets spray and no equipment, and a
-// day that watered one corner gets both.
-TEST(TerrainSceneTest, ThePivotIsDrawnOnlyWhenItsCircleFitsTheFarm) {
+}  // namespace
+
+// A pivot appears on a paddock that was watered, and on no other.
+TEST(TerrainSceneTest, APivotStandsOnEveryWateredPaddock) {
   TerrainScene scene;
   scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
              "cover");
+  scene.set_boundaries({middle_paddock()});
+  scene.show_spray(true);
 
-  core::Raster<double> corner = raster(16, 12, 0.0);
-  for (std::size_t row = 1; row < 3; ++row) {
-    for (std::size_t col = 1; col < 3; ++col) {
-      corner(col, row) = 20.0;
+  scene.show_irrigation(watering(raster(16, 12, 0.0), {0.0}));
+  EXPECT_EQ(scene.pivot_count(), 0U) << "a dry day waters nothing, so it drives nothing";
+
+  scene.show_irrigation(watering(raster(16, 12, 20.0), {20.0}));
+  EXPECT_EQ(scene.pivot_count(), 1U);
+  EXPECT_GT(scene.spray_line_count(), 0U);
+}
+
+// **The arm turns, and turning is all it does.** It carries no quantity - the
+// depth is on the paddock inspector - so what has to hold is that the geometry
+// moves and comes back round, and that it does not grow or shrink on the way.
+TEST(TerrainSceneTest, TheArmTurnsAndComesBackRound) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  scene.set_boundaries({middle_paddock()});
+  scene.show_spray(true);
+  scene.show_irrigation(watering(raster(16, 12, 20.0), {20.0}));
+
+  const auto tip = [&scene] {
+    vtkPoints* points = scene.spray_points();
+    std::array<double, 3> point{};
+    // Point 3 is the far end of the arm: mast bottom, mast top, arm start, arm
+    // end.
+    points->GetPoint(3, point.data());
+    return point;
+  };
+
+  const std::size_t lines = scene.spray_line_count();
+  const std::array<double, 3> start = tip();
+
+  scene.set_spray_phase(0.25);
+  const std::array<double, 3> quarter = tip();
+  EXPECT_GT(std::hypot(quarter[0] - start[0], quarter[1] - start[1]), 1.0)
+      << "a quarter turn should have moved the far end of the arm";
+  EXPECT_EQ(scene.spray_line_count(), lines) << "turning must not add or drop geometry";
+
+  scene.set_spray_phase(1.0);
+  const std::array<double, 3> full = tip();
+  EXPECT_NEAR(full[0], start[0], 1e-6);
+  EXPECT_NEAR(full[1], start[1], 1e-6);
+}
+
+// The arm stays inside the paddock it stands on. One that swept across the
+// fence would be watering ground the model gave to somebody else.
+TEST(TerrainSceneTest, TheArmStaysInsideItsPaddock) {
+  TerrainScene scene;
+  scene.show(raster(16, 12, 2500.0), sloping(16, 12), ColourScale(Ramp::PastureGreen, 0.0, 5000.0),
+             "cover");
+  const core::Polygon paddock = middle_paddock();
+  scene.set_boundaries({paddock});
+  scene.show_spray(true);
+  scene.show_irrigation(watering(raster(16, 12, 20.0), {20.0}));
+
+  for (const double phase : {0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875}) {
+    scene.set_spray_phase(phase);
+    vtkPoints* points = scene.spray_points();
+    for (vtkIdType i = 0; i < points->GetNumberOfPoints(); ++i) {
+      std::array<double, 3> point{};
+      points->GetPoint(i, point.data());
+      EXPECT_TRUE(paddock.contains({point[0], point[1]}))
+          << "phase " << phase << ", point " << i << " left the paddock";
     }
   }
-  scene.show_irrigation(corner);
-  EXPECT_GT(scene.pivot_line_count(), 0U) << "a small watered patch is a pivot's worth of ground";
-
-  scene.show_irrigation(raster(16, 12, 20.0));
-  EXPECT_EQ(scene.pivot_line_count(), 0U) << "a whole farm is not one pivot";
-  EXPECT_GT(scene.spray_line_count(), 0U) << "but the water is still shown";
 }
 
 // **The cloud can be taken away.** A density field is translucent by

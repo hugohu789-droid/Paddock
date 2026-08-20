@@ -141,7 +141,38 @@ class TerrainScene {
   /// is drawn instead is the equipment that does not move - the hub, and the
   /// circle it reaches - with spray standing over the ground that actually got
   /// water.
-  void show_irrigation(const core::Raster<double>& applied_mm);
+  /// What a day's irrigation looks like on the farm.
+  struct IrrigationToday {
+    /// Water that reached the root zone in each cell, mm. Used to decide which
+    /// paddocks are watering, not to say how much.
+    core::Raster<double> applied_mm;
+
+    /// The same, averaged over each paddock, in the order the boundaries were
+    /// given. A paddock with anything in it gets a pivot; the depth itself is
+    /// not drawn.
+    std::vector<double> paddock_mm;
+  };
+
+  /// Draws a pivot on every paddock that was watered today.
+  ///
+  /// **The picture says which paddocks are watering, and nothing about how
+  /// much.** A hub at the centre and an arm sweeping round it, the way a centre
+  /// pivot works and the way a clock hand reads. Turning it into a gauge - an
+  /// angle or an arc standing for millimetres - was tried and taken out: the
+  /// motion loops while the timeline is paused, and a paused day has no time
+  /// passing in it, so a moving picture that meant a quantity would be claiming
+  /// something the model never said.
+  ///
+  /// The quantity is not lost. It is on the paddock inspector, in millimetres,
+  /// for today and for the run, which is where a number belongs: written down,
+  /// where it can be read twice.
+  void show_irrigation(const IrrigationToday& today);
+
+  /// Turns the pivot arms. `phase` runs 0 to 1 for a full revolution and wraps.
+  ///
+  /// Cheap on purpose: the arms are rebuilt from a handful of remembered hubs,
+  /// so this can be called at animation speed.
+  void set_spray_phase(double phase);
 
   /// The two layers the scene owns itself. Everything else in the stack is
   /// handed to it by show_stack.
@@ -202,6 +233,9 @@ class TerrainScene {
   /// is when a picture of water landing on the paddocks is what they want.
   void show_spray(bool visible);
 
+  /// Whether the spray has been asked for.
+  [[nodiscard]] bool spray_shown() const noexcept { return spray_wanted_; }
+
   /// Shows or hides one sheet of the stack, by its position in it.
   void show_stack_layer(std::size_t index, bool visible);
 
@@ -213,7 +247,13 @@ class TerrainScene {
   /// picture can be checked without rendering it: these are the two things
   /// show_irrigation decides, and both are decidable from the geometry alone.
   [[nodiscard]] std::size_t spray_line_count() const;
-  [[nodiscard]] std::size_t pivot_line_count() const;
+
+  /// The spray's points, so the travelling wave can be checked without a
+  /// screenshot: what it does is move the tops, and nothing else.
+  [[nodiscard]] vtkPoints* spray_points() const;
+
+  /// How many pivots are drawn: one per paddock watering today.
+  [[nodiscard]] std::size_t pivot_count() const noexcept { return pivots_.size(); }
 
   /// Slides the view up or down the screen without turning it.
   ///
@@ -396,8 +436,20 @@ class TerrainScene {
   /// rebuilt every day and has to know, on a fresh day, whether to appear.
   bool spray_wanted_ = false;
 
-  vtkNew<vtkPolyData> pivot_lines_;
-  vtkNew<vtkActor> pivot_actor_;
+  /// One pivot: where it stands and how far it reaches. Kept so the arm can be
+  /// turned without the geometry being worked out again every frame.
+  struct Pivot {
+    double easting = 0.0;
+    double northing = 0.0;
+    double ground = 0.0;
+    double reach = 0.0;
+  };
+
+  std::vector<Pivot> pivots_;
+  double spray_phase_ = 0.0;
+
+  /// Rebuilds the arms from pivots_ at the current phase.
+  void lay_out_spray();
 
   /// The farm's extent, kept so the sky can be hung over it.
   double sky_east_ = 0.0;

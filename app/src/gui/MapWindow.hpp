@@ -257,6 +257,17 @@ class MapWindow : public QMainWindow {
   /// stack can be drawn by something other than a person clicking four times.
   void show_all_layers();
 
+  /// Whether the pivots are turning.
+  ///
+  /// Exposed because this is the one thing about the irrigation picture that a
+  /// screenshot cannot show, and it is the thing that broke: ticking the layer
+  /// told the scene the spray was wanted but never handed it a day, so the
+  /// arms stood still on exactly the day somebody had asked to watch.
+  [[nodiscard]] bool irrigation_animating() const;
+
+  /// Water put on across the farm on the day being shown, mm.
+  [[nodiscard]] double irrigation_today_mm() const;
+
   /// Switches between the flat map and the terrain view, as the drop-down
   /// would.
   void select_view(bool terrain);
@@ -323,6 +334,20 @@ class MapWindow : public QMainWindow {
 
   /// Fills the terrain view's stack with today's values for kStackedFields.
   void refresh_stack(std::size_t day);
+
+  /// Hands the terrain view the day's irrigation: where it landed, how much
+  /// each paddock got, and what a full bar means.
+  void refresh_irrigation(std::size_t day);
+
+  /// **Runs while the timeline is paused, and that is deliberate.**
+  ///
+  /// The spray's travelling wave says "this paddock is being watered today" -
+  /// a state, not a rate - so it keeps going on a day somebody is sitting on.
+  /// It carries no quantity; the bars round the paddocks do, and they are
+  /// still. Stopped whenever there is nothing to animate, so a farm that is not
+  /// being watered is not repainting itself sixty times a second for nothing.
+  QTimer* spray_timer_ = nullptr;
+  double spray_phase_ = 0.0;
   QComboBox* field_box_ = nullptr;
   QComboBox* scale_box_ = nullptr;
   QSlider* timeline_ = nullptr;
@@ -499,6 +524,7 @@ class MapWindow : public QMainWindow {
   std::optional<config::RunSummary> last_run_;
   std::optional<config::ScenarioBundle> last_bundle_;
   core::ManagementPolicy last_policy_;
+
   bool last_run_had_stock_ = false;
   std::string last_failure_;
 
