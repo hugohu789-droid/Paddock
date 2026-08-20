@@ -3,6 +3,7 @@
 
 #include "SeasonChart.hpp"
 
+#include <QBrush>
 #include <QColor>
 #include <QDateTime>
 #include <QLegend>
@@ -57,6 +58,16 @@ SeasonChart::SeasonChart(QWidget* parent) : QChartView(parent) {
   // no width.
   chart_->legend()->setVisible(false);
   chart_->setMargins(QMargins(2, 2, 2, 2));
+  // **The same dark as the window around it.** A white chart beside a dark
+  // instrument panel reads as a document somebody pasted in, and next to a
+  // night-dark scene it is the brightest thing on screen - which is the wrong
+  // thing to draw the eye, since the map is where the farm is.
+  chart_->setBackgroundBrush(QBrush(QColor(0x1B, 0x22, 0x30)));
+  chart_->setBackgroundRoundness(8.0);
+  // The plot area is left transparent. Given its own dark brush it covered the
+  // axes, which is a chart with no numbers on it - the background was worth
+  // less than they are.
+  chart_->setTitleBrush(QBrush(QColor(0x8A, 0x98, 0xB4)));
   chart_->setLocale(english_dates());
   chart_->setLocalizeNumbers(false);
   setChart(chart_);
@@ -78,27 +89,49 @@ void SeasonChart::clear() {
 
 void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<Line>& lines,
                            const std::vector<Events>& events) {
+  // **The old axes are deleted, not merely detached.**
+  //
+  // They are built with the chart as their parent, so removeAxis takes them off
+  // the chart and leaves them alive as its children. Every run added another
+  // set; after the first, the chart was carrying four, then six, and stopped
+  // drawing any of them or honouring a new title. The symptom was a chart with
+  // no numbers on it, which is not a chart.
+  const QList<QAbstractAxis*> stale = chart_->axes();
   chart_->removeAllSeries();
-  // The axes go with the series they were attached to, so they are rebuilt too
-  // rather than reused - a stale axis keeps the range of a run that is gone.
-  for (QAbstractAxis* axis : chart_->axes()) {
+  for (QAbstractAxis* axis : stale) {
     chart_->removeAxis(axis);
+    delete axis;
   }
+  time_axis_ = nullptr;
+  left_axis_ = nullptr;
+  right_axis_ = nullptr;
+  event_axis_ = nullptr;
   marker_ = nullptr;
   dates_ = dates;
-  chart_->setTitle(
-      "The farm through the year   -   marks below: irrigation, then days the mob moved");
-
   if (dates_.empty()) {
     clear();
     return;
   }
+  chart_->setTitle(
+      "The farm through the year   -   marks below: irrigation, then days the mob moved");
   marked_ = std::clamp(marked_, 0, static_cast<int>(dates_.size()) - 1);
+
+  // Axes in the panel's own greys, so the chart is one instrument with the
+  // window rather than a picture of one.
+  const QColor ink(0xDC, 0xE4, 0xF2);
+  const QColor faint(0x33, 0x40, 0x5A);
+  const auto dress = [&ink, &faint](QAbstractAxis* axis) {
+    axis->setLabelsColor(ink);
+    axis->setTitleBrush(QBrush(ink));
+    axis->setLinePenColor(faint);
+    axis->setGridLineColor(faint);
+  };
 
   time_axis_ = new QDateTimeAxis(chart_);
   time_axis_->setFormat("MMM");
   time_axis_->setTickCount(7);
   time_axis_->setTitleText("Month");
+  dress(time_axis_);
   chart_->addAxis(time_axis_, Qt::AlignBottom);
 
   // **Named twice over: on the axis and in the legend.**
@@ -110,11 +143,13 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
   // is dragged small.
   left_axis_ = new QValueAxis(chart_);
   left_axis_->setTitleText(lines.empty() ? QString() : lines.front().name);
+  dress(left_axis_);
   chart_->addAxis(left_axis_, Qt::AlignLeft);
   right_axis_ = new QValueAxis(chart_);
   const auto on_right =
       std::find_if(lines.begin(), lines.end(), [](const Line& line) { return line.on_right_axis; });
   right_axis_->setTitleText(on_right == lines.end() ? QString() : on_right->name);
+  dress(right_axis_);
   chart_->addAxis(right_axis_, Qt::AlignRight);
 
   double left_highest = 0.0;

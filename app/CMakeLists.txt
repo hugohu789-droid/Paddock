@@ -31,7 +31,7 @@ if(PADDOCK_BUILD_GUI)
   # (libqt6charts6-dev). It is required rather than optional: a chart that
   # appeared on some builds and not others would be a window that means
   # different things on different machines.
-  find_package(Qt6 REQUIRED COMPONENTS Charts Widgets)
+  find_package(Qt6 REQUIRED COMPONENTS Charts Concurrent Widgets)
   find_package(
     VTK REQUIRED
     COMPONENTS CommonCore
@@ -56,12 +56,15 @@ if(PADDOCK_BUILD_GUI)
     src/gui/SeasonChart.cpp
     src/gui/SeasonChart.hpp
     src/gui/SetupPanel.cpp
-    src/gui/SetupPanel.hpp)
+    src/gui/SetupPanel.hpp
+    src/gui/Theme.cpp
+    src/gui/Theme.hpp)
 
   set_target_properties(paddock-gui PROPERTIES AUTOMOC ON)
 
   target_link_libraries(paddock-gui PRIVATE Paddock::config Paddock::viz_vtk Qt6::Charts
-                                            Qt6::Widgets ${VTK_LIBRARIES} Paddock::project_options)
+                                            Qt6::Concurrent Qt6::Widgets
+                                            ${VTK_LIBRARIES} Paddock::project_options)
 
   # A build with the geospatial stack can draw a farm on measured ground; one
   # without still runs, and refuses a scenario whose terrain is a file rather

@@ -166,6 +166,15 @@ class SetupPanel : public QWidget {
   /// The panel's readiness changed, so whatever drives it should look again.
   void readinessChanged();
 
+  /// What the last run came to, as rich text.
+  ///
+  /// **Sent out rather than shown here.** The panel is where a run is set up;
+  /// what it came to belongs beside the map it drew, with the rest of the
+  /// readings. Keeping it in the panel meant the two halves of one answer sat
+  /// at opposite corners of the window - and the panel had to share its height
+  /// with the scenario list, so the box was usually one line tall.
+  void resultsReady(const QString& text);
+
   /// A different farm was chosen, with the directory it lives in.
   ///
   /// Separate from runRequested because choosing a farm is not the same as
@@ -245,7 +254,6 @@ class SetupPanel : public QWidget {
   bool ready_ = false;
   bool can_report_ = false;
   QLabel* problem_label_ = nullptr;
-  QLabel* results_label_ = nullptr;
 
   std::vector<config::SpeciesDefinition> species_;
 };

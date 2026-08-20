@@ -26,6 +26,7 @@
 #include <paddock/config/ScenarioConfig.hpp>
 
 #include "MapWindow.hpp"
+#include "Theme.hpp"
 
 namespace {
 
@@ -144,7 +145,8 @@ int main(int argc, char** argv) {
     // Must be set before the QApplication exists, or the widget and the render
     // window disagree about the surface they share.
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
-    const QApplication application(argc, argv);
+    QApplication application(argc, argv);
+    paddock::app::apply_theme(application);
 
     // A leading flag means no bundle was named, so the default stands in.
     std::string bundle_path;
@@ -195,9 +197,14 @@ int main(int argc, char** argv) {
         heights = std::stoi(std::string(*std::next(heights_flag)));
       }
       window.show_configuration(ground, terrain, heights, irrigate);
+      window.wait_for_run();
     }
 
     if (smoke) {
+      // A run is on a worker now, so a batch mode has to wait for it before it
+      // reads anything. A person clicking never needs this; a script always
+      // does.
+      window.wait_for_run();
       if (const std::string& failure = window.last_failure(); !failure.empty()) {
         std::cerr << "paddock-gui: " << failure << '\n';
         return 1;
@@ -262,6 +269,7 @@ int main(int argc, char** argv) {
         // this check pass whether or not opening a farm moves the view. The run
         // draws its own frame.
         window.open_scenario(std::string(*std::next(then_flag)));
+        window.wait_for_run();
 
         const auto farm = window.drawn_farm();
         const auto focus = window.camera_focus();

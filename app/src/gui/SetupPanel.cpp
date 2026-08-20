@@ -167,9 +167,6 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
 
   problem_label_ = new QLabel(this);
   problem_label_->setWordWrap(true);
-  results_label_ = new QLabel(this);
-  results_label_->setWordWrap(true);
-  results_label_->setTextFormat(Qt::RichText);
 
   auto* farm_group = new QGroupBox("Farm", this);
   auto* farm_form = new QFormLayout;
@@ -270,18 +267,12 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
              supplement_me_box_});
   management_group->setLayout(management_form);
 
-  auto* results_group = new QGroupBox("Results", this);
-  auto* results_layout = new QVBoxLayout;
-  results_layout->addWidget(results_label_);
-  results_group->setLayout(results_layout);
-
   auto* layout = new QVBoxLayout;
   layout->addWidget(farm_group);
   layout->addWidget(stock_group);
   layout->addWidget(management_group);
   layout->addWidget(irrigation_group);
   layout->addWidget(problem_label_);
-  layout->addWidget(results_group);
   layout->addStretch(1);
 
   // **The panel scrolls.** It grew past the height of a window when irrigation
@@ -815,7 +806,7 @@ void SetupPanel::show_results(const config::RunSummary& run, bool has_stock,
   text += closes ? "Dry matter, nitrogen and water all balance."
                  : "<b>A budget did not close.</b> Treat this run as unsound.";
 
-  results_label_->setText(text);
+  emit resultsReady(text);
   can_report_ = has_stock;
   emit readinessChanged();
   // The reason a report is unavailable belongs on the button that opens it, and
@@ -824,7 +815,7 @@ void SetupPanel::show_results(const config::RunSummary& run, bool has_stock,
 }
 
 void SetupPanel::show_failure(const QString& message) {
-  results_label_->setText(QString("<b>The run failed.</b><br>%1").arg(message.toHtmlEscaped()));
+  emit resultsReady(QString("<b>The run failed.</b> %1").arg(message.toHtmlEscaped()));
   can_report_ = false;
   emit readinessChanged();
 }

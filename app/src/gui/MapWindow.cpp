@@ -8,6 +8,8 @@
 #include <QDir>
 #include <QDockWidget>
 #include <QEvent>
+#include <QEventLoop>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -15,10 +17,12 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QRegularExpression>
+#include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QtConcurrent>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -71,6 +75,17 @@ constexpr int kOpeningMapHeight = 560;
 constexpr int kOpeningLowerHeight = 260;
 constexpr int kOpeningReadingsWidth = 620;
 constexpr int kOpeningChartWidth = 700;
+
+/// How far the floating notices sit in from the corner of the map, and how long
+/// the one in the corner stays. Long enough to be read on the way past, short
+/// enough not to sit over the farm while somebody works.
+constexpr int kNoticeMargin = 12;
+constexpr int kNoticeSeconds = 4;
+
+/// How long each turn of the event loop is given while waiting for a run, in
+/// milliseconds. Short enough that the wait ends promptly, long enough not to
+/// spin the processor for nothing.
+constexpr int kWaitSliceMs = 20;
 
 /// How often the spray's wave is redrawn, and how far it moves each time.
 /// Twenty-five frames a second, a full sweep in four seconds: fast enough to
@@ -208,6 +223,10 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
 
   paddock_label_ = new QLabel(this);
   paddock_label_->setTextFormat(Qt::RichText);
+
+  results_label_ = new QLabel(this);
+  results_label_->setTextFormat(Qt::RichText);
+  results_label_->setWordWrap(true);
   paddock_label_->setText("<b>Paddock</b> &nbsp; click the map to inspect one");
 
   // **These two lines must not set the width of the window.**
@@ -231,7 +250,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // size hint is its text and a hint that reaches the layout drags the window
   // about as the run plays - the fault that made the map jump a few pixels
   // wider and narrower day by day.
-  for (QLabel* line : {weather_label_, summary_label_, paddock_label_}) {
+  for (QLabel* line : {weather_label_, summary_label_, paddock_label_, results_label_}) {
     line->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
     line->setWordWrap(true);
     line->setAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -437,6 +456,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   readings->addWidget(weather_label_);
   readings->addWidget(paddock_label_);
   readings->addWidget(summary_label_);
+  readings->addWidget(results_label_);
   readings->addStretch(1);
   auto* readings_holder = new QWidget(this);
   readings_holder->setLayout(readings);
@@ -462,6 +482,22 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   layout->addLayout(playing);
   layout->addLayout(choices);
   layout->addLayout(layers);
+
+  // The two floating notices. Children of the window rather than of any layout,
+  // so they sit over the map instead of pushing it about - a banner that
+  // resized the scene every time a run started would be its own kind of jump.
+  progress_label_ = new QLabel(this);
+  progress_label_->setStyleSheet(
+      "background: rgba(28, 34, 46, 235); color: #dfe6f2; border-radius: 6px; padding: 7px 13px;");
+  progress_label_->hide();
+
+  notice_label_ = new QLabel(this);
+  notice_label_->hide();
+
+  notice_timer_ = new QTimer(this);
+  notice_timer_->setSingleShot(true);
+  notice_timer_->setInterval(kNoticeSeconds * 1000);
+  connect(notice_timer_, &QTimer::timeout, notice_label_, &QLabel::hide);
 
   view_->installEventFilter(this);
 
@@ -532,6 +568,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   connect(compare_button_, &QPushButton::clicked, this, &MapWindow::run_comparison);
   connect(report_button_, &QPushButton::clicked, this, &MapWindow::open_comparison_report);
   connect(setup_, &SetupPanel::readinessChanged, this, &MapWindow::refresh_scenario_list);
+  connect(setup_, &SetupPanel::resultsReady, results_label_, &QLabel::setText);
   connect(scenario_list_, &QListWidget::currentRowChanged, this, &MapWindow::show_scenario);
 
   auto* dock = new QDockWidget("Run a scenario", this);
@@ -606,21 +643,16 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   scene_.reset_camera();
 }
 
-void MapWindow::start_run() {
-  const SetupPanel::Choices choices = setup_->choices();
-  if (choices.scenario_directory.empty()) {
-    return;
-  }
-
-  timer_->stop();
-  play_button_->setText("Play");
-  setup_->set_running(true);
-  QApplication::setOverrideCursor(Qt::WaitCursor);
-
-  last_failure_.clear();
+MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
+  // **Nothing here touches the window.** This runs on a worker thread, so every
+  // result goes into the products it returns and the interface adopts them when
+  // it is finished. A day callback that wrote into the window's own vectors -
+  // which is what this used to do - was safe only because the run blocked
+  // everything, and blocking everything is the lag being fixed.
+  RunProducts products;
   try {
     config::ScenarioBundle bundle = config::load_scenario(choices.scenario_directory);
-    no_ground_reason_ = attach_elevation(bundle, choices.scenario_directory);
+    products.no_ground_reason = attach_elevation(bundle, choices.scenario_directory);
     if (!bundle.grid.has_value()) {
       throw std::runtime_error("This scenario has no [grid] section, so there is no map to draw.");
     }
@@ -647,23 +679,18 @@ void MapWindow::start_run() {
     if (!measured_ground) {
       bundle.terrain = choices.terrain;
     }
-    setup_->show_measured_ground(measured_ground);
 
-    clear_series();
-    // The ground this run is over, taken once. Empty for flat, which the
-    // terrain view draws as a level surface and says so, rather than refusing
-    // to open.
-    elevation_ = bundle.make_elevation();
-    last_run_had_stock_ = !bundle.mobs.empty();
-    if (last_run_had_stock_) {
-      simulate_managed(bundle, choices.policy, choices.irrigation, choices.irrigation_system);
+    products.elevation = bundle.make_elevation();
+    products.had_stock = !bundle.mobs.empty();
+    if (products.had_stock) {
+      simulate_managed(products, bundle, choices.policy, choices.irrigation,
+                       choices.irrigation_system);
     } else {
-      simulate_pasture_only(bundle, choices.irrigation, choices.irrigation_system);
+      simulate_pasture_only(products, bundle, choices.irrigation, choices.irrigation_system);
     }
 
-    last_policy_ = choices.policy;
-    last_bundle_ = bundle;
-    latitude_degrees_ = bundle.latitude_degrees;
+    products.policy = choices.policy;
+    products.latitude_degrees = bundle.latitude_degrees;
 
     // The slope of the ground the run was over, taken once. Flat ground has no
     // topography, and a farm with none gets a raster of zeros rather than a
@@ -672,51 +699,136 @@ void MapWindow::start_run() {
     // trusting.
     if (const std::optional<core::Topography> ground = bundle.make_topography();
         ground.has_value()) {
-      slope_.push_back(ground->slope_degrees);
-    } else if (bundle.grid.has_value()) {
+      products.slope.push_back(ground->slope_degrees);
+    } else {
       core::GeoTransform transform;
       transform.origin_easting = bundle.grid->origin_easting;
       transform.origin_northing = bundle.grid->origin_northing;
       transform.cell_size = bundle.grid->cell_size_m;
-      slope_.emplace_back(bundle.grid->cols, bundle.grid->rows, transform, 0.0);
+      products.slope.emplace_back(bundle.grid->cols, bundle.grid->rows, transform, 0.0);
     }
-    if (last_run_.has_value()) {
-      weather_ = last_run_->weather;
-      irrigation_mm_ = last_run_->irrigation_mm;
-      irrigation_tally_ = last_run_->irrigation;
-    }
-    // Who owns which cell. Built here rather than during the run because the
-    // fences do not move, and from the run's own raster so that the mask is over
-    // exactly the cells the model stepped.
-    mask_.reset();
-    if (!paddocks_.empty() && !cover_.empty()) {
-      mask_.emplace(cover_.front(), paddocks_);
-    }
-    selected_paddock_.reset();
 
-    adopt_series();
-    refresh_chart();
-    if (last_run_.has_value()) {
-      const double hectares = bundle.grid.has_value()
-                                  ? static_cast<double>(bundle.grid->cols * bundle.grid->rows) *
-                                        bundle.grid->cell_size_m * bundle.grid->cell_size_m /
-                                        10000.0
-                                  : 0.0;
-      setup_->show_results(*last_run_, last_run_had_stock_, irrigation_tally_, hectares);
+    if (products.summary.has_value()) {
+      products.weather = products.summary->weather;
+      products.irrigation_mm = products.summary->irrigation_mm;
+      products.irrigation = products.summary->irrigation;
     }
+    products.measured_ground = measured_ground;
+    products.bundle = std::move(bundle);
   } catch (const std::exception& error) {
+    products.failure = error.what();
+  }
+  return products;
+}
+
+void MapWindow::start_run() {
+  const SetupPanel::Choices choices = setup_->choices();
+  if (choices.scenario_directory.empty()) {
+    return;
+  }
+  if (running_) {
+    // Asked for again while one is in flight. Remembered, not refused: see
+    // rerun_wanted_.
+    rerun_wanted_ = true;
+    return;
+  }
+
+  timer_->stop();
+  play_button_->setText("Play");
+  setup_->set_running(true);
+  running_ = true;
+  refresh_scenario_list();
+  show_progress("Running " + QString::fromStdString(choices.scenario_directory) + "...");
+
+  // **On a worker, so the window keeps drawing while a year is simulated.**
+  // Half a second is long enough for a click to feel ignored and for a switch
+  // between scenarios to look like a hang.
+  auto* watcher = new QFutureWatcher<RunProducts>(this);
+  connect(watcher, &QFutureWatcher<RunProducts>::finished, this, [this, watcher] {
+    adopt_run(watcher->result());
+    watcher->deleteLater();
+  });
+  watcher->setFuture(QtConcurrent::run(&MapWindow::simulate, choices));
+}
+
+void MapWindow::adopt_run(RunProducts products) {
+  running_ = false;
+  setup_->set_running(false);
+
+  // Something changed while this was running, so this answer is already out of
+  // date. Drop it and run again rather than drawing it.
+  if (rerun_wanted_) {
+    rerun_wanted_ = false;
+    start_run();
+    return;
+  }
+
+  if (!products.failure.empty()) {
     // A failed run must not leave half a year on the timeline. Everything the
     // view draws from is cleared, so what is on screen is either a whole run or
     // nothing at all.
     clear_series();
     last_run_.reset();
     adopt_series();
-    last_failure_ = error.what();
-    setup_->show_failure(QString::fromUtf8(error.what()));
+    last_failure_ = products.failure;
+    setup_->show_failure(QString::fromStdString(products.failure));
+    hide_progress();
+    announce("That scenario could not be run", false);
+    refresh_scenario_list();
+    return;
   }
 
-  QApplication::restoreOverrideCursor();
-  setup_->set_running(false);
+  clear_series();
+  cover_ = std::move(products.cover);
+  soil_water_ = std::move(products.soil_water);
+  available_water_ = std::move(products.available_water);
+  water_stress_ = std::move(products.water_stress);
+  irrigation_today_ = std::move(products.irrigation_today);
+  irrigation_to_date_ = std::move(products.irrigation_to_date);
+  growth_ = std::move(products.growth);
+  legume_fraction_ = std::move(products.legume_fraction);
+  slope_ = std::move(products.slope);
+  dates_ = std::move(products.dates);
+  mean_cover_ = std::move(products.mean_cover);
+  stock_summary_ = std::move(products.stock_summary);
+  grazed_each_day_ = std::move(products.grazed_each_day);
+  mobs_each_day_ = std::move(products.mobs_each_day);
+  boundaries_ = std::move(products.boundaries);
+  paddocks_ = std::move(products.paddocks);
+  weather_ = std::move(products.weather);
+  irrigation_mm_ = std::move(products.irrigation_mm);
+  irrigation_tally_ = products.irrigation;
+  last_run_ = std::move(products.summary);
+  last_bundle_ = std::move(products.bundle);
+  elevation_ = std::move(products.elevation);
+  last_policy_ = products.policy;
+  latitude_degrees_ = products.latitude_degrees;
+  last_run_had_stock_ = products.had_stock;
+  no_ground_reason_ = std::move(products.no_ground_reason);
+  last_failure_.clear();
+  setup_->show_measured_ground(products.measured_ground);
+
+  // Who owns which cell. Built here rather than during the run because the
+  // fences do not move, and from the run's own raster so that the mask is over
+  // exactly the cells the model stepped.
+  mask_.reset();
+  if (!paddocks_.empty() && !cover_.empty()) {
+    mask_.emplace(cover_.front(), paddocks_);
+  }
+  selected_paddock_.reset();
+
+  adopt_series();
+  refresh_chart();
+  if (last_run_.has_value() && last_bundle_.has_value() && last_bundle_->grid.has_value()) {
+    const double hectares =
+        static_cast<double>(last_bundle_->grid->cols * last_bundle_->grid->rows) *
+        last_bundle_->grid->cell_size_m * last_bundle_->grid->cell_size_m / 10000.0;
+    setup_->show_results(*last_run_, last_run_had_stock_, irrigation_tally_, hectares);
+  }
+
+  hide_progress();
+  refresh_scenario_list();
+  announce(QString("%1 days simulated").arg(dates_.size()), true);
 }
 
 void MapWindow::open_report() {
@@ -867,11 +979,12 @@ const std::vector<std::size_t>& MapWindow::grazed_on(std::size_t day) const {
   return day < grazed_each_day_.size() ? grazed_each_day_[day] : kNothingGrazed;
 }
 
-void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date) {
-  cover_.push_back(grid.cover_kg_dm());
-  soil_water_.push_back(grid.soil_water_mm());
-  available_water_.push_back(grid.available_water_fraction());
-  water_stress_.push_back(grid.water_stress());
+void MapWindow::keep_day(RunProducts& into, const core::FarmletGrid& grid,
+                         const std::string& date) {
+  into.cover.push_back(grid.cover_kg_dm());
+  into.soil_water.push_back(grid.soil_water_mm());
+  into.available_water.push_back(grid.available_water_fraction());
+  into.water_stress.push_back(grid.water_stress());
 
   // Today's water, and the running total behind it. The total is accumulated
   // here rather than asked of the grid, because the grid holds a day and not a
@@ -879,22 +992,22 @@ void MapWindow::keep_day(const core::FarmletGrid& grid, const std::string& date)
   // reason for a model to remember anything.
   core::Raster<double> today = grid.last_irrigation_mm();
   core::Raster<double> so_far = today;
-  if (!irrigation_to_date_.empty()) {
-    const core::Raster<double>& before = irrigation_to_date_.back();
+  if (!into.irrigation_to_date.empty()) {
+    const core::Raster<double>& before = into.irrigation_to_date.back();
     for (std::size_t cell = 0; cell < so_far.size() && cell < before.size(); ++cell) {
       so_far.values()[cell] += before.values()[cell];
     }
   }
-  growth_.push_back(grid.last_growth_kg_dm());
-  irrigation_today_.push_back(std::move(today));
-  irrigation_to_date_.push_back(std::move(so_far));
+  into.growth.push_back(grid.last_growth_kg_dm());
+  into.irrigation_today.push_back(std::move(today));
+  into.irrigation_to_date.push_back(std::move(so_far));
 
-  legume_fraction_.push_back(grid.legume_fraction());
-  dates_.push_back(date);
-  mean_cover_.push_back(grid.mean_cover_kg_dm());
+  into.legume_fraction.push_back(grid.legume_fraction());
+  into.dates.push_back(date);
+  into.mean_cover.push_back(grid.mean_cover_kg_dm());
 }
 
-void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
+void MapWindow::simulate_managed(RunProducts& into, const config::ScenarioBundle& bundle,
                                  const core::ManagementPolicy& policy,
                                  const core::IrrigationPolicy& irrigation,
                                  const core::IrrigationSystem& system) {
@@ -902,18 +1015,18 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
   diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
   diet.digestibility_percent = kPastureDigestibility;
 
-  last_run_ = config::run_managed_scenario(
+  into.summary = config::run_managed_scenario(
       bundle, policy, diet, bundle.name,
-      [this](const core::Farm& farm, const core::FarmDay& day) {
-        keep_day(farm.grid(), day.date.to_iso_string());
+      [&into](const core::Farm& farm, const core::FarmDay& day) {
+        keep_day(into, farm.grid(), day.date.to_iso_string());
 
         // The fences do not move, so they are taken once, on the first day.
-        if (boundaries_.empty()) {
-          boundaries_.reserve(farm.paddocks().size());
+        if (into.boundaries.empty()) {
+          into.boundaries.reserve(farm.paddocks().size());
           for (const core::Paddock& paddock : farm.paddocks()) {
-            boundaries_.push_back(paddock.boundary);
+            into.boundaries.push_back(paddock.boundary);
           }
-          paddocks_ = farm.paddocks();
+          into.paddocks = farm.paddocks();
         }
 
         // Where the stock were. Taken from the farm rather than from the day's
@@ -925,7 +1038,7 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
         }
         std::sort(grazed.begin(), grazed.end());
         grazed.erase(std::unique(grazed.begin(), grazed.end()), grazed.end());
-        grazed_each_day_.push_back(std::move(grazed));
+        into.grazed_each_day.push_back(std::move(grazed));
 
         // Where the stock stood, one marker per paddock each mob occupied. A
         // set stocked mob has the run of the farm and gets a mark on all of it,
@@ -955,9 +1068,9 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
             markers.push_back(marker);
           }
         }
-        mobs_each_day_.push_back(std::move(markers));
+        into.mobs_each_day.push_back(std::move(markers));
 
-        if (stock_summary_.empty()) {
+        if (into.stock_summary.empty()) {
           std::string summary;
           for (const core::FarmMob& mob : farm.mobs()) {
             if (!summary.empty()) {
@@ -966,13 +1079,13 @@ void MapWindow::simulate_managed(const config::ScenarioBundle& bundle,
             summary += std::to_string(mob.mob.head) + " " + core::to_string(mob.mob.animal.kind) +
                        " (" + mob.mob.animal.class_id + ")";
           }
-          stock_summary_ = summary;
+          into.stock_summary = summary;
         }
       },
       irrigation, system);
 }
 
-void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle,
+void MapWindow::simulate_pasture_only(RunProducts& into, const config::ScenarioBundle& bundle,
                                       const core::IrrigationPolicy& irrigation,
                                       const core::IrrigationSystem& system) {
   core::FarmletGrid grid = bundle.make_grid();
@@ -983,36 +1096,36 @@ void MapWindow::simulate_pasture_only(const config::ScenarioBundle& bundle,
   grid.set_opening_stocks(summary.ledger);
 
   const std::size_t days = weather.records.size();
-  cover_.reserve(days);
-  soil_water_.reserve(days);
-  water_stress_.reserve(days);
-  legume_fraction_.reserve(days);
-  dates_.reserve(days);
-  mean_cover_.reserve(days);
+  into.cover.reserve(days);
+  into.soil_water.reserve(days);
+  into.water_stress.reserve(days);
+  into.legume_fraction.reserve(days);
+  into.dates.reserve(days);
+  into.mean_cover.reserve(days);
 
   // The schedule holds the per-cell memory of when each piece of ground was
   // last watered. It reads the grid's dryness and decides; the grid applies
   // what it is handed and decides nothing.
   core::IrrigationSchedule schedule(irrigation, system, grid.cell_count());
-  irrigation_mm_.reserve(days);
+  into.irrigation_mm.reserve(days);
 
   for (const core::DailyWeather& day : weather.records) {
     const core::Raster<double> dryness = grid.depletion_mm();
     const std::vector<double>& water =
         schedule.decide(dryness.values(), grid.total_available_water_mm());
-    irrigation_mm_.push_back(schedule.last_mean_mm());
+    into.irrigation_mm.push_back(schedule.last_mean_mm());
     grid.step(day, &summary.ledger, water);
-    keep_day(grid, day.date.to_iso_string());
+    keep_day(into, grid, day.date.to_iso_string());
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(grid.mean_cover_kg_dm());
   }
 
-  irrigation_tally_ = schedule.tally();
+  into.irrigation = schedule.tally();
   summary.closing_cover_kg_dm = grid.mean_cover_kg_dm();
   summary.closing_nitrogen_kg = grid.mean_total_nitrogen_kg();
   summary.closing_water_mm = grid.mean_soil_water_mm();
-  last_run_ = std::move(summary);
+  into.summary = std::move(summary);
 }
 
 void MapWindow::open_scenario(const std::string& bundle_directory) {
@@ -1524,6 +1637,12 @@ double MapWindow::irrigation_today_mm() const {
   return day < irrigation_mm_.size() ? irrigation_mm_[day] : 0.0;
 }
 
+void MapWindow::wait_for_run() const {
+  while (running_) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, kWaitSliceMs);
+  }
+}
+
 bool MapWindow::irrigation_animating() const {
   return spray_timer_ != nullptr && spray_timer_->isActive();
 }
@@ -1711,6 +1830,53 @@ std::string MapWindow::comparison_markdown(QString& failure) {
     table.caveats.push_back(std::move(reason));
   }
   return config::as_markdown(table) + "\n" + config::summarise(table) + "\n";
+}
+
+void MapWindow::show_progress(const QString& what) {
+  progress_label_->setText(what);
+  progress_label_->adjustSize();
+  place_notices();
+  progress_label_->show();
+  progress_label_->raise();
+}
+
+void MapWindow::hide_progress() {
+  progress_label_->hide();
+}
+
+void MapWindow::announce(const QString& what, bool good) {
+  notice_label_->setText(what);
+  // Green for done, amber for not. Colour alone would be a poor signal, so the
+  // words say it too - the colour is only there to be seen before they are
+  // read.
+  notice_label_->setStyleSheet(
+      good ? "background: rgba(38, 132, 84, 235); color: white; border-radius: 6px; padding: 7px "
+             "13px; font-weight: 600;"
+           : "background: rgba(176, 108, 22, 235); color: white; border-radius: 6px; padding: 7px "
+             "13px; font-weight: 600;");
+  notice_label_->adjustSize();
+  place_notices();
+  notice_label_->show();
+  notice_label_->raise();
+  notice_timer_->start();
+}
+
+void MapWindow::place_notices() {
+  if (view_ == nullptr) {
+    return;
+  }
+  // Positioned against the map rather than the window, so a note about a run
+  // sits over the thing the run drew.
+  const QPoint corner = view_->mapTo(this, QPoint(view_->width(), 0));
+  notice_label_->move(corner.x() - notice_label_->width() - kNoticeMargin,
+                      corner.y() + kNoticeMargin);
+  const QPoint left = view_->mapTo(this, QPoint(0, 0));
+  progress_label_->move(left.x() + kNoticeMargin, left.y() + kNoticeMargin);
+}
+
+void MapWindow::resizeEvent(QResizeEvent* event) {
+  QMainWindow::resizeEvent(event);
+  place_notices();
 }
 
 void MapWindow::show_all_layers() {
