@@ -103,6 +103,10 @@ cmake --build --preset gui
 ./build/gui/bin/paddock-gui  # or name a bundle: data/scenarios/canterbury-baseline
 ```
 
+This preset has the GUI and not the geospatial stack, so every farm it draws is
+flat whatever its manifest says. For measured ground use the `desktop` preset
+below.
+
 Two things worth knowing before you spend an afternoon on them:
 
 - **Distribution packages of VTK's Qt integration are Qt5 until Ubuntu 26.04.**
@@ -219,10 +223,29 @@ an install that already exists rather than rebuilding it into `build/desktop`.
 The preset cannot carry them because they name paths that belong to a machine
 rather than to the project.
 
-A build without the geospatial stack still runs `lincoln-lurdf` up to the point
-where it needs the ground, and then refuses it by name. That is deliberate: a
-farm quietly running flat when its manifest says otherwise is the failure worth
-preventing.
+A build without the geospatial stack runs `lincoln-lurdf` rather than refusing
+it, and draws the farm flat. It says so twice - on the console and in the panel
+beside the map:
+
+```
+paddock-gui: ground modelled flat
+paddock-gui: This farm has measured ground and this build has no geospatial
+stack to read it with, so it is being drawn flat. Build with the desktop preset
+- see docs/setup.md.
+```
+
+That line is the whole of the warning, so it is worth knowing what follows from
+it. **The terrain view is then a flat sheet, and the height exaggeration has
+nothing to work on.** Asking for Heights x20 over ground that is modelled flat
+multiplies nothing by twenty, and the control looks broken when it is the build
+that is wrong. If a farm will not take a slope, check which `paddock-gui` is
+running before looking anywhere else: `build/gui/bin/paddock-gui` cannot open a
+GeoTIFF at all, and only `build/desktop/bin/paddock-gui` can.
+
+A farm quietly running flat when its manifest says otherwise is still the
+failure worth preventing. What prevents it is that line, not a refusal - the
+window would rather show the farm and name what is missing from it than show
+nothing.
 
 The scenario needs the elevation snapshot, which is not committed:
 
