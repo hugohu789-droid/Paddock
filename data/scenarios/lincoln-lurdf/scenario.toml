@@ -17,7 +17,7 @@
 # The boundary is still the placeholder rectangle from
 # data/farms/lincoln-research-farms.toml - the right AREA in the wrong SHAPE,
 # because LINZ's open cadastre carries no owner and nothing yet says which
-# parcels are the farm. See docs/verify.md, open item 15.
+# parcels are the farm. See docs/validation/verify.md, open item 15.
 
 [scenario]
 name = "lincoln_lurdf"
@@ -72,7 +72,7 @@ latitude_degrees = -43.641
 # latitude because of the ozone above it rather than because of the sun's
 # height.
 #
-# Wind is carried and **nothing in the model reads it** - see docs/verify.md
+# Wind is carried and **nothing in the model reads it** - see docs/validation/verify.md
 # E12. It is a daily maximum at 10 m, not a mean at the 2 m most agronomic
 # equations expect, which is another reason not to feed it to one yet.
 kind = "snapshot"
@@ -84,11 +84,11 @@ licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. 
 
 [soil]
 path = "soil.toml"
-sha256 = "acbbef5a457d8d5a60d016e1fda5706fbb31fd8613c5112b20412d561bfd94ca"
+sha256 = "523e37beed50db5ecb6c367a5d53cf578823561dc940fbbc6aef31facdc4a36a"
 
 [sward]
 path = "sward.toml"
-sha256 = "6c7adf252d376044dcd4f26f7867f871cc61ad655bd9208cbe7f51ca96001ede"
+sha256 = "d33109030d022d64db408c55e99751541224e5e0f42f195f56848432f9bd6ce3"
 
 [initial_state]
 soil_water_mm = 90.0
@@ -150,7 +150,7 @@ sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "98c473bb07de20578ff950347d7959d9d11c66367dc6fca3cf4e1b884d7eb064"
+sha256 = "0ac6b26ff1af72a91c5ebd259ef310c04e305d3c15a6caf381756a257984363a"
 head = 417
 paddock = 0
 # 417 ewes on 80 hectares is 5.2 a hectare, the same stocking rate
@@ -162,7 +162,7 @@ liveweight_kg = 55.0
 age_days = 1500.0
 
 # Managed as canterbury-grazed is: set stocked over lambing, rotating the rest
-# of the year, after Smith and Dawson (1976). See docs/verify.md.
+# of the year, after Smith and Dawson (1976). See docs/validation/verify.md.
 
 [[grazing_period]]
 name = "winter rotation"

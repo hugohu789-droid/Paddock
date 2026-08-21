@@ -35,7 +35,7 @@ struct MobMarker {
   ///
   /// **These positions are illustrative and the model has none.** A mob belongs
   /// to a paddock; no animal in this model has a coordinate, and nothing
-  /// computes where one stands or how far it walks - see docs/verify.md E10,
+  /// computes where one stands or how far it walks - see docs/validation/verify.md E10,
   /// where the activity term is recorded as fed by nothing. Drawing one dot per
   /// animal says how many there are and where they may be, which is what the
   /// model knows. It does not say where any of them is.

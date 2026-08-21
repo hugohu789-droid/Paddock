@@ -47,5 +47,5 @@ a container changes type.
   bit-identical output holds within one platform and standard library, not
   across the CI matrix. Cross-platform golden baselines need core's own
   distribution transforms on top of the engine. Tracked as E1 in
-  [docs/verify.md](../verify.md), to be closed in M2 before the first golden
+  [docs/validation/verify.md](../verify.md), to be closed in M2 before the first golden
   baseline is pinned.

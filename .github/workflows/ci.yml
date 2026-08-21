@@ -50,6 +50,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history, because the licence check asks whether anything
+          # that may not be redistributed was ever committed. At the default
+          # depth of one there is no history to ask, and the check would pass
+          # by having nothing to look at.
+          fetch-depth: 0
 
       - name: Install clang-format ${{ env.LLVM_VERSION }}
         run: |
@@ -67,6 +73,15 @@ jobs:
 
       - name: Dependency direction and core determinism rules
         run: scripts/check-dependency-direction.sh
+
+      # NIWA's licence forbids passing its data to a third party and S-map is
+      # CC BY-NC-ND, so neither may be committed whatever its hash says. A
+      # licence breach found at release time is found too late, and it is not
+      # the kind of mistake anyone makes on purpose - which is exactly the kind
+      # worth spending a gate on. Fetching the whole history is what lets this
+      # check the past as well as the tree.
+      - name: Data that may not be redistributed
+        run: scripts/check-data-licences.sh
 
   build:
     name: ${{ matrix.name }}

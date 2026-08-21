@@ -333,7 +333,7 @@ void write_budgets(std::ostringstream& out, const RunSummary& run) {
 void write_evidence_notes(std::ostringstream& out, const ScenarioBundle& bundle) {
   out << "## What this report may be relied on for\n\n";
   out << "The evidence under this model is uneven, and a report that did not say so would be "
-         "worse than no report. The full working is in `docs/verify.md`.\n\n";
+         "worse than no report. The full working is in `docs/validation/verify.md`.\n\n";
 
   out << "| | |\n|---|---|\n";
   out << "| Conservation, deterministic replay | **Sound** — properties of the bookkeeping |\n";

@@ -37,7 +37,7 @@ namespace paddock::core {
 /// assumption, and it is worth naming: it says stock take more from the parts
 /// of a paddock that have more feed, which is closer to the truth than eating
 /// every cell down equally, and it is not the same as knowing where stock
-/// actually walk. Slope-driven preference is open item 9 in docs/verify.md and
+/// actually walk. Slope-driven preference is open item 9 in docs/validation/verify.md and
 /// would refine this; until it has a source, proportional allocation is the
 /// honest default because it follows from the feed being there rather than from
 /// a guess about the animals.

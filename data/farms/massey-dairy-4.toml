@@ -26,7 +26,7 @@ effective_hectares = 221.0
 # The LINZ-converted Palmerston North control point from
 # tests/gis/ProjectionTest.cpp. Massey's Dairy 4 is on Tennent Drive about 5 km
 # from the city, so this is the right locality and not the farm's centroid;
-# location_verified stays false. See docs/verify.md, open item 8.
+# location_verified stays false. See docs/validation/verify.md, open item 8.
 centre_easting = 1821633.1767
 centre_northing = 5526347.9734
 latitude_degrees = -40.3840

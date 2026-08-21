@@ -17,7 +17,7 @@
 // favour of rotation by November. Their evidence is weaker than this project's
 // other targets - one property, not a replicated trial, in a paper arguing for
 // the system it recommends - so it fixes a plausible magnitude rather than a
-// number to hit. See docs/verify.md.
+// number to hit. See docs/validation/verify.md.
 
 #include <gtest/gtest.h>
 
@@ -178,9 +178,10 @@ TEST(GrazingSystemComparisonTest, TheAnimalSideAdvantageIsNotReproducedAndTheRea
   // Rotation is behind, and this records by how much so that a change which
   // fixes it - selectivity, species dynamics, a cleverer farmer - shows up here
   // as a failure asking to be looked at rather than passing unnoticed.
-  EXPECT_LT(advantage, 0.0) << "rotation now leads on liveweight; if that is real, the "
-                               "mechanism that changed should be named in docs/verify.md "
-                               "and this test rewritten";
+  EXPECT_LT(advantage, 0.0)
+      << "rotation now leads on liveweight; if that is real, the "
+         "mechanism that changed should be named in docs/validation/verify.md "
+         "and this test rewritten";
   EXPECT_GT(advantage, -12.0) << "and the gap has grown beyond anything explicable";
 
   // The confinement is the cause, and it is visible in the shortfall days.

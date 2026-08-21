@@ -4,7 +4,7 @@
 # right shape for a moderately deep Canterbury silt loam, but they have not been
 # taken from S-map. Do not quote a result computed with this file.
 #
-# PLACEHOLDER - verify against Manaaki Whenua S-map (docs/verify.md, item 2)
+# PLACEHOLDER - verify against Manaaki Whenua S-map (docs/validation/verify.md, item 2)
 
 [soil]
 name = "templeton_silt_loam_example"

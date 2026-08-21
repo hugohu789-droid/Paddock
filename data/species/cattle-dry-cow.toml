@@ -4,7 +4,7 @@
 # represent a cow in milk. A cow defined here eats roughly what an animal at
 # maintenance eats and about half what a milking one would. Naming the file for
 # what it actually models is the difference between a limitation and a wrong
-# answer nobody noticed. See docs/verify.md.
+# answer nobody noticed. See docs/validation/verify.md.
 
 [species]
 name = "cattle_dairy_dry"
@@ -24,7 +24,7 @@ description = "A non-lactating dairy cow. Lactation is not modelled; this is not
 # is to "modify the value of Kantype in the BASAL equation to be 1.0 for sheep,
 # 1.3 for British cattle breeds and 1.5 for beef and dairy cattle of dairy
 # origin". This file records what OVERSEER does, which is what the rest of the
-# implemented equation set assumes; the disagreement is in docs/verify.md, and
+# implemented equation set assumes; the disagreement is in docs/validation/verify.md, and
 # changing it is a decision, not a correction.
 species_factor = { value = 1.4, status = "direct", source = "tmc_animal_me" }
 

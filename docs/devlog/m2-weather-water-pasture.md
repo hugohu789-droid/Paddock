@@ -8,7 +8,7 @@ draws it as a map you can scrub through a day at a time. All three budgets — d
 matter, water, nitrogen — close to 1e-9 over the year and on every individual
 day, each with a negative control proving the gate can fail. Every parameter in
 the model cites FAO-56 or a published New Zealand source, or is marked
-PLACEHOLDER and listed in `docs/verify.md`.
+PLACEHOLDER and listed in `docs/validation/verify.md`.
 
 **One problem worth writing down.** The validation gate compares modelled
 seasonal growth with DairyNZ's measured averages, and it failed. Twice, for two

@@ -14,7 +14,7 @@ namespace paddock::test_support {
 /// This is a fixture, not a calibration: the numbers are chosen to make
 /// assertions legible - a warm month, a cold month, a fixed wet-day
 /// probability - and carry no claim about any real place. Real site parameters
-/// live in TOML under data/ and cite NIWA climate normals; see docs/verify.md.
+/// live in TOML under data/ and cite NIWA climate normals; see docs/validation/verify.md.
 inline core::SyntheticWeatherParameters test_site_parameters() {
   core::SyntheticWeatherParameters parameters;
   parameters.site_name = "test_site";

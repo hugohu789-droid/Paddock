@@ -18,7 +18,7 @@ namespace paddock::viz {
 /// point.**
 ///
 /// There is no wind direction. The weather series carries a speed and no
-/// bearing (docs/verify.md E12), so a cloud that drifted one way would be
+/// bearing (docs/validation/verify.md E12), so a cloud that drifted one way would be
 /// drawing the single thing the data does not have - and a viewer would read
 /// it as the day's wind, because that is what drifting cloud means.
 ///

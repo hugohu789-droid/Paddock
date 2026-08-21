@@ -6,7 +6,7 @@
 # being underfed costs it weight, the farmer moves it, the paddock rests.
 #
 # The weather, soil and sward are still PLACEHOLDER definitions (see
-# docs/verify.md), so this bundle demonstrates that the loop closes and is
+# docs/validation/verify.md), so this bundle demonstrates that the loop closes and is
 # stable. It is not a description of Canterbury, and no number out of it is a
 # prediction. The ground is the exception: see [terrain].
 
@@ -25,15 +25,15 @@ latitude_degrees = -43.5
 [weather]
 kind = "synthetic"
 path = "weather.toml"
-sha256 = "b59bc98a348677638770e004a1050a9f55f1fd93b5b2346fa4079151588dcb33"
+sha256 = "6b1bfc03e57717c51f59b3814fab9f3f7aeb6bd9bd9e289d75c76b1d3cd2c56a"
 
 [soil]
 path = "soil.toml"
-sha256 = "acbbef5a457d8d5a60d016e1fda5706fbb31fd8613c5112b20412d561bfd94ca"
+sha256 = "523e37beed50db5ecb6c367a5d53cf578823561dc940fbbc6aef31facdc4a36a"
 
 [sward]
 path = "sward.toml"
-sha256 = "6c7adf252d376044dcd4f26f7867f871cc61ad655bd9208cbe7f51ca96001ede"
+sha256 = "d33109030d022d64db408c55e99751541224e5e0f42f195f56848432f9bd6ce3"
 
 [initial_state]
 soil_water_mm = 90.0
@@ -83,7 +83,7 @@ paddock_hectares = 2.0
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "98c473bb07de20578ff950347d7959d9d11c66367dc6fca3cf4e1b884d7eb064"
+sha256 = "0ac6b26ff1af72a91c5ebd259ef310c04e305d3c15a6caf381756a257984363a"
 head = 500
 paddock = 0
 # The species file describes a typical 60 kg ewe; this run starts with lighter
@@ -100,7 +100,7 @@ age_days = 1500.0
 
 # How they are managed, through the year. The shape follows Smith and Dawson
 # (1976): set stocked over lambing, rotating the rest of the year, at 21 days
-# after weaning and 35 as the summer dries. See docs/verify.md.
+# after weaning and 35 as the summer dries. See docs/validation/verify.md.
 #
 # The same system appears more than once with different parameters, which is
 # the point of a calendar rather than a single setting.

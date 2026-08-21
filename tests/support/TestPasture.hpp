@@ -16,7 +16,7 @@ namespace paddock::test_support {
 /// the published ranges are wide (radiation use efficiency between 1 and 3
 /// g DM/MJ depending on whether roots are counted, extinction coefficients from
 /// 0.3 to 1.3), and pinning them is the job of the T3 validation gate against
-/// measured DairyNZ growth curves, not of a unit test. See docs/verify.md.
+/// measured DairyNZ growth curves, not of a unit test. See docs/validation/verify.md.
 inline core::SwardParameters test_sward_parameters() {
   core::SwardParameters parameters;
   parameters.par_fraction = 0.5;

@@ -7,7 +7,7 @@
 // DIFFERENCE rather than a pair of predictions. Both runs use the same model,
 // the same soil and the same weather; one input changes. That difference is
 // informative even though neither absolute figure is quotable, because the
-// sward parameters these farms ship with are placeholders (docs/verify.md) -
+// sward parameters these farms ship with are placeholders (docs/validation/verify.md) -
 // so this file asserts direction and cost, and never a yield.
 //
 // The weather is the real Lincoln year, so the seasonal shape driving it is

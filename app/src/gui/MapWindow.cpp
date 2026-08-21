@@ -217,7 +217,7 @@ constexpr int kFrameInterval = 30;
 /// Fixed rather than exposed on the panel because this model does not track
 /// diet quality through the season, and a box a user could set would promise a
 /// precision that is not there. It is the pair the validation tests run at.
-/// See docs/verify.md.
+/// See docs/validation/verify.md.
 constexpr double kPastureMe = 10.5;
 constexpr double kPastureDigestibility = 75.0;
 

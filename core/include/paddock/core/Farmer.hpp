@@ -108,7 +108,7 @@ struct ManagementPolicy {
   /// PLACEHOLDER. New Zealand extension material talks about residuals in
   /// terms a farmer can see - a sward height, a cover after grazing - and this
   /// project has no sourced figure for the level at which a farmer should start
-  /// feeding out. See docs/verify.md.
+  /// feeding out. See docs/validation/verify.md.
   double minimum_cover_kg_dm_per_ha = 1600.0;
 
   /// What the stock are meant to be doing, kg per head per day. **Stock are

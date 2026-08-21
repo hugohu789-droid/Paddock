@@ -87,7 +87,7 @@ struct GrazingDay {
 /// nitrogen back within days as dung and urine, and this model does not return
 /// it. A long run will therefore strip nitrogen from the farm in a way a real
 /// one does not. That is a known and recorded gap, not an oversight; see
-/// docs/verify.md.
+/// docs/validation/verify.md.
 ///
 /// Throws std::invalid_argument for a malformed mob, a non-positive paddock
 /// area, or a diet the animal model rejects.

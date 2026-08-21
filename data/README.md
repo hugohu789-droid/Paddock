@@ -23,7 +23,7 @@ been checked yet is marked
 # PLACEHOLDER — verify against <source>
 ```
 
-and listed in [../docs/verify.md](../docs/verify.md) until it is.
+and listed in [../docs/validation/verify.md](../docs/validation/verify.md) until it is.
 
 **Bulk datasets are never committed.** LINZ, NIWA and Manaaki Whenua downloads
 live in `data/snapshots/`, which is gitignored. What is committed is the fetch

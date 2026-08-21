@@ -79,7 +79,7 @@ GrazingDay graze(PastureSward& sward, double paddock_hectares, const Mob& mob,
   if (ledger != nullptr) {
     // Outflows rather than transfers: both leave the pools this model tracks.
     // Dung and urine are not modelled, so the nitrogen does not come back - see
-    // the note on graze() and docs/verify.md.
+    // the note on graze() and docs/validation/verify.md.
     ledger->record_outflow(Budget::DryMatter, "grazing_offtake", day.eaten_kg_dm);
     ledger->record_outflow(Budget::Nitrogen, "grazing_offtake", day.nitrogen_removed_kg);
   }

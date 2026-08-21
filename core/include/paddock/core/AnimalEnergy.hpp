@@ -15,7 +15,7 @@
 ///   Manual for the description of the OVERSEER Nutrient Budgets engine,
 ///   version 6.3.0. AgResearch Ltd for OVERSEER Limited. ISSN 2253-461X.
 ///
-/// docs/verify.md carries the URL, the SHA-256 of the PDF these were read from,
+/// docs/validation/verify.md carries the URL, the SHA-256 of the PDF these were read from,
 /// and the primary sources the manual itself cites - chiefly Nicol and Brookes
 /// (2007) and CSIRO (2007), which disagree about the species factor K in a way
 /// that is recorded rather than resolved.
@@ -53,7 +53,7 @@ struct DietQuality {
   /// everything else, from CSIRO (2007). On a 10.5 MJ/kg pasture diet this is
   /// 0.703, and 0.28 / 0.703 = 0.40 MJ ME per kg lwt^0.75 - the figure Simpson
   /// (1978b) published for sheep. That agreement is what fixes which case is
-  /// which; see docs/verify.md.
+  /// which; see docs/validation/verify.md.
   [[nodiscard]] double maintenance_efficiency() const noexcept;
 
   /// kg, the efficiency with which ME is used for liveweight gain.
@@ -61,7 +61,7 @@ struct DietQuality {
   /// TMC Eq. 9, kgf = 0.042 dietME + 0.006, blended with milk at 0.7 by Eq. 8.
   /// The manual also states a temperate-pasture form (Eq. 11) that varies with
   /// legume content and day of year, and then says it "has not been
-  /// implemented"; that form is recorded in docs/verify.md and deliberately not
+  /// implemented"; that form is recorded in docs/validation/verify.md and deliberately not
   /// used here, partly because the text of its seasonal term did not survive
   /// extraction unambiguously.
   [[nodiscard]] double gain_efficiency() const noexcept;

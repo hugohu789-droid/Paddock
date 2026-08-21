@@ -6,7 +6,7 @@
 # station. A run driven by this file is a demonstration, not a simulation of a
 # place.
 #
-# PLACEHOLDER - verify against NIWA climate normals (docs/verify.md, item 7).
+# PLACEHOLDER - verify against NIWA climate normals (docs/validation/verify.md, item 7).
 # For a real site, replay a CliFlo snapshot instead: see
 # scripts/cliflo-snapshot.py and ADR 0008.
 

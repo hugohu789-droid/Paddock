@@ -18,7 +18,7 @@ namespace paddock::core {
 /// (Eq. 6) where humidity and wind are measured; Hargreaves is its documented
 /// fallback when only temperature is reliable, which is the common case for the
 /// CliFlo stations a farm is near. FAO-56 also says Eq. 52 should be checked
-/// against Penman-Monteith in each new region - tracked in docs/verify.md.
+/// against Penman-Monteith in each new region - tracked in docs/validation/verify.md.
 [[nodiscard]] double hargreaves_reference_et_mm(double min_air_temperature_c,
                                                 double max_air_temperature_c,
                                                 double extraterrestrial_mj) noexcept;
