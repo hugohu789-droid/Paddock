@@ -248,6 +248,20 @@ struct ScenarioBundle {
   /// zero.
   [[nodiscard]] std::vector<core::Paddock> make_paddocks() const;
 
+  /// Where the fences on this farm came from, when they came from nowhere.
+  ///
+  /// **The scenarios ship with subdivided rectangles, and the window names real
+  /// farms.** Every bundle here takes its paddocks from SyntheticParcelSource:
+  /// the grid's extent cut into blocks of `paddock_hectares`. That is a fair way
+  /// to demonstrate rotational grazing and it is not this farm's fences, and
+  /// somebody who knows the actual farm should be told which they are looking
+  /// at rather than left to work it out.
+  ///
+  /// Empty once a bundle takes its boundaries from a survey, so the note
+  /// disappears by itself rather than having to be remembered - see open item 15
+  /// in the verification tracker, which is what would make that possible.
+  [[nodiscard]] std::string paddock_caveat() const;
+
   /// A farm ready to step: ground, paddocks and the stock standing on it.
   /// Throws when the bundle has no [grid] section or no paddocks.
   [[nodiscard]] core::Farm make_farm() const;

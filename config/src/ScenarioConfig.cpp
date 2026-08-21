@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <fstream>
 #include <sstream>
@@ -594,6 +595,18 @@ std::vector<core::Paddock> ScenarioBundle::make_paddocks() const {
   area.expand_to_include(core::Point2D{spec.origin_easting + width_m, spec.origin_northing});
 
   return core::SyntheticParcelSource(spec.paddock_hectares).fetch(area);
+}
+
+std::string ScenarioBundle::paddock_caveat() const {
+  if (!grid.has_value() || grid->paddock_hectares <= 0.0) {
+    return {};
+  }
+  // Written here, beside the line that makes them, so that whoever replaces
+  // SyntheticParcelSource with a cadastral one has the claim in front of them
+  // and can delete it in the same edit.
+  return "The fences are a demonstration: the farm's extent cut into blocks of " +
+         std::to_string(std::lround(grid->paddock_hectares)) +
+         " ha. They are not this farm's actual paddocks.";
 }
 
 core::Farm ScenarioBundle::make_farm() const {

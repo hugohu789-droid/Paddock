@@ -1096,6 +1096,9 @@ void MapWindow::adopt_run(RunProducts products) {
   no_ground_reason_ = std::move(products.no_ground_reason);
   last_failure_.clear();
   setup_->show_measured_ground(products.measured_ground);
+  setup_->show_paddock_note(last_bundle_.has_value()
+                                ? QString::fromStdString(last_bundle_->paddock_caveat())
+                                : QString());
 
   // Who owns which cell. Built here rather than during the run because the
   // fences do not move, and from the run's own raster so that the mask is over

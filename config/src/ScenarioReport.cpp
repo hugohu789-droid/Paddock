@@ -123,6 +123,13 @@ void write_what_was_simulated(std::ostringstream& out, const ScenarioBundle& bun
         << fixed(bundle.terrain.surface.gradient_north * 100.0, 1) << "% north |\n";
   }
 
+  // Where the fences came from, on the same footing as where the ground came
+  // from. A report that names a real farm and shows paddock figures should say
+  // which of the two the paddocks are.
+  if (const std::string fences = bundle.paddock_caveat(); !fences.empty()) {
+    out << "| Paddocks | " << fences << " |\n";
+  }
+
   int head = 0;
   for (const MobSpec& mob : bundle.mobs) {
     head += mob.head;
