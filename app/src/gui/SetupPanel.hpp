@@ -130,6 +130,10 @@ class SetupPanel : public QWidget {
   /// something that is not happening.
   void show_measured_ground(bool measured);
 
+  /// What the bundle says about where its fences came from, shown with the
+  /// other caveats. Empty for a bundle whose boundaries are a survey.
+  void show_paddock_note(const QString& note);
+
   /// Chooses the ground by its position in the list, for the screenshot path.
   /// A view of terrain that only a person clicking can reach is a view nothing
   /// can check.
@@ -204,6 +208,10 @@ class SetupPanel : public QWidget {
  private:
   /// Whether the chosen scenario supplies its own measured ground.
   bool measured_ground_ = false;
+
+  /// Where this bundle's paddock boundaries came from, when they came from a
+  /// subdivision rather than a survey.
+  QString paddock_note_;
 
   /// True while adopt_bundle is filling the form from a bundle, so that the
   /// boxes it sets do not read as a person choosing something.

@@ -128,6 +128,29 @@ TEST(ScenarioBundleTest, TheShippedBundleLoadsWithItsHashesIntact) {
 // farmer's judgement in whatever code started it, so the result could only be
 // reproduced by somebody who also had that code. A bundle is supposed to be the
 // whole of a run.
+// **A bundle says where its fences came from, because they came from nowhere.**
+// Every shipped scenario subdivides its own extent, and the window names real
+// New Zealand farms - so somebody who knows one of them is told that the shape
+// on screen is a demonstration rather than left to wonder why it is unfamiliar.
+// The note carries the size it was cut at, and it goes empty for a bundle with
+// no paddocks at all, which is what will make it disappear when boundaries come
+// from a survey.
+TEST(ScenarioBundleTest, ABundleSaysWhereItsFencesCameFrom) {
+  const ScenarioBundle subdivided = load_scenario(grazed_bundle());
+  const std::string note = subdivided.paddock_caveat();
+
+  ASSERT_FALSE(note.empty()) << "a subdivided farm does not say that is what it is";
+  EXPECT_NE(note.find("not this farm's actual paddocks"), std::string::npos);
+  EXPECT_NE(note.find("2 ha"), std::string::npos)
+      << "the note should carry the size the extent was cut at, read from the bundle";
+
+  // The pasture-only bundle has no paddocks at all, so it has no fences to
+  // explain - which is the same branch a bundle taking its boundaries from a
+  // survey will one day take.
+  const ScenarioBundle unfenced = load_scenario(shipped_bundle());
+  EXPECT_TRUE(unfenced.paddock_caveat().empty());
+}
+
 TEST(ScenarioBundleTest, AGrazedBundleCarriesTheRulesItsFarmerWorksTo) {
   const ScenarioBundle bundle = load_scenario(grazed_bundle());
 

@@ -748,6 +748,11 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
   refresh_reset();
 }
 
+void SetupPanel::show_paddock_note(const QString& note) {
+  paddock_note_ = note;
+  refresh_readiness();
+}
+
 void SetupPanel::show_measured_ground(bool measured) {
   measured_ground_ = measured;
   terrain_box_->setEnabled(!measured);
@@ -873,6 +878,14 @@ QString SetupPanel::caveat() const {
   } else if (terrain_box_->currentData().toInt() != 0) {
     notes << "The ground is an invented surface. What it shows is what slope does, not what any "
              "particular hill does.";
+  }
+
+  // **The ground can be a survey while the fences are not.** The scenarios name
+  // real farms, and somebody who knows one of them should be told that the
+  // paddocks on screen are blocks cut out of the extent rather than left to
+  // wonder why the shape is unfamiliar. The bundle says it; this only shows it.
+  if (!paddock_note_.isEmpty()) {
+    notes << paddock_note_;
   }
 
   return notes.join("\n\n");
