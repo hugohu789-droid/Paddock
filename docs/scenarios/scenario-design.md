@@ -72,9 +72,15 @@ of these farms is under half a second, so there is nothing to save by keeping
 them.
 
 **Every arm goes through the same engine.** Scenario A and scenario B are the
-same code path with different settings, so a parameter that is wrong is wrong
-identically on both sides and cancels. This is why the verification tracker can
-say comparisons are sound while absolute yields are not.
+same code path with different settings, so the same parameters and the same
+structure are applied to both. This is why the verification tracker can say
+comparisons carry more weight than absolute yields.
+
+It is not a licence to treat a difference as measured. The responses those
+parameters feed are not linear, so a wrong parameter can bias the *size* of a
+difference — it may be wrong by more in the irrigated arm than in the rain-fed
+one, precisely because the two arms sit at different points on the same curve.
+A comparison from this model is good for a direction and a rough magnitude.
 
 The comparison table names **what differed** before it reports any metric, so a
 reader can see which single setting was turned on rather than taking it on

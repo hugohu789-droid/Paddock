@@ -85,8 +85,10 @@ tracker](../validation/verify.md):
 - The **seasonal shape** correlates well with DairyNZ's measured site
 - The **magnitude** does not: the modelled year runs low against the measured
   average, and the growth parameters are placeholders until they are sourced
-- Comparisons between two scenarios are unaffected: both arms carry the same
-  parameters, so a parameter error cancels
+- Comparisons between two scenarios carry more weight than absolute yields,
+  because both arms use the same parameters — but a wrong parameter can still
+  bias how big the difference comes out, since growth responds non-linearly and
+  the two arms sit at different points on the curve
 
 Do not quote an absolute yield from this model.
 

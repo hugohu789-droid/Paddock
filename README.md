@@ -1,5 +1,10 @@
 # Paddock
 
+[![CI](https://github.com/hugohu789-droid/Paddock/actions/workflows/ci.yml/badge.svg)](https://github.com/hugohu789-droid/Paddock/actions/workflows/ci.yml)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
+![Qt 6 · VTK](https://img.shields.io/badge/Qt%206-VTK-41cd52)
+[![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-lightgrey)](LICENSE)
+
 A spatially explicit pastoral farm simulator for New Zealand conditions, built
 in C++17 with Qt 6 and VTK.
 
@@ -95,8 +100,13 @@ stock, and irrigation on in one arm and off in the other. It is produced by
 | Water pumped (ML) | 0.0 | 295.6 |
 | Evapotranspiration (mm) | 554 | 842 |
 
-The table the application produces also lists what differed between the
-scenarios, so the reader can see which single setting the comparison turned on.
+![Scenario comparison: what differed between the two runs, then the metrics, then what the comparison cannot tell you](docs/images/paddock-comparison.png)
+
+The table opens with **what differed** before it reports a single metric, so a
+reader can see which setting was turned on rather than taking it on trust — and
+it closes with what the comparison cannot answer. Neither the price of water nor
+the value of the extra feed is in this model, so it will not tell you whether
+irrigating is worth doing; it will tell you what it does to the grass.
 
 ## Explainable Paddock Inspector
 
@@ -189,11 +199,18 @@ flowchart TB
     gis --> core
 ```
 
-The simulation core is independent of the GUI and of the visualisation. Qt and
-VTK consume simulation state; they do not own biological or management logic.
-`core/` has no external dependencies at all — a machine with only a compiler
-builds and runs the scientific test suite — and a CI script fails the build if
-anything points out of it.
+The simulation core is independent of the GUI and of the visualisation. `core/`
+has no external dependencies at all — a machine with only a compiler builds and
+runs the scientific test suite — and a CI script fails the build if anything
+points out of it.
+
+`app/` does include `core` directly, for its value types and for a few pure
+helpers such as sun position; what it does not do is run the model. The daily
+loop, the water balance, growth and the grazing and irrigation decisions are all
+behind `config::run_managed_scenario`, and no biological or management rule is
+evaluated in `app/` or `viz/`. The [system
+architecture](docs/architecture/system-architecture.md#level-1-the-system) sets
+out that boundary in full.
 
 For the modules, the daily execution order, the irrigation and grazing decision
 flows, the domain types and the sequence diagrams, see
@@ -213,8 +230,8 @@ flows, the domain types and the sequence diagrams, see
 ## Engineering Quality
 
 - Modern C++17, CMake with `CMakePresets.json` as the single source of build truth
-- Automated tests in five classes — unit, conservation, validation, statistical
-  and property (475 of them at the time of writing)
+- Several hundred automated tests in five classes — unit, conservation,
+  validation, statistical and property
 - GitHub Actions CI on Linux, macOS and Windows, with the GUI built and exercised headlessly
 - clang-tidy and clang-format gates, and an ASan/UBSan build
 - Deterministic replay, and dry matter, water and nitrogen balance checks on every commit
@@ -260,8 +277,12 @@ Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept
   site, the magnitude does not
 - Some example soil and sward inputs remain placeholders and are marked as such
 
-Work that compares two scenarios is unaffected by the parameter gaps: both arms
-carry the same parameters, so an error in one cancels.
+Scenario comparisons are more robust than absolute predictions, because both
+arms share the same parameters and the same model structure. They are not
+immune: a parameter that is wrong can still bias the *size* of a difference,
+since the response it feeds is not linear — a growth parameter can be wrong by
+more under irrigation than under drought. Read a comparison for its direction
+and its rough magnitude, not as a measurement.
 
 ## Irrigation Model Scope
 
@@ -388,6 +409,12 @@ Near-term priorities:
   ground, one paddock selected, its day open beside the year
 - [Paddock inspector](docs/images/paddock-inspector.png) — pasture, current
   water, the irrigation decision and grazing state
+- [Scenario comparison](docs/images/paddock-comparison.png) — what differed, the
+  metrics, and what the comparison cannot tell you
+
+Together they are the three interactions the application is built around: **run**
+a farm year, **inspect** one paddock through it, **compare** two ways of managing
+it.
 
 ## Project Status
 
