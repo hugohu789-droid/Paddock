@@ -55,14 +55,14 @@ it. There is no GUI panel for this and there may never be one.
   the hash are. A collaborator reproduces a bundle by re-fetching and checking
   the hash matches.
 - The CliFlo column mappings in the script are marked PLACEHOLDER until they
-  have been checked against a real export of each datatype (docs/verify.md,
+  have been checked against a real export of each datatype (docs/validation/verify.md,
   item 7). The script prints the headings it actually found and accepts
   `--column HEADING=field`, so an unexpected export is a five-second fix rather
   than a code change.
 - **The generator draws wet days independently.** Real rainfall comes in
   spells, and a Markov chain would capture that — but a chain's state depends on
   the previous day, which would break the date-keyed reproducibility above
-  unless it is anchored somewhere arbitrary. Tracked as E4 in docs/verify.md;
+  unless it is anchored somewhere arbitrary. Tracked as E4 in docs/validation/verify.md;
   drought scenarios in M4 need it, and by then the anchor can be part of the
   scenario bundle. Real-year replay is unaffected and is the honest path for
   anything where wet spells matter.

@@ -23,7 +23,7 @@ region = "Canterbury"
 # The LINZ-converted Canterbury Plains control point from
 # tests/gis/ProjectionTest.cpp. It lies within a few kilometres of Lincoln, so
 # it is the right place for solar geometry and the wrong place for a fence.
-# location_verified is false accordingly. See docs/verify.md, open items 8 and 15.
+# location_verified is false accordingly. See docs/validation/verify.md, open items 8 and 15.
 centre_easting = 1557252.3158
 centre_northing = 5167862.7895
 latitude_degrees = -43.6410

@@ -104,7 +104,7 @@ double DietQuality::energy_density() const noexcept {
 double DietQuality::maintenance_efficiency() const noexcept {
   // TMC Eq. 5 applies to milk diets, Eq. 6 to everything else. A diet that is
   // part milk is not covered by either as written; the blend below is the
-  // obvious reading and is flagged in docs/verify.md rather than presented as
+  // obvious reading and is flagged in docs/validation/verify.md rather than presented as
   // the manual's.
   const double forage =
       (kMaintenanceEfficiencySlope * energy_density()) + kMaintenanceEfficiencyIntercept;
@@ -319,7 +319,7 @@ LiveweightResponse liveweight_response(const AnimalClassParameters& animal,
   //
   // The share is not charged on a deficit: it is the cost of producing, and an
   // animal losing weight is not producing. TMC does not cover that case, so
-  // this is a reading rather than the manual's, and docs/verify.md says so.
+  // this is a reading rather than the manual's, and docs/validation/verify.md says so.
   const double production_me = response.losing
                                    ? response.surplus_me_mj
                                    : response.surplus_me_mj / (1.0 + kProductionMaintenanceShare);

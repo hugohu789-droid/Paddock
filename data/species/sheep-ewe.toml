@@ -3,7 +3,7 @@
 # Sheep are the one class where the two primary sources agree on the species
 # factor, so this file has no choice to record. What it does have is an
 # unverified standard reference weight - see the note below and open item in
-# docs/verify.md.
+# docs/validation/verify.md.
 
 [species]
 name = "sheep_ewe"

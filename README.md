@@ -9,6 +9,12 @@ paddock be opened up and followed through the year.
 
 ![The Paddock simulator: a Lincoln farm on LiDAR ground, one paddock selected, its day open in the inspector](docs/images/paddock-main.png)
 
+<sub>The ground in that picture is Canterbury – Selwyn LiDAR 1 m DEM (2023),
+sourced from Toitū Te Whenua LINZ and licensed for reuse under CC BY 4.0;
+licensor Environment Canterbury, produced by Landpro. The weather is Open-Meteo
+(ERA5), CC BY 4.0, generated using Copernicus Climate Change Service
+information.</sub>
+
 ## What Paddock Does
 
 - Simulates a pastoral farm day by day over a full New Zealand farm year
@@ -31,7 +37,7 @@ Paddock was built to make those interactions visible and testable through time
 and space. It aims at transparent simulation, scenario comparison and
 explainable management decisions rather than black-box prediction — and at
 saying plainly which of its own numbers carry weight, which is what
-[docs/verify.md](docs/verify.md) is for.
+[docs/validation/verify.md](docs/validation/verify.md) is for.
 
 ## Key Capabilities
 
@@ -168,20 +174,19 @@ the timeline plays, and the inspector follows it.
 
 ## Architecture
 
-```
-Qt Application (app/)
-      |
-      +---- VTK visualisation (viz/)
-      |
-      +---- Scenario, reports, comparison, inspection (config/)
-      |
-      v
-   C++17 core (core/)
-      |
-      +---- Weather            +---- Grazing and the farmer
-      +---- Soil water         +---- Livestock energy
-      +---- Pasture growth     +---- Irrigation
-      +---- Terrain            +---- Budget ledger
+```mermaid
+flowchart TB
+    app["app/ — Qt 6 desktop application and CLI"]
+    viz["viz/ — VTK: 2D map, 3D terrain"]
+    config["config/ — scenarios, runs, reports, inspection"]
+    core["core/ — simulation kernel<br/>weather · soil water · pasture · irrigation<br/>grazing · livestock · budget ledger<br/><b>no external dependencies</b>"]
+    gis["gis/ — GDAL · PROJ: elevation, cadastre"]
+
+    app --> viz
+    app --> config
+    viz --> core
+    config --> core
+    gis --> core
 ```
 
 The simulation core is independent of the GUI and of the visualisation. Qt and
@@ -189,6 +194,10 @@ VTK consume simulation state; they do not own biological or management logic.
 `core/` has no external dependencies at all — a machine with only a compiler
 builds and runs the scientific test suite — and a CI script fails the build if
 anything points out of it.
+
+For the modules, the daily execution order, the irrigation and grazing decision
+flows, the domain types and the sequence diagrams, see
+[**System Architecture**](docs/architecture/system-architecture.md).
 
 ## Design Principles
 
@@ -231,12 +240,12 @@ Gillingham's slope and aspect trial — with tolerance-band tests in CI and
 comparison plots uploaded as artifacts.
 
 This should be treated as a simulation and research platform, not as a certified
-farm advisory model. [docs/verify.md](docs/verify.md) records, output by output,
+farm advisory model. [docs/validation/verify.md](docs/validation/verify.md) records, output by output,
 what may be quoted and what may not.
 
 ## Known Limitations
 
-Taken from [docs/verify.md](docs/verify.md), which is kept current with the code:
+Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept current with the code:
 
 - Sheep maintenance requirement is low by about 15% against CSIRO (2007), so
   **carrying capacity for sheep is overstated by up to 17%**
@@ -349,11 +358,19 @@ Dependency direction is one way: `gis → core`, `viz → core`, `config → cor
 
 ## Documentation
 
-- [docs/setup.md](docs/setup.md) — build and dependency setup, all three editors
-- [docs/verify.md](docs/verify.md) — model verification, evidence, and what may be quoted
-- [docs/adr/](docs/adr/) — one file per architectural decision
-- [docs/devlog/](docs/devlog/) — development notes, one per milestone
-- [docs/backlog.md](docs/backlog.md) — what is queued and why
+| Document | Purpose |
+|---|---|
+| [System architecture](docs/architecture/system-architecture.md) | Modules, daily execution order, decision flows, domain types, dependency rules |
+| [Verification tracker](docs/validation/verify.md) | Evidence, calibration status, and what each output may be quoted for |
+| [Soil water model](docs/model/soil-water-model.md) | The water balance, evapotranspiration and the stress coefficient |
+| [Pasture model](docs/model/pasture-model.md) | Growth, senescence, the mixed sward and its calibration status |
+| [Grazing model](docs/model/grazing-model.md) | Demand, intake, the farmer's rule, the cover floor |
+| [Irrigation model](docs/model/irrigation-model.md) | Trigger, target, limits, efficiency, and the recorded decision |
+| [Nitrogen model](docs/model/nitrogen-model.md) | What is modelled, and the pathways that are not |
+| [Scenario design](docs/scenarios/scenario-design.md) | What a bundle is, and what makes a comparison honest |
+| [Data and provenance](docs/data.md) | Sources, snapshots, hashes and coordinates |
+| [Setup](docs/setup.md) | Build and dependency instructions, all three editors |
+| [ADRs](docs/adr/) · [devlog](docs/devlog/) · [backlog](docs/backlog.md) | Decisions, milestone notes, and what is queued |
 
 ## Roadmap
 
@@ -381,7 +398,7 @@ management scenarios; inspects individual paddocks through time; and exports
 reports.
 
 Biological calibration and validation are ongoing, and
-[docs/verify.md](docs/verify.md) is the honest account of where they stand.
+[docs/validation/verify.md](docs/validation/verify.md) is the honest account of where they stand.
 
 ## Licence
 

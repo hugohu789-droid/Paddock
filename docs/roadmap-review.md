@@ -91,7 +91,7 @@ irrigated, water productivity 1.58 kg DM per m³ — and §32 makes them the dem
 story. **This project cannot produce those numbers honestly yet.**
 
 The sward and soil definitions in every shipped bundle are marked PLACEHOLDER
-in `docs/verify.md`. They are internally consistent and they are not calibrated
+in `docs/validation/verify.md`. They are internally consistent and they are not calibrated
 against New Zealand pasture measurements. A rain-fed versus irrigated
 comparison built on them is valid as a *difference* — same model, same weather,
 one input changed — and its absolute yields are not quotable. So:
@@ -191,7 +191,7 @@ asks for and what the current bundle format already supports.
 codebase:
 
 - **Do not wire wind into the model to make it look used.** It is carried and
-  read by nothing (`docs/verify.md` E12). It belongs in evaporative demand or
+  read by nothing (`docs/validation/verify.md` E12). It belongs in evaporative demand or
   cold stress, and the shipped series supplies a daily maximum at 10 m, which
   is the wrong statistic at the wrong height for either.
 - **Do not put a ceiling on liveweight without a source** (E13). The model will

@@ -153,7 +153,7 @@ TEST(LivestockCalibrationTest, SheepMaintenanceAgainstAdjabuiWithGrazingIncluded
   // area per animal, and leaves horizontal_km_per_day and vertical_km_per_day
   // at zero. The equation is implemented, tested in isolation, and fed by
   // nothing - the same shape of gap terrain had before it was wired up. See
-  // docs/verify.md, engineering caveat E10.
+  // docs/validation/verify.md, engineering caveat E10.
   EXPECT_DOUBLE_EQ(need.activity_net_mj, 0.0)
       << "if this ever becomes non-zero somebody has started supplying a distance, and the "
          "caveat about it should go";

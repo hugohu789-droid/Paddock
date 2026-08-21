@@ -4,7 +4,7 @@
 # it. That matters more than it sounds: the brief this library was built from
 # was accurate on almost everything, and wrong on one attribution that would
 # have put a contested number into the model as settled fact. See the
-# verification notes at the end of each entry, and docs/verify.md.
+# verification notes at the end of each entry, and docs/validation/verify.md.
 #
 # `retrieved` is the day the source was read. PDFs carry the SHA-256 of the file
 # that was read, on the same principle the scenario bundles use: a citation is
@@ -61,7 +61,7 @@ liveweight-change ME, and walking ME by contour.
 Verified, and it is the strongest validation this project has for cattle: the
 maintenance table is stated as calculated at 11.0 MJ ME/kg DM, and the equations
 already implemented in core reproduce it to within 2% across 300-600 kg. See
-docs/verify.md.
+docs/validation/verify.md.
 
 The page also carries a walking ME table by contour - flat 2.0, rolling 3.0,
 hilly/steep 6.0 MJ ME/km - which the brief did not mention and which is a New
@@ -159,7 +159,7 @@ So the K table is `direct` as a record of what OVERSEER uses, and must not be
 recorded as a value this review endorses. The review also observes that
 OVERSEER's equation "is cited as derived from Nicol and Brookes (2007), but uses
 the K values" of a different source - which is the same disagreement already
-recorded in docs/verify.md, now with an independent reviewer taking a side.
+recorded in docs/validation/verify.md, now with an independent reviewer taking a side.
 
 Recommendation 9 gives a route for the cold-stress term this model lacks: CSIRO
 (2007) equations, NIWA monthly climate, and Cottle and Pacheco (2016) for fleece
@@ -179,7 +179,7 @@ verified = true
 sha256 = "f83171454056ecdd9e8e801e3958b9cbc387109c195dbebf0b34ebee7ffa016a"
 notes = """
 The equation set core/AnimalEnergy.cpp implements. Read in full earlier; see
-docs/verify.md for the equation-by-equation record and for the two readings that
+docs/validation/verify.md for the equation-by-equation record and for the two readings that
 are this project's rather than the manual's.
 """
 
@@ -252,7 +252,7 @@ magazine article giving feed allowances a farmer can act on.
 It is here because of who wrote it: Ken Geenty is the Geenty of Geenty and
 Rattray (1987), the paper open item 13 cannot obtain. He gives 12 MJ ME/day for
 a 60 kg ewe at maintenance, against Nicol and Brookes' 9.7 and CSIRO's 9.0.
-That 2.3 MJ is the same gap docs/verify.md records for the 1987 paper - the
+That 2.3 MJ is the same gap docs/validation/verify.md records for the 1987 paper - the
 same author, thirty-eight years later, still about 2 MJ above.
 
 What it suggests, and it is a suggestion rather than a finding: the Geenty

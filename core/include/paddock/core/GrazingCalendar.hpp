@@ -22,7 +22,7 @@
 /// rotational intent becomes when there are too few paddocks for the mobs, so
 /// it is an outcome of the farm's subdivision rather than a way of managing
 /// one, and a farm that cannot hold its spell will produce it without being
-/// told to. See docs/verify.md.
+/// told to. See docs/validation/verify.md.
 namespace paddock::core {
 
 enum class GrazingSystem : std::uint8_t {

@@ -17,7 +17,7 @@ That makes three things impossible: a golden regression baseline that means
 anything on more than one platform, a scenario bundle that reproduces on a
 colleague's machine, and a validation result a reviewer can check.
 
-The gap was recorded as E1 in `docs/verify.md` at the end of M1 rather than
+The gap was recorded as E1 in `docs/validation/verify.md` at the end of M1 rather than
 papered over. This closes it.
 
 ## Decision

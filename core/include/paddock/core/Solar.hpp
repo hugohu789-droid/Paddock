@@ -154,7 +154,7 @@ enum class SkyCondition : std::uint8_t { Clear, PartlyCloudy, Overcast };
 /// This is the ratio Allen et al. (2006) build their transfer on. Applying it
 /// to a measured value assumes the sky is as clear on the slope as it was over
 /// the instrument, which is the assumption every method of this kind makes and
-/// the reason docs/verify.md carries it as a caveat.
+/// the reason docs/validation/verify.md carries it as a caveat.
 [[nodiscard]] double slope_radiation_ratio(double latitude_degrees, int day_of_year,
                                            double slope_degrees, double aspect_degrees) noexcept;
 

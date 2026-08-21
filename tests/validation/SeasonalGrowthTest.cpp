@@ -14,7 +14,7 @@
 //     while every Canterbury site on DairyNZ's sheet received 154 to 330 kg
 //     N/ha of fertiliser. Matching those sites in magnitude would mean the
 //     model was wrong.
-//   * The growth parameters are placeholders (docs/verify.md, E7). Calibrating
+//   * The growth parameters are placeholders (docs/validation/verify.md, E7). Calibrating
 //     the magnitude is what this gate is for; today it measures the gap and
 //     writes it down rather than pretending it is closed.
 //

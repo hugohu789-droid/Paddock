@@ -15,7 +15,7 @@ namespace paddock::config {
 /// ```toml
 /// [site]
 /// name = "canterbury_plains_example"
-/// licence = "climate normals from NIWA; see docs/verify.md"
+/// licence = "climate normals from NIWA; see docs/validation/verify.md"
 /// latitude_degrees = -43.5
 ///
 /// [variation]

@@ -48,7 +48,7 @@ struct FarmLocation {
 
   /// False when the coordinates are approximate rather than surveyed. A farm
   /// carrying an unverified location still loads and still runs; what it must
-  /// not do is let the number pass as measured. Listed in docs/verify.md until
+  /// not do is let the number pass as measured. Listed in docs/validation/verify.md until
   /// it is true.
   bool location_verified = false;
 

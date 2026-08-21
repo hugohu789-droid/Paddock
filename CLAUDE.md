@@ -52,7 +52,7 @@ livestock and pests coupled on real NZ geospatial data. C++17 core, Qt/VTK 2D+3D
    stored as CSVs in `data/calibration/` with source citations, and asserted
    by tolerance-band validation tests. Any placeholder value must be marked
    `# PLACEHOLDER — verify against <source>` in the data file and tracked in
-   `docs/verify.md`.
+   `docs/validation/verify.md`.
 6. **Config as data first, UI second.** Every simulator object is
    configurable via validated TOML with line-precise error messages. GUI
    configuration panels come later and only read/write the same files. Never
@@ -269,7 +269,7 @@ CI build.
 - Prefer adding a data file over adding a code path. If a change wants a new
   entity subclass, stop and re-express it as components + data.
 - Every model parameter cites its source in the data file or is explicitly
-  marked PLACEHOLDER and listed in `docs/verify.md`.
+  marked PLACEHOLDER and listed in `docs/validation/verify.md`.
 - Never commit secrets, API keys, or bulk downloaded datasets.
 - Every new source file must include the GPL-3.0 SPDX license header. Do not
   accept external code without verifying CLA compliance.
@@ -292,7 +292,7 @@ CI build.
   the door open — entity-ID-keyed RNG, double-buffered state, per-partition
   ledgers merged in fixed order — but do not implement threading.
 
-## Items to verify before hardcoding (tracked in docs/verify.md)
+## Items to verify before hardcoding (tracked in docs/validation/verify.md)
 
 - Pasture growth parameters (base/optimal temps, seasonal rates, annual DM
   yield) → DairyNZ, AgResearch

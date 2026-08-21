@@ -7,7 +7,7 @@
 # while this model grows only what an animal can eat.
 #
 # PLACEHOLDER - calibrate against measured DairyNZ seasonal growth curves at the
-# T3 validation gate (docs/verify.md, item 1 and caveat E7). Until then, no
+# T3 validation gate (docs/validation/verify.md, item 1 and caveat E7). Until then, no
 # growth figure produced with this file should be quoted.
 
 [sward]

@@ -197,7 +197,7 @@ TEST(DataFilesTest, StandardReferenceWeightIsStillUnresolvedEverywhere) {
     EXPECT_FALSE(definition.standard_reference_weight.is_evidence())
         << definition.name
         << " now claims an evidenced reference weight; if that is right, cite it in "
-           "sources.toml and docs/verify.md and update this test to match";
+           "sources.toml and docs/validation/verify.md and update this test to match";
   }
 }
 

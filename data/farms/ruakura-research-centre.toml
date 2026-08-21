@@ -19,7 +19,7 @@ region = "Waikato"
 # point table in tests/gis/ProjectionTest.cpp, which came from LINZ's Concord
 # conversion service. That makes the number traceable, but it is a locality
 # reference point and NOT a surveyed farm centroid - which is why
-# location_verified is false. See docs/verify.md, open item 8.
+# location_verified is false. See docs/validation/verify.md, open item 8.
 centre_easting = 1804011.1268
 centre_northing = 5815700.0870
 latitude_degrees = -37.7833

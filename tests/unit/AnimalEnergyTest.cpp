@@ -205,7 +205,7 @@ TEST(AnimalEnergyTest, GainCostsMoreAsAnAnimalApproachesItsMatureWeight) {
   const double mature_evg = energy_value_of_gain_mj_per_kg(animal, nearly_mature);
 
   EXPECT_GT(mature_evg, young_evg);
-  // Regression pins, and the bracket quoted in docs/verify.md: about 11 MJ/kg
+  // Regression pins, and the bracket quoted in docs/validation/verify.md: about 11 MJ/kg
   // early and about 26 near mature weight.
   EXPECT_NEAR(young_evg, 11.4, 0.6) << young_evg;
   EXPECT_NEAR(mature_evg, 26.5, 0.6) << mature_evg;
@@ -219,7 +219,7 @@ TEST(AnimalEnergyTest, TheChewingIterationConvergesWithinTheManualsFivePasses) {
   // and pregnancy (Eq. 26-32) are not implemented, so this model has no way to
   // represent a milking cow at all. The intake below is right for an animal at
   // maintenance plus a little gain and would be roughly half what a cow in milk
-  // eats. See docs/verify.md for what is still missing.
+  // eats. See docs/validation/verify.md for what is still missing.
   AnimalClassParameters cow;
   cow.class_id = "dry_cow";
   cow.species_factor = 1.4;  // CSIRO (2007) for dairy

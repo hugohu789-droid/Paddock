@@ -90,7 +90,7 @@ TEST(ScenarioReportTest, TheEvidenceCaveatsTravelWithTheNumbers) {
   EXPECT_TRUE(contains(report, "Not quotable"))
       << "the report does not say absolute liveweight gain cannot be quoted";
   EXPECT_TRUE(contains(report, "lactation is absent"));
-  EXPECT_TRUE(contains(report, "docs/verify.md"));
+  EXPECT_TRUE(contains(report, "docs/validation/verify.md"));
 
   // The ground the run was over. Until a [terrain] section existed every farm
   // was flat and nothing said so, which made the slope equations look like they

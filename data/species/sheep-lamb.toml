@@ -3,7 +3,7 @@
 # This class is the one the model can be checked against: Frater, Howarth and
 # McEwen give a worked lamb of 28 kg gaining 100 g/day at 100 days old on a
 # 10.5 MJ ME/kg DM diet, needing 9.72 MJ ME/day by Nicol and Brookes (2007).
-# tests/unit/AnimalEnergyTest.cpp reproduces it. See docs/verify.md.
+# tests/unit/AnimalEnergyTest.cpp reproduces it. See docs/validation/verify.md.
 
 [species]
 name = "sheep_lamb_weaned"

@@ -29,7 +29,7 @@ struct PastureSpeciesParameters {
   ///
   /// Published figures need care: values around 2 g/MJ for perennial ryegrass
   /// are commonly whole-plant, roots included, while this model grows only what
-  /// an animal can eat. See docs/verify.md.
+  /// an animal can eat. See docs/validation/verify.md.
   double radiation_use_efficiency_g_per_mj = 0.0;
 
   /// Cardinal temperatures for the growth response, degrees C.
@@ -166,7 +166,7 @@ class PastureSward {
   /// animals select, and Smith and Dawson (1976) report that set stocking is
   /// "highly selective" and overgrazes clover in particular. Modelling that
   /// needs a source for how strong the preference is, which this project does
-  /// not have yet; see docs/verify.md. Until it does, a system comparison here
+  /// not have yet; see docs/validation/verify.md. Until it does, a system comparison here
   /// cannot show the species-composition half of their finding.
   ///
   /// Nitrogen leaves with the dry matter, at each species' own content.
