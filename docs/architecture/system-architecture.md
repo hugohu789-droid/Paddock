@@ -33,7 +33,7 @@ diagram, because it would be believed.
 ## Purpose and scope
 
 Paddock is a spatially explicit, deterministic pastoral farm simulation
-platform. It carries nine domains:
+platform. It spans these concerns:
 
 weather · soil water · pasture · irrigation · grazing · livestock · management ·
 scenarios · visualisation and reporting
@@ -51,7 +51,7 @@ by something, not merely intended.
 |---|---|
 | **Separation of concerns** — simulation logic is not presentation logic | `core/` compiles and its tests run with no Qt, no VTK, no GDAL |
 | **Determinism** — the same inputs give the same output, bit for bit | Every random draw comes from an injected engine keyed by entity ID; a property test runs a year twice and compares |
-| **Testability** — the science can be tested without a window | 475 tests, of which the scientific classes link `core` and `config` only |
+| **Testability** — the science can be tested without a window | Several hundred tests, of which the scientific classes link `core` and `config` only |
 | **Extensibility** — a new species or policy is data, not a class | Species, pastures and farms are TOML; entities are components |
 | **Explainability** — a management decision can be accounted for | The model records its decisions; the interface reads them and never re-derives them |
 | **Conservation** — nothing appears or vanishes unaccounted for | A budget ledger tracks dry matter, water and nitrogen; a closed run must balance to 1e-9 |
@@ -103,13 +103,28 @@ flowchart TB
     viz --> core
     config --> core
     gis --> core
-    app -.->|"snapshots only"| core
+    app -.->|"value types + pure helpers"| core
     gis -.->|"feeds at load time"| config
 ```
 
-The arrows are what may include what. Nothing points out of `core`, and the
-dashed line from `app` is a read of simulation state rather than a call into
-simulation logic.
+The arrows are what may include what, and nothing points out of `core`.
+
+**What the dashed line means, precisely.** `app` does depend on `core` directly,
+and it is worth being exact about how, because "the GUI does not touch the core"
+would be a slogan rather than a description:
+
+- It uses core's **value types** — `Raster`, `Paddock`, `Date`, the daily weather
+  record — to hold and draw what a run produced
+- It calls a few **pure functions** that are presentation work rather than farm
+  simulation: `sun_position`, `clearness_index`, `sky_from_clearness`, which
+  place the sun and colour the sky for the day being shown
+- It builds a `PaddockMask`, which decides which cell belongs to which paddock —
+  a core algorithm, used here to average a paddock's figures for the inspector
+
+What it does **not** do is run the model. The daily loop, the water balance,
+growth, the grazing decision and the irrigation decision are all behind
+`config::run_managed_scenario`, and the window learns their results by being
+handed them. No biological or management rule is evaluated in `app/` or `viz/`.
 
 ## Level 2: inside the core
 
@@ -452,8 +467,12 @@ sequenceDiagram
     Note over Run: Every arm goes through the same engine.<br/>Scenarios are re-run rather than remembered,<br/>so no arm is an answer from an older model.
 ```
 
-Both arms running through one engine is what makes the comparison mean anything:
-a parameter that is wrong is wrong identically on both sides and cancels.
+Both arms running through one engine is what makes the comparison worth more
+than the absolute figures: the same parameters and the same structure are
+applied to each. It does not make a comparison exact. The responses those
+parameters feed are not linear, so a parameter that is wrong can bias the size
+of a difference — more under irrigation than under drought, say — even though
+the direction survives.
 
 ## Consequences of these choices
 
