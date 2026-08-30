@@ -1,0 +1,134 @@
+name: T4
+
+# T4 is the nightly gate. Nothing here blocks a pull request, and that is the
+# point: each of these costs more than a pull request should wait for, and each
+# answers a question that is worth asking of a day's work rather than of a
+# commit.
+#
+#   * the golden regression - a fixed farm, a fixed weather year and a fixed
+#     seed, compared point by point against a committed series
+#   * performance baselines, raster size against herd size, against the claim
+#     in CLAUDE.md that justifies staying single-threaded
+#   * line coverage, kept as an artifact
+#
+# **Benchmarks measure the runner as much as the code.** A GitHub runner is
+# shared hardware and its timings wander between runs, so these are a trend on
+# one kind of machine rather than a threshold anything fails against. When a
+# number needs to be trusted, it is measured on a known machine and written
+# down beside the code - benchmarks/StepBenchmark.cpp carries the first set.
+
+on:
+  schedule:
+    # 14:00 UTC is 02:00 in New Zealand: the work of the day before, judged
+    # before the next day starts.
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    name: Golden regression
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ninja
+        run: command -v ninja || scripts/ci-apt-install.sh ninja-build
+
+      - name: Configure and build
+        run: |
+          cmake --preset ci-core
+          cmake --build --preset ci-core
+
+      - name: The year still runs the way it ran
+        run: ctest --preset ci-core -L regression --output-on-failure
+
+      # The diff series is written whether or not the comparison passed, so a
+      # failure arrives with the whole year rather than with its first bad day.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: golden-diff
+          path: build/ci-core/regression/*.csv
+          if-no-files-found: ignore
+
+  benchmarks:
+    name: Performance baselines
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ninja and google-benchmark
+        run: |
+          command -v ninja || scripts/ci-apt-install.sh ninja-build
+          scripts/ci-apt-install.sh libbenchmark-dev
+
+      # RelWithDebInfo, never Debug. A Debug benchmark measures the debug
+      # runtime: at target scale it reports about 4.6 s against 1.9 s.
+      - name: Configure and build
+        run: |
+          cmake --preset release -DPADDOCK_BUILD_BENCHMARKS=ON
+          cmake --build --preset release --target paddock_benchmarks
+
+      - name: Measure
+        run: |
+          ./build/release/bin/paddock_benchmarks \
+            --benchmark_min_time=1x \
+            --benchmark_format=json \
+            --benchmark_out=benchmarks.json
+          ./build/release/bin/paddock_benchmarks --benchmark_min_time=1x
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmarks
+          path: benchmarks.json
+          if-no-files-found: error
+
+  coverage:
+    name: Line coverage
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ninja and gcovr
+        run: |
+          command -v ninja || scripts/ci-apt-install.sh ninja-build
+          scripts/ci-apt-install.sh gcovr
+
+      # Coverage needs its own instrumented build; --coverage is passed here
+      # rather than added to a preset so that no ordinary build carries it.
+      - name: Configure and build
+        run: |
+          cmake --preset default \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DPADDOCK_WARNINGS_AS_ERRORS=OFF \
+            -DCMAKE_CXX_FLAGS="--coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+          cmake --build --preset default
+
+      - name: Run everything
+        run: ctest --preset default --output-on-failure
+
+      # An artifact rather than an upload to a coverage service: that would need
+      # a token in the repository, and a number nobody has agreed to act on is
+      # not worth a secret.
+      - name: Report
+        run: |
+          mkdir -p coverage
+          gcovr --root . --filter 'core/' --filter 'config/' \
+            --html-details coverage/index.html \
+            --print-summary
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage
+          if-no-files-found: ignore

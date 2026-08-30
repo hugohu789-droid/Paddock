@@ -280,6 +280,7 @@ when both are level, and two numbers tell them apart.
 | T1 | pre-commit | `.githooks/pre-commit` — format, line endings, `ctest --preset fast` |
 | T2 | every PR | `.github/workflows/ci.yml` |
 | T3 | every PR | Validation against measured growth curves, plot kept as an artifact |
+| T4 | nightly | `.github/workflows/nightly.yml` — golden regression, benchmarks, coverage |
 | T5 | on a `v*` tag | `.github/workflows/release.yml` — packages, Doxygen, draft release |
 
 Run any gate by hand:
@@ -355,3 +356,40 @@ what would reverse it.
 
 Snapshots are never packaged. A scenario whose elevation is missing runs, draws
 flat ground, and names the script that fetches the surface.
+
+## The golden regression and the benchmarks
+
+The regression suite runs a fixed farm on a fixed weather year with a fixed seed
+and compares the result point by point against a series committed under
+`tests/regression/baselines/`. It has no opinion about whether the model is
+right — the conservation and validation suites have that — only about whether it
+still answers what it answered yesterday.
+
+```bash
+ctest --preset default -L regression
+```
+
+A failure writes the whole year to `build/<preset>/regression/golden-diff.csv`,
+so a change that moves every day is one file rather than one number.
+
+**When the change was intended**, rewrite the baseline deliberately and review
+the diff as part of the change — that diff is the record of what the model now
+says differently:
+
+```bash
+PADDOCK_WRITE_GOLDEN_BASELINE=1 ctest --preset default -L regression
+```
+
+The benchmarks are off by default and must be built RelWithDebInfo; a Debug
+build measures the debug runtime and reports roughly two and a half times the
+real cost.
+
+```bash
+cmake --preset release -DPADDOCK_BUILD_BENCHMARKS=ON
+cmake --build --preset release --target paddock_benchmarks
+./build/release/bin/paddock_benchmarks --benchmark_min_time=1x
+```
+
+`benchmarks/StepBenchmark.cpp` records the first measured set beside the code,
+because a benchmark on a shared CI runner measures the runner as much as the
+model.
