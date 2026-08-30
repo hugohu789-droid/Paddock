@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Gejile Hu. All rights reserved.
+#
+# Only the settings that differ from Doxygen's defaults are here. A generated
+# Doxyfile is two thousand lines of restated defaults that hide the dozen
+# choices actually made, and it goes stale against the next Doxygen release.
+
+PROJECT_NAME           = Paddock
+PROJECT_BRIEF          = "A spatially explicit pastoral farm simulator for New Zealand conditions"
+PROJECT_NUMBER         =
+
+# The headers carry the explanations. This project writes its reasoning in the
+# header beside the declaration - why a coefficient is 1.0 when nothing is
+# wrong, which budget line a process touches, what a published figure says -
+# so the API pages are worth generating precisely because they are not a
+# restatement of the signatures.
+INPUT                  = core/include config/include gis/include viz/include \
+                         ai/include README.md docs/architecture
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+
+# app/ is Qt widgets and viz/src is VTK plumbing: both are read by opening the
+# file, not by browsing generated pages. Excluding them keeps the output about
+# the model.
+EXCLUDE                = build dist
+EXCLUDE_PATTERNS       = */build/* */vcpkg_installed/*
+
+# Undocumented declarations are listed rather than hidden. A public function
+# with no comment is a gap worth seeing on the page.
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+
+# Markdown in comments, because that is how they are already written.
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+
+# The dependency direction is the project's central architectural rule, so the
+# include graphs are the one piece of generated art worth having. They need
+# Graphviz; without it Doxygen warns and carries on.
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+
+# Quiet output, but warnings are kept: a malformed \param that silently drops a
+# parameter from the page is exactly what this should say out loud.
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_NO_PARAMDOC       = YES
