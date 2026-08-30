@@ -135,13 +135,18 @@ TerrainScene::TerrainScene() {
   // is their meaning, so a light falling across them would change what they
   // say.
   sun_actor_->SetMapper(nullptr);
-  // Taken by value, not by reference: gcc's -Wdangling-reference fires on a
-  // reference bound into a braced list of temporaries, and a pair of two raw
-  // pointers costs nothing to copy.
-  for (const auto pair : {std::make_pair(sun_disc_.Get(), sun_actor_.Get()),
-                          std::make_pair(rain_lines_.Get(), rain_actor_.Get()),
-                          std::make_pair(spray_lines_.Get(), spray_actor_.Get()),
-                          std::make_pair(wind_marks_.Get(), wind_actor_.Get())}) {
+  // **The table is a named local, and that is the whole point of it.** Written
+  // as a braced list in the range-for, gcc reports the implicit reference to
+  // the list's backing array as possibly dangling and clang objects to the copy
+  // that silences gcc - the two warnings ask for opposite things. A named array
+  // is a thing with a lifetime neither compiler has to guess at.
+  const std::array<std::pair<vtkPolyData*, vtkActor*>, 4> symbols = {{
+      {sun_disc_.Get(), sun_actor_.Get()},
+      {rain_lines_.Get(), rain_actor_.Get()},
+      {spray_lines_.Get(), spray_actor_.Get()},
+      {wind_marks_.Get(), wind_actor_.Get()},
+  }};
+  for (const auto& pair : symbols) {
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(pair.first);
     // **No scalar colouring on any of these.** Their colour is their meaning
