@@ -280,6 +280,7 @@ when both are level, and two numbers tell them apart.
 | T1 | pre-commit | `.githooks/pre-commit` — format, line endings, `ctest --preset fast` |
 | T2 | every PR | `.github/workflows/ci.yml` |
 | T3 | every PR | Validation against measured growth curves, plot kept as an artifact |
+| T5 | on a `v*` tag | `.github/workflows/release.yml` — packages, Doxygen, draft release |
 
 Run any gate by hand:
 
@@ -327,3 +328,30 @@ Bulk datasets are never committed. `data/` holds definitions and calibration
 tables; downloaded LINZ, NIWA and Manaaki Whenua snapshots live in
 `data/snapshots/`, which is gitignored — fetch scripts and content hashes are
 committed instead, so a scenario bundle can be reproduced from them.
+
+## Making a release
+
+`scripts/package-release.sh` assembles the desktop application, the data it can
+run without fetching anything, and a `NOTICE.txt` generated from the provenance
+files beside that data. It reads Qt, VTK and the vcpkg tree out of the build
+directory's own `CMakeCache.txt`, so it needs no paths of its own:
+
+```bash
+cmake --preset desktop
+cmake --build --preset desktop
+scripts/package-release.sh --build build/desktop --out dist
+```
+
+The script runs a full simulated year from inside the staged tree before it
+archives anything, so a missing runtime library fails here rather than on the
+machine of whoever downloads it.
+
+Tagging `v*` runs the T5 workflow: Linux and macOS packages, the API
+documentation to GitHub Pages, and a **draft** GitHub Release. The Windows
+package is built with the command above and attached to that draft by hand —
+Qt and VTK are not available as binaries to a Windows runner, and
+`docs/adr/0013-release-packaging.md` records the measurement behind that and
+what would reverse it.
+
+Snapshots are never packaged. A scenario whose elevation is missing runs, draws
+flat ground, and names the script that fetches the surface.

@@ -1,0 +1,160 @@
+name: T5
+
+# T5 is the delivery gate: it runs on a version tag and turns a green commit
+# into something a person can download and open.
+#
+#   * a Linux desktop package, built on the same Ubuntu 26.04 image and the
+#     same Qt6 + VTK packages the T2 map-view job already proves
+#   * a macOS desktop package, Qt and VTK from Homebrew, through macdeployqt
+#   * the API documentation, published to GitHub Pages
+#   * a GitHub Release carrying whatever packages were built
+#
+# **Windows packages are built locally and attached by hand, and that is
+# written down rather than quietly skipped.** Qt and VTK are not available as
+# binaries to a Windows runner the way they are through apt and Homebrew;
+# building them from source costs hours per run, and the same measurement that
+# kept the geospatial suite off Windows pull requests applies here (see the
+# gis-windows job in ci.yml). What stands in for it is scripts/package-release.sh
+# run on a developer machine, which deploys Qt with windeployqt, copies VTK and
+# the GDAL fan-out beside it, and refuses to finish unless the staged tree runs.
+# docs/adr/0013-release-packaging.md records the trade and what would reverse it.
+#
+# Run this from the Actions tab against any branch to rehearse it. Only a tag
+# creates a release; a manual run stops after building and uploading artifacts.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    timeout-minutes: 45
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Package Linux (apt Qt6 + VTK)
+            os: ubuntu-26.04
+          - name: Package macOS (brew Qt6 + VTK)
+            os: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6, VTK and the geospatial stack (Linux)
+        if: runner.os == 'Linux'
+        env:
+          CI_APT_TIMEOUT: 900
+        run: |
+          command -v ninja || scripts/ci-apt-install.sh ninja-build
+          scripts/ci-apt-install.sh qt6-base-dev qt6-charts-dev libvtk9-qt-dev \
+            libgdal-dev libproj-dev xvfb libgl1-mesa-dri
+
+      - name: Install Qt6, VTK and the geospatial stack (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja qt vtk gdal proj
+
+      # The desktop preset is the one a release is made of: the map, the terrain
+      # view and the geospatial stack that lets a scenario be drawn on the
+      # ground it names.
+      - name: Configure and build
+        run: |
+          cmake --preset desktop
+          cmake --build --preset desktop
+
+      # The scientific suite, on the artefact that is about to be shipped rather
+      # than on a build made for the purpose. A release that has not run its own
+      # conservation assertions is a release nobody checked.
+      - name: Test what is being shipped
+        run: ctest --test-dir build/desktop --output-on-failure
+
+      - name: Package
+        run: scripts/package-release.sh --build build/desktop --out dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paddock-${{ runner.os }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  docs:
+    name: API documentation
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Doxygen and Graphviz
+        run: scripts/ci-apt-install.sh doxygen graphviz
+
+      # The tag is the version on the front page. A manual rehearsal has no tag,
+      # so it says so rather than inventing one.
+      - name: Generate
+        run: |
+          version="${GITHUB_REF_NAME}"
+          case "${GITHUB_REF}" in
+            refs/tags/*) ;;
+            *) version="${version} (unreleased)" ;;
+          esac
+          ( cat Doxyfile; echo "PROJECT_NUMBER = ${version}" ) | doxygen -
+          test -f html/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: html
+
+  publish-docs:
+    name: Publish to GitHub Pages
+    needs: docs
+    if: startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  release:
+    name: GitHub Release
+    needs: [package, docs]
+    if: startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: What is about to be released
+        run: ls -lh artifacts
+
+      # Draft, not published. The Windows package is attached by hand before
+      # this goes out, and a draft is what makes that step possible rather than
+      # a race against people already downloading an incomplete release.
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --draft \
+            --title "Paddock ${GITHUB_REF_NAME}" \
+            --notes "Desktop packages for Linux and macOS. The Windows package is attached before this draft is published; see docs/adr/0013-release-packaging.md.
+
+          Each archive carries the simulator, the scenarios it can run without fetching anything, and NOTICE.txt naming the licence of every piece of third-party data inside it. Ground elevation is not shipped: the scenarios that name it draw flat and say how to fetch it." \
+            artifacts/*

@@ -5,6 +5,12 @@ install/
 compile_commands.json
 .cache/
 
+# Release staging. scripts/package-release.sh assembles here; the archives it
+# makes are attached to a GitHub Release, never committed - they carry the whole
+# Qt, VTK and GDAL runtime and run to tens of megabytes.
+dist/
+html/
+
 # Machine-local build configuration (vcpkg root, compiler paths).
 # CMakePresets.json is committed; CMakeUserPresets.json never is.
 CMakeUserPresets.json
