@@ -42,6 +42,14 @@ struct RunSummary {
   /// eat. Cover includes the dead standing material above it, and on this farm
   /// the two part company badly by late summer.
   std::vector<double> green_kg_dm_per_ha;
+
+  /// Nitrate leached past the root zone each day, kg N/ha.
+  ///
+  /// **What a regional council asks a farm for.** Summed over a year it is the
+  /// number a nitrogen limit is written against - Environment Canterbury's
+  /// Selwyn Waihora zone puts that limit at 15 kg N/ha/yr, above which a farm
+  /// must reduce below its own baseline.
+  std::vector<double> nitrate_leached_kg_per_ha;
   std::vector<double> liveweight_kg;
   std::vector<int> paddock_of_first_mob;
 
@@ -137,6 +145,9 @@ struct RunSummary {
   [[nodiscard]] double liveweight_change_kg() const {
     return closing_liveweight_kg() - opening_liveweight_kg();
   }
+
+  /// The year's total nitrate leaching, kg N/ha.
+  [[nodiscard]] double nitrate_leached_total_kg_per_ha() const;
 
   [[nodiscard]] double mean_cover_kg_dm_per_ha() const;
   [[nodiscard]] double lowest_cover_kg_dm_per_ha() const;

@@ -137,6 +137,13 @@ class Farm {
   /// grazing.
   void set_mob_head(std::size_t mob, int head);
 
+  /// How this farm's stock return their nitrogen. Left at the defaults a farm
+  /// still cycles nitrogen; a scenario sets these to describe a different
+  /// class of stock or a different supplement.
+  void set_excreta(const ExcretaParameters& excreta);
+
+  [[nodiscard]] const ExcretaParameters& excreta() const noexcept { return excreta_; }
+
   /// Sets what a mob is carrying and rearing, so the energy model charges it.
   ///
   /// The companion to `set_mob_head`: a flock that drives how many animals
@@ -227,6 +234,7 @@ class Farm {
   PaddockMask mask_;
   std::vector<Paddock> paddocks_;
   std::vector<FarmMob> mobs_;
+  ExcretaParameters excreta_;
 
   /// Column-major-free: (col, row) pairs, flattened, one list per paddock.
   std::vector<std::vector<std::size_t>> cells_of_paddock_;

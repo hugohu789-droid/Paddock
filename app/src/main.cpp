@@ -26,8 +26,11 @@
 #include <paddock/core/Weather.hpp>
 
 #ifdef PADDOCK_WITH_CONFIG
+#include <paddock/config/NitrogenReport.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/core/Simulation.hpp>
+
+#include "AttachElevation.hpp"
 #endif
 
 namespace {
@@ -176,6 +179,74 @@ int run_disease(const std::vector<std::string>& arguments) {
 /// `paddock scenario run <bundle>` - loads a bundle, checks its inputs are the
 /// ones it was built on, runs it, and reports. A run whose budgets do not close
 /// is reported as a failure: the numbers would be meaningless.
+/// `paddock nitrogen <bundle> <regulation.toml> [<year> ...]`
+///
+/// **A compliance figure is a quotation, so the rule is an argument.** New
+/// Zealand has no national nitrogen loss limit - regional councils set them
+/// catchment by catchment - so a command that carried one built in would be
+/// inventing a regulation. The file names the zone, the authority and the plan,
+/// and the report quotes all three.
+///
+/// **Several years, because one says almost nothing.** Leaching moves with
+/// drainage and drainage is weather: a farm can leach three times as much in a
+/// wet year without having changed anything it does. Given more than one year
+/// this prints them side by side, with leaching per millimetre of drainage
+/// beside the total, which is the column that separates the two.
+int run_nitrogen(const std::vector<std::string>& arguments) {
+  paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(arguments.front());
+
+  // The same attachment `scenario run` makes: a bundle that names a LiDAR
+  // snapshot needs a reader for it, and refuses rather than running flat.
+  if (const std::string trouble = paddock::app::attach_elevation(bundle, arguments.front());
+      !trouble.empty()) {
+    std::cerr << "paddock: " << trouble << '\n';
+    return 1;
+  }
+  const paddock::config::NitrogenRegulation rule =
+      paddock::config::load_nitrogen_regulation(arguments[1]);
+
+  if (!bundle.management.has_value()) {
+    std::cerr << "paddock: '" << bundle.name
+              << "' has no [management] section, so it has no stock to graze it - and on a "
+                 "New Zealand farm it is the stock's excreta, not fertiliser, that leaches\n";
+    return 2;
+  }
+
+  paddock::core::DietQuality diet;
+  diet.metabolisable_energy_mj_per_kg_dm = 10.5;
+  diet.digestibility_percent = 75.0;
+
+  const auto year_of = [&bundle, &diet](int start) {
+    paddock::config::ScenarioBundle one = bundle;
+    one.range = paddock::core::DateRange{paddock::core::Date{start, 7, 1},
+                                         paddock::core::Date{start + 1, 6, 30}};
+    const std::string label = std::to_string(start) + "-" + (start % 100 + 1 < 10 ? "0" : "") +
+                              std::to_string((start + 1) % 100);
+    return paddock::config::nitrogen_year(
+        paddock::config::run_managed_scenario(one, *one.management, diet, label), label);
+  };
+
+  std::vector<paddock::config::NitrogenYear> years;
+  if (arguments.size() <= 2) {
+    const std::string label =
+        bundle.range.first.to_iso_string() + " to " + bundle.range.last.to_iso_string();
+    years.push_back(paddock::config::nitrogen_year(
+        paddock::config::run_managed_scenario(bundle, *bundle.management, diet, label), label));
+  } else {
+    for (std::size_t i = 2; i < arguments.size(); ++i) {
+      years.push_back(year_of(std::stoi(arguments[i])));
+    }
+  }
+
+  std::cout << bundle.name << " - nitrogen loss to water\n\n";
+  if (years.size() == 1) {
+    std::cout << paddock::config::nitrogen_compliance_report(years.front(), rule);
+  } else {
+    std::cout << paddock::config::nitrogen_years_report(years, rule);
+  }
+  return 0;
+}
+
 int run_scenario(const std::string& bundle_directory, const std::string& csv_path) {
   const paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(bundle_directory);
   paddock::core::Farmlet farmlet = bundle.make_farmlet();
@@ -263,6 +334,15 @@ int main(int argc, char** argv) {
         rest.emplace_back(args[i]);
       }
       return run_disease(rest);
+    }
+
+    if (args.size() >= 3 && args[0] == "nitrogen") {
+      std::vector<std::string> rest;
+      rest.reserve(args.size() - 1);
+      for (std::size_t i = 1; i < args.size(); ++i) {
+        rest.emplace_back(args[i]);
+      }
+      return run_nitrogen(rest);
     }
 
     if (args.size() >= 3 && args[0] == "scenario" && args[1] == "run") {

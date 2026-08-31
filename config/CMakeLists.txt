@@ -11,6 +11,7 @@ add_library(
   src/ConfigError.cpp
   src/DiseaseConfig.cpp
   src/DiseaseReport.cpp
+  src/NitrogenReport.cpp
   src/FarmConfig.cpp
   src/PaddockInspection.cpp
   src/PastureConfig.cpp

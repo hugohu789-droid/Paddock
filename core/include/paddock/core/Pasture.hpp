@@ -58,6 +58,80 @@ struct PastureSpeciesParameters {
   [[nodiscard]] std::string validation_error() const;
 };
 
+/// How a grazing animal's nitrogen comes back to the paddock.
+///
+/// Every figure here is a share or a loading rather than a rate, so a scenario
+/// that changes stocking changes the nitrogen without changing any of these.
+struct ExcretaParameters {
+  /// Nitrogen a urine patch lands at, kg N/ha. OVERSEER's technical description
+  /// for regional councils: "Urine and dung patches contain large N loads (up
+  /// to 1000 kg N/ha)". This is the ceiling of that range and so the least
+  /// concentrated reading of it would be lower - a lower loading spreads the
+  /// same nitrogen over more ground and leaches less.
+  double urine_patch_loading_kg_n_per_ha = 1000.0;
+
+  /// What the pasture on a patch can actually take up before the rest is
+  /// surplus, kg N/ha. **PLACEHOLDER**: patch uptake saturates well below the
+  /// loading, which is the whole reason patches leach, but no single measured
+  /// figure has been read. 300 is the order the literature discusses.
+  double urine_patch_uptake_kg_n_per_ha = 300.0;
+
+  /// Share of a day's drainage water that actually carries nitrate past the
+  /// root zone, as against water that bypasses the soil matrix. One means
+  /// perfect mixing. **PLACEHOLDER** - preferential flow through a stony soil
+  /// is real and would lower this.
+  double drainage_mixing_fraction = 1.0;
+
+  /// Nitrogen a kilogram of DUNG carries, per kilogram of dry matter the animal
+  /// ate. TMC (Animal model, Eq. 137 and its discussion): Barrow and Lambourne
+  /// (1962) put average sheep dung at 0.835 g N per 100 g DM eaten, and
+  /// Burgraaf (AgResearch) at 0.72. The higher figure is used, which sends more
+  /// nitrogen to the slow organic path and less to urine - the conservative
+  /// direction for a leaching estimate.
+  double dung_nitrogen_per_kg_intake = 0.00835;
+
+  /// Nitrogen in a kilogram of liveweight gain. Protein is roughly 18% of a
+  /// sheep's gain and nitrogen is 16% of protein. **PLACEHOLDER** - no single
+  /// measured figure has been read for New Zealand sheep.
+  double body_nitrogen_per_kg_gain = 0.029;
+
+  /// Nitrogen a head puts into wool each day. A 5 kg fleece at 16% nitrogen is
+  /// 0.8 kg N a year. **PLACEHOLDER**, and it shares the fleece weight's
+  /// unsourced 5 kg.
+  double wool_nitrogen_kg_per_head_per_day = 0.0022;
+
+  /// Nitrogen in a kilogram of bought feed.
+  ///
+  /// **Not a detail on this farm.** In its driest year it buys 126 tonnes of
+  /// supplement against 145 tonnes grazed, so feed brought through the gate is
+  /// half the nitrogen the stock eat - and all of it is excreted onto the
+  /// paddock like any other. A leaching model that counted only grazed nitrogen
+  /// would understate this farm by something near half. **VERIFY**: 2.5% is the
+  /// order for pasture silage and baleage; no source is recorded.
+  double supplement_nitrogen_fraction = 0.025;
+
+  [[nodiscard]] std::string invalid_reason() const;
+};
+
+/// A day's dung and urine from one mob, in kg N.
+struct Excreta {
+  double urine_nitrogen_kg = 0.0;
+  double dung_nitrogen_kg = 0.0;
+
+  [[nodiscard]] double total_kg() const noexcept { return urine_nitrogen_kg + dung_nitrogen_kg; }
+};
+
+/// Splits what a mob ate into what it kept and what it gave back.
+///
+/// **The dung is computed and the urine is the remainder**, which is TMC
+/// Eq. 137 read the way it is written: dung nitrogen is a fixed concentration
+/// per kilogram of dry matter eaten, so whatever is excreted beyond that is
+/// urine. On a 3.5% nitrogen diet that puts about 76% of excreta nitrogen in
+/// urine, which is where nearly all the leaching comes from.
+[[nodiscard]] Excreta excreta_from_intake(double nitrogen_eaten_kg, double intake_kg_dm,
+                                          double liveweight_gain_kg, double head,
+                                          const ExcretaParameters& excreta) noexcept;
+
 /// A two-species sward and the soil nitrogen it draws on.
 struct SwardParameters {
   PastureSpeciesParameters grass;
@@ -172,9 +246,49 @@ class PastureSward {
   /// Nitrogen leaves with the dry matter, at each species' own content.
   Defoliation remove_green_dry_matter(double requested_kg_dm);
 
+  /// Returns a day's dung and urine to this sward, in kg N over its area.
+  ///
+  /// **Closing the loop the animal used to break.** Nitrogen left with the
+  /// grazed dry matter and never came back, so a grazed farm ran its soil down
+  /// to nothing and the nitrogen budget closed only because the offtake was
+  /// booked as leaving the system. A grazing animal keeps a tenth of what it
+  /// eats and returns the rest within days, which is why excreta - not
+  /// fertiliser - is the primary source of nitrate leaching in New Zealand
+  /// pastoral farming.
+  ///
+  /// **Urine and dung go to different places because they behave differently.**
+  /// Urine is urea: it hydrolyses within days and nitrifies, so it arrives in
+  /// the mineral pool immediately and is available to leach. Dung is organic and
+  /// mineralises slowly, so it joins the dead pool and comes back through the
+  /// decomposition already modelled.
+  ///
+  /// **And urine does not land evenly.** A ewe urinates on a patch, not on a
+  /// paddock: OVERSEER's technical description puts patch loadings at up to
+  /// 1000 kg N/ha, far past what a plant can take up, so most of a patch's
+  /// nitrogen is surplus from the moment it lands. That surplus is what leaches,
+  /// and spreading urine evenly over a hectare - which is what a model without
+  /// patches does - would have the pasture absorb nearly all of it and leach
+  /// almost nothing.
+  void return_excreta(double urine_nitrogen_kg, double dung_nitrogen_kg,
+                      const ExcretaParameters& excreta, BudgetLedger* ledger = nullptr);
+
+  /// Leaches nitrate out of the root zone with the day's drainage, and returns
+  /// what left in kg N.
+  ///
+  /// **A mixing model, and the simplest one that is not a guess.** Water leaving
+  /// the root zone carries the nitrate dissolved in it, so the share of the
+  /// pool that goes is the share of the water that goes. OVERSEER defines the
+  /// root zone at 60 cm and counts nitrogen past it as lost, accounting for
+  /// nothing that happens between there and a river - and neither does this.
+  double leach_nitrate(double drainage_mm, double soil_water_mm, BudgetLedger* ledger = nullptr);
+
   [[nodiscard]] double soil_mineral_nitrogen_kg() const noexcept {
     return soil_mineral_nitrogen_kg_;
   }
+
+  /// Nitrate sitting under urine patches: surplus to what the plants there can
+  /// use, and the pool that leaching draws on.
+  [[nodiscard]] double patch_nitrate_kg() const noexcept { return patch_nitrate_kg_; }
 
   /// Nitrogen held in plant material, green and dead.
   [[nodiscard]] double plant_nitrogen_kg() const noexcept;
@@ -182,7 +296,7 @@ class PastureSward {
   /// Every kilogram of nitrogen the model is holding: the closing stock the
   /// conservation tests compare against the ledger.
   [[nodiscard]] double total_nitrogen_kg() const noexcept {
-    return soil_mineral_nitrogen_kg_ + plant_nitrogen_kg();
+    return soil_mineral_nitrogen_kg_ + patch_nitrate_kg_ + plant_nitrogen_kg();
   }
 
   [[nodiscard]] double leaf_area_index() const noexcept;
@@ -198,6 +312,10 @@ class PastureSward {
   /// litter arrive with different nitrogen contents and mix once they land.
   double dead_nitrogen_kg_ = 0.0;
   double soil_mineral_nitrogen_kg_ = 0.0;
+  /// Nitrate under urine patches, held apart from the mineral pool because the
+  /// plants on a patch cannot use it and the plants off the patch cannot reach
+  /// it. It waits for drainage.
+  double patch_nitrate_kg_ = 0.0;
 };
 
 }  // namespace paddock::core

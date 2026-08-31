@@ -209,17 +209,27 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
   // Pinned from the run, at the same 1e-6 relative tolerance the series uses and
   // for the same reason: three platforms, one committed set of numbers.
   //
-  // **Repinned when the grid stopped overriding the soil file.** The scenario's
+  // **Repinned twice.** First when the grid stopped overriding the soil file,
+  // and again when the nitrogen cycle was closed at the animal: excreta returns
+  // to the paddock now instead of leaving with the grazed dry matter, so the
+  // sward has nitrogen it did not have and grows more on it. Cover rose another
+  // 52 kg DM/ha on the mean.
+  //
+  // The failure message carries "evaluates to" for every one of these, which is
+  // where the new figures come from - no separate mechanism is needed to read
+  // them.
+  //
+  // **When the grid stopped overriding the soil file.** The scenario's
   // soil.toml computes 120 mm of available water and its [grid] section varied
   // that across the farm from 60 to 140 - averaging 100, replacing the profile
   // rather than varying around it, so the soil file was read by nothing. The
   // gradient is now centred on the soil at 100 to 140, and this farm holds a
   // fifth more water than the numbers below were pinned against. Cover rose by
   // 78 kg DM/ha on the mean and the mob was moved once more.
-  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3087.5196280088153, 3.1e-3);
-  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1809.6299950658319, 1.9e-3);
-  EXPECT_NEAR(run.closing_cover_kg_dm, 1809.6299950658319, 1.9e-3);
-  EXPECT_NEAR(run.eaten_kg_dm, 125226.39354542417, 1.3e-1);
+  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3139.1836894794083, 3.2e-3);
+  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1833.2600658840947, 1.9e-3);
+  EXPECT_NEAR(run.closing_cover_kg_dm, 1833.2600658840947, 1.9e-3);
+  EXPECT_NEAR(run.eaten_kg_dm, 125219.06421844629, 1.3e-1);
   EXPECT_NEAR(run.closing_liveweight_kg(), 55.000014928809946, 5.5e-5);
 
   // Counts, so they are equalities. A management decision that moves a mob one

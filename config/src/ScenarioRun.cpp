@@ -41,6 +41,16 @@ int RunSummary::days_water_stressed() const {
                                         [](double coefficient) { return coefficient < 1.0; }));
 }
 
+double RunSummary::nitrate_leached_total_kg_per_ha() const {
+  // Kahan, because a year of small daily numbers summed naively drifts, and
+  // this one gets compared against a regulatory limit.
+  core::KahanSum total;
+  for (const double day : nitrate_leached_kg_per_ha) {
+    total.add(day);
+  }
+  return total.value();
+}
+
 double RunSummary::mean_cover_kg_dm_per_ha() const {
   if (cover_kg_dm_per_ha.empty()) {
     return 0.0;
@@ -385,6 +395,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.green_kg_dm_per_ha.push_back(farm.grid().mean_green_kg_dm());
+    summary.nitrate_leached_kg_per_ha.push_back(farm.grid().mean_nitrate_leached_kg_per_ha());
     // **Only where there is stock to record it from.** A farm can be run
     // carrying none - a pasture-only scenario is a legitimate thing to ask the
     // model for - and these two series were read off the first mob whether or
@@ -464,6 +475,7 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.green_kg_dm_per_ha.push_back(farm.grid().mean_green_kg_dm());
+    summary.nitrate_leached_kg_per_ha.push_back(farm.grid().mean_nitrate_leached_kg_per_ha());
     // A farm with no stock on it, as above: nothing to read a liveweight from.
     if (!farm.mobs().empty()) {
       summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);

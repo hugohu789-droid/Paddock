@@ -37,6 +37,10 @@ struct DailyRecord {
   double cover_kg_dm = 0.0;
   double legume_fraction = 0.0;
   double soil_mineral_nitrogen_kg = 0.0;
+
+  /// Nitrate that left the root zone today, kg N/ha. **The number a regional
+  /// council asks for**, summed over a year and compared against a limit.
+  double nitrate_leached_kg = 0.0;
 };
 
 /// A hectare of pasture on one soil: the smallest thing that is a farm.
@@ -68,6 +72,12 @@ class Farmlet {
   /// management rule out of the biology.
   DailyRecord step(const DailyWeather& weather, double radiation_ratio = 1.0,
                    BudgetLedger* ledger = nullptr, double irrigation_mm = 0.0);
+
+  /// Returns a day's dung and urine to this cell, kg N per hectare.
+  void return_excreta(double urine_kg_n_per_ha, double dung_kg_n_per_ha,
+                      const ExcretaParameters& excreta) {
+    sward_.return_excreta(urine_kg_n_per_ha, dung_kg_n_per_ha, excreta);
+  }
 
   [[nodiscard]] const SoilWaterBucket& soil() const noexcept { return soil_; }
 
