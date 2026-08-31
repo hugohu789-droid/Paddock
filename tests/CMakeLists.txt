@@ -14,6 +14,7 @@ add_executable(
   unit/FarmDecisionTest.cpp
   unit/FarmerTest.cpp
   unit/FarmletGridTest.cpp
+  unit/FlockTest.cpp
   unit/GeometryTest.cpp
   unit/GrazingCalendarTest.cpp
   unit/GrazingTest.cpp unit/IrrigationTest.cpp
