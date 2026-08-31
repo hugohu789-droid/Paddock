@@ -1,0 +1,135 @@
+# Facial eczema: sporidesmin poisoning from Pseudopithomyces chartarum.
+#
+# **What this file is honest about.** The chain runs weather -> sporulation ->
+# spore count -> toxin load -> liver damage -> production. Both ends are
+# published and cited below. The middle - how a cumulative toxin load becomes a
+# GGT reading - is fitted to field thresholds and is marked as fitted, because
+# working the sourced numbers through rules out doing it any other way:
+#
+#   At 100,000 spores/g, the level field guidance calls dangerous, a 60 kg ewe
+#   eating 1.5 kg DM/day ingests 0.0035 mg sporidesmin/kg liveweight/day. The
+#   single experimental dose that produces severe disease is 1.0 mg/kg, which
+#   at that rate would take 283 days to accumulate - against the 10 to 18 days
+#   field guidance gives for clinical signs. The gap is sixteen-fold.
+#
+# It is explainable (grass weight may be fresh not dry, stock grazing low eat
+# the litter at the sward base where spores concentrate, counts run well above
+# 100,000) but every explanation is unsourced, so none is applied. See
+# docs/validation/verify.md, open item 4.
+
+[disease]
+name = "facial_eczema"
+display_name = "Facial eczema"
+description = "Sporidesmin from Pseudopithomyces chartarum spores on dead pasture litter; liver and bile duct damage, photosensitisation, lost production."
+affects = ["sheep", "cattle", "deer"]
+
+# ---------------------------------------------------------------- sporulation
+
+[sporulation]
+# DairyNZ Technical Series, February 2012: "conditions are favourable for spore
+# production when overnight minimum grass temperatures stay at or above 12C over
+# four consecutive nights, and humidity is high e.g., with drizzly rain
+# (4-6 mm/48 h), or when soil is kept moist by irrigation".
+grass_minimum_temperature_c = { value = 12.0, status = "direct", source = "dairynz_technical_series_2012" }
+consecutive_nights = { value = 4, status = "direct", source = "dairynz_technical_series_2012" }
+rainfall_mm_per_48h = { value = 4.0, status = "direct", source = "dairynz_technical_series_2012" }
+
+# The same source: "January to May are the high risk months". Kept as data
+# rather than as a hardcoded season so a model of a warmer decade does not have
+# to argue with a constant.
+high_risk_months = { value = [1, 2, 3, 4, 5], status = "direct", source = "dairynz_technical_series_2012" }
+
+# "In natural outbreaks spore counts usually show one or two small increases
+# over several weeks, followed by a major rapid rise when the right weather
+# conditions occur." The shape is a spike, not a ramp, and these two rates are
+# what produce it. **PLACEHOLDER** - the shape is described in the source, the
+# rates are not, and no measured sporulation curve has been located.
+rise_per_favourable_day = { value = 1.9, status = "placeholder", source = "none" }
+decay_per_unfavourable_day = { value = 0.75, status = "placeholder", source = "none" }
+background_spores_per_g = { value = 2000.0, status = "placeholder", source = "none" }
+
+[counting]
+# DairyNZ, Facial Eczema - Management for New Zealand dairy herds. A model that
+# reports one clean count would be claiming a precision the test does not have.
+variability_below_50k = { value = 10000.0, status = "direct", source = "dairynz_fe_management" }
+variability_above_50k = { value = 45000.0, status = "direct", source = "dairynz_fe_management" }
+between_paddock_spread = { value = 500000.0, status = "direct", source = "dairynz_fe_management" }
+
+[thresholds]
+# The same guide's management programme, in spores per gram of pasture.
+monitor_own_farm = { value = 20000.0, status = "direct", source = "dairynz_fe_management" }
+full_zinc_dose = { value = 30000.0, status = "direct", source = "dairynz_fe_management" }
+stand_down = { value = 10000.0, status = "direct", source = "dairynz_fe_management" }
+stand_down_weeks = { value = 3, status = "direct", source = "dairynz_fe_management" }
+# Field guidance rather than the DairyNZ programme: 100,000 is called dangerous,
+# 50,000 dangerous over long grazing, 20,000 damaging over an extended period.
+dangerous = { value = 100000.0, status = "direct", source = "field_guidance" }
+
+# ---------------------------------------------------------------- toxin
+
+[toxin]
+# Fitzgerald, Collin and Towers (1998), Letters in Applied Microbiology
+# 26(1):17-21, measured both quantities in one New Zealand pasture trial:
+# 113 ng/g grass at 80,000 spores/g untreated, 26 ng/g at 50,000 spores/g in
+# plots seeded with atoxigenic strains. That is 1.41 and 0.52 pg per spore -
+# **the same count carrying 2.7 times the toxin depending which strains are
+# present**, so this is a central value with a documented reason to be wrong.
+picograms_per_spore = { value = 1.41, status = "direct", source = "fitzgerald_1998" }
+picograms_per_spore_low = { value = 0.52, status = "direct", source = "fitzgerald_1998" }
+
+# Single oral doses in the experimental literature, mg sporidesmin/kg
+# liveweight. 1.0 "produced severe disease with uniformity". **Recorded, and
+# deliberately not used as a cumulative threshold** - see the arithmetic at the
+# top of this file.
+acute_severe_mg_per_kg = { value = 1.0, status = "reference_only", source = "experimental_literature" }
+
+# ---------------------------------------------------------------- response
+
+[liver]
+# **FITTED, not derived.** The exposure at which a mob reaches the reactor GGT,
+# expressed as spore-days: spores/g multiplied by days of grazing on them. Set
+# so that the field thresholds reproduce: about a fortnight at the 100,000
+# spores/g that guidance calls dangerous. It is an empirical index and must be
+# reported as one - the toxin mass balance above does not support it.
+reactor_spore_days = { value = 1500000.0, status = "fitted", source = "field_guidance" }
+
+# Morris, Smith and Hickey (2002), New Zealand Veterinary Journal 50(1):14-18.
+# Serum GGT above which a lamb is a reactor in the national ram-breeding
+# tolerance test, measured 21 days after a sporidesmin challenge.
+reactor_ggt_iu_per_l = { value = 55.0, status = "direct", source = "morris_2002" }
+
+# The same paper's regression of liver injury score on GGT in dosed Romney
+# lambs: LIS = -2.96 (SE 0.38) + 0.89 (SE 0.07) x ln(GGT), R2 = 0.54, p<0.001.
+# It did not differ between FE-resistant and control sire lines, so it is a
+# physiological relationship rather than a property of one flock.
+liver_injury_intercept = { value = -2.96, status = "direct", source = "morris_2002" }
+liver_injury_ln_ggt_slope = { value = 0.89, status = "direct", source = "morris_2002" }
+
+# DairyNZ Technical Series, February 2012: "levels of 250 IU/L indicate
+# moderate damage", and "only about 10% of affected animals show clinical
+# signs, for every clinical case there will be 10 cows with sub-clinical FE".
+moderate_damage_ggt_iu_per_l = { value = 250.0, status = "direct", source = "dairynz_technical_series_2012" }
+clinical_fraction_of_affected = { value = 0.10, status = "direct", source = "dairynz_technical_series_2012" }
+
+[production]
+# Cuttance, Mason and Laven (2021), New Zealand Veterinary Journal
+# 69(4):201-210: "an increase of 100 IU/L in GGT activity was associated with a
+# decrease of 0.011 (95% CI = 0.010-0.012) kg MS/cow/day".
+#
+# **Dairy only.** No equivalent quantified response was found for sheep - the
+# literature describes reduced daily gain, wool loss and lowered reproduction
+# without numbers - and every scenario this project ships runs ewes. The sheep
+# response must not be borrowed from this one, so there is no entry for it and
+# a sheep run reports liver damage without claiming a production effect.
+milksolids_kg_per_cow_per_day_per_100_ggt = { value = 0.011, status = "direct", source = "cuttance_2021" }
+milksolids_ci_low = { value = 0.010, status = "direct", source = "cuttance_2021" }
+milksolids_ci_high = { value = 0.012, status = "direct", source = "cuttance_2021" }
+
+[sources]
+dairynz_technical_series_2012 = "DairyNZ Technical Series, February 2012, Managing facial eczema."
+dairynz_fe_management = "DairyNZ, Facial Eczema - Management for New Zealand dairy herds."
+fitzgerald_1998 = "Fitzgerald JM, Collin RG, Towers NR (1998). Biological control of sporidesmin-producing strains of Pithomyces chartarum by biocompetitive exclusion. Letters in Applied Microbiology 26(1):17-21."
+morris_2002 = "Morris CA, Smith BL, Hickey SM (2002). Relationship between sporidesmin-induced liver injury and serum activity of gamma-glutamyltransferase in Romney lambs. New Zealand Veterinary Journal 50(1):14-18."
+cuttance_2021 = "Cuttance EL, Mason WA, Laven RA (2021). The association of milk-solid production during the current lactation with liver damage due to presumptive ingestion of spores from Pithomyces chartarum by dairy cattle. New Zealand Veterinary Journal 69(4):201-210."
+experimental_literature = "Single-dose sporidesmin studies in sheep, 0.5 to 3.0 mg/kg liveweight; recorded for reference and not used as a cumulative threshold."
+field_guidance = "New Zealand veterinary and extension guidance: 100,000 spores/g dangerous, 50,000 dangerous over long grazing, 20,000 damaging over an extended period; clinical signs 10-18 days after intake."

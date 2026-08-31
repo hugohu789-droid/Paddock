@@ -16,6 +16,7 @@ add_executable(
   unit/GrazingCalendarTest.cpp
   unit/GrazingTest.cpp unit/IrrigationTest.cpp
   unit/LiveweightResponseTest.cpp
+  unit/MycotoxinTest.cpp
   unit/PaddockMaskTest.cpp
   unit/PastureTest.cpp
   unit/RasterTest.cpp
