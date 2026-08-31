@@ -1,0 +1,50 @@
+# An example perennial ryegrass and white clover sward.
+#
+# Every growth parameter here is PLACEHOLDER. The values are the right order of
+# magnitude and produce a plausible seasonal shape, but the published ranges are
+# wide and often measured differently from what this model needs - radiation use
+# efficiencies near 2 g DM/MJ for perennial ryegrass usually include roots,
+# while this model grows only what an animal can eat.
+#
+# PLACEHOLDER - calibrate against measured DairyNZ seasonal growth curves at the
+# T3 validation gate (docs/validation/verify.md, item 1 and caveat E7). Until then, no
+# growth figure produced with this file should be quoted.
+
+[sward]
+# Photosynthetically active radiation as a share of global solar radiation.
+par_fraction = 0.5  # PLACEHOLDER - conventional value, no source recorded yet
+
+# Share of the dead pool that decomposes each day. Its carbon leaves the tracked
+# pools as soil organic matter; its nitrogen mineralises back into the soil.
+decomposition_rate_per_day = 0.02  # PLACEHOLDER
+
+[grass]
+species_id = "ryegrass_perennial"
+specific_leaf_area_m2_per_kg = 20.0        # PLACEHOLDER
+extinction_coefficient = 0.5               # PLACEHOLDER - published range 0.3 to 1.3
+radiation_use_efficiency_g_per_mj = 1.5    # PLACEHOLDER - above-ground only
+base_temperature_c = 4.4                   # cool limit for temperate grasses
+optimum_temperature_c = 20.0               # PLACEHOLDER
+maximum_temperature_c = 35.0               # PLACEHOLDER
+senescence_rate_per_day = 0.02             # PLACEHOLDER
+# Crown and stubble that do not senesce and that the plant regrows from.
+residual_kg_dm_per_ha = 400.0              # PLACEHOLDER
+nitrogen_content_fraction = 0.035          # PLACEHOLDER
+# A grass fixes nothing; the key may be omitted entirely.
+nitrogen_fixation_kg_per_t_dm = 0.0
+
+[legume]
+species_id = "clover_white"
+specific_leaf_area_m2_per_kg = 25.0        # PLACEHOLDER
+extinction_coefficient = 0.6               # PLACEHOLDER
+radiation_use_efficiency_g_per_mj = 1.4    # PLACEHOLDER - above-ground only
+base_temperature_c = 5.0                   # PLACEHOLDER
+optimum_temperature_c = 22.0               # PLACEHOLDER
+maximum_temperature_c = 35.0               # PLACEHOLDER
+senescence_rate_per_day = 0.025            # PLACEHOLDER
+residual_kg_dm_per_ha = 100.0              # PLACEHOLDER
+nitrogen_content_fraction = 0.045          # PLACEHOLDER
+# Published New Zealand range is 20 to 28 kg N fixed per tonne of clover dry
+# matter; 25 is mid-range. Note this is below the nitrogen a tonne of clover
+# contains, so clover draws on soil nitrogen as well as on the air.
+nitrogen_fixation_kg_per_t_dm = 25.0
