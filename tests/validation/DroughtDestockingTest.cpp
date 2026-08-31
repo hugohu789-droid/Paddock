@@ -122,30 +122,24 @@ int destockings(const RunSummary& run) {
                     }));
 }
 
-// **The drought is in the pasture, and it does not reach the stock.**
+// **The drought now reaches the cover the farmer holds the farm to, and stops
+// one step short of the stock.**
 //
-// M4's acceptance asks for a drought year that triggers destocking. This model
-// produces the first half and not the second: the dry year is plainly drier -
-// 230 water-stressed days against the wet year's 116, and lower at its lowest -
-// but cover never falls to the 1,600 the farmer holds it to, so no mob goes
-// short and nothing has to be sold.
+// This test has moved twice, and where it has got to is the point of it. It
+// began asserting that a dry year forces a sale, which the model could not do.
+// It then asserted the drought showed in the grass and went no further, because
+// the farm carried about five times the feed it needed. Two of those slack
+// halves have since been taken up - a ewe is charged for her pregnancy and her
+// milk, and her lambs graze - and the driest year in ten now takes cover to
+// 1,597 kg DM/ha against the 1,600 the farmer holds it to.
 //
-// **The decision rules were the first thing suspected and are not at fault.**
-// The farm carries about five times the feed it needs, in two sourced halves.
-// The grass: water use efficiency measures 20.2 kg DM/ha/mm here, which is what
-// Martin et al. (2006) report for *irrigated* ryegrass/white clover, against
-// 12.3 for Canterbury dryland - and it does not budge between a 527 mm year and
-// a 1,036 mm one, which is the tell, because a real one would. The stock: a ewe
-// eats 192 kg DM a year against the New Zealand stock unit's 550, because
-// `AnimalEnergy` charges maintenance and gain and has no lactation term yet.
-// Utilisation lands near 8% where a sheep farm runs 65 to 80%.
-//
-// So this asserts what is true: the drought shows, and the farmer does not sell
-// stock the feed supply does not require them to sell. A model that destocked
-// here anyway would be manufacturing a decision. See E20 in
-// docs/validation/verify.md - the acceptance waits on lactation and on a
-// pasture calibration.
-TEST(DroughtDestockingTest, TheDroughtShowsInThePastureAndDoesNotYetReachTheStock) {
+// **No mob goes short even so**, and that is not a contradiction: cover here is
+// a farm mean, and a mean below the target still leaves feed where the mobs
+// actually are. What remains is the grass. Water use efficiency is near 20 kg
+// DM/ha/mm, which Martin et al. (2006) give for *irrigated* ryegrass and clover
+// against 12.3 for Canterbury dryland, so the farm still grows about 1.6 times
+// what its rainfall should buy. See E20.
+TEST(DroughtDestockingTest, TheDroughtReachesTheFarmersFloorAndStopsShortOfTheStock) {
   const ScenarioBundle dry = year_of(2015);  // 527 mm, the driest of the ten
   ASSERT_TRUE(dry.management.has_value());
 
@@ -162,13 +156,18 @@ TEST(DroughtDestockingTest, TheDroughtShowsInThePastureAndDoesNotYetReachTheStoc
   EXPECT_LT(drought.lowest_cover_kg_dm_per_ha(), wet.lowest_cover_kg_dm_per_ha())
       << "and should take the farm lower";
 
-  // And it does not reach the stock, because the cover never gets near the
-  // floor the farmer holds it to.
+  // **It now gets under the farmer's floor.** The wet year does not.
+  EXPECT_LT(drought.lowest_cover_kg_dm_per_ha(), dry.management->minimum_cover_kg_dm_per_ha)
+      << "the driest year in ten should take a Canterbury farm below its target cover";
+  EXPECT_GT(wet.lowest_cover_kg_dm_per_ha(), dry.management->minimum_cover_kg_dm_per_ha)
+      << "and the wettest should not, or this is a farm rather than a drought";
+
+  // And still no mob is short, so nothing is sold. A model that destocked on a
+  // mean while every mob had feed in front of it would be selling on a summary
+  // statistic rather than on hunger.
   EXPECT_EQ(drought.days_short, 0);
-  EXPECT_GT(drought.lowest_cover_kg_dm_per_ha(), dry.management->minimum_cover_kg_dm_per_ha)
-      << "so there is nothing for a destocking rule to answer";
   EXPECT_EQ(destockings(drought), 0)
-      << "and a farmer who sold here would be selling for no reason the model can name";
+      << "a farmer who sold here would be selling for no reason the model can name";
 }
 
 // **The year reads like a farm year.** Four events, in order, at prices from

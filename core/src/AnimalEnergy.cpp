@@ -173,10 +173,33 @@ double age_factor(double age_days) noexcept {
   return std::max(kAgeFactorFloor, std::exp(-kAgeDecayPerDay * age_days));
 }
 
+double milk_factor(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
+  if (!state.on_the_mother || animal.suckling_weeks <= 0.0) {
+    return 1.0;
+  }
+  // TMC Eq. 16: Mage is 0.26 spread over the weeks the young can suckle, which
+  // is 0.010 for sheep at 26 weeks.
+  const double per_week = 0.26 / animal.suckling_weeks;
+
+  // TMC Eq. 15, floored at 1 as the manual requires.
+  return std::max(1.0, 1.0 + 0.26 - (per_week * (state.age_days / 7.0)));
+}
+
+double milk_share_of_diet(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
+  if (!state.on_the_mother) {
+    return 0.0;
+  }
+  // TMC Eq. 74, clamped as the manual requires. For a sheep this is
+  // 1 - age/182: all milk at birth, all grass at 26 weeks.
+  return std::clamp((milk_factor(animal, state) - 1.0) / 0.26, 0.0, 1.0);
+}
+
 double basal_net_energy_mj(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
-  // M is 1: it applies only before weaning, and Nicol and Brookes omit it.
+  // TMC Eq. 13, with the milk factor M of Eq. 15 - 1 for anything weaned, which
+  // is what Nicol and Brookes assume throughout.
   return kBasalMjPerKgMetabolic * animal.species_factor * animal.sex_factor *
-         age_factor(state.age_days) * metabolic_weight(state.liveweight_kg);
+         milk_factor(animal, state) * age_factor(state.age_days) *
+         metabolic_weight(state.liveweight_kg);
 }
 
 double slope_movement_factor(double slope_degrees) noexcept {
@@ -379,6 +402,7 @@ EnergyRequirement daily_energy_requirement(const AnimalClassParameters& animal,
   result.pregnancy_me_mj = pregnancy_net_energy_mj(animal, state) / kPregnancyEfficiency;
 
   const double maintenance_efficiency = diet.maintenance_efficiency();
+  const double milk_share = milk_share_of_diet(animal, state);
 
   // **Lactation is production; pregnancy is not.** TMC Eq. 1 reads
   // `MEmaintenance + productionME + MEpregnancy`, and Eq. 54 charges a tenth of
@@ -400,7 +424,18 @@ EnergyRequirement daily_energy_requirement(const AnimalClassParameters& animal,
 
     // TMC Eq. 55 and 19, with Eq. 1's pregnancy term.
     result.total_me_mj = result.maintenance_me_mj + production_me + result.pregnancy_me_mj;
-    result.intake_kg_dm = result.total_me_mj / diet.metabolisable_energy_mj_per_kg_dm;
+
+    // **What the mother supplies, the paddock does not.** A suckling animal
+    // takes what milk there is - the ewe's yield, not its own appetite - and
+    // grazes for the rest. TMC Eq. 74's milk share caps it, so a lamb never
+    // draws more of its diet from milk than the manual says it can.
+    //
+    // The milk was already charged to the ewe as lactation, which is what makes
+    // this a transfer rather than a second helping. For anything weaned both
+    // terms are zero and these two lines are the old one.
+    result.milk_me_mj = std::min(state.milk_me_mj_per_day, result.total_me_mj * milk_share);
+    result.intake_kg_dm = std::max(0.0, result.total_me_mj - result.milk_me_mj) /
+                          diet.metabolisable_energy_mj_per_kg_dm;
 
     result.iterations = pass;
     if (pass > 1 &&
@@ -436,7 +471,14 @@ LiveweightResponse liveweight_response(const AnimalClassParameters& animal,
   }
 
   LiveweightResponse response;
-  response.metabolisable_energy_mj = intake_kg_dm * diet.metabolisable_energy_mj_per_kg_dm;
+
+  // **What it drank counts as much as what it ate.** Subtracting milk from a
+  // lamb's grazing demand and then judging its weight on the grass alone is how
+  // a lamb crop went from 3 kg to 3 grams over a spring: it asked for little,
+  // got what it asked for, and was assessed as starving. The milk is real
+  // energy and the ewe has already paid for it.
+  response.metabolisable_energy_mj = (intake_kg_dm * diet.metabolisable_energy_mj_per_kg_dm) +
+                                     std::max(0.0, state.milk_me_mj_per_day);
 
   // Chewing is not circular here: the intake is given rather than solved for,
   // which is the whole difference between this function and its inverse.

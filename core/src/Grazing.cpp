@@ -13,8 +13,10 @@ std::string Mob::validation_error() const {
   if (name.empty()) {
     return "a mob needs a name";
   }
-  if (head <= 0) {
-    return name + ": a mob needs at least one animal";
+  // Empty is allowed: a mob whose head is driven by a flock is empty out of
+  // season, and a paddock with no stock on it is a real state of a farm.
+  if (head < 0) {
+    return name + ": a mob cannot have a negative head";
   }
   const std::string animal_error = animal.validation_error();
   if (!animal_error.empty()) {
@@ -48,6 +50,19 @@ GrazingDay graze(PastureSward& sward, double paddock_hectares, const Mob& mob,
   // Fed for the target, not for yesterday's outcome. The same reasoning as
   // Farm::step, and the two paths have to agree: a single paddock and a whole
   // farm must not offer the same mob different amounts of the same feed.
+  // **An empty mob eats nothing and is not starving.** A mob stocked by a flock
+  // is empty out of season - the lamb crop between weaning and the next
+  // lambing - and without this the head count divides into the intake below and
+  // hands the liveweight model a NaN, which then spreads to everything the
+  // animal touches. It is not an error state; it is December.
+  if (mob.head <= 0) {
+    GrazingDay empty;
+    empty.demand_kg_dm = 0.0;
+    empty.offered_kg_dm = 0.0;
+    empty.feed_limited = false;
+    return empty;
+  }
+
   AnimalState wanting = mob.state;
   wanting.liveweight_change_kg_per_day = std::max(0.0, mob.target_gain_kg_per_day);
   const EnergyRequirement need = daily_energy_requirement(mob.animal, wanting, diet, ground);

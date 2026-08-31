@@ -1,45 +1,63 @@
-# A weaned lamb.
+# A lamb, from birth to sale.
 #
-# This class is the one the model can be checked against: Frater, Howarth and
-# McEwen give a worked lamb of 28 kg gaining 100 g/day at 100 days old on a
-# 10.5 MJ ME/kg DM diet, needing 9.72 MJ ME/day by Nicol and Brookes (2007).
-# tests/unit/AnimalEnergyTest.cpp reproduces it. See docs/validation/verify.md.
+# **The class the model kept talking about and did not have.** Lambs were born
+# as a cohort of ewes: a newborn inherited a breeding ewe's 55 kg liveweight and
+# her sex factor, which is why drafting on lamb liveweight sold animals whose
+# weight the model never earned, and why the drafting rule had to be switched
+# off. A lamb is a different animal from its mother and now says so.
 
 [species]
-name = "sheep_lamb_weaned"
-
-# What a person would call it, for anything that has to show this animal
-# rather than compute with it. The energy model works from the factors below and
-# does not read this; a map that cannot say whether those are sheep or cattle is
-# withholding the one thing a reader could see for themselves.
+name = "sheep_lamb"
 kind = "sheep"
-display_name = "Weaned lamb"
-description = "A growing lamb after weaning; the class with a published worked example behind it."
+display_name = "Lamb"
+description = "A lamb from birth to sale, on milk and grass before weaning and grass after it."
 
 [energy]
-# K, TMC Eq. 13. CSIRO (2007) and Nicol and Brookes (2007) both give 1.0 for
-# sheep - the one species factor the two sources agree on, and the one the
-# OVERSEER ME review leaves alone in its Recommendation 6.
+# K, TMC Eq. 13. The same 1.0 as the ewe: CSIRO (2007) and Nicol and Brookes
+# (2007) agree on sheep, and K is a species factor rather than a class one.
 species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
 
-# S, TMC Eq. 14: 1.075 for a mixed-sex mob, which is what a
-# weaned lamb crop is before the wether lambs are drafted off.
+# S, TMC Eq. 14 and section 5.2.4. **1.075, not 1.0**, and the reason is worth
+# stating: the manual sets S to 1.075 for pre-weaned animals because they "are
+# not sex segregated" - a lamb mob is ram and ewe lambs together, and the ram
+# lambs cost more. A model that used the ewe's 1.0 here would underfeed every
+# lamb on the farm by 7.5% of its basal requirement.
 sex_factor = { value = 1.075, status = "direct", source = "tmc_animal_me" }
 
-# SRW. No source: the OVERSEER chapter that carries breed characteristics has
-# not been retrieved, and Beef + Lamb NZ's feeding tables give liveweight
-# classes rather than breed mature weights - which their own guidance says must
-# not be read as one. SRW drives the energy value of gain (TMC Eq. 45), so a
-# growth rate resting on this number is not quotable.
-standard_reference_weight_kg = { value = 65.0, status = "verify" }
+# SRW is the animal's MATURE weight, not its current one, so a lamb carries the
+# same reference weight as the ewe it will become: TMC Characteristics of
+# animals, Table 8, Romney 66 kg. It is what the energy value of gain is
+# measured against (TMC Eq. 44-46), which is why a lamb lays down protein early
+# and fat later.
+standard_reference_weight_kg = { value = 66.0, status = "direct", source = "tmc_characteristics" }
 
-# SpGraze, TMC Eq. 20. The manual gives 0.0025 for dairy and beef and states no
-# sheep value in the chapter read, so this is the cattle figure carried across.
+# SpGraze, TMC Eq. 20. Carried across from the ewe, and inheriting her caveat:
+# the manual gives 0.0025 for dairy and beef and states no sheep value in the
+# chapter read.
 grazing_coefficient = { value = 0.0025, status = "placeholder" }
 
 # k1, TMC Eq. 44: 16.5 for large lean cattle breeds, 20.3 otherwise.
 gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
 
+[reproduction]
+# A lamb does not breed, so it has no gestation and gives no milk - it only
+# drinks it. Zero switches both terms off.
+gestation_length_days = { value = 0.0, status = "direct", source = "tmc_animal_me" }
+milk_fat_percent = { value = 0.0, status = "direct", source = "tmc_animal_me" }
+milk_protein_percent = { value = 0.0, status = "direct", source = "tmc_animal_me" }
+breed_effect = { value = 0.0, status = "direct", source = "tmc_animal_me" }
+
+# **How long milk lasts.** TMC Eq. 16, from SCA (1994): "If it is assumed sheep
+# can suckle up to 26 weeks, and cattle to 18 weeks". That makes the milk share
+# of a lamb's diet 1 - age/182 - all milk on the day it is born, all grass at
+# six months - and it is what keeps the farm from being fed twice, because the
+# milk half is already charged to the ewe as lactation.
+#
+# A flock weaning at 103 days leaves its lambs on 43% milk the day they are
+# weaned off it, which is the shape of a real weaning check.
+suckling_weeks = { value = 26.0, status = "direct", source = "tmc_animal_me" }
+
 [typical]
-liveweight_kg = 28.0
-age_days = 100.0
+# A lamb at about a month old: past its birth weight, well short of drafting.
+liveweight_kg = 15.0
+age_days = 30.0

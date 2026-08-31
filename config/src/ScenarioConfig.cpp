@@ -403,8 +403,13 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
       mob.age_days =
           detail::optional_double(*entry, "age_days", species.typical_age_days, manifest_path);
 
-      if (mob.head <= 0) {
-        detail::throw_in(*entry, manifest_path, "mob '" + mob.name + "' needs at least one animal");
+      // **Zero head is a mob something else fills.** The lamb crop is declared
+      // by the scenario - this is what a lamb on this farm is - and stocked by
+      // the flock: nothing before lambing, the season's lambs through spring,
+      // nothing after the weaning draft. A negative head is still a typo.
+      if (mob.head < 0) {
+        detail::throw_in(*entry, manifest_path,
+                         "mob '" + mob.name + "' cannot have a negative head");
       }
       if (mob.liveweight_kg <= 0.0) {
         detail::throw_in(*entry, manifest_path, "mob '" + mob.name + "' needs a positive weight");

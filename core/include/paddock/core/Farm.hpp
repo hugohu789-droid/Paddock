@@ -145,6 +145,19 @@ class Farm {
   /// in an empty year.
   void set_mob_reproduction(std::size_t mob, int days_pregnant, int days_lactating, double young);
 
+  /// Replaces a mob's whole animal state.
+  ///
+  /// For a class the flock grows rather than holds steady: a lamb's age,
+  /// liveweight and whether it is still on its mother all move together, and
+  /// setting them one at a time invites a caller to forget one.
+  void set_mob_state(std::size_t mob, const AnimalState& state);
+
+  /// The ground a mob is standing on, as the energy model sees it. Exposed
+  /// because milk yield depends on pasture mass (TMC Eq. 35), so anything
+  /// working out what a ewe gives has to ask the same question the grazing
+  /// step asks.
+  [[nodiscard]] GrazingConditions conditions_for(std::size_t mob) const;
+
   /// Which mob has a paddock, or kNobody. A paddock carries at most one mob
   /// here: two mobs sharing ground is a real practice, but it needs a rule for
   /// how they divide the feed, and inventing one would be inventing a result.

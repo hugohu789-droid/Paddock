@@ -86,13 +86,25 @@ TEST(FlockTest, TurningTheYearAgesEveryCohortAndSellsThePastCullAge) {
   EXPECT_EQ(culled, 80) << "the six-year-olds turned seven and went";
   EXPECT_EQ(flock.head(), 320);
 
-  // Everything left is a year older, and the ages moved with them.
+  // Everything left is a class older.
   for (const AgeCohort& c : flock.cohorts()) {
     EXPECT_LE(c.age_years, rates.cull_age_years);
-    EXPECT_GE(c.mob.state.age_days, 730.0 + 365.0)
-        << "the representative animal has to age with its cohort, or the energy "
-           "model keeps feeding a two-tooth forever";
   }
+
+  // **But the animals are not a year older, and that is the division.** Turning
+  // the year renames classes; the days advance in `step`, one at a time. This
+  // used to add 365 here, which was right for a flock stepped once a year and
+  // wrong for one stepped daily - a lamb born in August stayed nought days old
+  // until the following July, and the share of a lamb's diet that is milk is a
+  // function of exactly that number (TMC Eq. 15).
+  EXPECT_DOUBLE_EQ(flock.cohorts().front().mob.state.age_days, 730.0)
+      << "no day passed, so no day was added";
+
+  const FlockCalendar calendar;
+  for (int i = 0; i < 10; ++i) {
+    flock.step(Date{2025, 5, 10 + i}, calendar, rates);
+  }
+  EXPECT_DOUBLE_EQ(flock.cohorts().front().mob.state.age_days, 740.0) << "ten days, ten days older";
 }
 
 // **Ten years without replacements empties the flock**, which is the finding

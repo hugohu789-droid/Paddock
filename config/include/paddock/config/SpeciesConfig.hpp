@@ -54,6 +54,7 @@ struct SpeciesDefinition {
   SourcedValue milk_fat_percent;
   SourcedValue milk_protein_percent;
   SourcedValue breed_effect;
+  SourcedValue suckling_weeks;
 
   /// Every sourced value in this definition, for a caller that wants to report
   /// on the lot rather than name them one at a time.

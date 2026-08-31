@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include <paddock/core/AnimalEnergy.hpp>
 #include <paddock/core/Grazing.hpp>
 #include <paddock/core/SimulationClock.hpp>
 
@@ -167,8 +168,27 @@ class Flock {
 
   void add(AgeCohort cohort);
 
-  /// Turns the year over: every cohort ages, and anything past the cull age
-  /// leaves. Returns the head that left, for the account to sell.
+  /// A lamb cohort is built from this rather than from the ewes.
+  ///
+  /// **Without it a lamb is a ewe that happens to be young.** New cohorts used
+  /// to copy the oldest ewe cohort's mob, so a newborn lamb inherited a 55 kg
+  /// liveweight and a breeding ewe's sex factor - which is why drafting on lamb
+  /// liveweight sold animals whose weight the model never earned. Set this from
+  /// the scenario's lamb species and a lamb starts at its birth weight, with a
+  /// lamb's parameters, and grows on what it eats.
+  ///
+  /// Left unset, cohorts are built from the ewes as before, so a flock that
+  /// does not care about lambs needs no lamb data.
+  void set_lamb_template(Mob lamb);
+
+  /// Turns the year over: every cohort renames itself, and anything past the
+  /// cull age leaves. Returns the head that left, for the account to sell.
+  ///
+  /// **Classes only: the animals' ages advance daily, in `step`.** This used to
+  /// add a year to the representative animal's age as well, which was right for
+  /// a flock stepped once a year and wrong for one stepped daily - a lamb born
+  /// in August stayed nought days old until the following July, and the share
+  /// of its diet that is milk is a function of exactly that number.
   ///
   /// **Ageing and culling are one operation on purpose.** A flock that aged
   /// without culling would grow old, and one that culled without ageing would
@@ -178,6 +198,11 @@ class Flock {
   int age_one_year(const FlockRates& rates);
 
   [[nodiscard]] const std::vector<AgeCohort>& cohorts() const noexcept { return cohorts_; }
+
+  /// Writable access, for the one thing the flock cannot work out for itself:
+  /// what a mob's liveweight did on the paddock. The grazing model owns that
+  /// number and the flock has to be told it.
+  [[nodiscard]] std::vector<AgeCohort>& cohorts_for_update() noexcept { return cohorts_; }
 
   [[nodiscard]] int head() const noexcept;
 
@@ -223,6 +248,8 @@ class Flock {
 
  private:
   std::vector<AgeCohort> cohorts_;
+  Mob lamb_template_;
+  bool has_lamb_template_ = false;
 };
 
 }  // namespace paddock::core
