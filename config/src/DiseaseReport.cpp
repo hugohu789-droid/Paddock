@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
 #include <algorithm>
+#include <cstddef>
 #include <iomanip>
 #include <sstream>
 #include <string>

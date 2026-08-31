@@ -137,17 +137,22 @@ DiseaseDefinition read(const toml::table& root, const std::string& path) {
 
   // **Every citation a parameter names has to exist.** A source identifier with
   // no entry in [sources] is a number that looks cited and is not.
-  for (const auto& [key, sourced] : definition.provenance) {
-    if (sourced.source_id.empty()) {
+  for (const auto& entry : definition.provenance) {
+    // **Copied out of the pair rather than destructured.** A structured binding
+    // cannot be captured by a lambda until C++20, and this is a C++17 project:
+    // gcc and MSVC allow it as an extension and clang refuses, so the build was
+    // green on two platforms and red on the third.
+    const std::string& key = entry.first;
+    const std::string& cited = entry.second.source_id;
+    if (cited.empty()) {
       continue;
     }
-    const bool known =
-        std::any_of(definition.sources.begin(), definition.sources.end(),
-                    [&](const auto& entry) { return entry.first == sourced.source_id; });
+    const bool known = std::any_of(definition.sources.begin(), definition.sources.end(),
+                                   [&cited](const auto& source) { return source.first == cited; });
     if (!known) {
-      throw ConfigError(path, 1, 1,
-                        "'" + key + "' cites source '" + sourced.source_id +
-                            "', which [sources] does not define");
+      throw ConfigError(
+          path, 1, 1,
+          "'" + key + "' cites source '" + cited + "', which [sources] does not define");
     }
   }
 
