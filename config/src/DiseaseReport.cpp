@@ -110,8 +110,9 @@ std::string render_disease_years(const DiseaseSite& site, const DiseaseDefinitio
 
   // **The lead is the decision, not the measurement.** A reader who stops after
   // one sentence should still have the answer.
-  out << "Over " << total.years << " years, a zinc programme would have run in **"
-      << total.years_with_a_programme << "** of them";
+  out << "Over " << total.years << (total.years == 1 ? " year" : " years")
+      << ", a zinc programme would have run in **" << total.years_with_a_programme
+      << (total.years == 1 ? "** of it" : "** of them");
   if (total.worst_zinc_days > 0) {
     out << ", the longest **" << total.worst_zinc_days << " days** in "
         << farm_year(total.worst_year);

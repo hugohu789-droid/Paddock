@@ -43,6 +43,8 @@
 #include <vtkRenderer.h>
 #include <vtkWindowToImageFilter.h>
 
+#include <paddock/config/DiseaseConfig.hpp>
+#include <paddock/config/DiseaseReport.hpp>
 #include <paddock/config/ScenarioComparison.hpp>
 #include <paddock/config/ScenarioReport.hpp>
 #include <paddock/core/FarmletGrid.hpp>
@@ -565,6 +567,16 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   run_report_button_->setEnabled(false);
   connect(run_report_button_, &QPushButton::clicked, this, &MapWindow::open_report);
 
+  disease_report_button_ = new QPushButton("Facial eczema", this);
+  disease_report_button_->setObjectName("quietAction");
+  disease_report_button_->setToolTip(
+      "What this year's weather would have asked of a zinc programme: when it would have "
+      "started, how many days it would have run, and what the season would have done to a mob "
+      "nobody treated.\n\nThe model gives the animals no zinc. For how often a farm "
+      "needs one, point 'paddock disease' at a decade of weather.");
+  disease_report_button_->setEnabled(false);
+  connect(disease_report_button_, &QPushButton::clicked, this, &MapWindow::open_disease_report);
+
   readings->addStretch(1);
 
   auto* readings_inner = new QWidget(this);
@@ -587,6 +599,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   auto* report_row = new QHBoxLayout;
   report_row->setContentsMargins(10, 0, 10, 8);
   report_row->addStretch(1);
+  report_row->addWidget(disease_report_button_);
   report_row->addWidget(run_report_button_);
 
   auto* readings_column = new QVBoxLayout;
@@ -843,8 +856,10 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   connect(compare_button_, &QPushButton::clicked, this, &MapWindow::run_comparison);
   connect(setup_, &SetupPanel::readinessChanged, this, &MapWindow::refresh_scenario_list);
   connect(setup_, &SetupPanel::resultsReady, results_label_, &QLabel::setText);
-  connect(setup_, &SetupPanel::readinessChanged, this,
-          [this] { run_report_button_->setEnabled(setup_->can_report()); });
+  connect(setup_, &SetupPanel::readinessChanged, this, [this] {
+    run_report_button_->setEnabled(setup_->can_report());
+    disease_report_button_->setEnabled(setup_->can_report());
+  });
   connect(scenario_list_, &QListWidget::currentRowChanged, this, &MapWindow::show_scenario);
 
   auto* dock = new QDockWidget("Run a scenario", this);
@@ -1163,6 +1178,34 @@ void MapWindow::open_report() {
       QString::fromStdString(last_bundle_->name + "-report.md"), this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->show();
+}
+
+void MapWindow::open_disease_report() {
+  if (!last_bundle_.has_value() || weather_.empty()) {
+    return;
+  }
+
+  // The data directory the window was given, rather than anything derived from
+  // the working directory: the app is started from several places and the
+  // diseases are always beside the scenarios.
+  const std::string diseases = data_directory_ + "/diseases/facial-eczema.toml";
+
+  try {
+    const config::DiseaseDefinition disease = config::load_disease(diseases);
+
+    config::DiseaseSite site;
+    site.name = last_bundle_->name;
+    site.weather.records = weather_;
+
+    auto* dialog =
+        new ReportDialog(QString::fromStdString(config::render_disease_years(site, disease)),
+                         QString::fromStdString(last_bundle_->name + "-facial-eczema.md"), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+  } catch (const std::exception& error) {
+    // A missing or malformed disease file is not a reason to lose the window.
+    QMessageBox::warning(this, "Facial eczema", QString::fromStdString(error.what()));
+  }
 }
 
 std::optional<std::pair<double, double>> MapWindow::ground_range() const {
