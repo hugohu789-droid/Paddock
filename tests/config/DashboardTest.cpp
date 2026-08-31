@@ -209,6 +209,15 @@ TEST(DashboardTest, TheSeriesExportHasADateColumnAndOneColumnPerSeries) {
     EXPECT_NE(csv.find(series.name + " (" + series.unit + ")"), std::string::npos) << series.name;
   }
 
+  // **The level a series is read against travels with it.** A cover column
+  // exported without it is a column somebody plots and then guesses at: 1,400
+  // kg DM/ha is a farm in trouble or a farm doing exactly what it planned.
+  const auto with_reference =
+      std::count_if(board.series.begin(), board.series.end(),
+                    [](const DashboardSeries& series) { return series.reference.has_value(); });
+  ASSERT_GT(with_reference, 0) << "the cover series is held to the management minimum";
+  EXPECT_NE(csv.find("[held at "), std::string::npos);
+
   // A row per day, plus the header.
   const auto rows = static_cast<int>(std::count(csv.begin(), csv.end(), '\n'));
   EXPECT_EQ(rows, static_cast<int>(board.dates.size()) + 1);

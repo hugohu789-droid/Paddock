@@ -11,6 +11,7 @@
 #include <QString>
 #include <QValueAxis>
 #include <QWidget>
+#include <optional>
 #include <vector>
 
 namespace paddock::app {
@@ -42,6 +43,15 @@ class SeasonChart : public QChartView {
     QString unit;
     QColor colour;
     std::vector<double> values;
+
+    /// A level drawn across the chart, dashed, in this line's own colour - the
+    /// cover a farmer holds the farm to, a regulatory trigger.
+    ///
+    /// **A series without one is read against nothing.** A cover line falling
+    /// from 2,800 to 1,400 looks like a farm in trouble or a farm doing exactly
+    /// what it planned, and which of those it is depends on a number that was
+    /// nowhere on the chart until this existed.
+    std::optional<double> reference;
   };
 
   /// Something that either happened on a day or did not.
