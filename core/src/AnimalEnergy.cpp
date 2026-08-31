@@ -188,6 +188,25 @@ double movement_net_energy_mj(const AnimalState& state, const GrazingConditions&
          ground.area_per_animal_ha / fmove;
 }
 
+WalkingDistance walking_distance_on(double slope_degrees) noexcept {
+  // OVERSEER Characteristics of animals v6.3, Table 30, from Nicol and Brookes
+  // (2007). The boundaries are LUC slope classes: flat is A and B, rolling is
+  // C, easy hill is D and E, steep hill is F and G. See the header.
+  //
+  // A negative slope is not a thing the terrain model produces, but reading one
+  // as flat rather than as steep keeps a bad raster from inventing energy.
+  if (slope_degrees < 8.0) {
+    return {0.5, 0.0};
+  }
+  if (slope_degrees < 16.0) {
+    return {1.0, 0.1};
+  }
+  if (slope_degrees < 26.0) {
+    return {1.5, 0.15};
+  }
+  return {2.0, 0.2};
+}
+
 double activity_net_energy_mj(const AnimalState& state, const GrazingConditions& ground) noexcept {
   return state.liveweight_kg * ((kMovementMjPerKgPerKm * ground.horizontal_km_per_day) +
                                 (kClimbMjPerKgPerKm * ground.vertical_km_per_day));

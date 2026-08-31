@@ -264,8 +264,9 @@ what may be quoted and what may not.
 
 Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept current with the code:
 
-- Sheep maintenance requirement is low by about 15% against CSIRO (2007), so
-  **carrying capacity for sheep is overstated by up to 17%**
+- Sheep maintenance requirement is low by about 5% against CSIRO (2007), so
+  **carrying capacity for sheep is overstated by about 5%** (it was 15% and 17%
+  until the walking distance an animal covers in a day was supplied)
 - **Absolute liveweight gain is not quotable**: standard reference weight is
   unverified and it drives the energy value of gain
 - Lactation is not modelled — a "dairy cow" here is a dry cow

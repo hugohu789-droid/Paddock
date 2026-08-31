@@ -83,10 +83,13 @@ a grazed year.
 From the [verification tracker](../validation/verify.md), and it matters:
 
 - **Cattle maintenance** reproduces DairyNZ to about 2% across 300–600 kg
-- **Sheep maintenance is low by about 15%** against CSIRO (2007). The basal term
-  agrees to 0.3% — it is the same equation — and the gap is the cost of grazing,
-  walking and activity, which this model charges about a tenth of
-- **Sheep carrying capacity is therefore overstated by up to 17%**
+- **Sheep maintenance is low by about 5%** against CSIRO (2007). The basal term
+  agrees to 0.3% — it is the same equation — and the rest is the cost of
+  grazing, walking and activity, which this model now charges about seven tenths
+  of. It charged a tenth until TMC Eq. 24 was given a walking distance; the
+  distances are OVERSEER's Table 30, from Nicol and Brookes (2007), keyed to
+  slope by the LUC classes
+- **Sheep carrying capacity is therefore overstated by about 5%**
 - **Absolute liveweight gain is not quotable**: standard reference weight is
   unverified and it drives the energy value of gain
 - Comparisons between grazing systems are sound: both arms carry the same

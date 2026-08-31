@@ -174,6 +174,51 @@ struct GrazingConditions {
   double vertical_km_per_day = 0.0;
 };
 
+/// How far an animal walks in a day, by the steepness of the ground it is on.
+///
+/// **The numbers are published, not chosen.** OVERSEER's *Characteristics of
+/// animals* chapter (v6.3, Table 30) gives them by topography class, taken in
+/// turn from Nicol and Brookes (2007, Appendix - activity costs):
+///
+///   | class      | Hk km/day | Vk km/day |
+///   |------------|----------:|----------:|
+///   | flat       |       0.5 |       0   |
+///   | rolling    |       1.0 |       0.1 |
+///   | easy hill  |       1.5 |       0.15|
+///   | steep hill |       2.0 |       0.2 |
+///
+/// They are not per species: the same chapter's pasture-mass table has a row
+/// per animal type and this one does not, so a ewe and a steer are charged the
+/// same kilometres on the same ground.
+///
+/// **Where the slope boundaries come from, and why they are this project's
+/// decision.** OVERSEER takes topography as a category the user picks per
+/// block; this model has a measured slope for every cell and so has to map one
+/// to the other. Two New Zealand sources agree on where the lines fall:
+/// Manaaki Whenua's Land Use Capability slope classes (A 0-3, B 4-7, C 8-15,
+/// D 16-20, E 21-25, F 26-35, G >35 degrees), and Te Ara's description of
+/// pastoral land as flat to rolling 0-16, hill 16-26, steep above 26. So flat
+/// is LUC A and B, rolling is C, easy hill is D and E, and steep hill is F and
+/// G - and the two sources break at the same two degrees.
+///
+/// **This is charged on top of the movement of grazing, not instead of it.**
+/// TMC Eq. 54 sums NEbasal, NEchew, NEmove and NEactivity, so a model that runs
+/// Eq. 22 and Eq. 24 together is doing what OVERSEER does rather than counting
+/// the same walking twice.
+///
+/// One thing OVERSEER is not consistent about, recorded rather than tidied
+/// away: Table 30 is headed "walking distances *while grazing*", while the
+/// chapter that consumes it calls NEactivity the cost of "other activities such
+/// as finding water, shelter". Which of the two the distances describe does not
+/// change where they go - Table 30 feeds Eq. 24 - but it does mean this term
+/// should not be quoted as one or the other.
+struct WalkingDistance {
+  double horizontal_km_per_day = 0.0;
+  double vertical_km_per_day = 0.0;
+};
+
+[[nodiscard]] WalkingDistance walking_distance_on(double slope_degrees) noexcept;
+
 /// Agefactor, TMC Eq. 17: exp(-0.00008 a) with a in days, floored at 0.84.
 ///
 /// **The floor is a decision, not a default**, and the two OVERSEER documents

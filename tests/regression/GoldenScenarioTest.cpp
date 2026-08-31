@@ -208,10 +208,10 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
 
   // Pinned from the run, at the same 1e-6 relative tolerance the series uses and
   // for the same reason: three platforms, one committed set of numbers.
-  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3015.442560885554, 3.0e-3);
-  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1792.6809292015721, 1.8e-3);
-  EXPECT_NEAR(run.closing_cover_kg_dm, 1792.6809292015721, 1.8e-3);
-  EXPECT_NEAR(run.eaten_kg_dm, 123455.32095006487, 1.3e-1);
+  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3009.8028175746545, 3.0e-3);
+  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1786.3353012761572, 1.8e-3);
+  EXPECT_NEAR(run.closing_cover_kg_dm, 1786.3353012761572, 1.8e-3);
+  EXPECT_NEAR(run.eaten_kg_dm, 125234.05312538470, 1.3e-1);
   EXPECT_NEAR(run.closing_liveweight_kg(), 55.000014928809946, 5.5e-5);
 
   // Counts, so they are equalities. A management decision that moves a mob one
