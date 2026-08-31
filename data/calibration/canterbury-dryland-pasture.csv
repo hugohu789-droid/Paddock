@@ -1,0 +1,56 @@
+# Canterbury dryland pasture production, for calibrating what a rain-fed farm grows.
+#
+# **The reference series caveat E8 said did not exist.** E7 recorded that the
+# pasture growth parameters are fixtures rather than a calibration, and E8 that
+# no unfertilised Canterbury reference series had been found to calibrate them
+# against. One does exist, and the search that concluded otherwise had simply
+# not reached it.
+#
+# THE SITE. The Winchmore Irrigation Research Station, mid-Canterbury, on
+# Lismore stony silt loam (an Orthic Brown soil) - "30-35 cm stony greyish-brown
+# silt loam on thick beds of greywacke gravel and sand". Mean annual rainfall
+# 745 mm, range 491-949. Perennial ryegrass and white clover under sheep
+# grazing. The irrigation trial ran four DRYLAND replicates - rainfall only -
+# alongside four irrigated treatments from 1951 to 2018, which makes it the
+# longest grazed and irrigated pasture trial in the world and the dryland
+# reference this model needs. Its 96,000 records are public:
+# doi:10.6084/m9.figshare.13530209.
+#
+# WHY THE ROWS ARE DERIVED RATHER THAN READ. The Figshare dataset has not been
+# downloaded and parsed; these are the summary figures the published reviews
+# state, and they are marked as derived for that reason. A later pass should
+# replace them with the series itself and turn `status` to direct.
+#
+# THE ARITHMETIC, so a reader can check it. The reviews report that irrigation
+# roughly doubles production at Winchmore, adding 5.2 to 5.5 t DM/ha, "an
+# increase of up to 80%". Taking the increment over the increase gives the
+# dryland base: 5.2/0.80 = 6.5, and a doubling from a 5.5 t increment gives 5.5.
+# The companion fertiliser trial, which is irrigated throughout, gives a
+# long-term mean near 12.0 t DM/ha on its phosphorus treatments and 5.4 t on the
+# nil-phosphorus control - and 12.0 is what the dryland figures double to.
+#
+# WATER USE EFFICIENCY is the sharper test, because it does not depend on the
+# rainfall of any one year. Martin et al. (2006) report 12.3 kg DM/ha/mm for
+# dryland pasture at Winchmore, against 20 for ryegrass/white clover under
+# frequent and uniform irrigation. A rain-fed model reporting 20 is converting
+# water to dry matter at an irrigated rate.
+#
+# Sources:
+#   Scientific Data 8:52 (2021), "Seventy years of data from the world's
+#     longest grazed and irrigated pasture trials" - site, treatments, soil,
+#     rainfall, repository.
+#   Winchmore long-term fertiliser trial, 2022-23 annual update (Fertiliser
+#     Association of NZ) - long-term means, nil-P control.
+#   Martin et al. (2006), via NZGA "Yield and water use of temperate pastures
+#     in summer dry environments" - water use efficiencies.
+#
+# status: direct = read from the source; derived = computed from figures the
+# source states, with the arithmetic above.
+
+quantity,value,low,high,units,status,note
+annual_dry_matter_dryland,6.0,5.5,6.5,t DM/ha/yr,derived,rain-fed ryegrass/white clover under sheep grazing at 745 mm
+annual_dry_matter_irrigated,12.0,11.0,12.5,t DM/ha/yr,direct,the fertiliser trial's long-term mean on its phosphorus treatments
+annual_dry_matter_nil_phosphorus,5.4,,,t DM/ha/yr,direct,irrigated but unfertilised - the long-term mean of the control
+water_use_efficiency_dryland,12.3,,,kg DM/ha/mm,direct,Martin et al. (2006) at Winchmore
+water_use_efficiency_irrigated,20.0,,,kg DM/ha/mm,direct,ryegrass/white clover under frequent uniform irrigation
+mean_annual_rainfall,745,491,949,mm,direct,Winchmore, and the range over the trial period

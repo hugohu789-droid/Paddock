@@ -151,9 +151,14 @@ TEST(LambsGrazeTest, MilkIsChargedOnceAndTheFarmIsNotFedTwice) {
   // Roughly 440 lambs join about 310 ewes for a hundred days. If they grazed as
   // grown ewes the year's intake would rise by something near a third; the milk
   // half of their diet is already on the ewes' side, so it rises by far less.
+  //
+  // The band moved down when the pasture was calibrated against Winchmore
+  // (E21): on a farm growing 4.9 t DM/ha in its driest year, what the mobs can
+  // take off the paddock is bounded by the grass rather than by their appetite,
+  // and the rest of the year's feed is bought.
   const double eaten_per_ha = run.eaten_kg_dm / 80.0;
-  EXPECT_GT(eaten_per_ha, 1'700.0);
-  EXPECT_LT(eaten_per_ha, 2'400.0)
+  EXPECT_GT(eaten_per_ha, 700.0);
+  EXPECT_LT(eaten_per_ha, 1'800.0)
       << "an intake this high would mean the lambs are grazing for milk they already drank";
 }
 

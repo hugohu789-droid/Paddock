@@ -37,6 +37,11 @@ struct RunSummary {
   /// One entry per simulated day.
   std::vector<core::Date> dates;
   std::vector<double> cover_kg_dm_per_ha;
+
+  /// The GREEN part of that cover, day by day - what an animal can actually
+  /// eat. Cover includes the dead standing material above it, and on this farm
+  /// the two part company badly by late summer.
+  std::vector<double> green_kg_dm_per_ha;
   std::vector<double> liveweight_kg;
   std::vector<int> paddock_of_first_mob;
 

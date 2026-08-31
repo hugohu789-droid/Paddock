@@ -178,6 +178,11 @@ double FarmletGrid::mean_cover_kg_dm() const {
                           [](const Farmlet& farmlet) { return farmlet.sward().cover_kg_dm(); });
 }
 
+double FarmletGrid::mean_green_kg_dm() const {
+  return compensated_mean(cells_,
+                          [](const Farmlet& farmlet) { return farmlet.sward().green_kg_dm(); });
+}
+
 double FarmletGrid::mean_soil_water_mm() const {
   return compensated_mean(cells_, [](const Farmlet& farmlet) { return farmlet.soil().water_mm(); });
 }

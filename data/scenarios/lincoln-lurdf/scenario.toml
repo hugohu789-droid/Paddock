@@ -84,11 +84,11 @@ licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. 
 
 [soil]
 path = "soil.toml"
-sha256 = "523e37beed50db5ecb6c367a5d53cf578823561dc940fbbc6aef31facdc4a36a"
+sha256 = "93eae9f37464dfb85d72436515e6ed9266080e0f4039172732924e228f4b9d5d"
 
 [sward]
 path = "sward.toml"
-sha256 = "d33109030d022d64db408c55e99751541224e5e0f42f195f56848432f9bd6ce3"
+sha256 = "7a3038fc53d49dc12e00701ae995b83d8e6b92fc980baa51511c27f783914039"
 
 [initial_state]
 soil_water_mm = 90.0
@@ -114,8 +114,18 @@ soil_mineral_nitrogen_kg_per_ha = 60.0
 cols = 40
 rows = 32
 cell_size_m = 25.0
-available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
-available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
+# **These override soil.toml, and used to disagree with it.** The grid varies
+# available water across the farm, and it does so by replacing the figure the
+# soil file computes rather than varying around it - so a soil profile stating
+# 70 mm ran on a farm holding 60 to 140. The bundle now refuses when the two
+# disagree, because a sourced number that loses silently to a demonstration
+# gradient is worse than no number at all.
+#
+# Centred on the 70 mm the Lismore profile gives (see soil.toml), spread +-15 mm
+# for the within-series variation that soil physical properties show across the
+# Canterbury Plains. The spread is PLACEHOLDER; the centre is not.
+available_water_west_mm = 55.0
+available_water_east_mm = 85.0
 origin_easting = 1556752.3158
 origin_northing = 5168262.7895
 

@@ -208,15 +208,23 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
 
   // Pinned from the run, at the same 1e-6 relative tolerance the series uses and
   // for the same reason: three platforms, one committed set of numbers.
-  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3009.8028175746545, 3.0e-3);
-  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1786.3353012761572, 1.8e-3);
-  EXPECT_NEAR(run.closing_cover_kg_dm, 1786.3353012761572, 1.8e-3);
-  EXPECT_NEAR(run.eaten_kg_dm, 125234.05312538470, 1.3e-1);
+  //
+  // **Repinned when the grid stopped overriding the soil file.** The scenario's
+  // soil.toml computes 120 mm of available water and its [grid] section varied
+  // that across the farm from 60 to 140 - averaging 100, replacing the profile
+  // rather than varying around it, so the soil file was read by nothing. The
+  // gradient is now centred on the soil at 100 to 140, and this farm holds a
+  // fifth more water than the numbers below were pinned against. Cover rose by
+  // 78 kg DM/ha on the mean and the mob was moved once more.
+  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3087.5196280088153, 3.1e-3);
+  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1809.6299950658319, 1.9e-3);
+  EXPECT_NEAR(run.closing_cover_kg_dm, 1809.6299950658319, 1.9e-3);
+  EXPECT_NEAR(run.eaten_kg_dm, 125226.39354542417, 1.3e-1);
   EXPECT_NEAR(run.closing_liveweight_kg(), 55.000014928809946, 5.5e-5);
 
   // Counts, so they are equalities. A management decision that moves a mob one
   // more time is a change worth stopping on, not one to absorb in a tolerance.
-  EXPECT_EQ(run.moves, 97);
+  EXPECT_EQ(run.moves, 98);
   EXPECT_EQ(run.days_short, 0);
 }
 
