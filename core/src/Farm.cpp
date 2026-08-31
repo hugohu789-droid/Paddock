@@ -99,6 +99,13 @@ void Farm::set_target_gain(std::size_t mob, double kg_per_day) {
   mobs_[mob].mob.target_gain_kg_per_day = kg_per_day;
 }
 
+void Farm::set_mob_head(std::size_t mob, int head) {
+  if (mob >= mobs_.size()) {
+    return;
+  }
+  mobs_[mob].mob.head = std::max(0, head);
+}
+
 void Farm::spread_mob(std::size_t mob) {
   if (mob >= mobs_.size()) {
     throw std::out_of_range("Farm::spread_mob: no such mob");

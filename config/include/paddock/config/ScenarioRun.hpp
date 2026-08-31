@@ -5,12 +5,16 @@
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/core/BudgetLedger.hpp>
+#include <paddock/core/FarmAccount.hpp>
+#include <paddock/core/FarmDecision.hpp>
 #include <paddock/core/Farmer.hpp>
+#include <paddock/core/Flock.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
 #include <paddock/core/Irrigation.hpp>
 #include <paddock/core/Weather.hpp>
@@ -88,6 +92,21 @@ struct RunSummary {
   [[nodiscard]] double bought_feed_kg_dm() const;
   [[nodiscard]] int days_feed_was_bought() const;
 
+  /// The farm's cash, when the run was given an economics to keep it in.
+  ///
+  /// **Optional on purpose.** Every scenario that ran before money existed
+  /// still runs, unchanged and unpriced: a run without economics reports what
+  /// happened to the grass and says nothing about what it was worth. Asking for
+  /// the second is a decision a scenario makes.
+  std::optional<core::FarmAccount> account;
+
+  /// What the flock did: born, died, culled, sold. Empty unless the run was
+  /// given a flock.
+  std::vector<core::FlockDay> flock_days;
+
+  /// Head at the close, when a flock was run.
+  int closing_head = 0;
+
   core::BudgetLedger ledger;
   double closing_cover_kg_dm = 0.0;
   double closing_nitrogen_kg = 0.0;
@@ -108,6 +127,23 @@ struct RunSummary {
   [[nodiscard]] double mean_cover_kg_dm_per_ha() const;
   [[nodiscard]] double lowest_cover_kg_dm_per_ha() const;
   [[nodiscard]] double highest_cover_kg_dm_per_ha() const;
+};
+
+/// The money side of a run, when a scenario asks for one.
+///
+/// **All four parts or none.** An account without prices cannot sell, a flock
+/// without an account cannot be paid for, and decisions without either have
+/// nothing to decide about - so this is one optional argument rather than four,
+/// and a run either keeps books or does not.
+struct FarmBusiness {
+  core::OperatingCosts costs;
+  core::Prices prices;
+  double opening_balance_dollars = 0.0;
+
+  core::Flock flock;
+  core::FlockCalendar calendar;
+  core::FlockRates rates;
+  core::DecisionPolicy decisions;
 };
 
 /// Runs a bundle for its own date range under a calendar the caller supplies.
@@ -155,6 +191,16 @@ using DayObserver =
                                               const core::ManagementPolicy& policy,
                                               const core::DietQuality& diet, std::string label);
 
+/// The same run, keeping books.
+///
+/// The pasture, the stock and the weather behave exactly as they do without
+/// `business` - money observes and decides, it does not feed the grass - so a
+/// priced run and an unpriced one of the same scenario grow the same pasture.
+[[nodiscard]] RunSummary run_managed_scenario(const ScenarioBundle& bundle,
+                                              const core::ManagementPolicy& policy,
+                                              const core::DietQuality& diet, std::string label,
+                                              FarmBusiness business);
+
 /// Runs a bundle under the farmer its own manifest describes.
 ///
 /// This is what `[management]` is for. Until it existed the calendar was in the
@@ -174,7 +220,8 @@ using DayObserver =
                                               const core::DietQuality& diet, std::string label,
                                               const DayObserver& each_day,
                                               const core::IrrigationPolicy& irrigation = {},
-                                              const core::IrrigationSystem& system = {});
+                                              const core::IrrigationSystem& system = {},
+                                              FarmBusiness* business = nullptr);
 
 /// A calendar that runs one system for the whole of `run`, for comparing a
 /// system against another rather than against a mixed year.

@@ -44,6 +44,13 @@ struct AgeCohort {
 
   Mob mob;
 
+  /// Whether these animals are being kept or sold.
+  ///
+  /// A lamb cohort is finishing stock until the farmer picks replacements out
+  /// of it at weaning; what is kept becomes breeding stock and what is not is
+  /// sold. This is what `FarmOutlook::is_finishing_class` reads.
+  bool is_finishing = false;
+
   /// A name a farmer would use, from the age. Hoggets at one, two-tooths at
   /// two, mixed-age after that.
   [[nodiscard]] std::string class_name() const;
@@ -118,11 +125,19 @@ struct FlockDay {
   int died = 0;
   int culled = 0;
 
+  /// Lambs sold at weaning: the crop, less the replacements kept back. **The
+  /// farm's main income**, and the reason a flock that keeps every lamb was
+  /// growing without limit before this existed.
+  int sold_store = 0;
+
+  /// Lambs kept as replacements, which become next year's hoggets.
+  int kept_as_replacements = 0;
+
   /// True on the day the year turned, so a caller knows the classes moved.
   bool year_turned = false;
 
   [[nodiscard]] bool anything_happened() const noexcept {
-    return born > 0 || died > 0 || culled > 0 || year_turned;
+    return born > 0 || died > 0 || culled > 0 || sold_store > 0 || year_turned;
   }
 };
 
@@ -155,6 +170,9 @@ class Flock {
   /// Removes `head` from the oldest cohorts first, which is what a farmer sells
   /// when they have to sell. Returns how many actually went.
   int sell_oldest(int head);
+
+  /// Head in cohorts the farmer is finishing rather than keeping.
+  [[nodiscard]] int finishing_head() const noexcept;
 
   /// Takes `head` out of the breeding cohorts, oldest first. What a cull draft
   /// and a lambing death both look like from the flock's side.

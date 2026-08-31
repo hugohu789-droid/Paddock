@@ -159,6 +159,7 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
         born.mob.name = "lambs " + std::to_string(today.year);
         born.mob.head = lambs;
         born.mob.state.age_days = 0.0;
+        born.is_finishing = true;
         add(std::move(born));
         day.born = lambs;
       }
@@ -169,14 +170,47 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
     }
   }
 
-  // **Weaning**, the main culling event: age, teeth and udders.
+  // **Weaning**: the main culling event, and the day the lamb crop is split.
   if (is(calendar.weaning_month, calendar.weaning_day)) {
     const int ewes = breeding_head();
     const double culled = static_cast<double>(ewes) * rates.culled_at_weaning_fraction;
     day.culled += remove_from_breeding(static_cast<int>(std::llround(culled)));
+
+    // **The replacements come out of the crop, and the rest are sold.** How
+    // many is the replacement rate applied to the breeding flock that will
+    // remain - a farmer keeps enough ewe lambs to replace the ewes leaving, not
+    // a share of the lambs born. Ridler et al. (2025) put that at 29.2%.
+    const int remaining_ewes = breeding_head();
+    const int wanted = static_cast<int>(
+        std::llround(static_cast<double>(remaining_ewes) * rates.replacement_fraction));
+
+    for (AgeCohort& cohort : cohorts_) {
+      if (!cohort.is_finishing || cohort.mob.head <= 0) {
+        continue;
+      }
+      const int kept = std::min(cohort.mob.head, std::max(0, wanted - day.kept_as_replacements));
+      const int sold = cohort.mob.head - kept;
+
+      day.kept_as_replacements += kept;
+      day.sold_store += sold;
+      cohort.mob.head = kept;
+      // What is kept stops being finishing stock: it is next year's flock.
+      cohort.is_finishing = false;
+    }
+
+    cohorts_.erase(std::remove_if(cohorts_.begin(), cohorts_.end(),
+                                  [](const AgeCohort& cohort) { return cohort.mob.head <= 0; }),
+                   cohorts_.end());
   }
 
   return day;
+}
+
+int Flock::finishing_head() const noexcept {
+  return std::accumulate(cohorts_.begin(), cohorts_.end(), 0,
+                         [](int running, const AgeCohort& cohort) {
+                           return cohort.is_finishing ? running + cohort.mob.head : running;
+                         });
 }
 
 int Flock::remove_from_breeding(int head) {

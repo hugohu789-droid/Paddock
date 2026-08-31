@@ -186,6 +186,31 @@ TEST(FlockTest, WeaningCullsTheOlderEwes) {
   EXPECT_LT(flock.cohorts().front().mob.head, 80);
 }
 
+// **Weaning splits the lamb crop**, which is where the farm's income comes
+// from and what stops a flock growing without limit.
+TEST(FlockTest, WeaningKeepsReplacementsAndSellsTheRest) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  const FlockDay lambing = flock.step(Date{2024, 8, 20}, calendar, rates);
+  ASSERT_GT(lambing.born, 0);
+  EXPECT_EQ(flock.finishing_head(), lambing.born) << "a lamb is finishing stock until weaning";
+
+  const FlockDay weaning = flock.step(Date{2024, 12, 1}, calendar, rates);
+
+  // Replacements are the rate applied to the ewes that remain, not a share of
+  // the lambs: a farmer keeps enough to replace what is leaving.
+  EXPECT_EQ(weaning.kept_as_replacements + weaning.sold_store, lambing.born)
+      << "every lamb is either kept or sold";
+  EXPECT_GT(weaning.sold_store, weaning.kept_as_replacements)
+      << "most of a lamb crop is sold, or there would be no income";
+
+  // What is kept stops being finishing stock: it is next year's flock.
+  EXPECT_EQ(flock.finishing_head(), 0);
+  EXPECT_EQ(flock.head(), flock.breeding_head() + weaning.kept_as_replacements);
+}
+
 // **The question the whole age structure exists to answer.** Run ten years of
 // the real calendar and see whether a flock feeds itself: lambs become
 // hoggets, hoggets become two-tooths, the old draft leaves, and the head count
@@ -217,8 +242,12 @@ TEST(FlockTest, TenYearsOfTheCalendarKeepAFlockGoing) {
   // is not a management policy, and what this says is that the flock now has
   // somewhere for lambs to go and nothing yet to send them there. Selling them
   // is the drafting rule, which needs a finishing class - the next step.
-  EXPECT_GT(flock.head(), 400)
-      << "with every lamb kept and nothing drafted, ten years should leave more sheep";
+  // **A flock that keeps only its replacements holds its size.** That is the
+  // whole point of the age structure: born, weaned, replacements kept, the rest
+  // sold, the old draft culled - and after ten years there is still a farm
+  // rather than an empty paddock or a flock that ate the district.
+  EXPECT_GT(flock.head(), 100) << "the flock did not die out";
+  EXPECT_LT(flock.head(), 2'000) << "and it did not run away either";
 
   // And no cohort is older than the cull age, whatever else happened.
   for (const AgeCohort& cohort : flock.cohorts()) {
