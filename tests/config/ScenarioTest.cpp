@@ -361,4 +361,43 @@ TEST(ScenarioBundleTest, AnUnknownWeatherKindIsRefused) {
 }
 
 }  // namespace
+
+// **The check that keeps one quantity from having two owners.** A bundle's
+// [grid] section varies available water across the farm by REPLACING what
+// soil.toml computes, not by scaling it - so for a while a soil profile stating
+// 120 mm ran on a farm averaging 100, and editing the soil file changed not one
+// figure in the output. Every shipped bundle now agrees with its own soil, and
+// this is what says so.
+TEST(ScenarioTest, EveryBundlesWaterGradientAgreesWithItsSoil) {
+  for (const std::string& name :
+       {"canterbury-baseline", "canterbury-grazed", "lincoln-lurdf", "ruakura-fe"}) {
+    const ScenarioBundle bundle =
+        load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
+    ASSERT_TRUE(bundle.grid.has_value()) << name;
+
+    const double gradient_mean =
+        (bundle.grid->available_water_west_mm + bundle.grid->available_water_east_mm) / 2.0;
+    EXPECT_NEAR(gradient_mean, bundle.soil.total_available_water_mm,
+                0.1 * bundle.soil.total_available_water_mm)
+        << name << ": the grid averages " << gradient_mean
+        << " mm of available water and soil.toml computes " << bundle.soil.total_available_water_mm
+        << ". The grid overrides the soil, so the profile would never be used.";
+
+    EXPECT_NO_THROW(static_cast<void>(bundle.make_soil_raster())) << name;
+  }
+}
+
+// The other half: a bundle whose two figures disagree has to be refused, or the
+// check above is only describing what happens to be true today.
+TEST(ScenarioTest, ABundleWhoseGridDisagreesWithItsSoilIsRefused) {
+  ScenarioBundle bundle =
+      load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/canterbury-grazed");
+  ASSERT_TRUE(bundle.grid.has_value());
+
+  bundle.grid->available_water_west_mm = 20.0;
+  bundle.grid->available_water_east_mm = 40.0;  // averages 30 against a stated 120
+
+  EXPECT_THROW(static_cast<void>(bundle.make_soil_raster()), std::runtime_error);
+}
+
 }  // namespace paddock::config
