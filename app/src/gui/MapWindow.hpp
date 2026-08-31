@@ -201,6 +201,11 @@ class MapWindow : public QMainWindow {
   /// where you point at ten of them. What the window can honestly answer is
   /// what this year would have asked for, which is the year it is drawing.
   void open_disease_report();
+
+  /// **Every indicator this run produced, with how far each can be trusted.**
+  /// The report says what happened; this says where each figure stands against
+  /// what it is measured by, and how many of them rest on evidence at all.
+  void open_dashboard();
   void show_day(int day);
   void change_field(int field);
   void change_scale(int mode);
@@ -532,6 +537,7 @@ class MapWindow : public QMainWindow {
   /// of several. Under the readings it expands on.
   QPushButton* run_report_button_ = nullptr;
   QPushButton* disease_report_button_ = nullptr;
+  QPushButton* dashboard_button_ = nullptr;
 
   /// The last table produced, so the report can be reopened without running
   /// everything again. Empty until something has been run.

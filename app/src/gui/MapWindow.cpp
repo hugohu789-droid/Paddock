@@ -45,6 +45,9 @@
 
 #include <paddock/config/DiseaseConfig.hpp>
 #include <paddock/config/DiseaseReport.hpp>
+#include <paddock/config/EconomicsConfig.hpp>
+#include <paddock/config/FarmDashboard.hpp>
+#include <paddock/config/NitrogenReport.hpp>
 #include <paddock/config/ScenarioComparison.hpp>
 #include <paddock/config/ScenarioReport.hpp>
 #include <paddock/core/FarmletGrid.hpp>
@@ -53,6 +56,7 @@
 
 #include "../AttachElevation.hpp"
 #include "ComparisonDialog.hpp"
+#include "DashboardDialog.hpp"
 #include "PagePrinter.hpp"
 #include "ReportDialog.hpp"
 
@@ -577,6 +581,16 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   disease_report_button_->setEnabled(false);
   connect(disease_report_button_, &QPushButton::clicked, this, &MapWindow::open_disease_report);
 
+  dashboard_button_ = new QPushButton("Indicators", this);
+  dashboard_button_->setObjectName("quietAction");
+  dashboard_button_->setToolTip(
+      "Every indicator this run produced, in five panels, with where each stands against what "
+      "it is measured by - and how far each rests on something published.\n\n"
+      "The last is not decoration: most of these are model outputs, and a page that showed "
+      "them without saying so would be inviting them to be quoted as measurements.");
+  dashboard_button_->setEnabled(false);
+  connect(dashboard_button_, &QPushButton::clicked, this, &MapWindow::open_dashboard);
+
   readings->addStretch(1);
 
   auto* readings_inner = new QWidget(this);
@@ -599,6 +613,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   auto* report_row = new QHBoxLayout;
   report_row->setContentsMargins(10, 0, 10, 8);
   report_row->addStretch(1);
+  report_row->addWidget(dashboard_button_);
   report_row->addWidget(disease_report_button_);
   report_row->addWidget(run_report_button_);
 
@@ -859,6 +874,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   connect(setup_, &SetupPanel::readinessChanged, this, [this] {
     run_report_button_->setEnabled(setup_->can_report());
     disease_report_button_->setEnabled(setup_->can_report());
+    dashboard_button_->setEnabled(setup_->can_report());
   });
   connect(scenario_list_, &QListWidget::currentRowChanged, this, &MapWindow::show_scenario);
 
@@ -1178,6 +1194,34 @@ void MapWindow::open_report() {
       QString::fromStdString(last_bundle_->name + "-report.md"), this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->show();
+}
+
+void MapWindow::open_dashboard() {
+  if (!last_bundle_.has_value() || !last_run_.has_value()) {
+    return;
+  }
+
+  try {
+    // **The rule and the economics are read from the data directory here, not
+    // built in.** The command line takes them as arguments because a compliance
+    // figure is a quotation; the window knows where the data is, so it can look
+    // - but if either is missing the page simply has fewer panels rather than
+    // inventing what a farm spends or which zone it sits in.
+    std::optional<config::NitrogenRegulation> rule;
+    try {
+      rule = config::load_nitrogen_regulation(data_directory_ +
+                                              "/regulations/canterbury-nitrogen.toml");
+    } catch (const std::exception&) {
+      rule.reset();
+    }
+
+    auto* dialog = new DashboardDialog(
+        config::build_dashboard(*last_bundle_, *last_run_, last_bundle_->name, rule), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+  } catch (const std::exception& error) {
+    QMessageBox::warning(this, "Indicators", QString::fromStdString(error.what()));
+  }
 }
 
 void MapWindow::open_disease_report() {
