@@ -9,6 +9,7 @@ add_library(
   src/Distributions.cpp
   src/Entity.cpp
   src/Farm.cpp
+  src/FarmAccount.cpp
   src/Farmer.cpp
   src/FarmletGrid.cpp
   src/Geometry.cpp

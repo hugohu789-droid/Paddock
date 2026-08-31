@@ -1,0 +1,118 @@
+# What a Canterbury sheep farm spends and earns.
+#
+# **Why this class and not the other one.** Beef + Lamb New Zealand's survey
+# splits Marlborough-Canterbury into Class 6 (S.I. Finishing Breeding) and
+# Class 8 (S.I. Mixed Finishing). Class 8 is the geographic match - "located
+# mainly on the Canterbury Plains" - and the wrong enterprise: its weed and pest
+# bill is $449/ha and its cash crop expenses $257/ha, because it is an arable
+# farm that also runs stock. Class 6 is a sheep and beef breeding-finishing
+# farm, and its shape fits the farm this project models: fertiliser $154/ha,
+# animal health $55/ha, shearing $46/ha, no meaningful cash crop.
+#
+# The stocking rate confirms it. Every Class 6 line divides from $/ha to $/SU at
+# 7.74 stock units per hectare, and the modelled farm - 417 ewes on 80 ha at
+# about 1.35 SU each - comes to roughly 7.0 SU/ha. The same kind of farm.
+#
+# **Two different strengths of evidence in one file, and they are marked.** The
+# expenditure is `direct`: B+LNZ publish it, per hectare, from a random stratified
+# survey of about 540 farms. The prices are `verify`: they are trade-press
+# figures for the same season, not the survey's own, and a run that turns them
+# into a profit is quoting a newspaper rather than a dataset.
+#
+# **What is deliberately absent.** No lamb carcass weight, no lambing
+# percentage, no cull rate - the model produces those, and taking them from a
+# survey would be feeding the answer back in as an input. And no land value:
+# this file is a cash account, and land is not cash.
+
+[economics]
+name = "canterbury_sheep"
+display_name = "Canterbury sheep, Beef + Lamb Class 6"
+description = "Operating costs and prices for a South Island finishing-breeding sheep farm, Marlborough-Canterbury."
+region = "Marlborough-Canterbury"
+survey_class = "Class 6 S.I. Finishing Breeding"
+survey_year = "2024-25"
+
+# ---------------------------------------------------------------- expenditure
+#
+# All $/ha/year, the mean of the 2024-25 final survey. B+LNZ report these as
+# annual figures; the model spreads them evenly across the year unless a line
+# says otherwise, because a survey mean carries no seasonality.
+#
+# **Interest, rent and depreciation are carried but not charged by default.**
+# EBITRm - the measure B+LNZ rank farms by - is defined before interest, tax,
+# rent and manager wage, so a farm compared on that basis is being treated as
+# debt-free, freehold and owner-operated. A model that charged $219/ha of
+# interest to a farm nobody said had a mortgage would be inventing a balance
+# sheet.
+
+[expenditure]
+wages_and_salaries = { value = 87.31, status = "direct", source = "blnz_2025_csi" }
+animal_health = { value = 55.04, status = "direct", source = "blnz_2025_csi" }
+weed_and_pest = { value = 51.64, status = "direct", source = "blnz_2025_csi" }
+shearing = { value = 46.10, status = "direct", source = "blnz_2025_csi" }
+fertiliser = { value = 153.62, status = "direct", source = "blnz_2025_csi" }
+lime = { value = 5.51, status = "direct", source = "blnz_2025_csi" }
+seeds = { value = 38.21, status = "direct", source = "blnz_2025_csi" }
+vehicles_and_fuel = { value = 78.84, status = "direct", source = "blnz_2025_csi" }
+electricity = { value = 9.58, status = "direct", source = "blnz_2025_csi" }
+feed_and_grazing = { value = 68.36, status = "direct", source = "blnz_2025_csi" }
+dog_expenses = { value = 9.23, status = "direct", source = "blnz_2025_csi" }
+cultivation_and_sowing = { value = 39.65, status = "direct", source = "blnz_2025_csi" }
+cash_crop = { value = 2.30, status = "direct", source = "blnz_2025_csi" }
+repairs_and_maintenance = { value = 73.30, status = "direct", source = "blnz_2025_csi" }
+irrigation_charges = { value = 61.50, status = "direct", source = "blnz_2025_csi" }
+cartage = { value = 18.66, status = "direct", source = "blnz_2025_csi" }
+administration = { value = 45.42, status = "direct", source = "blnz_2025_csi" }
+insurance_and_acc = { value = 38.58, status = "direct", source = "blnz_2025_csi" }
+rates = { value = 45.01, status = "direct", source = "blnz_2025_csi" }
+
+# Charged only when a scenario says the farm carries them. See the note above.
+interest = { value = 219.18, status = "direct", source = "blnz_2025_csi" }
+rent = { value = 26.85, status = "direct", source = "blnz_2025_csi" }
+depreciation = { value = 106.52, status = "direct", source = "blnz_2025_csi" }
+
+[expenditure_options]
+# Whether the three lines above are charged. Off by default, so a run reports
+# EBITRm-comparable costs unless somebody states a balance sheet.
+charge_interest = false
+charge_rent = false
+charge_depreciation = false
+
+# ---------------------------------------------------------------- prices
+#
+# **Weaker evidence than the block above, and marked as such.** These are trade
+# press figures for the 2024-25 season, not the survey's own revenue lines. The
+# survey publishes revenue per hectare, but not in a form this document renders
+# as a table a reader can check - and deriving it from EBITRm needs a guess
+# about which wage lines that measure excludes, which is the kind of arithmetic
+# this project refuses.
+
+[prices]
+# South Island lamb schedule, new-season lambs, 2024-25.
+lamb_dollars_per_kg_carcass = { value = 7.80, status = "verify", source = "farmers_weekly_schedule" }
+
+# South Island strong wool indicator at the end of 2024.
+wool_dollars_per_kg = { value = 3.80, status = "verify", source = "strong_wool_indicator" }
+
+# What a cull ewe fetches. **No figure located** - the searches that produced
+# the two above did not produce this one, and mutton schedules move differently
+# from lamb. A run that sells cull ewes has to say it is using a placeholder.
+cull_ewe_dollars_per_head = { value = 90.0, status = "placeholder", source = "none" }
+
+# ---------------------------------------------------------------- capital
+
+[capital]
+# What the farm has in the bank on day one.
+#
+# **An engineering choice, not a survey figure.** B+LNZ publish a balance sheet
+# analysis but not a working-capital norm, and "how much cash should a farm
+# start a season with" is a question about the farmer rather than the farm. This
+# is six months of operating expenditure at the rates above, which is enough to
+# make insolvency reachable in a bad year and unreachable in an ordinary one -
+# so a run can demonstrate the thing without being rigged either way.
+opening_balance_per_hectare = { value = 400.0, status = "placeholder", source = "none" }
+
+[sources]
+blnz_2025_csi = "Beef + Lamb New Zealand Economic Service, Sheep and Beef Farm Survey: Marlborough/Canterbury, quintile analysis of final 2024-25 survey data. Class 6 S.I. Finishing Breeding, mean of the 2024-25 column."
+farmers_weekly_schedule = "South Island lamb schedule for new-season lambs, 2024-25, as reported in the New Zealand farming trade press. Not a Beef + Lamb survey figure."
+strong_wool_indicator = "South Island strong wool indicator, end of 2024, as reported in the New Zealand farming trade press."
