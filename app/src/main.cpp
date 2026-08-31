@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -26,6 +27,8 @@
 #include <paddock/core/Weather.hpp>
 
 #ifdef PADDOCK_WITH_CONFIG
+#include <paddock/config/EconomicsConfig.hpp>
+#include <paddock/config/FarmDashboard.hpp>
 #include <paddock/config/NitrogenReport.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/core/Simulation.hpp>
@@ -192,6 +195,121 @@ int run_disease(const std::vector<std::string>& arguments) {
 /// wet year without having changed anything it does. Given more than one year
 /// this prints them side by side, with leaching per millimetre of drainage
 /// beside the total, which is the column that separates the two.
+/// `paddock dashboard <bundle> [<year> ...] [--csv <stem>]`
+///
+/// **Every indicator carries how much it can be trusted, and the export carries
+/// it too.** A dashboard is the easiest place in a project like this to undo its
+/// own discipline: a tile reading "27.3 kg N/ha" is read as a measurement, and
+/// it is a model output resting on a placeholder. So the trust column is in the
+/// page, in the CSV, and counted in a panel of its own.
+int run_dashboard(const std::vector<std::string>& arguments) {
+  std::string csv_stem;
+  std::string rule_path;
+  std::string economics_path;
+  std::vector<int> years;
+  for (std::size_t i = 1; i < arguments.size(); ++i) {
+    if (arguments[i] == "--csv" && i + 1 < arguments.size()) {
+      csv_stem = arguments[i + 1];
+      ++i;
+      continue;
+    }
+    if (arguments[i] == "--rule" && i + 1 < arguments.size()) {
+      rule_path = arguments[i + 1];
+      ++i;
+      continue;
+    }
+    if (arguments[i] == "--economics" && i + 1 < arguments.size()) {
+      economics_path = arguments[i + 1];
+      ++i;
+      continue;
+    }
+    years.push_back(std::stoi(arguments[i]));
+  }
+
+  paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(arguments.front());
+  if (const std::string trouble = paddock::app::attach_elevation(bundle, arguments.front());
+      !trouble.empty()) {
+    std::cerr << "paddock: " << trouble << '\n';
+    return 1;
+  }
+  if (!bundle.management.has_value()) {
+    std::cerr << "paddock: '" << bundle.name
+              << "' has no [management] section, so it has no stock and half these indicators "
+                 "would be blank"
+                 "\n";
+    return 2;
+  }
+
+  // **The zone rule is an argument, not a default.** New Zealand has no national
+  // nitrogen loss limit - councils set them catchment by catchment - so a
+  // dashboard that reached for one on its own would be asserting that this farm
+  // is in that zone. Without --rule the nitrogen panel still reports what
+  // leached; it simply has nothing to say about compliance, which is the honest
+  // answer when nobody has said which rule applies.
+  std::optional<paddock::config::NitrogenRegulation> rule;
+  if (!rule_path.empty()) {
+    rule = paddock::config::load_nitrogen_regulation(rule_path);
+  }
+
+  // **Without --economics the money and flock panels are simply absent**, which
+  // is better than showing a farm's finances against costs nobody stated. The
+  // pasture, water and nitrogen panels do not need them.
+  std::optional<paddock::config::FarmEconomics> economics;
+  if (!economics_path.empty()) {
+    economics = paddock::config::load_economics(economics_path);
+  }
+
+  paddock::core::DietQuality diet;
+  diet.metabolisable_energy_mj_per_kg_dm = 10.5;
+  diet.digestibility_percent = 75.0;
+
+  const auto board_for = [&](const paddock::config::ScenarioBundle& one, const std::string& label) {
+    if (economics.has_value()) {
+      return paddock::config::build_dashboard(
+          one,
+          paddock::config::run_managed_scenario(one, *one.management, diet, label,
+                                                paddock::config::business_from(one, *economics)),
+          label, rule);
+    }
+    return paddock::config::build_dashboard(
+        one, paddock::config::run_managed_scenario(one, *one.management, diet, label), label, rule);
+  };
+
+  std::vector<paddock::config::FarmDashboard> boards;
+  if (years.empty()) {
+    boards.push_back(board_for(bundle, bundle.range.first.to_iso_string().substr(0, 4)));
+  } else {
+    for (const int start : years) {
+      paddock::config::ScenarioBundle one = bundle;
+      one.range = paddock::core::DateRange{paddock::core::Date{start, 7, 1},
+                                           paddock::core::Date{start + 1, 6, 30}};
+      boards.push_back(board_for(one, std::to_string(start) + "-" +
+                                          (((start + 1) % 100) < 10 ? "0" : "") +
+                                          std::to_string((start + 1) % 100)));
+    }
+  }
+
+  if (boards.size() == 1) {
+    std::cout << paddock::config::as_text(boards.front());
+  } else {
+    std::cout << paddock::config::compare_dashboards_as_text(boards);
+  }
+
+  if (!csv_stem.empty()) {
+    std::ofstream indicators(csv_stem + "-indicators.csv");
+    indicators << (boards.size() == 1 ? paddock::config::indicators_as_csv(boards.front())
+                                      : paddock::config::compare_dashboards_as_csv(boards));
+    std::ofstream series(csv_stem + "-series.csv");
+    series << paddock::config::series_as_csv(boards.front());
+    std::cout << "\n"
+                 "  wrote "
+              << csv_stem << "-indicators.csv and " << csv_stem
+              << "-series.csv"
+                 "\n";
+  }
+  return 0;
+}
+
 int run_nitrogen(const std::vector<std::string>& arguments) {
   paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(arguments.front());
 
@@ -334,6 +452,15 @@ int main(int argc, char** argv) {
         rest.emplace_back(args[i]);
       }
       return run_disease(rest);
+    }
+
+    if (args.size() >= 2 && args[0] == "dashboard") {
+      std::vector<std::string> rest;
+      rest.reserve(args.size() - 1);
+      for (std::size_t i = 1; i < args.size(); ++i) {
+        rest.emplace_back(args[i]);
+      }
+      return run_dashboard(rest);
     }
 
     if (args.size() >= 3 && args[0] == "nitrogen") {
