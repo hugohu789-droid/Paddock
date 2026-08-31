@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <string>
 #include <utility>
@@ -109,6 +110,98 @@ int Flock::sell_oldest(int head) {
                                 [](const AgeCohort& cohort) { return cohort.mob.head <= 0; }),
                  cohorts_.end());
   return sold;
+}
+
+std::string FlockCalendar::invalid_reason() const {
+  const auto valid = [](int month, int day) { return Date{2024, month, day}.is_valid(); };
+  if (!valid(mating_month, mating_day)) {
+    return "the mating date is not a date";
+  }
+  if (!valid(lambing_month, lambing_day)) {
+    return "the lambing date is not a date";
+  }
+  if (!valid(weaning_month, weaning_day)) {
+    return "the weaning date is not a date";
+  }
+  if (!valid(year_turns_month, year_turns_day)) {
+    return "the date the year turns is not a date";
+  }
+  return {};
+}
+
+FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const FlockRates& rates) {
+  FlockDay day;
+
+  const auto is = [&today](int month, int date) {
+    return today.month == month && today.day == date;
+  };
+
+  // **The year turns first.** Classes are renamed and the oldest draft leaves
+  // before anything else happens, because a ewe culled for age on 1 July is not
+  // available to be mated in the season that follows.
+  if (is(calendar.year_turns_month, calendar.year_turns_day)) {
+    day.culled += age_one_year(rates);
+    day.year_turned = true;
+  }
+
+  // **Lambing.** The lambs of the season arrive as a cohort of their own, and
+  // the bulk of the year's ewe deaths happen here.
+  if (is(calendar.lambing_month, calendar.lambing_day)) {
+    const int ewes = breeding_head();
+    if (ewes > 0) {
+      const int lambs = static_cast<int>(
+          std::llround(static_cast<double>(ewes) * rates.lambing_percentage / 100.0));
+      if (lambs > 0) {
+        AgeCohort born;
+        born.birth_year = today.year;
+        born.age_years = 0;
+        born.mob = cohorts_.empty() ? Mob{} : cohorts_.front().mob;
+        born.mob.name = "lambs " + std::to_string(today.year);
+        born.mob.head = lambs;
+        born.mob.state.age_days = 0.0;
+        add(std::move(born));
+        day.born = lambs;
+      }
+
+      const double lost = static_cast<double>(ewes) * rates.loss_to_mid_lactation_fraction *
+                          rates.share_of_loss_at_lambing;
+      day.died = remove_from_breeding(static_cast<int>(std::llround(lost)));
+    }
+  }
+
+  // **Weaning**, the main culling event: age, teeth and udders.
+  if (is(calendar.weaning_month, calendar.weaning_day)) {
+    const int ewes = breeding_head();
+    const double culled = static_cast<double>(ewes) * rates.culled_at_weaning_fraction;
+    day.culled += remove_from_breeding(static_cast<int>(std::llround(culled)));
+  }
+
+  return day;
+}
+
+int Flock::remove_from_breeding(int head) {
+  int remaining = std::max(0, head);
+  int removed = 0;
+
+  // Oldest breeding cohorts first: a farmer culling for age and teeth takes the
+  // old ewes, and a death at lambing falls hardest on them too.
+  for (AgeCohort& cohort : cohorts_) {
+    if (remaining <= 0) {
+      break;
+    }
+    if (cohort.age_years < 2) {
+      continue;
+    }
+    const int from_this = std::min(cohort.mob.head, remaining);
+    cohort.mob.head -= from_this;
+    remaining -= from_this;
+    removed += from_this;
+  }
+
+  cohorts_.erase(std::remove_if(cohorts_.begin(), cohorts_.end(),
+                                [](const AgeCohort& cohort) { return cohort.mob.head <= 0; }),
+                 cohorts_.end());
+  return removed;
 }
 
 }  // namespace paddock::core
