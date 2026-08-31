@@ -155,4 +155,42 @@ std::vector<double> spore_count_series(const WeatherSeries& weather,
   return counts;
 }
 
+std::vector<MycotoxinYear> mycotoxin_years(const WeatherSeries& weather,
+                                           double monitoring_spores_per_g,
+                                           double dangerous_spores_per_g,
+                                           const MycotoxinParameters& parameters) {
+  const std::vector<double> counts = spore_count_series(weather, parameters);
+
+  std::vector<MycotoxinYear> years;
+  double carried = 0.0;
+
+  for (std::size_t day = 0; day < counts.size() && day < weather.records.size(); ++day) {
+    const Date& date = weather.records[day].date;
+
+    // July opens the farm year, so anything before July belongs to the year
+    // that started the previous July.
+    const int starting_year = date.month >= 7 ? date.year : date.year - 1;
+    if (years.empty() || years.back().starting_year != starting_year) {
+      MycotoxinYear opened;
+      opened.starting_year = starting_year;
+      years.push_back(opened);
+    }
+
+    // Carried across the boundary on purpose: a liver does not reset in July.
+    carried = next_exposure(carried, counts[day], parameters);
+
+    MycotoxinYear& year = years.back();
+    year.peak_spores_per_g = std::max(year.peak_spores_per_g, counts[day]);
+    year.peak_ggt_iu_per_l =
+        std::max(year.peak_ggt_iu_per_l, ggt_from_exposure(carried, parameters));
+    if (counts[day] >= monitoring_spores_per_g) {
+      ++year.days_at_or_above_monitoring;
+    }
+    if (counts[day] >= dangerous_spores_per_g) {
+      ++year.days_at_or_above_dangerous;
+    }
+  }
+  return years;
+}
+
 }  // namespace paddock::core

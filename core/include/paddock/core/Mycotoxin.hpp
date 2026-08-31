@@ -167,4 +167,34 @@ struct MycotoxinParameters {
 [[nodiscard]] std::vector<double> spore_count_series(const WeatherSeries& weather,
                                                      const MycotoxinParameters& parameters);
 
+/// One farm year of the disease, as a report would state it.
+///
+/// The year runs July to June, because that is the year a New Zealand pastoral
+/// farm is run on and facial eczema straddles the calendar boundary - an
+/// outbreak that starts in December and runs into February is one season, not
+/// two.
+struct MycotoxinYear {
+  /// The July the year opens in.
+  int starting_year = 0;
+
+  double peak_spores_per_g = 0.0;
+  int days_at_or_above_monitoring = 0;
+  int days_at_or_above_dangerous = 0;
+
+  /// The highest serum GGT reached, from exposure carried across the whole
+  /// series rather than reset each July - a liver does not know when the
+  /// financial year ends.
+  double peak_ggt_iu_per_l = 0.0;
+};
+
+/// Summarises a multi-year weather series, one entry per July-to-June year.
+///
+/// **Exposure carries across the boundary and is cleared daily**, which is what
+/// makes a decade meaningful rather than ten independent years: a bad autumn
+/// still shows in the following winter, and a quiet year lets a liver recover.
+[[nodiscard]] std::vector<MycotoxinYear> mycotoxin_years(const WeatherSeries& weather,
+                                                         double monitoring_spores_per_g,
+                                                         double dangerous_spores_per_g,
+                                                         const MycotoxinParameters& parameters);
+
 }  // namespace paddock::core

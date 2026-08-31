@@ -115,5 +115,95 @@ TEST(FacialEczemaGeographyTest, CanterburyStaysClearAcrossTheFittedRange) {
   }
 }
 
+// **Ten consecutive years at one farm.** A single year cannot tell you whether
+// a model is bounded, and this project found that out the hard way: the year
+// first tested had no favourable run longer than six nights, and every test was
+// green against a model whose spore count ran to 4.8e18 on weather that had
+// actually happened. A decade is what caught it.
+//
+// What this asserts is the shape of a real facial eczema record rather than any
+// one year's numbers: the disease is not every year, it is not never, and no
+// year is physically absurd.
+TEST(FacialEczemaGeographyTest, ADecadeAtRuakuraLooksLikeARecordRatherThanAnOverflow) {
+  const WeatherSeries weather = year_at("ruakura-fe/weather-2015-2025.csv");
+  ASSERT_EQ(weather.records.size(), 3653U) << "ten farm years, July 2015 to June 2025";
+
+  const MycotoxinParameters fe = facial_eczema();
+  const std::vector<MycotoxinYear> years =
+      mycotoxin_years(weather, kMonitorOwnFarm, kDangerous, fe);
+
+  ASSERT_EQ(years.size(), 10U) << "July 2015 to June 2025 is ten whole farm years";
+
+  int clear = 0;
+  int reached_monitoring = 0;
+  int reached_dangerous = 0;
+  for (const MycotoxinYear& year : years) {
+    // **No year may be physically absurd.** This is the assertion the decade
+    // was fetched for.
+    EXPECT_LE(year.peak_spores_per_g, fe.carrying_capacity_spores_per_g)
+        << year.starting_year << " ran past what litter can carry";
+
+    if (year.days_at_or_above_monitoring == 0) {
+      ++clear;
+    } else {
+      ++reached_monitoring;
+    }
+    if (year.days_at_or_above_dangerous > 0) {
+      ++reached_dangerous;
+    }
+  }
+
+  EXPECT_GT(clear, 0) << "a decade in the Waikato should contain a year that was simply fine";
+  EXPECT_GT(reached_monitoring, 4) << "and most years should ask a farmer to start counting";
+  EXPECT_GT(reached_dangerous, 2) << "and several should reach the level guidance calls dangerous";
+  EXPECT_LT(reached_dangerous, static_cast<int>(years.size()))
+      << "but not every year, or the model is describing a place rather than a season";
+}
+
+// Exposure crossing the July boundary is what makes a decade more than ten
+// separate years, so this compares a year run inside the decade against the
+// same year run from a standing start. If the two agree, exposure is resetting
+// and the decade is ten independent runs wearing a trench coat.
+TEST(FacialEczemaGeographyTest, AYearInsideTheDecadeInheritsFromTheOneBeforeIt) {
+  const WeatherSeries decade = year_at("ruakura-fe/weather-2015-2025.csv");
+  const MycotoxinParameters fe = facial_eczema();
+
+  const std::vector<MycotoxinYear> together =
+      mycotoxin_years(decade, kMonitorOwnFarm, kDangerous, fe);
+  ASSERT_FALSE(together.empty());
+
+  // Pick the year that follows the worst one, which is where an inheritance
+  // would show most clearly.
+  std::size_t worst = 0;
+  for (std::size_t i = 0; i < together.size(); ++i) {
+    if (together[i].peak_ggt_iu_per_l > together[worst].peak_ggt_iu_per_l) {
+      worst = i;
+    }
+  }
+  ASSERT_LT(worst + 1, together.size()) << "the worst year is the last, so nothing follows it";
+  const MycotoxinYear& following = together[worst + 1];
+
+  // The same year on its own: every day whose farm year matches, and nothing
+  // before it.
+  WeatherSeries alone;
+  for (const DailyWeather& day : decade.records) {
+    const int starting_year = day.date.month >= 7 ? day.date.year : day.date.year - 1;
+    if (starting_year == following.starting_year) {
+      alone.records.push_back(day);
+    }
+  }
+  ASSERT_FALSE(alone.records.empty());
+
+  const std::vector<MycotoxinYear> by_itself =
+      mycotoxin_years(alone, kMonitorOwnFarm, kDangerous, fe);
+  ASSERT_EQ(by_itself.size(), 1U);
+
+  // The spore counts are the same weather either way; only the liver differs.
+  EXPECT_DOUBLE_EQ(following.peak_spores_per_g, by_itself.front().peak_spores_per_g)
+      << "the same weather should grow the same spores whichever run it is in";
+  EXPECT_GT(following.peak_ggt_iu_per_l, by_itself.front().peak_ggt_iu_per_l)
+      << "a year that follows a bad one should start with something already carried";
+}
+
 }  // namespace
 }  // namespace paddock::core

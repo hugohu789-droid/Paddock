@@ -115,7 +115,9 @@ paddock_hectares = 2.0
 # **The file is not committed** - snapshots never are - and the hash is what
 # makes that safe. Fetch it once with:
 #
-#   python scripts/nz-elevation-snapshot.py --lon 175.3167 --lat -37.7833 #       --collection waikato/hamilton_2023 #       --out data/snapshots/ruakura-dem-1m.tiff
+#   python scripts/nz-elevation-snapshot.py --lon 175.3167 --lat -37.7833 \
+#       --collection waikato/hamilton_2023 \
+#       --out data/snapshots/ruakura-dem-1m.tiff
 #
 # Without it this bundle runs on flat ground and says so, which is a working
 # scenario rather than a broken one: facial eczema is a question about the air
