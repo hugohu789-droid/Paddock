@@ -14,6 +14,7 @@ add_library(
   src/Geometry.cpp
   src/Grazing.cpp
   src/GrazingCalendar.cpp
+  src/Mycotoxin.cpp
   src/PaddockMask.cpp
   src/Pasture.cpp
   src/SimulationClock.cpp

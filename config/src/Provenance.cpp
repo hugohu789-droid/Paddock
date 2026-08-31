@@ -20,6 +20,8 @@ std::string to_string(Provenance status) {
       return "derived";
     case Provenance::Verify:
       return "verify";
+    case Provenance::Fitted:
+      return "fitted";
     case Provenance::Placeholder:
       return "placeholder";
   }
@@ -37,6 +39,10 @@ bool provenance_from_string(std::string_view text, Provenance& out) {
   }
   if (text == "verify") {
     out = Provenance::Verify;
+    return true;
+  }
+  if (text == "fitted") {
+    out = Provenance::Fitted;
     return true;
   }
   if (text == "placeholder") {

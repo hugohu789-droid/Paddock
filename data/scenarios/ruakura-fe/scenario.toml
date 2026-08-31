@@ -1,0 +1,178 @@
+# A Waikato sheep block through a facial eczema year.
+#
+# **Why this place.** Ruakura is where AgResearch ran the long-term facial
+# eczema selection experiment, and the liver-injury regression this model uses -
+# Morris, Smith and Hickey (2002) - was measured on lambs sired by rams from it.
+# So the disease is demonstrated on the ground the literature it came from was
+# measured on.
+#
+# **What differs from lincoln-lurdf, and what does not.** The block is the same
+# shape, the same stocking and the same management as the Canterbury bundle, and
+# the soil and sward files are copies of it. The only thing that changes is
+# where the farm is and therefore what weather falls on it. That is deliberate:
+# a difference between the two runs is a difference between two climates, not
+# between two farms.
+#
+# **The ground is measured**, from the same LINZ elevation service the Canterbury
+# bundle uses. A build without the geospatial stack, or a checkout that has not
+# fetched the tile, draws the farm flat and says which - and that is still a
+# working scenario, because facial eczema is a question about the air and the
+# litter at the base of the sward rather than about slope.
+
+[scenario]
+name = "ruakura_fe"
+description = "A Waikato sheep block on recorded weather, in the country where facial eczema happens."
+engine_version = "0.1.0"
+master_seed = 20240120
+
+[run]
+start_date = "2023-07-01"
+end_date = "2024-06-30"
+latitude_degrees = -37.777
+
+[weather]
+# Recorded, not synthetic. Fetched with:
+#
+#   python scripts/open-meteo-snapshot.py --lon 175.3053 --lat -37.7773 \
+#       --start 2023-07-01 --end 2024-06-30 \
+#       --out data/scenarios/ruakura-fe/weather-2023.csv
+#
+# **Committed, unlike the elevation.** Open-Meteo is CC BY 4.0, so this file may
+# travel with the repository; the LiDAR that lincoln-lurdf names may not, which
+# is why that bundle carries a hash and a script instead.
+#
+# What the year looks like where this scenario is pointed: 120 nights at or
+# above 12 C, 132 days with 4 mm of rain behind them, and 61 where both hold at
+# once - five separate runs long enough to open an outbreak. Lincoln's same year
+# has no such run at all, which is the whole point of the pair.
+#
+# The same two-model caveat as the Canterbury file: everything but the
+# ultraviolet is ERA5 from the archive endpoint, and `uv_index` is CAMS from the
+# air quality endpoint. The provenance file records which column came from
+# which.
+kind = "snapshot"
+path = "weather-2023.csv"
+sha256 = "88c79ef0c4272564853216a3295a7f44abab27d2617b4d7cba75359415410ad8"
+dataset = "Open-Meteo historical weather API (ERA5 reanalysis)"
+licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5)."
+
+[soil]
+path = "soil.toml"
+sha256 = "523e37beed50db5ecb6c367a5d53cf578823561dc940fbbc6aef31facdc4a36a"
+
+[sward]
+path = "sward.toml"
+sha256 = "d33109030d022d64db408c55e99751541224e5e0f42f195f56848432f9bd6ce3"
+
+[initial_state]
+soil_water_mm = 90.0
+grass_kg_dm_per_ha = 2200.0
+legume_kg_dm_per_ha = 600.0
+soil_mineral_nitrogen_kg_per_ha = 60.0
+
+[grid]
+# The same 40 x 32 cells at 25 m as lincoln-lurdf - 1000 by 800 m, 80 hectares -
+# so the two farms differ in their weather and in nothing else.
+#
+# The origin is the north-west corner of a block centred on the Ruakura centre
+# this repository already carries: 1804011.1268 E, 5815700.0870 N in
+# data/farms/ruakura-research-centre.toml, which is LINZ's own Concord
+# conversion of the Ruakura locality and is pinned in tests/gis/ProjectionTest.cpp.
+# That file records it as a locality reference and **not** a surveyed farm
+# centroid - see open item 8 - so this block is placed near Ruakura rather than
+# on it.
+#
+# The weather was fetched at 175.3053 E, 37.7773 S, about 1.2 km from that
+# point. It makes no difference to what falls on the farm: ERA5 answers from a
+# grid cell tens of kilometres across, and the provenance file records the cell
+# that replied as -37.785587, 175.30121 - the same cell either coordinate lands in.
+cols = 40
+rows = 32
+cell_size_m = 25.0
+available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
+available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
+#
+# **Placed to sit inside the LiDAR tile, with the margins checked.** The tile
+# runs 1799200-1804000 E and 5809200-5816400 N, so a 1000 by 800 m block at
+# this origin has 200 m of clearance at its nearest edge, the eastern one, and
+# 300 m at the northern. That puts the block about 700 m west of the Ruakura
+# centre named above, which is within the accuracy that centre claims for
+# itself - it is a locality reference, not a survey.
+origin_easting = 1802800.0
+origin_northing = 5816100.0
+
+# 80 ha at 2 ha gives 40 paddocks of 2.0 ha, as on the Canterbury block.
+paddock_hectares = 2.0
+
+[terrain]
+# Measured ground, not a formula.
+#
+# Waikato - Hamilton LiDAR 1m DEM (2023), tile BD33_10000_0405, flown
+# 9 November 2023, 1 m, already in NZTM2000. A DEM and not a DSM: bare earth,
+# because grass grows on the ground and not on the woolshed roof. Licensed
+# CC BY 4.0, hosted and processed by Toitu Te Whenua LINZ.
+#
+# **The file is not committed** - snapshots never are - and the hash is what
+# makes that safe. Fetch it once with:
+#
+#   python scripts/nz-elevation-snapshot.py --lon 175.3167 --lat -37.7833 \
+#       --collection waikato/hamilton_2023 \
+#       --out data/snapshots/ruakura-dem-1m.tiff
+#
+# Without it this bundle runs on flat ground and says so, which is a working
+# scenario rather than a broken one: facial eczema is a question about the air
+# and the litter at the base of the sward rather than about slope.
+kind = "snapshot"
+path = "../../snapshots/ruakura-dem-1m.tiff"
+sha256 = "fdd4a1c86a4d280a582c2d89d589c38339909c4ee6e47573e73fc69cde30bb8a"
+
+[[mob]]
+name = "main mob"
+path = "../../species/sheep-ewe.toml"
+sha256 = "0ac6b26ff1af72a91c5ebd259ef310c04e305d3c15a6caf381756a257984363a"
+head = 417
+paddock = 0
+liveweight_kg = 55.0
+age_days = 1500.0
+
+# The same calendar the Canterbury bundle runs, so the management is not a
+# variable between them either.
+
+[[grazing_period]]
+name = "winter rotation"
+from = "2023-07-01"
+to = "2023-08-19"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 35
+
+[[grazing_period]]
+name = "lambing"
+from = "2023-08-20"
+to = "2023-10-28"
+system = "set_stocking"
+
+[[grazing_period]]
+name = "post-weaning rotation"
+from = "2023-10-29"
+to = "2023-11-30"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 21
+
+[[grazing_period]]
+name = "dry season rotation"
+from = "2023-12-01"
+to = "2024-06-30"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 35
+
+[management]
+minimum_cover_kg_dm_per_ha = 1600.0
+rotation_cover_threshold_kg_dm_per_ha = 2200.0
+target_liveweight_gain_kg_per_day = 0.0
+maximum_graze_days = 3
+minimum_spell_days = 35
+supplement_me_mj_per_kg_dm = 10.0
+may_buy_feed = true

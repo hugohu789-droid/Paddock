@@ -16,6 +16,7 @@ add_executable(
   unit/GrazingCalendarTest.cpp
   unit/GrazingTest.cpp unit/IrrigationTest.cpp
   unit/LiveweightResponseTest.cpp
+  unit/MycotoxinTest.cpp
   unit/PaddockMaskTest.cpp
   unit/PastureTest.cpp
   unit/RasterTest.cpp
@@ -81,6 +82,24 @@ gtest_discover_tests(paddock_conservation_tests PROPERTIES LABELS "conservation"
 if(PADDOCK_BUILD_APP)
   add_test(NAME app_reports_its_version COMMAND paddock --version)
   set_tests_properties(app_reports_its_version PROPERTIES LABELS "unit;fast")
+
+  # The disease command, end to end. It is the one CLI output a person reads
+  # rather than a machine parses, so a smoke test that it renders at all is
+  # worth more than its cost.
+  add_test(NAME app_reports_a_disease_decade
+           COMMAND paddock disease "${CMAKE_SOURCE_DIR}/data/diseases/facial-eczema.toml"
+                   "${CMAKE_SOURCE_DIR}/data/scenarios/ruakura-fe/weather-2015-2025.csv")
+  set_tests_properties(app_reports_a_disease_decade PROPERTIES
+                       LABELS "unit;fast"
+                       PASS_REGULAR_EXPRESSION "a zinc programme would have run in")
+
+  add_test(NAME app_compares_two_places_for_a_disease
+           COMMAND paddock disease "${CMAKE_SOURCE_DIR}/data/diseases/facial-eczema.toml"
+                   "${CMAKE_SOURCE_DIR}/data/scenarios/ruakura-fe/weather-2015-2025.csv"
+                   "${CMAKE_SOURCE_DIR}/data/scenarios/lincoln-lurdf/weather-2015-2025.csv")
+  set_tests_properties(app_compares_two_places_for_a_disease PROPERTIES
+                       LABELS "unit;fast"
+                       PASS_REGULAR_EXPRESSION "0 of 10")
 endif()
 
 # config/ has its own suite because it links a dependency core does not have.
@@ -113,7 +132,8 @@ if(PADDOCK_BUILD_CONFIG)
   set(PADDOCK_VALIDATION_OUTPUT_DIR "${CMAKE_BINARY_DIR}/validation")
   file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
 
-  add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
+  add_executable(paddock_validation_tests validation/FacialEczemaGeographyTest.cpp
+                                          validation/GrazedYearTest.cpp
                                           validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp
                                           validation/ManagedFarmTest.cpp

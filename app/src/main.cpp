@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdio>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -13,6 +14,8 @@
 #include <string_view>
 #include <vector>
 
+#include <paddock/config/DiseaseConfig.hpp>
+#include <paddock/config/DiseaseReport.hpp>
 #include <paddock/core/SnapshotWeather.hpp>
 
 #ifdef PADDOCK_WITH_GIS
@@ -125,6 +128,51 @@ void write_csv(const paddock::core::RunResult& result, const std::string& path) 
   std::cout << "wrote " << result.daily.size() << " daily records to " << path << '\n';
 }
 
+/// `paddock disease <disease.toml> <weather.csv>...`
+///
+/// **The question this answers is not "what is the spore count", it is "how
+/// many years out of ten would this farm have run a zinc programme".** One
+/// weather file gives the year-by-year table; several give the comparison
+/// between places, which is the form that says whether the disease is a
+/// question for a farm at all.
+///
+/// The site's name is the weather file's parent directory, which is the bundle
+/// it belongs to - so `data/scenarios/ruakura-fe/weather-2015-2025.csv` reports
+/// as "ruakura-fe" without anyone having to name it twice.
+int run_disease(const std::vector<std::string>& arguments) {
+  const paddock::config::DiseaseDefinition disease =
+      paddock::config::load_disease(arguments.front());
+
+  std::vector<paddock::config::DiseaseSite> sites;
+  for (std::size_t i = 1; i < arguments.size(); ++i) {
+    const std::filesystem::path weather_path(arguments[i]);
+
+    paddock::core::SnapshotWeatherSource::Options options;
+    options.path = arguments[i];
+    options.dataset = "recorded weather";
+    options.licence = "see the snapshot's provenance file";
+
+    const paddock::core::SnapshotWeatherSource source(options);
+    const paddock::core::ConnectionStatus status = source.test_connection();
+    if (!status.ok) {
+      std::cerr << "paddock: " << status.message << "\n";
+      return 1;
+    }
+
+    paddock::config::DiseaseSite site;
+    site.name = weather_path.parent_path().filename().string();
+    if (site.name.empty()) {
+      site.name = weather_path.stem().string();
+    }
+    site.weather.records = source.records();
+    sites.push_back(std::move(site));
+  }
+
+  std::cout << (sites.size() == 1 ? paddock::config::render_disease_years(sites.front(), disease)
+                                  : paddock::config::render_disease_comparison(sites, disease));
+  return 0;
+}
+
 /// `paddock scenario run <bundle>` - loads a bundle, checks its inputs are the
 /// ones it was built on, runs it, and reports. A run whose budgets do not close
 /// is reported as a failure: the numbers would be meaningless.
@@ -208,6 +256,15 @@ int main(int argc, char** argv) {
     }
 
 #ifdef PADDOCK_WITH_CONFIG
+    if (args.size() >= 3 && args[0] == "disease") {
+      std::vector<std::string> rest;
+      rest.reserve(args.size() - 1);
+      for (std::size_t i = 1; i < args.size(); ++i) {
+        rest.emplace_back(args[i]);
+      }
+      return run_disease(rest);
+    }
+
     if (args.size() >= 3 && args[0] == "scenario" && args[1] == "run") {
       std::string csv_path;
       if (args.size() == 5 && args[3] == "--csv") {

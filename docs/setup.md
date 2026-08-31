@@ -308,13 +308,24 @@ copies, and **only the 64-bit one works**. The 32-bit build under
 "/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/x64/bin/clang-tidy.exe" --quiet core/src/YourFile.cpp -- -std=c++17 -Icore/include
 ```
 
-Two cautions when invoking it by hand rather than through the compile database.
-Findings in a file whose includes could not be resolved are not to be trusted:
-clang-tidy cannot see the real types, so untouched variables look
-const-assignable and defined functions look undeclared. And `modernize-type-traits`
-fires inside Google Test's own macro expansions, which CI's header filter
-suppresses and an ad-hoc run does not. Check a finding against the file's
-includes before acting on it.
+**Give it every include the file needs, or the findings are noise.** A file
+whose includes do not resolve is parsed without real types, and clang-tidy then
+reports variables as const-assignable that are assigned two lines later and
+functions as needing internal linkage that are declared in a header it could not
+open. Six such findings on `config/src/` turned out to be one missing `-I`. What
+each module needs:
+
+| Editing | Add |
+|---|---|
+| `core/src/` | `-Icore/include` |
+| `config/src/` | the above, plus `-Iconfig/include -Iconfig/src -Ibuild/default/_deps/tomlplusplus-src/include` |
+| `tests/` | the above, plus `-Itests -DPADDOCK_DATA_DIR='"data"'` and the gtest include from `build/default/vcpkg_installed/` |
+
+The toml++ path is a fetched dependency, so it only exists after a configure -
+`cmake --preset default` first if it is missing.
+
+One more caution: `modernize-type-traits` fires inside Google Test's own macro
+expansions, which CI's header filter suppresses and an ad-hoc run does not.
 
 ## Line endings and case sensitivity
 
