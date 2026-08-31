@@ -41,7 +41,7 @@ MycotoxinParameters a_mycotoxin() {
   parameters.background_spores_per_g = 2000.0;
   parameters.carrying_capacity_spores_per_g = 500'000.0;
   parameters.picograms_per_spore = 1.41;
-  parameters.reactor_spore_days = 1'500'000.0;
+  parameters.reactor_toxin_ng_days = 2'115.0;
   parameters.reactor_ggt_iu_per_l = 55.0;
   parameters.liver_injury_intercept = -2.96;
   parameters.liver_injury_ln_ggt_slope = 0.89;
@@ -176,17 +176,23 @@ TEST(MycotoxinTest, MostOfAnAffectedMobShowsNothing) {
 TEST(MycotoxinTest, TheFittedIndexReproducesTheFieldThresholds) {
   const MycotoxinParameters fe = a_mycotoxin();
 
+  // **Toxin-days, not spore-days.** The count goes through the conversion
+  // first, which is the whole point of the axis: a spore count means nothing to
+  // a liver until it is turned into the toxin standing on the pasture.
+  const auto days_at = [&](double spores_per_g, double days) {
+    return toxin_ng_per_g(spores_per_g, fe) * days;
+  };
+
   // Field guidance: 100,000 spores/g is dangerous, and clinical signs follow
   // intake by 10 to 18 days. A fortnight there should reach the reactor GGT.
-  const double dangerous_fortnight = 100'000.0 * 15.0;
-  EXPECT_GE(ggt_from_exposure(dangerous_fortnight, fe), fe.reactor_ggt_iu_per_l);
+  EXPECT_GE(ggt_from_exposure(days_at(100'000.0, 15.0), fe), fe.reactor_ggt_iu_per_l);
 
   // And 20,000 - "damaging over an extended period" - should not get there in
   // the same fortnight.
-  EXPECT_LT(ggt_from_exposure(20'000.0 * 15.0, fe), fe.reactor_ggt_iu_per_l);
+  EXPECT_LT(ggt_from_exposure(days_at(20'000.0, 15.0), fe), fe.reactor_ggt_iu_per_l);
 
   // But should over a season, which is what "extended period" means.
-  EXPECT_GE(ggt_from_exposure(20'000.0 * 90.0, fe), fe.reactor_ggt_iu_per_l);
+  EXPECT_GE(ggt_from_exposure(days_at(20'000.0, 90.0), fe), fe.reactor_ggt_iu_per_l);
 
   EXPECT_DOUBLE_EQ(ggt_from_exposure(0.0, fe), 0.0);
 }

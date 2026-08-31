@@ -66,10 +66,22 @@ struct MycotoxinParameters {
   double picograms_per_spore = 1.41;
 
   // Response.
-  double reactor_spore_days = 1'500'000.0;
+  /// **Toxin-days per gram, not spore-days.** The dose an animal takes is the
+  /// toxin on the pasture, and how much toxin a spore carries is a measured
+  /// quantity that varies: Fitzgerald, Collin and Towers (1998) found the same
+  /// count carrying 2.7 times the toxin depending which strains were present.
+  /// While this was accumulated in spore-days that measurement could not reach
+  /// a result, and neither could anything that destroys toxin without
+  /// destroying spores - which is both of the open gaps, rain eluting it and
+  /// sunlight altering it.
+  ///
+  /// FITTED, and the figure is the exact translation of the spore-day threshold
+  /// it replaces at 1.41 pg per spore, so moving the axis changed no result on
+  /// the day it moved. What changed is that the conversion now carries weight.
+  double reactor_toxin_ng_days = 2'115.0;
 
-  /// Exposure a year of clean pasture delivers, subtracted before any damage is
-  /// counted.
+  /// Exposure a year of clean pasture delivers, in toxin-days per gram,
+  /// subtracted before any damage is counted.
   ///
   /// **Without this the model gives sheep liver damage for standing on clean
   /// grass.** The count never falls below a background, so cumulative exposure
@@ -77,7 +89,7 @@ struct MycotoxinParameters {
   /// Canterbury pasture that never once sporulated put a mob over the reactor
   /// threshold. The fungus lives on dead litter year round, so the background
   /// is real; what is not real is charging liver damage for it.
-  double background_spore_days_per_year = 732'000.0;
+  double background_toxin_ng_days_per_year = 1'032.12;
 
   /// Share of accumulated exposure cleared each day.
   ///
@@ -132,14 +144,15 @@ struct MycotoxinParameters {
 [[nodiscard]] double toxin_ng_per_g(double spore_count_per_g,
                                     const MycotoxinParameters& parameters) noexcept;
 
-/// **The fitted step.** Serum GGT from accumulated exposure in spore-days.
+/// **The fitted step.** Serum GGT from accumulated exposure in toxin-days.
 ///
-/// Exposure is spores per gram multiplied by days spent grazing them. The
-/// reactor threshold is reached at `reactor_spore_days`, and GGT rises in
+/// Exposure is nanograms of toxin per gram of pasture multiplied by days spent
+/// grazing it. The
+/// reactor threshold is reached at `reactor_toxin_ng_days`, and GGT rises in
 /// proportion beyond it. This is an empirical index calibrated so the published
 /// field thresholds reproduce - it is not a toxin mass balance and must not be
 /// reported as one.
-[[nodiscard]] double ggt_from_exposure(double spore_days,
+[[nodiscard]] double ggt_from_exposure(double toxin_ng_days,
                                        const MycotoxinParameters& parameters) noexcept;
 
 /// Carries accumulated exposure forward one day.
@@ -148,7 +161,7 @@ struct MycotoxinParameters {
 /// background is not charged, because clean pasture does not damage a liver,
 /// and what is already carried decays, because a liver repairs. Both are why
 /// `ggt_from_exposure` may be given this rather than a plain sum.
-[[nodiscard]] double next_exposure(double carried_spore_days, double today_spores_per_g,
+[[nodiscard]] double next_exposure(double carried_toxin_ng_days, double today_toxin_ng_per_g,
                                    const MycotoxinParameters& parameters) noexcept;
 
 /// Liver injury score from serum GGT.

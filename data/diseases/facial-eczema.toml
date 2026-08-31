@@ -111,19 +111,29 @@ acute_severe_mg_per_kg = { value = 1.0, status = "direct", source = "experimenta
 
 [liver]
 # **FITTED, not derived.** The exposure at which a mob reaches the reactor GGT,
-# expressed as spore-days: spores/g multiplied by days of grazing on them. Set
-# so that the field thresholds reproduce: about a fortnight at the 100,000
-# spores/g that guidance calls dangerous. It is an empirical index and must be
-# reported as one - the toxin mass balance above does not support it.
-reactor_spore_days = { value = 1500000.0, status = "fitted", source = "field_guidance" }
+# in toxin-days per gram: nanograms of sporidesmin per gram of pasture
+# multiplied by days of grazing on it. Set so the field thresholds reproduce -
+# about a fortnight at the 100,000 spores/g guidance calls dangerous. It is an
+# empirical index and must be reported as one; the toxin mass balance above does
+# not support it.
+#
+# **The axis is toxin, not spores, and that is a deliberate change.** While this
+# accumulated spore-days the picograms-per-spore figure above reached nothing:
+# the strain difference Fitzgerald et al. measured, the same count carrying 2.7
+# times the toxin, could not change a result. 2115 is the exact translation of
+# the 1,500,000 spore-days it replaces at 1.41 pg/spore, so the move changed no
+# published number on the day it happened - what it changed is that the
+# conversion now carries weight.
+reactor_toxin_ng_days = { value = 2115.0, status = "fitted", source = "field_guidance" }
 
 # **Exposure a clean year delivers, subtracted before any damage is counted.**
 # The count never falls below the background above, so a running total rises
 # every day whether or not anything happened: three years of Canterbury pasture
 # that never once sporulated used to put a mob over the reactor threshold. The
 # fungus does live on dead litter year round, so the background is real - what
-# is not real is charging a liver for it. 2000 spores/g over 366 days.
-background_spore_days_per_year = { value = 732000.0, status = "fitted", source = "field_guidance" }
+# is not real is charging a liver for it. 2000 spores/g over 366 days, in the
+# toxin-days the axis is now measured in.
+background_toxin_ng_days_per_year = { value = 1032.12, status = "fitted", source = "field_guidance" }
 
 # **A liver repairs.** GGT peaks about three weeks after a challenge, which is
 # why the national tolerance test reads it at 21 days, and then falls back over

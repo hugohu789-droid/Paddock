@@ -29,8 +29,8 @@ std::string MycotoxinParameters::invalid_reason() const {
   if (carrying_capacity_spores_per_g <= background_spores_per_g) {
     return "carrying_capacity_spores_per_g must exceed the background it rises from";
   }
-  if (background_spore_days_per_year < 0.0) {
-    return "background_spore_days_per_year cannot be negative";
+  if (background_toxin_ng_days_per_year < 0.0) {
+    return "background_toxin_ng_days_per_year cannot be negative";
   }
   if (clearance_per_day < 0.0 || clearance_per_day >= 1.0) {
     return "clearance_per_day is a daily share and must lie in [0, 1)";
@@ -38,8 +38,8 @@ std::string MycotoxinParameters::invalid_reason() const {
   if (picograms_per_spore <= 0.0) {
     return "picograms_per_spore must be positive";
   }
-  if (reactor_spore_days <= 0.0) {
-    return "reactor_spore_days must be positive";
+  if (reactor_toxin_ng_days <= 0.0) {
+    return "reactor_toxin_ng_days must be positive";
   }
   if (reactor_ggt_iu_per_l <= 0.0) {
     return "reactor_ggt_iu_per_l must be positive";
@@ -102,26 +102,27 @@ double toxin_ng_per_g(double spore_count_per_g, const MycotoxinParameters& param
   return std::max(0.0, spore_count_per_g) * parameters.picograms_per_spore / 1000.0;
 }
 
-double next_exposure(double carried_spore_days, double today_spores_per_g,
+double next_exposure(double carried_toxin_ng_days, double today_toxin_ng_per_g,
                      const MycotoxinParameters& parameters) noexcept {
   // The background a clean year delivers, spread over the year. Subtracting it
   // daily rather than at the end means a run of any length behaves the same,
   // which a model that can be asked for three years has to do.
-  const double background_today = std::max(0.0, parameters.background_spore_days_per_year) / 365.0;
-  const double charged = std::max(0.0, today_spores_per_g - background_today);
+  const double background_today =
+      std::max(0.0, parameters.background_toxin_ng_days_per_year) / 365.0;
+  const double charged = std::max(0.0, today_toxin_ng_per_g - background_today);
 
   const double clearance = std::clamp(parameters.clearance_per_day, 0.0, 1.0);
-  return std::max(0.0, (carried_spore_days * (1.0 - clearance)) + charged);
+  return std::max(0.0, (carried_toxin_ng_days * (1.0 - clearance)) + charged);
 }
 
-double ggt_from_exposure(double spore_days, const MycotoxinParameters& parameters) noexcept {
-  if (spore_days <= 0.0) {
+double ggt_from_exposure(double toxin_ng_days, const MycotoxinParameters& parameters) noexcept {
+  if (toxin_ng_days <= 0.0) {
     return 0.0;
   }
   // Linear in exposure through the reactor point. Deliberately the simplest
   // shape that reproduces the field thresholds: a curve with more parameters
   // would fit them no better and would look like it knew more than it does.
-  return parameters.reactor_ggt_iu_per_l * (spore_days / parameters.reactor_spore_days);
+  return parameters.reactor_ggt_iu_per_l * (toxin_ng_days / parameters.reactor_toxin_ng_days);
 }
 
 double liver_injury_score(double ggt_iu_per_l, const MycotoxinParameters& parameters) noexcept {
@@ -193,7 +194,7 @@ std::vector<MycotoxinYear> mycotoxin_years(const WeatherSeries& weather,
     }
 
     // Carried across the boundary on purpose: a liver does not reset in July.
-    carried = next_exposure(carried, counts[day], parameters);
+    carried = next_exposure(carried, toxin_ng_per_g(counts[day], parameters), parameters);
 
     MycotoxinYear& year = years.back();
     year.peak_spores_per_g = std::max(year.peak_spores_per_g, counts[day]);

@@ -284,13 +284,49 @@ TEST(DataFilesTest, YearsOfCleanPastureNeverReachTheReactorThreshold) {
 
   double carried = 0.0;
   for (int day = 0; day < 365 * 5; ++day) {
-    carried = core::next_exposure(carried, p.background_spores_per_g, p);
+    carried = core::next_exposure(carried, toxin_ng_per_g(p.background_spores_per_g, p), p);
   }
 
   const double ggt = core::ggt_from_exposure(carried, p);
   EXPECT_LT(ggt, p.reactor_ggt_iu_per_l)
       << "five years of pasture that never sporulated should leave a liver alone; GGT " << ggt;
   EXPECT_DOUBLE_EQ(core::liver_injury_score(ggt, p), 0.0);
+}
+
+// **The point of measuring the dose in toxin rather than spores.**
+//
+// Fitzgerald, Collin and Towers (1998) measured the same spore count carrying
+// 2.7 times the toxin depending which strains were on the pasture - 1.41 pg per
+// spore in untreated plots against 0.52 where atoxigenic strains had been
+// seeded. While exposure accumulated spore-days that measurement could not
+// change a result. It has to now, or the axis was moved for nothing.
+TEST(DataFilesTest, AnAtoxigenicPastureDamagesLessThanAToxigenicOne) {
+  const core::MycotoxinParameters toxigenic =
+      load_disease(data_path("diseases/facial-eczema.toml")).mycotoxin;
+
+  core::MycotoxinParameters atoxigenic = toxigenic;
+  atoxigenic.picograms_per_spore = 0.52;
+
+  // The same spore count on both, for a season.
+  constexpr double kCount = 100'000.0;
+  double carried_toxigenic = 0.0;
+  double carried_atoxigenic = 0.0;
+  for (int day = 0; day < 60; ++day) {
+    carried_toxigenic =
+        core::next_exposure(carried_toxigenic, core::toxin_ng_per_g(kCount, toxigenic), toxigenic);
+    carried_atoxigenic = core::next_exposure(carried_atoxigenic,
+                                             core::toxin_ng_per_g(kCount, atoxigenic), atoxigenic);
+  }
+
+  const double ggt_toxigenic = core::ggt_from_exposure(carried_toxigenic, toxigenic);
+  const double ggt_atoxigenic = core::ggt_from_exposure(carried_atoxigenic, atoxigenic);
+
+  EXPECT_GT(ggt_toxigenic, ggt_atoxigenic)
+      << "the same count of less toxic spores must do less damage, or the toxin conversion is "
+         "still reaching nothing";
+
+  // And by about the ratio the paper measured, not by some other amount.
+  EXPECT_NEAR(ggt_toxigenic / ggt_atoxigenic, 1.41 / 0.52, 0.15);
 }
 
 }  // namespace

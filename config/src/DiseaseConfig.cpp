@@ -108,9 +108,9 @@ DiseaseDefinition read(const toml::table& root, const std::string& path) {
   read_sourced(toxin_table, "acute_severe_mg_per_kg", path, definition);
 
   const toml::table& liver = detail::require_table(root, "liver", path);
-  toxin.reactor_spore_days = read_sourced(liver, "reactor_spore_days", path, definition);
-  toxin.background_spore_days_per_year =
-      read_sourced(liver, "background_spore_days_per_year", path, definition);
+  toxin.reactor_toxin_ng_days = read_sourced(liver, "reactor_toxin_ng_days", path, definition);
+  toxin.background_toxin_ng_days_per_year =
+      read_sourced(liver, "background_toxin_ng_days_per_year", path, definition);
   toxin.clearance_per_day = read_sourced(liver, "clearance_per_day", path, definition);
   toxin.reactor_ggt_iu_per_l = read_sourced(liver, "reactor_ggt_iu_per_l", path, definition);
   toxin.liver_injury_intercept = read_sourced(liver, "liver_injury_intercept", path, definition);
