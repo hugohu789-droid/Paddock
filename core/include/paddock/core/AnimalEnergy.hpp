@@ -171,6 +171,12 @@ struct AnimalClassParameters {
   /// otherwise. It scales the milk a ewe gives for twins and triplets.
   double breed_effect = 0.01;
 
+  /// How many weeks the young of this species can suckle for. TMC Eq. 16, from
+  /// SCA (1994): 26 weeks for sheep, 18 for cattle. It sets how fast milk gives
+  /// way to grass in a young animal's diet, and zero means this class is never
+  /// on a mother.
+  double suckling_weeks = 0.0;
+
   [[nodiscard]] std::string validation_error() const;
 };
 
@@ -194,6 +200,30 @@ struct AnimalState {
   /// representative ewe rears the flock's mean, and a 132.3% lambing is 1.323
   /// lambs a ewe, not one ewe with one lamb and another with two.
   double young = 0.0;
+
+  /// Whether this animal is still on its mother, and so getting part of its
+  /// diet as milk rather than as grass.
+  ///
+  /// **The flag that stops the farm being fed twice.** A lamb's milk is already
+  /// paid for on the ewe's side, as her lactation; charging the lamb's whole
+  /// requirement to the paddock as well would count the same feed on both
+  /// sides of the udder.
+  bool on_the_mother = false;
+
+  /// Energy a suckling animal gets from its mother each day, MJ.
+  ///
+  /// **Supply, not appetite.** It is the ewe's daily milk yield (TMC Eq. 35)
+  /// shared among her lambs, at the energy Eq. 46 puts in a kilogram of it - so
+  /// a lamb gets what its mother actually produced, and a ewe on a bare paddock
+  /// milks less and her lambs go to the grass earlier. Setting this from the
+  /// lamb's own appetite instead would let a hungry lamb conjure milk.
+  ///
+  /// **Carried at its net energy content**, which is what the ewe was charged
+  /// for putting into it, so no energy is created crossing the udder. The
+  /// manual would use it at km = 0.85 for a milk diet (TMC Eq. 5) where this
+  /// model uses the pasture diet's efficiency; see docs/validation/verify.md,
+  /// E25.
+  double milk_me_mj_per_day = 0.0;
 };
 
 /// The ground the animal is grazing, and how far it walks over it.
@@ -322,6 +352,23 @@ struct WalkingDistance {
 [[nodiscard]] double energy_value_of_gain_mj_per_kg(const AnimalClassParameters& animal,
                                                     const AnimalState& state) noexcept;
 
+/// M, the milk factor of TMC Eq. 15 with the Mage of Eq. 16, from SCA (1994).
+///
+/// It raises a suckling animal's basal requirement - milk is a richer diet and
+/// an animal on it runs hotter - and it falls linearly to 1 as the animal grows
+/// out of suckling. `basal_net_energy_mj` carried it as a hardcoded 1 until
+/// there was a pre-weaned animal in the model to apply it to.
+[[nodiscard]] double milk_factor(const AnimalClassParameters& animal,
+                                 const AnimalState& state) noexcept;
+
+/// propmilk, TMC Eq. 74: the share of a suckling animal's diet that is milk.
+///
+/// Falls from 1 at birth to 0 at the end of suckling - 182 days for a sheep,
+/// which is Eq. 16's 26 weeks. **The rest is grass**, and this is what says how
+/// much of a lamb's appetite the paddock has to answer for.
+[[nodiscard]] double milk_share_of_diet(const AnimalClassParameters& animal,
+                                        const AnimalState& state) noexcept;
+
 /// NEmilk, TMC Eq. 46: the net energy in a kilogram of ewe milk, from its fat
 /// and protein. Nicol and Brookes (2007), by way of the manual.
 [[nodiscard]] double milk_net_energy_mj_per_kg(const AnimalClassParameters& animal) noexcept;
@@ -395,7 +442,16 @@ struct EnergyRequirement {
   /// MErequirements, TMC Eq. 55.
   double total_me_mj = 0.0;
 
-  /// TMC Eq. 19: what the animal has to eat to cover total_me_mj.
+  /// ME the animal gets from its mother rather than from the paddock, TMC
+  /// Eq. 74. Zero for anything not suckling, which is everything except a lamb
+  /// between birth and weaning.
+  double milk_me_mj = 0.0;
+
+  /// TMC Eq. 19: what the animal has to eat **off the paddock** to cover
+  /// total_me_mj, which is the whole requirement less what came as milk.
+  ///
+  /// For everything that is not on a mother these are the same number, so this
+  /// changed no existing result when milk arrived.
   double intake_kg_dm = 0.0;
 
   /// How many passes the chewing loop took, and whether it settled. The manual

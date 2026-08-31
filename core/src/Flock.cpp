@@ -13,9 +13,6 @@ namespace paddock::core {
 
 namespace {
 
-/// A year of ageing, in the days the animal state counts in.
-constexpr double kDaysPerYear = 365.25;
-
 /// Days since the most recent occurrence of a month and day, on or before
 /// today. Comparing three of these is how the year's phases are told apart
 /// without any of them having to know where a year begins.
@@ -61,6 +58,11 @@ std::string FlockRates::invalid_reason() const {
   return {};
 }
 
+void Flock::set_lamb_template(Mob lamb) {
+  lamb_template_ = std::move(lamb);
+  has_lamb_template_ = true;
+}
+
 void Flock::add(AgeCohort cohort) {
   cohorts_.push_back(std::move(cohort));
   // Oldest first, and by birth year rather than by age so the order is stable
@@ -75,7 +77,6 @@ int Flock::age_one_year(const FlockRates& rates) {
 
   for (AgeCohort& cohort : cohorts_) {
     ++cohort.age_years;
-    cohort.mob.state.age_days += kDaysPerYear;
   }
 
   // Anything past the cull age goes. Counted before erasing, because a farmer
@@ -211,11 +212,23 @@ void Flock::set_reproductive_state(const Date& today, const FlockCalendar& calen
     cohort.mob.state.days_pregnant = breeds && carrying ? since_mating : 0;
     cohort.mob.state.days_lactating = breeds && milking ? since_lambing : 0;
     cohort.mob.state.young = breeds && (carrying || milking) ? litter : 0.0;
+
+    // **A lamb is on its mother while its mother is milking**, which is the
+    // same span from the other side. What it drinks is charged to her, so the
+    // paddock only answers for the rest.
+    cohort.mob.state.on_the_mother = cohort.age_years == 0 && milking;
   }
 }
 
 FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const FlockRates& rates) {
   FlockDay day;
+
+  // **A day older, every day.** The milk share of a lamb's diet is a function
+  // of its age in days (TMC Eq. 15), so an age that only moved once a year
+  // would have kept every lamb newborn until the following July.
+  for (AgeCohort& cohort : cohorts_) {
+    cohort.mob.state.age_days += 1.0;
+  }
 
   const auto is = [&today](int month, int date) {
     return today.month == month && today.day == date;
@@ -240,10 +253,22 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
         AgeCohort born;
         born.birth_year = today.year;
         born.age_years = 0;
-        born.mob = cohorts_.empty() ? Mob{} : cohorts_.front().mob;
+        if (has_lamb_template_) {
+          born.mob = lamb_template_;
+        } else {
+          born.mob = cohorts_.empty() ? Mob{} : cohorts_.front().mob;
+        }
         born.mob.name = "lambs " + std::to_string(today.year);
         born.mob.head = lambs;
         born.mob.state.age_days = 0.0;
+
+        // **Born at a birth weight, not at its mother's.** TMC Eq. 11-14 make
+        // that a share of the dam's reference weight that falls as the litter
+        // grows, so a flock at 1.32 lambs gets a lamb between a single's and a
+        // twin's.
+        born.mob.state.liveweight_kg =
+            birth_weight_kg(born.mob.animal, rates.lambing_percentage / 100.0);
+        born.mob.state.liveweight_change_kg_per_day = 0.0;
         born.is_finishing = true;
         add(std::move(born));
         day.born = lambs;

@@ -201,10 +201,12 @@ TEST(DataFilesTest, StandardReferenceWeightIsEvidencedOnlyWhereItHasBeenFound) {
 
   bool saw_the_ewe = false;
   for (const SpeciesDefinition& definition : species) {
-    if (definition.name == "sheep_ewe") {
-      saw_the_ewe = true;
+    if (definition.name == "sheep_ewe" || definition.name == "sheep_lamb") {
+      saw_the_ewe = saw_the_ewe || definition.name == "sheep_ewe";
+      // The lamb carries the same figure, because SRW is a mature weight: it
+      // is what a lamb will grow into, not what it weighs now.
       EXPECT_TRUE(definition.standard_reference_weight.is_evidence())
-          << "the ewe's reference weight is Table 8 of the OVERSEER characteristics chapter";
+          << "the sheep reference weight is Table 8 of the OVERSEER characteristics chapter";
       EXPECT_DOUBLE_EQ(definition.standard_reference_weight.value, 66.0);
       continue;
     }

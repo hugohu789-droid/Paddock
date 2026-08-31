@@ -116,6 +116,20 @@ void Farm::set_mob_reproduction(std::size_t mob, int days_pregnant, int days_lac
   mobs_[mob].mob.state.young = std::max(0.0, young);
 }
 
+void Farm::set_mob_state(std::size_t mob, const AnimalState& state) {
+  if (mob >= mobs_.size()) {
+    return;
+  }
+  mobs_[mob].mob.state = state;
+}
+
+GrazingConditions Farm::conditions_for(std::size_t mob) const {
+  if (mob >= mobs_.size()) {
+    return {};
+  }
+  return conditions_on(mobs_[mob].paddocks, mobs_[mob].mob);
+}
+
 void Farm::spread_mob(std::size_t mob) {
   if (mob >= mobs_.size()) {
     throw std::out_of_range("Farm::spread_mob: no such mob");
@@ -273,6 +287,15 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     // mob happened to do yesterday. Yesterday's number is an outcome, and
     // feeding to it is circular - see Mob::target_gain_kg_per_day. Holding
     // weight remains the floor, for the reason above.
+    // **An empty mob is skipped, not fed.** A mob stocked by a flock is empty
+    // out of season, and dividing the day's intake by no animals hands the
+    // liveweight model a NaN that never washes out - the mob comes back next
+    // season weighing not-a-number.
+    if (farm_mob.mob.head <= 0) {
+      day.mobs.push_back(mob_day);
+      continue;
+    }
+
     AnimalState wanting = farm_mob.mob.state;
     wanting.liveweight_change_kg_per_day = std::max(0.0, farm_mob.mob.target_gain_kg_per_day);
 

@@ -90,10 +90,10 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   // A wether has no gestation, and a file that had to state that would be
   // inviting somebody to state it wrongly.
   if (const toml::table* reproduction = root["reproduction"].as_table()) {
-    detail::reject_unknown_keys(
-        *reproduction,
-        {"gestation_length_days", "milk_fat_percent", "milk_protein_percent", "breed_effect"}, path,
-        "[reproduction]");
+    detail::reject_unknown_keys(*reproduction,
+                                {"gestation_length_days", "milk_fat_percent",
+                                 "milk_protein_percent", "breed_effect", "suckling_weeks"},
+                                path, "[reproduction]");
 
     definition.gestation_length_days = read_sourced(*reproduction, "gestation_length_days", path);
     definition.milk_fat_percent = read_sourced(*reproduction, "milk_fat_percent", path);
@@ -104,6 +104,13 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
     definition.energy.milk_fat_percent = definition.milk_fat_percent.value;
     definition.energy.milk_protein_percent = definition.milk_protein_percent.value;
     definition.energy.breed_effect = definition.breed_effect.value;
+
+    // Optional inside an optional table: a class whose young never suckle - a
+    // hogget, a wether - says nothing and gets zero.
+    if (reproduction->contains("suckling_weeks")) {
+      definition.suckling_weeks = read_sourced(*reproduction, "suckling_weeks", path);
+      definition.energy.suckling_weeks = definition.suckling_weeks.value;
+    }
   }
 
   const toml::table& typical = detail::require_table(root, "typical", path);

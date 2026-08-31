@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <stdexcept>
 
 #include <paddock/core/BudgetLedger.hpp>
@@ -242,15 +243,34 @@ TEST(GrazingTest, AMobWithFeedToSpareHoldsItsWeight) {
       << "a mob that ate its requirement should not drift";
 }
 
+// **An empty mob is December, not an error.** This used to be refused along
+// with a nameless mob and a paddock of no area, and it stopped being an error
+// when a mob's head began to be driven by a flock: the lamb crop is empty
+// between weaning and the next lambing, and a paddock with no stock on it is a
+// real state of a farm rather than a broken input.
+TEST(GrazingTest, AnEmptyMobEatsNothingAndIsNotStarving) {
+  PastureSward sward(two_species_sward(), 3000.0, 900.0, 60.0);
+  const double before = sward.grass_kg_dm() + sward.legume_kg_dm();
+
+  Mob none = ewes(10);
+  none.head = 0;
+  const GrazingDay day = graze(sward, 1.0, none, pasture_diet(), flat_paddock());
+
+  EXPECT_DOUBLE_EQ(day.eaten_kg_dm, 0.0);
+  EXPECT_DOUBLE_EQ(day.demand_kg_dm, 0.0);
+  EXPECT_FALSE(day.feed_limited) << "nothing went hungry, because nothing was there";
+  EXPECT_DOUBLE_EQ(sward.grass_kg_dm() + sward.legume_kg_dm(), before)
+      << "and the grass is untouched";
+
+  // The intake per head is the one that would have been a NaN, and a NaN here
+  // spreads into liveweight and never comes back.
+  EXPECT_FALSE(std::isnan(day.intake_per_head_kg_dm));
+}
+
 TEST(GrazingTest, AnImpossibleMobOrPaddockIsRefused) {
   PastureSward sward(two_species_sward(), 3000.0, 900.0, 60.0);
 
   EXPECT_THROW(static_cast<void>(graze(sward, 0.0, ewes(10), pasture_diet(), flat_paddock())),
-               std::invalid_argument);
-
-  Mob no_animals = ewes(10);
-  no_animals.head = 0;
-  EXPECT_THROW(static_cast<void>(graze(sward, 1.0, no_animals, pasture_diet(), flat_paddock())),
                std::invalid_argument);
 
   Mob unnamed = ewes(10);

@@ -107,6 +107,15 @@ struct RunSummary {
   /// Head at the close, when a flock was run.
   int closing_head = 0;
 
+  /// What a lamb weighed on the day the crop was drafted, kg.
+  ///
+  /// **The number the model was never able to state.** Lamb liveweight used to
+  /// be whatever a lamb was born holding, because nothing drove it - which is
+  /// why the drafting rule had to be switched off. Now lambs graze, so this is
+  /// an outcome of the weather and the grass, and OVERSEER's own default of
+  /// 20 kg (TMC Eq. 17) is something to check it against.
+  double lamb_weaning_weight_kg = 0.0;
+
   core::BudgetLedger ledger;
   double closing_cover_kg_dm = 0.0;
   double closing_nitrogen_kg = 0.0;

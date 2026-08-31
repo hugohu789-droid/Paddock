@@ -161,6 +161,24 @@ paddock = 0
 liveweight_kg = 55.0
 age_days = 1500.0
 
+# **The lamb crop, which eats.** Head is zero here and driven by the flock: it
+# rises to the season's lambs on 20 August and falls to nothing when they are
+# weaned and sold on 1 December. Before this mob existed the farm's lambs were
+# born, counted, priced and sold without ever taking a mouthful of grass.
+#
+# They share the ground with the ewes rather than having their own, which is
+# what a lamb does - the mobs graze in turn and the second sees what the first
+# left. What they drink is charged to the ewes as lactation, so only the grass
+# half of their diet is taken here (TMC Eq. 74).
+[[mob]]
+name = "lambs"
+path = "../../species/sheep-lamb.toml"
+sha256 = "89ca2f9a416277c674356d63f9048ce94003b41962b1bf4f08fbe631f597e703"
+head = 0
+paddock = 0
+liveweight_kg = 6.0
+age_days = 0.0
+
 # Managed as canterbury-grazed is: set stocked over lambing, rotating the rest
 # of the year, after Smith and Dawson (1976). See docs/validation/verify.md.
 

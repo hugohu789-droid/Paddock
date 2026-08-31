@@ -112,8 +112,30 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
                     const core::Date& today, RunSummary& summary) {
   account.charge_day(today);
 
+  // **What the lambs did on the paddock yesterday comes back first.** The farm
+  // grows them - that is the whole point of putting them on grass - so their
+  // liveweight lives there and the flock has to read it before it steps, or
+  // every lamb stays at its birth weight forever and the flock's own copy
+  // silently overwrites the growth.
+  if (farm.mobs().size() > 1 && farm.mobs()[1].mob.head > 0) {
+    for (core::AgeCohort& cohort : business.flock.cohorts_for_update()) {
+      if (cohort.is_finishing) {
+        cohort.mob.state.liveweight_kg = farm.mobs()[1].mob.state.liveweight_kg;
+        cohort.mob.state.liveweight_change_kg_per_day =
+            farm.mobs()[1].mob.state.liveweight_change_kg_per_day;
+        break;
+      }
+    }
+  }
+
   const core::FlockDay flock_day = business.flock.step(today, business.calendar, business.rates);
   summary.flock_days.push_back(flock_day);
+
+  // Caught on the day of the draft, because the cohort that was sold is gone
+  // by the next one.
+  if (flock_day.sold_store > 0 && farm.mobs().size() > 1) {
+    summary.lamb_weaning_weight_kg = farm.mobs()[1].mob.state.liveweight_kg;
+  }
 
   if (flock_day.sold_store > 0) {
     // Store lambs at the schedule, on the carcass weight a lamb drafts at.
@@ -195,6 +217,40 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
       break;
     }
   }
+
+  // **And the lambs, if the bundle gave them a mob to graze with.** A scenario
+  // that declares a second mob gets the season's lamb crop put on it: nothing
+  // before lambing, the whole crop through spring, nothing after the weaning
+  // draft. A bundle with one mob is unaffected - set_mob_head on an index that
+  // is not there does nothing - so the older scenarios still describe ewes
+  // alone.
+  farm.set_mob_head(1, business.flock.finishing_head());
+  for (const core::AgeCohort& cohort : business.flock.cohorts()) {
+    if (cohort.is_finishing) {
+      core::AnimalState lamb = cohort.mob.state;
+
+      // **The udder, as an energy transfer between two mobs.** The ewes were
+      // charged for the milk they made; the lambs are credited with it, at the
+      // energy TMC Eq. 46 puts in a kilogram and shared out among the lambs a
+      // ewe is rearing. A ewe on a bare paddock makes less (Eq. 35 has pasture
+      // mass in it), so her lambs go to the grass sooner - which is the whole
+      // reason this is a supply and not an appetite.
+      lamb.milk_me_mj_per_day = 0.0;
+      if (!farm.mobs().empty() && lamb.on_the_mother) {
+        const core::Mob& ewes = farm.mobs()[0].mob;
+        const double lambs_per_ewe = ewes.state.young;
+        if (lambs_per_ewe > 0.0) {
+          const core::GrazingConditions ground = farm.conditions_for(0);
+          const double yield_kg = core::daily_milk_yield_kg(ewes.animal, ewes.state, ground);
+          lamb.milk_me_mj_per_day =
+              yield_kg * core::milk_net_energy_mj_per_kg(ewes.animal) / lambs_per_ewe;
+        }
+      }
+
+      farm.set_mob_state(1, lamb);
+      break;
+    }
+  }
 }
 
 }  // namespace
@@ -256,6 +312,14 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.account.emplace(business->opening_balance_dollars, business->costs, business->prices,
                             farm_hectares);
     manager.emplace(business->decisions, core::standard_rules(business->decisions));
+
+    // **Lambs are built from the bundle's lamb mob, if it has one.** A scenario
+    // that declares a second mob is saying what a lamb on this farm is - its
+    // species file, its sex factor, how long it suckles - and the flock builds
+    // each season's crop from that rather than from a copy of its mothers.
+    if (farm.mobs().size() > 1) {
+      business->flock.set_lamb_template(farm.mobs()[1].mob);
+    }
     summary.flock_days.reserve(weather.records.size());
   }
 
