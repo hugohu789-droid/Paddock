@@ -137,6 +137,14 @@ class Farm {
   /// grazing.
   void set_mob_head(std::size_t mob, int head);
 
+  /// Sets what a mob is carrying and rearing, so the energy model charges it.
+  ///
+  /// The companion to `set_mob_head`: a flock that drives how many animals
+  /// graze should drive what those animals cost to feed, or a farm carries the
+  /// right number of ewes and feeds every one of them as though it were August
+  /// in an empty year.
+  void set_mob_reproduction(std::size_t mob, int days_pregnant, int days_lactating, double young);
+
   /// Which mob has a paddock, or kNobody. A paddock carries at most one mob
   /// here: two mobs sharing ground is a real practice, but it needs a rule for
   /// how they divide the feed, and inventing one would be inventing a result.

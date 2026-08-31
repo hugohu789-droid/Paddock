@@ -11,6 +11,8 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include <paddock/core/Flock.hpp>
 
 namespace paddock::core {
@@ -252,6 +254,85 @@ TEST(FlockTest, TenYearsOfTheCalendarKeepAFlockGoing) {
   // And no cohort is older than the cull age, whatever else happened.
   for (const AgeCohort& cohort : flock.cohorts()) {
     EXPECT_LE(cohort.age_years, rates.cull_age_years);
+  }
+}
+
+// **The calendar has to describe a sheep.** The shipped dates said 1 April to
+// 20 August, which is 141 days, and a ewe's gestation is 150 (TMC Table 28,
+// Freer et al. 2006). Nothing read the mating date, so nothing had noticed.
+TEST(FlockTest, TheCalendarsGestationIsASheepsGestation) {
+  const FlockCalendar calendar;
+  EXPECT_EQ(calendar.gestation_days(), 150) << "23 March to 20 August";
+  EXPECT_EQ(calendar.invalid_reason(), "");
+
+  // Lactation length is not a separate figure: TMC (Characteristics of animals)
+  // Eq. 27 defines a sheep's as weaning day minus birth day, which the calendar
+  // already carries.
+  EXPECT_EQ(calendar.lactation_days(), 103) << "20 August to 1 December";
+
+  // The old dates would now be refused, with the arithmetic in the message.
+  FlockCalendar drifted;
+  drifted.mating_month = 4;
+  drifted.mating_day = 1;
+  const std::string why = drifted.invalid_reason();
+  EXPECT_NE(why, "");
+  EXPECT_NE(why.find("141"), std::string::npos) << "the message should say how far out it is";
+}
+
+// **Where the missing two-thirds of a stock unit was.** Every ewe used to be
+// fed maintenance every day of the year; these are the days she is not empty.
+TEST(FlockTest, EwesAreCarryingBetweenMatingAndLambingAndMilkingUntilWeaning) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  const auto ewe = [&flock]() -> const AnimalState& { return flock.cohorts().front().mob.state; };
+
+  // Deep in the dry period: mated in March, weaned in December, and this is
+  // February - carrying nothing and milking nothing.
+  flock.step(Date{2025, 2, 1}, calendar, rates);
+  EXPECT_EQ(ewe().days_pregnant, 0);
+  EXPECT_EQ(ewe().days_lactating, 0);
+  EXPECT_DOUBLE_EQ(ewe().young, 0.0);
+
+  // A fortnight after mating: carrying, and barely costing anything for it yet.
+  flock.step(Date{2025, 4, 6}, calendar, rates);
+  EXPECT_EQ(ewe().days_pregnant, 14);
+  EXPECT_EQ(ewe().days_lactating, 0);
+  EXPECT_NEAR(ewe().young, 1.323, 1e-9) << "the flock's mean litter, not a whole lamb";
+
+  // The day before lambing: 149 days in, and at her most expensive.
+  flock.step(Date{2025, 8, 19}, calendar, rates);
+  EXPECT_EQ(ewe().days_pregnant, 149);
+
+  // A fortnight after lambing: milking, no longer carrying.
+  flock.step(Date{2025, 9, 3}, calendar, rates);
+  EXPECT_EQ(ewe().days_pregnant, 0);
+  EXPECT_EQ(ewe().days_lactating, 14);
+
+  // The day after weaning: dry again.
+  flock.step(Date{2025, 12, 2}, calendar, rates);
+  EXPECT_EQ(ewe().days_lactating, 0);
+  EXPECT_DOUBLE_EQ(ewe().young, 0.0);
+}
+
+// Lambs and hoggets are not put to the ram here, so they are never charged for
+// a pregnancy they are not carrying.
+TEST(FlockTest, YoungStockAreNeitherPregnantNorMilking) {
+  Flock flock;
+  flock.add(cohort(2024, 0, 100));  // lambs
+  flock.add(cohort(2023, 1, 100));  // hoggets
+  flock.add(cohort(2022, 2, 100));  // two-tooths
+
+  flock.step(Date{2025, 8, 19}, FlockCalendar{}, FlockRates{});
+
+  for (const AgeCohort& c : flock.cohorts()) {
+    if (c.age_years < 2) {
+      EXPECT_EQ(c.mob.state.days_pregnant, 0) << c.class_name() << " should not be in lamb";
+      EXPECT_DOUBLE_EQ(c.mob.state.young, 0.0);
+    } else {
+      EXPECT_GT(c.mob.state.days_pregnant, 0) << "but a two-tooth is a breeding ewe";
+    }
   }
 }
 

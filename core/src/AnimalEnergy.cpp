@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 
@@ -109,6 +111,11 @@ double DietQuality::maintenance_efficiency() const noexcept {
   const double forage =
       (kMaintenanceEfficiencySlope * energy_density()) + kMaintenanceEfficiencyIntercept;
   return (milk_fraction * kMilkMaintenanceEfficiency) + ((1.0 - milk_fraction) * forage);
+}
+
+double DietQuality::lactation_efficiency() const noexcept {
+  // TMC Eq. 3.
+  return (0.35 * energy_density()) + 0.42;
 }
 
 double DietQuality::gain_efficiency() const noexcept {
@@ -235,6 +242,106 @@ double energy_value_of_gain_mj_per_kg(const AnimalClassParameters& animal,
          ((animal.gain_energy_ceiling_mj_per_kg - rate_adjustment) / sigmoid);
 }
 
+double milk_net_energy_mj_per_kg(const AnimalClassParameters& animal) noexcept {
+  // TMC Eq. 46, the sheep and beef form. The dairy form (Eq. 45) differs only
+  // in its constant, 0.948 against 0.976.
+  return (0.376 * animal.milk_fat_percent) + (0.209 * animal.milk_protein_percent) + 0.976;
+}
+
+double birth_weight_kg(const AnimalClassParameters& animal, double young) noexcept {
+  // TMC Eq. 11-14 (Characteristics of animals): the share of SRW a lamb is born
+  // at, falling as the litter grows. fRS, the size adjustment of Eq. 15, is 1
+  // here because RS is measured against a reference flock this model does not
+  // carry - see docs/validation/verify.md.
+  static constexpr std::array<double, 4> kShare = {0.100, 0.085, 0.070, 0.055};
+
+  const double litter = std::clamp(young, 1.0, 4.0);
+  const auto lower = static_cast<std::size_t>(std::floor(litter)) - 1;
+  const std::size_t upper = std::min(lower + 1, std::size_t{3});
+  const double between = litter - std::floor(litter);
+  const double share = kShare[lower] + ((kShare[upper] - kShare[lower]) * between);
+
+  return share * animal.standard_reference_weight_kg;
+}
+
+double pregnancy_net_energy_mj(const AnimalClassParameters& animal,
+                               const AnimalState& state) noexcept {
+  if (animal.gestation_length_days <= 0.0 || state.days_pregnant <= 0 || state.young <= 0.0) {
+    return 0.0;
+  }
+
+  // TMC Eq. 28: how far through gestation the animal is.
+  const double gestation_proportion =
+      std::clamp(static_cast<double>(state.days_pregnant) / animal.gestation_length_days, 0.0, 1.0);
+  const double remaining = 1.0 - gestation_proportion;
+
+  // TMC Eq. 26's NEpreg2. It runs from about 0.002 at conception to 1 at term,
+  // which is the whole shape of a ewe's pregnancy demand.
+  const double growth =
+      std::exp((0.965 * remaining) + (4.37 * (1.0 - std::exp(0.965 * remaining))));
+
+  const double birth_weight = birth_weight_kg(animal, state.young);
+
+  // TMC Eq. 30: what the conceptus weighs now, and Eq. 31's NBW, which is the
+  // same share of SRW that birth_weight_kg applied - so the ratio below is
+  // dimensionless, as the manual intends.
+  const double conceptus_now = birth_weight * std::exp(2.20 * (1.0 - std::exp(1.77 * remaining)));
+
+  // TMC Eq. 29: the condition factor, RC being current weight over normal
+  // weight. A ewe in better condition than her class expects carries a dearer
+  // pregnancy, which is the point of the term.
+  const double normal_weight = animal.standard_reference_weight_kg;
+  const double condition_ratio = normal_weight > 0.0 ? state.liveweight_kg / normal_weight : 1.0;
+  const double condition_factor =
+      normal_weight > 0.0 && birth_weight > 0.0
+          ? 1.0 + ((condition_ratio - 1.0) * (conceptus_now / birth_weight))
+          : 1.0;
+
+  // TMC Eq. 26.
+  return state.young * birth_weight * 1.43 * 4.33 * (4.37 * 0.965) / animal.gestation_length_days *
+         growth * condition_factor;
+}
+
+double daily_milk_yield_kg(const AnimalClassParameters& animal, const AnimalState& state,
+                           const GrazingConditions& ground) noexcept {
+  if (animal.gestation_length_days <= 0.0 || state.days_lactating <= 0 || state.young <= 0.0) {
+    return 0.0;
+  }
+
+  const auto day = static_cast<double>(state.days_lactating);
+  const double litter = std::clamp(state.young, 1.0, 4.0);
+  const double singles = std::clamp(2.0 - litter, 0.0, 1.0);
+  const double twins = 1.0 - singles;
+
+  // TMC Eq. 36. The published constants are per litter size; a mob's mean
+  // litter sits between two of them, so they are blended the same way birth
+  // weight is. Triplets and quads share a constant in the manual because the
+  // plot had flattened, so a flock this side of 2 lambs never reaches them.
+  const double multiple_young = (1.002884363 * singles) + (1.287356551 * twins);
+
+  // TMC Eq. 38, the mob form of the breed effect.
+  const double breed = singles + ((1.0 + animal.breed_effect) * twins);
+
+  // TMC Eq. 35. The lactation curve peaks around day 14 and decays; the pasture
+  // terms add milk on a good paddock and take it away on a bare one.
+  const double curve =
+      1.01 * std::exp((0.41 * std::log(day)) - (0.0287 * day)) * multiple_young * breed * 1000.0;
+
+  // The manual writes this term as `PastureMass * 1000 - 1300`, so its pasture
+  // mass is in tonnes and its threshold in kilograms - which is exactly the
+  // unit this model already carries.
+  const double above_bare = (ground.pasture_mass_t_dm_per_ha * 1000.0) - 1300.0;
+  const double pasture = (0.4144 * above_bare) - (1e-4 * above_bare * above_bare);
+
+  return std::max(0.0, (curve + pasture) / 1000.0);
+}
+
+double lactation_net_energy_mj(const AnimalClassParameters& animal, const AnimalState& state,
+                               const GrazingConditions& ground) noexcept {
+  // TMC Eq. 33.
+  return daily_milk_yield_kg(animal, state, ground) * milk_net_energy_mj_per_kg(animal);
+}
+
 double liveweight_change_net_energy_mj(const AnimalClassParameters& animal,
                                        const AnimalState& state) noexcept {
   return state.liveweight_change_kg_per_day * kEmptyBodyFraction *
@@ -265,8 +372,19 @@ EnergyRequirement daily_energy_requirement(const AnimalClassParameters& animal,
   result.liveweight_change_me_mj =
       liveweight_change_net_energy_mj(animal, state) / diet.gain_efficiency();
 
+  // TMC Eq. 50 and 49: net energy over its own efficiency. Pregnancy's kp of
+  // 0.13 is what makes a late-pregnant ewe so expensive to feed.
+  result.lactation_me_mj =
+      lactation_net_energy_mj(animal, state, ground) / diet.lactation_efficiency();
+  result.pregnancy_me_mj = pregnancy_net_energy_mj(animal, state) / kPregnancyEfficiency;
+
   const double maintenance_efficiency = diet.maintenance_efficiency();
-  const double production_me = result.liveweight_change_me_mj;
+
+  // **Lactation is production; pregnancy is not.** TMC Eq. 1 reads
+  // `MEmaintenance + productionME + MEpregnancy`, and Eq. 54 charges a tenth of
+  // production to maintenance - so which side of the line a term falls on
+  // changes the answer by that tenth.
+  const double production_me = result.liveweight_change_me_mj + result.lactation_me_mj;
 
   // TMC Eq. 52: the loop needs somewhere to start, and starting from the right
   // order of magnitude is what lets it finish inside five passes.
@@ -280,8 +398,8 @@ EnergyRequirement daily_energy_requirement(const AnimalClassParameters& animal,
     result.maintenance_me_mj =
         (net_maintenance / maintenance_efficiency) + (kProductionMaintenanceShare * production_me);
 
-    // TMC Eq. 55 and 19.
-    result.total_me_mj = result.maintenance_me_mj + production_me;
+    // TMC Eq. 55 and 19, with Eq. 1's pregnancy term.
+    result.total_me_mj = result.maintenance_me_mj + production_me + result.pregnancy_me_mj;
     result.intake_kg_dm = result.total_me_mj / diet.metabolisable_energy_mj_per_kg_dm;
 
     result.iterations = pass;

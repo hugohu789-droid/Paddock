@@ -83,7 +83,7 @@ paddock_hectares = 2.0
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "0ac6b26ff1af72a91c5ebd259ef310c04e305d3c15a6caf381756a257984363a"
+sha256 = "e64936b7a1195d911c1606d0448ae08f8068d338f342694291f73c1802361bed"
 head = 500
 paddock = 0
 # The species file describes a typical 60 kg ewe; this run starts with lighter

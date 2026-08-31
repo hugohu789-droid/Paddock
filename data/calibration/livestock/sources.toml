@@ -183,6 +183,34 @@ docs/validation/verify.md for the equation-by-equation record and for the two re
 are this project's rather than the manual's.
 """
 
+[source.tmc_characteristics]
+organisation = "AgResearch, for OVERSEER Limited"
+title = "Characteristics of animals (Technical Manual, engine v6.3.0)"
+url = "https://assets.ctfassets.net/bo1h2c9cbxaf/333mT2ReWXJ7NlTz97a31g/dec402937ea2ce58a09d6859dff27ffb/TMC_Characteristics_of_animals_v6.3_June_2018.pdf"
+retrieved = "2026-09-01"
+source_type = "primary"
+verified = true
+sha256 = "9a7a61d7e9820fb9bdba33e3bba7fbe2d807b43e64955d2cd510e21dca9d775e"
+notes = """
+The companion chapter to tmc_animal_me, and the one the ME chapter keeps
+referring to for the parameters its equations need. Retrieving it closed two
+open items at once: Table 8 gives Romney ewes a standard reference weight of
+66 kg, which sheep-ewe.toml had carried as an unsourced 65 and flagged for
+verification; and Table 28 gives sheep a gestation length of 150 days, from
+Freer et al. (2006), which is what the pregnancy term needs.
+
+Equations 11 to 14 give lamb birth weight as a share of SRW - 0.100 for a
+single falling to 0.055 for quads - the same shares that appear as NBW in the
+ME chapter's Equation 31. Equation 27 defines a sheep's lactation length as
+weaning day minus birth day, so a flock calendar already carries it.
+
+**One broken cross-reference, recorded because it cost time.** Equation 46
+computes the energy in milk from its fat and protein and sends the reader to
+section 5.8 for both; section 5.8 is the monthly distribution of milk yield and
+carries neither. The sheep milk composition in sheep-ewe.toml therefore comes
+from the literature and is marked verify.
+"""
+
 [source.adjabui_model_comparison]
 organisation = "Massey University, published in Livestock Science"
 title = "A comparison of three nutritional models for estimating total metabolisable energy requirements for a ewe, beef breeding cow, lamb, and a calf/yearling in New Zealand's pasture-only system"

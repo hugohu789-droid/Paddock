@@ -16,6 +16,20 @@ namespace {
 /// A year of ageing, in the days the animal state counts in.
 constexpr double kDaysPerYear = 365.25;
 
+/// Days since the most recent occurrence of a month and day, on or before
+/// today. Comparing three of these is how the year's phases are told apart
+/// without any of them having to know where a year begins.
+int days_since_last(const Date& today, int month, int day) {
+  Date candidate{today.year, month, day};
+  if (!candidate.is_valid()) {
+    return -1;
+  }
+  if (candidate.days_since_epoch() > today.days_since_epoch()) {
+    candidate = Date{today.year - 1, month, day};
+  }
+  return static_cast<int>(today.days_since_epoch() - candidate.days_since_epoch());
+}
+
 }  // namespace
 
 std::string AgeCohort::class_name() const {
@@ -126,7 +140,78 @@ std::string FlockCalendar::invalid_reason() const {
   if (!valid(year_turns_month, year_turns_day)) {
     return "the date the year turns is not a date";
   }
+
+  // **The check that catches the nine days**, and the band is published rather
+  // than picked. Sheep gestation runs 142 to 152 days across breeds, averaging
+  // 147, with wool breeds such as Romney at 147 to 150; OVERSEER uses 150 (TMC
+  // Table 28, from Freer et al. 2006). The shipped calendar used to say 141,
+  // which is outside the range for a sheep of any breed - which is the point.
+  //
+  // A first band of 136 to 164 was written here and would have let those 141
+  // days through, so it is recorded: a validator that admits the bug it was
+  // written for is worse than none, because it certifies the mistake.
+  const int gestation = gestation_days();
+  if (gestation < 142 || gestation > 152) {
+    return "mating to lambing is " + std::to_string(gestation) +
+           " days, which is outside a sheep's gestation of 142 to 152";
+  }
+
+  const int lactation = lactation_days();
+  if (lactation < 1) {
+    return "weaning must fall after lambing";
+  }
   return {};
+}
+
+int FlockCalendar::gestation_days() const {
+  const Date mating{2024, mating_month, mating_day};
+  Date lambing{2024, lambing_month, lambing_day};
+  if (!mating.is_valid() || !lambing.is_valid()) {
+    return 0;
+  }
+  if (lambing.days_since_epoch() < mating.days_since_epoch()) {
+    lambing = Date{2025, lambing_month, lambing_day};
+  }
+  return static_cast<int>(lambing.days_since_epoch() - mating.days_since_epoch());
+}
+
+int FlockCalendar::lactation_days() const {
+  const Date lambing{2024, lambing_month, lambing_day};
+  Date weaning{2024, weaning_month, weaning_day};
+  if (!lambing.is_valid() || !weaning.is_valid()) {
+    return 0;
+  }
+  if (weaning.days_since_epoch() < lambing.days_since_epoch()) {
+    weaning = Date{2025, weaning_month, weaning_day};
+  }
+  return static_cast<int>(weaning.days_since_epoch() - lambing.days_since_epoch());
+}
+
+void Flock::set_reproductive_state(const Date& today, const FlockCalendar& calendar,
+                                   const FlockRates& rates) {
+  const int since_mating = days_since_last(today, calendar.mating_month, calendar.mating_day);
+  const int since_lambing = days_since_last(today, calendar.lambing_month, calendar.lambing_day);
+  const int since_weaning = days_since_last(today, calendar.weaning_month, calendar.weaning_day);
+  if (since_mating < 0 || since_lambing < 0 || since_weaning < 0) {
+    return;
+  }
+
+  // Mating more recent than lambing means she is carrying; lambing more recent
+  // than weaning means she is milking. Comparing recencies rather than testing
+  // date ranges is what lets a phase cross the new year without a special case.
+  const bool carrying = since_mating < since_lambing;
+  const bool milking = since_lambing < since_weaning;
+
+  const double litter = rates.lambing_percentage / 100.0;
+
+  for (AgeCohort& cohort : cohorts_) {
+    // A lamb or a hogget is neither, and neither is a cohort being finished.
+    const bool breeds = cohort.age_years >= 2 && !cohort.is_finishing;
+
+    cohort.mob.state.days_pregnant = breeds && carrying ? since_mating : 0;
+    cohort.mob.state.days_lactating = breeds && milking ? since_lambing : 0;
+    cohort.mob.state.young = breeds && (carrying || milking) ? litter : 0.0;
+  }
 }
 
 FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const FlockRates& rates) {
@@ -202,6 +287,10 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
                                   [](const AgeCohort& cohort) { return cohort.mob.head <= 0; }),
                    cohorts_.end());
   }
+
+  // Last, so that a cohort born or weaned today is already in the flock when it
+  // is asked whether it is carrying anything.
+  set_reproductive_state(today, calendar, rates);
 
   return day;
 }

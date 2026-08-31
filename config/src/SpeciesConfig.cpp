@@ -48,7 +48,8 @@ SourcedValue read_sourced(const toml::table& parent, std::string_view key,
 }
 
 SpeciesDefinition read(const toml::table& root, const std::string& path) {
-  detail::reject_unknown_keys(root, {"species", "energy", "typical"}, path, "the file");
+  detail::reject_unknown_keys(root, {"species", "energy", "reproduction", "typical"}, path,
+                              "the file");
 
   const toml::table& species = detail::require_table(root, "species", path);
   detail::reject_unknown_keys(species, {"name", "display_name", "description", "kind"}, path,
@@ -84,6 +85,26 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   definition.energy.standard_reference_weight_kg = definition.standard_reference_weight.value;
   definition.energy.grazing_coefficient = definition.grazing_coefficient.value;
   definition.energy.gain_energy_ceiling_mj_per_kg = definition.gain_energy_ceiling.value;
+
+  // **[reproduction] is optional, and its absence means "does not breed".**
+  // A wether has no gestation, and a file that had to state that would be
+  // inviting somebody to state it wrongly.
+  if (const toml::table* reproduction = root["reproduction"].as_table()) {
+    detail::reject_unknown_keys(
+        *reproduction,
+        {"gestation_length_days", "milk_fat_percent", "milk_protein_percent", "breed_effect"}, path,
+        "[reproduction]");
+
+    definition.gestation_length_days = read_sourced(*reproduction, "gestation_length_days", path);
+    definition.milk_fat_percent = read_sourced(*reproduction, "milk_fat_percent", path);
+    definition.milk_protein_percent = read_sourced(*reproduction, "milk_protein_percent", path);
+    definition.breed_effect = read_sourced(*reproduction, "breed_effect", path);
+
+    definition.energy.gestation_length_days = definition.gestation_length_days.value;
+    definition.energy.milk_fat_percent = definition.milk_fat_percent.value;
+    definition.energy.milk_protein_percent = definition.milk_protein_percent.value;
+    definition.energy.breed_effect = definition.breed_effect.value;
+  }
 
   const toml::table& typical = detail::require_table(root, "typical", path);
   detail::reject_unknown_keys(typical, {"liveweight_kg", "age_days"}, path, "[typical]");

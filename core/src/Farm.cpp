@@ -106,6 +106,16 @@ void Farm::set_mob_head(std::size_t mob, int head) {
   mobs_[mob].mob.head = std::max(0, head);
 }
 
+void Farm::set_mob_reproduction(std::size_t mob, int days_pregnant, int days_lactating,
+                                double young) {
+  if (mob >= mobs_.size()) {
+    return;
+  }
+  mobs_[mob].mob.state.days_pregnant = std::max(0, days_pregnant);
+  mobs_[mob].mob.state.days_lactating = std::max(0, days_lactating);
+  mobs_[mob].mob.state.young = std::max(0.0, young);
+}
+
 void Farm::spread_mob(std::size_t mob) {
   if (mob >= mobs_.size()) {
     throw std::out_of_range("Farm::spread_mob: no such mob");
