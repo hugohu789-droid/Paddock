@@ -10,6 +10,7 @@ add_library(
   src/Entity.cpp
   src/Farm.cpp
   src/FarmAccount.cpp
+  src/FarmDecision.cpp
   src/Farmer.cpp
   src/FarmletGrid.cpp
   src/Geometry.cpp
