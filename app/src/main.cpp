@@ -155,7 +155,7 @@ int run_disease(const std::vector<std::string>& arguments) {
     const paddock::core::SnapshotWeatherSource source(options);
     const paddock::core::ConnectionStatus status = source.test_connection();
     if (!status.ok) {
-      std::cerr << "paddock: " << status.message << std::endl;
+      std::cerr << "paddock: " << status.message << "\n";
       return 1;
     }
 

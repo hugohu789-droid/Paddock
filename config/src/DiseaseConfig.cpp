@@ -150,9 +150,10 @@ DiseaseDefinition read(const toml::table& root, const std::string& path) {
     const bool known = std::any_of(definition.sources.begin(), definition.sources.end(),
                                    [&cited](const auto& source) { return source.first == cited; });
     if (!known) {
-      throw ConfigError(
-          path, 1, 1,
-          "'" + key + "' cites source '" + cited + "', which [sources] does not define");
+      std::string message = "'";
+      message.append(key).append("' cites source '").append(cited);
+      message.append("', which [sources] does not define");
+      throw ConfigError(path, 1, 1, message);
     }
   }
 
