@@ -1,20 +1,34 @@
-# An example soil definition.
+# A Canterbury dryland soil: Lismore stony silt loam.
 #
-# The water-holding measurements below are PLACEHOLDER values: they are the
-# right shape for a moderately deep Canterbury silt loam, but they have not been
-# taken from S-map. Do not quote a result computed with this file.
+# **The depth is sourced; the fractions are not, and the difference matters.**
+# This file used to describe a 0.6 m "templeton silt loam example" holding
+# 120 mm of available water - a deep soil, and the wrong one for a rain-fed farm
+# being compared against Canterbury dryland production. Lismore stony silt loam
+# is the Canterbury dryland soil: it is what the Winchmore trials sit on, which
+# makes it the soil of the only long-run dryland reference series there is
+# (docs/validation/verify.md, E21), and it is described as "30-35 cm stony
+# greyish-brown silt loam on thick beds of greywacke gravel and sand".
 #
-# PLACEHOLDER - verify against Manaaki Whenua S-map (docs/validation/verify.md, item 2)
+# That gravel is a rooting barrier, so the rooting depth is 0.35 m rather than
+# 0.6, and the available water falls from 120 mm to 70. **Only the depth
+# changed.** The field capacity and wilting point fractions below are the same
+# unsourced values they always were, because changing those as well would have
+# been fitting the soil to the answer rather than to the profile.
+#
+# PLACEHOLDER on the fractions - verify against Manaaki Whenua S-map, which
+# reports profile available water for Lismore at 0.3, 0.6 and 1.0 m
+# (docs/validation/verify.md, item 2)
 
 [soil]
-name = "templeton_silt_loam_example"
+name = "lismore_stony_silt_loam"
 
 [water]
 # FAO-56 Eq. 82 computes total available water from these three:
-# 1000 (0.38 - 0.18) x 0.6 m = 120 mm.
+# 1000 (0.38 - 0.18) x 0.35 m = 70 mm.
 field_capacity_fraction = 0.38   # PLACEHOLDER - verify against S-map
 wilting_point_fraction = 0.18    # PLACEHOLDER - verify against S-map
-rooting_depth_m = 0.6            # PLACEHOLDER - verify against S-map
+# Depth to the greywacke gravel at Winchmore, which roots do not cross.
+rooting_depth_m = 0.35
 
 # Fraction of available water the pasture can use before it feels stress.
 # FAO-56 Table 22 gives 0.60 for rotated and extensive grazing pasture.

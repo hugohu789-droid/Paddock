@@ -172,6 +172,21 @@ double Farm::paddock_cover_kg_dm_per_ha(std::size_t paddock) const {
   return total / static_cast<double>(cells.size());
 }
 
+double Farm::paddock_green_kg_dm_per_ha(std::size_t paddock) const {
+  if (paddock >= paddocks_.size()) {
+    throw std::out_of_range("Farm::paddock_green_kg_dm_per_ha: no such paddock");
+  }
+  const std::vector<std::size_t>& cells = cells_of_paddock_[paddock];
+  if (cells.empty()) {
+    return 0.0;
+  }
+  double total = 0.0;
+  for (const std::size_t index : cells) {
+    total += grid_.cell(index % grid_.cols(), index / grid_.cols()).sward().green_kg_dm();
+  }
+  return total / static_cast<double>(cells.size());
+}
+
 double Farm::paddock_offer_kg_dm(std::size_t paddock) const {
   if (paddock >= paddocks_.size()) {
     throw std::out_of_range("Farm::paddock_offer_kg_dm: no such paddock");

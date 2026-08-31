@@ -509,6 +509,37 @@ core::Farmlet ScenarioBundle::make_farmlet() const {
   return {soil, sward, initial_state, latitude_degrees};
 }
 
+/// **The grid's water gradient has to agree with the soil file it varies.**
+///
+/// The gradient replaces `total_available_water_mm` rather than scaling it, so
+/// for a while a soil profile stating 70 mm ran on a farm holding 60 to 140 and
+/// nothing said so: the sourced number lost silently to a demonstration
+/// gradient, and changing the soil file changed nothing at all. One quantity
+/// with two sources of truth is a quantity nobody owns.
+///
+/// A tenth either way covers rounding in a hand-written bundle; anything wider
+/// means the two were edited apart.
+namespace {
+
+std::string water_gradient_disagreement(const core::SoilWaterParameters& soil, double west_mm,
+                                        double east_mm, const std::string& name) {
+  const double stated = soil.total_available_water_mm;
+  if (stated <= 0.0) {
+    return {};
+  }
+  const double gradient_mean = (west_mm + east_mm) / 2.0;
+  if (std::abs(gradient_mean - stated) <= 0.1 * stated) {
+    return {};
+  }
+  return "scenario '" + name + "': [grid] averages " + std::to_string(gradient_mean) +
+         " mm of available water across the farm, but soil.toml computes " +
+         std::to_string(stated) +
+         " mm. The grid overrides the soil file, so the profile would never be used - centre the "
+         "gradient on the soil, or change the soil.";
+}
+
+}  // namespace
+
 core::Raster<core::SoilWaterParameters> ScenarioBundle::make_soil_raster() const {
   if (!grid.has_value()) {
     throw std::runtime_error("scenario '" + name + "' has no [grid] section, so it has no map");
@@ -519,6 +550,12 @@ core::Raster<core::SoilWaterParameters> ScenarioBundle::make_soil_raster() const
   transform.origin_easting = spec.origin_easting;
   transform.origin_northing = spec.origin_northing;
   transform.cell_size = spec.cell_size_m;
+
+  if (const std::string disagreement = water_gradient_disagreement(
+          soil, spec.available_water_west_mm, spec.available_water_east_mm, name);
+      !disagreement.empty()) {
+    throw std::runtime_error(disagreement);
+  }
 
   core::Raster<core::SoilWaterParameters> soils(spec.cols, spec.rows, transform, soil);
   const double span = spec.cols > 1 ? static_cast<double>(spec.cols - 1) : 1.0;

@@ -1,14 +1,34 @@
-# An example perennial ryegrass and white clover sward.
+# A perennial ryegrass and white clover sward, with its radiation use
+# efficiency calibrated against Canterbury dryland production.
 #
-# Every growth parameter here is PLACEHOLDER. The values are the right order of
-# magnitude and produce a plausible seasonal shape, but the published ranges are
-# wide and often measured differently from what this model needs - radiation use
-# efficiencies near 2 g DM/MJ for perennial ryegrass usually include roots,
-# while this model grows only what an animal can eat.
+# **One parameter is FITTED and the rest are still PLACEHOLDER.** Radiation use
+# efficiency was 1.5 g DM/MJ for the grass and 1.4 for the clover, both
+# unsourced, and with them this farm converted water to dry matter at 19.8 kg
+# DM/ha/mm - which Martin et al. (2006) give for *irrigated* ryegrass and white
+# clover, against 12.3 for Canterbury dryland. A rain-fed farm running at an
+# irrigated efficiency grows about 1.6 times what its rainfall buys, and that
+# is why no dry year could ever pinch it.
 #
-# PLACEHOLDER - calibrate against measured DairyNZ seasonal growth curves at the
-# T3 validation gate (docs/validation/verify.md, item 1 and caveat E7). Until then, no
-# growth figure produced with this file should be quoted.
+# **Water use efficiency turned out to be the only thing that could be fitted
+# here**, and it is worth saying why. Growth and evapotranspiration are both
+# scaled by the same water stress coefficient, so their ratio does not depend on
+# the water balance at all: making the soil shallower cut growth and ET by the
+# same factor and left WUE at 19.8 to three figures. The ratio is set by
+# radiation use efficiency and the temperature response, and of those two only
+# RUE has no source.
+#
+# FITTED TO: `data/calibration/canterbury-dryland-pasture.csv`, specifically the
+# dryland water use efficiency of 12.3 kg DM/ha/mm measured at Winchmore -
+# 1.5 x 12.3/19.8 = 0.932, and 1.4 x 12.3/19.8 = 0.870. One scalar, one target,
+# applied to both species so their balance is unchanged. **This is a fit and not
+# a measurement**: it makes the model reproduce a published efficiency it was
+# not reproducing, and it does not make 0.932 a measured radiation use
+# efficiency for ryegrass. The independent check is annual production, which
+# nothing was fitted to - see the validation test.
+#
+# Everything else here is still PLACEHOLDER: specific leaf area, extinction,
+# senescence, the temperature cardinals and the decomposition rate. See
+# docs/validation/verify.md, E7 and E21.
 
 [sward]
 # Photosynthetically active radiation as a share of global solar radiation.
@@ -22,7 +42,9 @@ decomposition_rate_per_day = 0.02  # PLACEHOLDER
 species_id = "ryegrass_perennial"
 specific_leaf_area_m2_per_kg = 20.0        # PLACEHOLDER
 extinction_coefficient = 0.5               # PLACEHOLDER - published range 0.3 to 1.3
-radiation_use_efficiency_g_per_mj = 1.5    # PLACEHOLDER - above-ground only
+# FITTED to Winchmore's dryland water use efficiency - see the header. Was an
+# unsourced 1.5.
+radiation_use_efficiency_g_per_mj = 0.932
 base_temperature_c = 4.4                   # cool limit for temperate grasses
 optimum_temperature_c = 20.0               # PLACEHOLDER
 maximum_temperature_c = 35.0               # PLACEHOLDER
@@ -37,7 +59,9 @@ nitrogen_fixation_kg_per_t_dm = 0.0
 species_id = "clover_white"
 specific_leaf_area_m2_per_kg = 25.0        # PLACEHOLDER
 extinction_coefficient = 0.6               # PLACEHOLDER
-radiation_use_efficiency_g_per_mj = 1.4    # PLACEHOLDER - above-ground only
+# FITTED with the same scalar as the grass, so the two species keep the balance
+# they had. Was an unsourced 1.4.
+radiation_use_efficiency_g_per_mj = 0.870
 base_temperature_c = 5.0                   # PLACEHOLDER
 optimum_temperature_c = 22.0               # PLACEHOLDER
 maximum_temperature_c = 35.0               # PLACEHOLDER

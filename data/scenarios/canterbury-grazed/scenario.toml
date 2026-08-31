@@ -60,8 +60,12 @@ soil_mineral_nitrogen_kg_per_ha = 60.0
 cols = 48
 rows = 32
 cell_size_m = 25.0
-available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
-available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
+# Centred on the 120 mm this bundle's soil.toml computes, not replacing it: the
+# grid used to override the soil file outright, so a stated profile of 120 mm
+# ran on a farm averaging 100. The bundle now refuses when the two disagree.
+# The +-20 mm spread is PLACEHOLDER; the centre comes from the soil file.
+available_water_west_mm = 100.0
+available_water_east_mm = 140.0
 origin_easting = 1554550.0
 origin_northing = 5167300.0
 

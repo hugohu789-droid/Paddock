@@ -135,6 +135,16 @@ class FarmletGrid {
   /// Per-hectare means, compensated: the closing stocks the conservation tests
   /// compare the ledger against.
   [[nodiscard]] double mean_cover_kg_dm() const;
+
+  /// Mean GREEN dry matter, kg DM/ha - the part an animal can eat.
+  ///
+  /// **Not the same as cover, and the difference is the point.** `cover` is
+  /// green plus the dead standing material above it, which is what a plate
+  /// meter sweeps up and what a total-dry-matter budget has to account for.
+  /// What a mob can actually put in its mouth is the green, and a farm that
+  /// manages to a cover figure padded with thatch is managing to a number no
+  /// animal can eat.
+  [[nodiscard]] double mean_green_kg_dm() const;
   [[nodiscard]] double mean_soil_water_mm() const;
   [[nodiscard]] double mean_total_nitrogen_kg() const;
 

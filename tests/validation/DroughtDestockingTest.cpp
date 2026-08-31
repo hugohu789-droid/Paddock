@@ -122,24 +122,25 @@ int destockings(const RunSummary& run) {
                     }));
 }
 
-// **The drought now reaches the cover the farmer holds the farm to, and stops
-// one step short of the stock.**
+// **M4's acceptance: a dry year forces the farmer to sell.**
 //
-// This test has moved twice, and where it has got to is the point of it. It
-// began asserting that a dry year forces a sale, which the model could not do.
-// It then asserted the drought showed in the grass and went no further, because
-// the farm carried about five times the feed it needed. Two of those slack
-// halves have since been taken up - a ewe is charged for her pregnancy and her
-// milk, and her lambs graze - and the driest year in ten now takes cover to
-// 1,597 kg DM/ha against the 1,600 the farmer holds it to.
+// This test moved three times before it got here, and the route is the point.
+// It began asserting a sale the model could not produce. It then asserted only
+// that the drought showed in the grass, because the farm carried about five
+// times the feed it needed. Then that it reached the cover the farmer holds the
+// farm to but no further. Each retreat was recorded rather than papered over,
+// and each named what was missing.
 //
-// **No mob goes short even so**, and that is not a contradiction: cover here is
-// a farm mean, and a mean below the target still leaves feed where the mobs
-// actually are. What remains is the grass. Water use efficiency is near 20 kg
-// DM/ha/mm, which Martin et al. (2006) give for *irrigated* ryegrass and clover
-// against 12.3 for Canterbury dryland, so the farm still grows about 1.6 times
-// what its rainfall should buy. See E20.
-TEST(DroughtDestockingTest, TheDroughtReachesTheFarmersFloorAndStopsShortOfTheStock) {
+// Three things were missing and all three are now in. A ewe is charged for the
+// pregnancy she carries and the milk she makes; her lambs graze; and the
+// pasture's radiation use efficiency is calibrated against Winchmore's dryland
+// water use efficiency rather than left at an unsourced figure that had a
+// rain-fed farm growing what an irrigated one grows.
+//
+// The driest year in ten now takes the farm below the cover it is held to, the
+// mob goes short, and the farmer sells. The wettest year does not - which is
+// the control, and is why this is a drought rather than a farm.
+TEST(DroughtDestockingTest, TheDriestYearForcesTheFarmerToSell) {
   const ScenarioBundle dry = year_of(2015);  // 527 mm, the driest of the ten
   ASSERT_TRUE(dry.management.has_value());
 
@@ -162,12 +163,10 @@ TEST(DroughtDestockingTest, TheDroughtReachesTheFarmersFloorAndStopsShortOfTheSt
   EXPECT_GT(wet.lowest_cover_kg_dm_per_ha(), dry.management->minimum_cover_kg_dm_per_ha)
       << "and the wettest should not, or this is a farm rather than a drought";
 
-  // And still no mob is short, so nothing is sold. A model that destocked on a
-  // mean while every mob had feed in front of it would be selling on a summary
-  // statistic rather than on hunger.
-  EXPECT_EQ(drought.days_short, 0);
-  EXPECT_EQ(destockings(drought), 0)
-      << "a farmer who sold here would be selling for no reason the model can name";
+  // **And the farmer sells**, which is what M4 asks for.
+  EXPECT_GT(destockings(drought), 0)
+      << "the driest year in ten should put the farmer in a position where selling is the answer";
+  EXPECT_LT(drought.closing_head, 300) << "and the flock should be smaller for it at the close";
 }
 
 // **The year reads like a farm year.** Four events, in order, at prices from
@@ -194,7 +193,8 @@ TEST(DroughtDestockingTest, TheLedgerReadsLikeAFarmYear) {
   // The flock is smaller at the close than the lambs made it, because the
   // lambs left.
   EXPECT_LT(run.closing_head, 800);
-  EXPECT_GT(run.closing_head, 300);
+  EXPECT_GT(run.closing_head, 100)
+      << "a dry year takes a draft off this farm, but not the whole flock";
 }
 
 // **What the farmer sells stops eating.** The regression test for the coupling
@@ -205,7 +205,11 @@ TEST(DroughtDestockingTest, TheLedgerReadsLikeAFarmYear) {
 // could change the feed pressure, which made destocking incapable of relieving
 // anything and put M4's drought acceptance out of reach by construction.
 TEST(DroughtDestockingTest, WhatTheFarmerSellsStopsEating) {
-  const ScenarioBundle year = year_of(2015);
+  // **The wet year, not the dry one.** In a dry year the big flock destocks and
+  // the small one does not, so the two end the year with similar numbers and
+  // the comparison measures the destocking rule instead of the coupling. A wet
+  // year sells nothing for feed, which leaves only the thing being tested.
+  const ScenarioBundle year = year_of(2024);
   ASSERT_TRUE(year.management.has_value());
 
   // The same farm and weather, run with a big flock and a small one.
@@ -244,18 +248,24 @@ TEST(DroughtDestockingTest, TheWettestYearDoesNot) {
 //
 // The invariant worth keeping is the narrower one underneath it: **the books
 // themselves change nothing.** Two runs with the same flock, the same policy
-// and different money must grow the same grass to the last kilogram. Both
-// balances here are far enough from empty that no rule reads them differently;
-// a farm near insolvency is supposed to graze differently, and does.
+// and different money must grow the same grass to the last kilogram.
+//
+// Both balances are deliberately large. A farm near insolvency is supposed to
+// graze differently and does - once the pasture was calibrated, a farm opening
+// on $32,000 sold stock in the driest year where one opening on $320,000 bought
+// feed instead, and this test failed for exactly the right reason. Money that
+// runs out is a real input to a decision; money that does not is not.
 TEST(DroughtDestockingTest, TheBooksThemselvesDoNotChangeThePasture) {
   const ScenarioBundle dry = year_of(2015);
   ASSERT_TRUE(dry.management.has_value());
 
+  FarmBusiness ordinary_b = a_business();
+  ordinary_b.opening_balance_dollars = 300'000.0;
   FarmBusiness comfortable = a_business();
   comfortable.opening_balance_dollars = 320'000.0;
 
   const RunSummary ordinary =
-      run_managed_scenario(dry, *dry.management, pasture_diet(), "ordinary", a_business());
+      run_managed_scenario(dry, *dry.management, pasture_diet(), "ordinary", std::move(ordinary_b));
   const RunSummary rich =
       run_managed_scenario(dry, *dry.management, pasture_diet(), "rich", std::move(comfortable));
 

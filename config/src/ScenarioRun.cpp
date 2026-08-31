@@ -164,6 +164,19 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // had no reason to stop. The lamb crop's income comes from the weaning split
   // instead, which is a sourced rate rather than an unearned weight.
   outlook.is_finishing_class = false;
+  // **Cover, not green, and that is a decision rather than an oversight.** Cover
+  // is green plus the dead standing above it, and on this farm the two part
+  // company by up to 45% in late summer - a paddock reporting 1,640 kg DM/ha of
+  // cover in September has 968 of grass on it. Switching this to green was
+  // tried and reverted: the 1,600 kg DM/ha floor a policy states is a rising
+  // plate meter figure, and a plate meter reads dead material too, so measuring
+  // green against a threshold set in cover silently raises the bar by a third
+  // and had the farmer buying feed all year.
+  //
+  // The real defect is upstream: a third to a half of this model's standing dry
+  // matter is dead, where a grazed New Zealand pasture runs 10 to 20%. See
+  // docs/validation/verify.md, E26. `green_kg_dm_per_ha` is reported alongside
+  // cover so the gap is visible rather than implied.
   outlook.cover_kg_dm_per_ha = farm.grid().mean_cover_kg_dm();
   outlook.minimum_cover_kg_dm_per_ha = policy.minimum_cover_kg_dm_per_ha;
   outlook.days_short = summary.days_short;
@@ -359,6 +372,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
+    summary.green_kg_dm_per_ha.push_back(farm.grid().mean_green_kg_dm());
     // **Only where there is stock to record it from.** A farm can be run
     // carrying none - a pasture-only scenario is a legitimate thing to ask the
     // model for - and these two series were read off the first mob whether or
@@ -437,6 +451,7 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
+    summary.green_kg_dm_per_ha.push_back(farm.grid().mean_green_kg_dm());
     // A farm with no stock on it, as above: nothing to read a liveweight from.
     if (!farm.mobs().empty()) {
       summary.liveweight_kg.push_back(farm.mobs().front().mob.state.liveweight_kg);
