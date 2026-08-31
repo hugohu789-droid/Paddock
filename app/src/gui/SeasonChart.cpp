@@ -190,7 +190,27 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
     // a fifth of its cover look like one that dropped to nothing. Every
     // quantity here is one that cannot go below zero, so nothing is cut off.
     const auto highest = std::max_element(line.values.begin(), line.values.end());
-    const double top = highest == line.values.end() ? 1.0 : *highest;
+    double top = highest == line.values.end() ? 1.0 : *highest;
+
+    // **The level this line is read against**, dashed and in the same colour so
+    // it belongs to the line rather than floating over the chart. Kept out of
+    // the legend: it is the same quantity, not another one.
+    if (line.reference.has_value() && !dates_.empty()) {
+      auto* level = new QLineSeries(chart_);
+      QPen pen(line.colour, 1.0, Qt::DashLine);
+      level->setPen(pen);
+      level->append(static_cast<double>(stamp(dates_.front())), *line.reference);
+      level->append(static_cast<double>(stamp(dates_.back())), *line.reference);
+      chart_->addSeries(level);
+      level->attachAxis(time_axis_);
+      level->attachAxis(axis);
+      chart_->legend()->markers(level).front()->setVisible(false);
+
+      // The axis has to reach it, or a farm sitting under its own floor draws a
+      // line the chart has cropped off the top.
+      top = std::max(top, *line.reference);
+    }
+
     axis->setRange(0.0, top > 0.0 ? top * 1.05 : 1.0);
     axis->setLabelFormat(top < 10.0 ? "%.2f" : "%.0f");
     axis->setLabelsColor(line.colour);

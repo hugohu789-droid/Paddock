@@ -209,6 +209,7 @@ void DashboardDialog::build_chart() {
     line.unit = QString::fromStdString(series.unit);
     line.colour = line_colour(static_cast<int>(i));
     line.values = series.values;
+    line.reference = series.reference;
     lines.push_back(std::move(line));
   }
 

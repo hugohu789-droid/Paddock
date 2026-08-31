@@ -424,9 +424,18 @@ std::string indicators_as_csv(const FarmDashboard& dashboard) {
 
 std::string series_as_csv(const FarmDashboard& dashboard) {
   std::ostringstream out;
+  // **The reference travels in the heading.** A cover column exported without
+  // the level it is read against is a column somebody plots and then guesses
+  // at: 1,400 kg DM/ha is a farm in trouble or a farm doing exactly what it
+  // planned, and which of those depends on a number that would not be in the
+  // file.
   out << "date";
   for (const DashboardSeries& series : dashboard.series) {
-    out << ',' << csv(series.name + " (" + series.unit + ")");
+    std::string heading = series.name + " (" + series.unit + ")";
+    if (series.reference.has_value()) {
+      heading += " [held at " + fixed(*series.reference, 0) + "]";
+    }
+    out << ',' << csv(heading);
   }
   out << '\n';
 
