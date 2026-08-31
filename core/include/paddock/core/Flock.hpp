@@ -71,6 +71,16 @@ struct FlockRates {
   /// (2025): 16.5% (SD 8.3).
   double culled_at_weaning_fraction = 0.165;
 
+  /// Share of the 10.5% loss that happens at lambing rather than spread from
+  /// mating to mid-lactation. Ridler et al. (2025): "two-thirds of ewe
+  /// mortalities between breeding and mid-lactation occurred during the lambing
+  /// period."
+  double share_of_loss_at_lambing = 2.0 / 3.0;
+
+  /// Lambs tailed per hundred ewes put to the ram. Beef + Lamb New Zealand's
+  /// national estimate for 2024-25 is a 132.3% ewe lambing percentage.
+  double lambing_percentage = 132.3;
+
   /// The age at which a ewe is culled whatever else is true. **PLACEHOLDER**:
   /// the study names age as the commonest reason for culling without giving the
   /// age, and a replacement rate of 29.2% implies an average retention of about
@@ -78,6 +88,42 @@ struct FlockRates {
   int cull_age_years = 6;
 
   [[nodiscard]] std::string invalid_reason() const;
+};
+
+/// When the year's events fall.
+///
+/// A New Zealand sheep calendar, and the dates a Canterbury flock runs to. They
+/// are management choices rather than measurements - a farmer picks them - so
+/// they are configurable and marked PLACEHOLDER where a scenario does not say.
+struct FlockCalendar {
+  int mating_month = 4;
+  int mating_day = 1;
+
+  int lambing_month = 8;
+  int lambing_day = 20;
+
+  int weaning_month = 12;
+  int weaning_day = 1;
+
+  /// 1 July, when the classes are renamed and the oldest draft goes.
+  int year_turns_month = 7;
+  int year_turns_day = 1;
+
+  [[nodiscard]] std::string invalid_reason() const;
+};
+
+/// What happened to the flock today.
+struct FlockDay {
+  int born = 0;
+  int died = 0;
+  int culled = 0;
+
+  /// True on the day the year turned, so a caller knows the classes moved.
+  bool year_turned = false;
+
+  [[nodiscard]] bool anything_happened() const noexcept {
+    return born > 0 || died > 0 || culled > 0 || year_turned;
+  }
 };
 
 /// The flock, oldest cohort first.
@@ -109,6 +155,22 @@ class Flock {
   /// Removes `head` from the oldest cohorts first, which is what a farmer sells
   /// when they have to sell. Returns how many actually went.
   int sell_oldest(int head);
+
+  /// Takes `head` out of the breeding cohorts, oldest first. What a cull draft
+  /// and a lambing death both look like from the flock's side.
+  int remove_from_breeding(int head);
+
+  /// Runs one day of the flock's own year: mating, lambing, weaning and the
+  /// turn of the year, each on its date and none of them on any other.
+  ///
+  /// **Deterministic, not stochastic.** A rate applied to a cohort gives a
+  /// fraction of an animal, and this rounds rather than drawing. Two reasons:
+  /// the published rates are between-flock means, so a draw would be inventing
+  /// a within-flock distribution nobody measured; and a deterministic flock
+  /// keeps the conservation assertions exact, which a per-animal draw would
+  /// not. A scenario that wants a bad year should say so with weather rather
+  /// than with a seed.
+  FlockDay step(const Date& today, const FlockCalendar& calendar, const FlockRates& rates);
 
  private:
   std::vector<AgeCohort> cohorts_;

@@ -130,5 +130,101 @@ TEST(FlockTest, SellingMoreThanTheFlockHoldsSellsWhatThereIs) {
   EXPECT_EQ(flock.sell_oldest(10), 0) << "an empty flock has nothing to sell";
 }
 
+// **The year's events, each on its own date and no other.**
+TEST(FlockTest, TheCalendarIsValidAndEventsFallOnTheirDates) {
+  EXPECT_EQ(FlockCalendar{}.invalid_reason(), "");
+
+  FlockCalendar impossible;
+  impossible.lambing_month = 2;
+  impossible.lambing_day = 30;
+  EXPECT_NE(impossible.invalid_reason(), "");
+
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  // An ordinary day does nothing at all.
+  const FlockDay quiet = flock.step(Date{2024, 5, 15}, calendar, rates);
+  EXPECT_FALSE(quiet.anything_happened());
+  EXPECT_EQ(flock.head(), 400);
+}
+
+// **Lambing.** 400 ewes at Beef + Lamb's 132.3% is 529 lambs, and the deaths
+// that Ridler et al. put at two-thirds of the year's losses happen the same day.
+TEST(FlockTest, LambingAddsACohortAndCostsSomeEwes) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  const FlockDay lambing = flock.step(Date{2024, 8, 20}, calendar, rates);
+
+  EXPECT_EQ(lambing.born, 529) << "400 ewes at 132.3%";
+  EXPECT_EQ(lambing.died, 28) << "400 ewes, 10.5% lost overall, two-thirds of it here";
+
+  // The lambs are their own cohort, at age zero, and are not counted as
+  // breeding stock.
+  EXPECT_EQ(flock.head(), 400 - 28 + 529);
+  EXPECT_EQ(flock.breeding_head(), 400 - 28);
+  EXPECT_EQ(flock.cohorts().back().class_name(), "lambs");
+  EXPECT_DOUBLE_EQ(flock.cohorts().back().mob.state.age_days, 0.0);
+}
+
+// Weaning is the main culling event, and it takes the old ewes.
+TEST(FlockTest, WeaningCullsTheOlderEwes) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  const int before = flock.breeding_head();
+  const FlockDay weaning = flock.step(Date{2024, 12, 1}, calendar, rates);
+
+  EXPECT_EQ(weaning.culled, 66) << "16.5% of 400";
+  EXPECT_EQ(flock.breeding_head(), before - 66);
+
+  // Taken off the top: the six-year-olds went first.
+  ASSERT_FALSE(flock.cohorts().empty());
+  EXPECT_LT(flock.cohorts().front().mob.head, 80);
+}
+
+// **The question the whole age structure exists to answer.** Run ten years of
+// the real calendar and see whether a flock feeds itself: lambs become
+// hoggets, hoggets become two-tooths, the old draft leaves, and the head count
+// neither collapses nor runs away.
+TEST(FlockTest, TenYearsOfTheCalendarKeepAFlockGoing) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  int born = 0;
+  int died = 0;
+  int culled = 0;
+
+  Date day{2024, 7, 1};
+  for (int i = 0; i < 365 * 10; ++i) {
+    const FlockDay event = flock.step(day, calendar, rates);
+    born += event.born;
+    died += event.died;
+    culled += event.culled;
+    day = Date::from_days_since_epoch(day.days_since_epoch() + 1);
+  }
+
+  EXPECT_GT(born, 0);
+  EXPECT_GT(died, 0);
+  EXPECT_GT(culled, 0);
+
+  // **A flock that sells every lamb it breeds cannot replace itself**, and this
+  // one keeps them all - so it grows. That is the finding: keeping every lamb
+  // is not a management policy, and what this says is that the flock now has
+  // somewhere for lambs to go and nothing yet to send them there. Selling them
+  // is the drafting rule, which needs a finishing class - the next step.
+  EXPECT_GT(flock.head(), 400)
+      << "with every lamb kept and nothing drafted, ten years should leave more sheep";
+
+  // And no cohort is older than the cull age, whatever else happened.
+  for (const AgeCohort& cohort : flock.cohorts()) {
+    EXPECT_LE(cohort.age_years, rates.cull_age_years);
+  }
+}
+
 }  // namespace
 }  // namespace paddock::core
