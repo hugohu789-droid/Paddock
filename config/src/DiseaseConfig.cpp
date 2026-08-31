@@ -92,12 +92,14 @@ DiseaseDefinition read(const toml::table& root, const std::string& path) {
   read_sourced(counting, "between_paddock_spread", path, definition);
 
   const toml::table& thresholds = detail::require_table(root, "thresholds", path);
-  definition.monitor_own_farm_spores_per_g =
+  definition.monitor_own_farm_spores_per_g = toxin.monitor_spores_per_g =
       read_sourced(thresholds, "monitor_own_farm", path, definition);
-  definition.full_zinc_dose_spores_per_g =
+  definition.full_zinc_dose_spores_per_g = toxin.full_dose_spores_per_g =
       read_sourced(thresholds, "full_zinc_dose", path, definition);
-  definition.stand_down_spores_per_g = read_sourced(thresholds, "stand_down", path, definition);
-  read_sourced(thresholds, "stand_down_weeks", path, definition);
+  definition.stand_down_spores_per_g = toxin.stand_down_spores_per_g =
+      read_sourced(thresholds, "stand_down", path, definition);
+  toxin.stand_down_weeks =
+      static_cast<int>(read_sourced(thresholds, "stand_down_weeks", path, definition));
   definition.dangerous_spores_per_g = read_sourced(thresholds, "dangerous", path, definition);
 
   const toml::table& toxin_table = detail::require_table(root, "toxin", path);

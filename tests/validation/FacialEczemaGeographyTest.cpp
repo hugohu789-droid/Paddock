@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <paddock/config/DiseaseConfig.hpp>
+#include <paddock/config/DiseaseReport.hpp>
 #include <paddock/core/Mycotoxin.hpp>
 #include <paddock/core/SnapshotWeather.hpp>
 #include <paddock/core/Weather.hpp>
@@ -203,6 +204,81 @@ TEST(FacialEczemaGeographyTest, AYearInsideTheDecadeInheritsFromTheOneBeforeIt) 
       << "the same weather should grow the same spores whichever run it is in";
   EXPECT_GT(following.peak_ggt_iu_per_l, by_itself.front().peak_ggt_iu_per_l)
       << "a year that follows a bad one should start with something already carried";
+}
+
+// **The report a person reads.** These check what it says, not how it is
+// spelled: a report whose headline sentence disagreed with its own table would
+// be worse than no report.
+TEST(FacialEczemaGeographyTest, TheDecadeReportLeadsWithTheDecision) {
+  config::DiseaseSite ruakura;
+  ruakura.name = "Ruakura";
+  ruakura.weather = year_at("ruakura-fe/weather-2015-2025.csv");
+
+  const config::DiseaseDefinition fe =
+      config::load_disease(std::string(PADDOCK_DATA_DIR) + "/diseases/facial-eczema.toml");
+  const std::string report = config::render_disease_years(ruakura, fe);
+
+  // The lead is the decision, so a reader who stops after one sentence has it.
+  EXPECT_NE(report.find("a zinc programme would have run in"), std::string::npos);
+  EXPECT_NE(report.find("2015-16"), std::string::npos) << "every year appears";
+  EXPECT_NE(report.find("2024-25"), std::string::npos);
+
+  // **The caveat is not optional.** A report that showed zinc days without
+  // saying the model never gave any zinc would be claiming a treated farm.
+  EXPECT_NE(report.find("does not give the animals zinc"), std::string::npos);
+
+  // **Found by reading the output rather than the assertions.** A programme
+  // that opens in one year and is still running in the next has no start date
+  // of its own, and the report printed the unset one - 1970-01-01 - while every
+  // test passed.
+  EXPECT_EQ(report.find("1970"), std::string::npos)
+      << "a year that inherited a running programme is printing an unset date";
+  // Every year that ran a programme names a date or says the season was carried
+  // in; none of them prints an unset one. The old code lost the start date of a
+  // year that both inherited a running programme and later opened a new one,
+  // which is 2023-24 here.
+  EXPECT_NE(report.find("2024-01-01"), std::string::npos)
+      << "2023-24 inherited a programme and then opened its own; the second start is the "
+         "one to print";
+}
+
+TEST(FacialEczemaGeographyTest, TheFarmComparisonSaysWhetherItIsAQuestionAtAll) {
+  config::DiseaseSite ruakura;
+  ruakura.name = "Ruakura (Waikato)";
+  ruakura.weather = year_at("ruakura-fe/weather-2015-2025.csv");
+
+  config::DiseaseSite lincoln;
+  lincoln.name = "Lincoln (Canterbury)";
+  lincoln.weather = year_at("lincoln-lurdf/weather-2015-2025.csv");
+
+  const config::DiseaseDefinition fe =
+      config::load_disease(std::string(PADDOCK_DATA_DIR) + "/diseases/facial-eczema.toml");
+  const std::string report = config::render_disease_comparison({ruakura, lincoln}, fe);
+
+  EXPECT_NE(report.find("Ruakura (Waikato)"), std::string::npos);
+  EXPECT_NE(report.find("Lincoln (Canterbury)"), std::string::npos);
+  EXPECT_NE(report.find("Years needing a programme"), std::string::npos);
+  EXPECT_NE(report.find("0 of 10"), std::string::npos)
+      << "Canterbury should need no programme in any of the ten years";
+}
+
+// The claim the comparison rests on, asserted on the numbers rather than on the
+// rendered text: ten Canterbury years never reach the count at which the
+// guidance asks a farmer to start counting.
+TEST(FacialEczemaGeographyTest, TenCanterburyYearsNeverReachTheMonitoringThreshold) {
+  const WeatherSeries weather = year_at("lincoln-lurdf/weather-2015-2025.csv");
+  ASSERT_EQ(weather.records.size(), 3653U);
+
+  const MycotoxinParameters fe = facial_eczema();
+  const std::vector<MycotoxinYear> years =
+      mycotoxin_years(weather, kMonitorOwnFarm, kDangerous, fe);
+
+  for (const MycotoxinYear& year : years) {
+    EXPECT_EQ(year.zinc_programme_days, 0)
+        << year.starting_year << " called for zinc in Canterbury";
+    EXPECT_LT(year.peak_spores_per_g, kMonitorOwnFarm)
+        << year.starting_year << " reached the monitoring threshold";
+  }
 }
 
 }  // namespace

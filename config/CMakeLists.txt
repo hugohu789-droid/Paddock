@@ -10,6 +10,7 @@ add_library(
   paddock_config STATIC
   src/ConfigError.cpp
   src/DiseaseConfig.cpp
+  src/DiseaseReport.cpp
   src/FarmConfig.cpp
   src/PaddockInspection.cpp
   src/PastureConfig.cpp

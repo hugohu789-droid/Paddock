@@ -96,6 +96,16 @@ struct MycotoxinParameters {
   double liver_injury_ln_ggt_slope = 0.89;
   double clinical_fraction_of_affected = 0.10;
 
+  /// DairyNZ's management programme, spores per gram of pasture. These are the
+  /// numbers a farmer acts on, and they are what turns a spore count into a
+  /// decision: start counting your own paddocks at the first, put the mob on a
+  /// full zinc dose at the second, and stop only after three weeks at or below
+  /// the third.
+  double monitor_spores_per_g = 20'000.0;
+  double full_dose_spores_per_g = 30'000.0;
+  double stand_down_spores_per_g = 10'000.0;
+  int stand_down_weeks = 3;
+
   /// Rejects a parameter set that cannot produce a meaningful run, in the same
   /// shape as the other core parameter structs: a reason, or empty.
   [[nodiscard]] std::string invalid_reason() const;
@@ -185,6 +195,27 @@ struct MycotoxinYear {
   /// series rather than reset each July - a liver does not know when the
   /// financial year ends.
   double peak_ggt_iu_per_l = 0.0;
+
+  /// Days the published programme would have had a mob on a full zinc dose.
+  ///
+  /// **This is the number a farm acts on.** A spore count is a laboratory
+  /// figure; this is a cost and a fortnight of labour. It is what the DairyNZ
+  /// protocol would have told you to do given this weather - it is not what
+  /// this model did to the animals, which is nothing. The GGT beside it is the
+  /// untreated case, so the two columns together say what the season demanded
+  /// and what it would have done had nobody answered.
+  int zinc_programme_days = 0;
+
+  /// The day the programme would have started, when it started in this year.
+  ///
+  /// **A programme can run in a year without starting in it.** One that opens
+  /// in November and is still running the following July belongs to both years'
+  /// day counts and to only the first year's start date. `started_this_year`
+  /// says which, so a report can print a date or say the season was carried in
+  /// rather than printing an unset one - which it did, as 1970-01-01, until
+  /// somebody read the output instead of the assertions.
+  Date programme_started{};
+  bool started_this_year = false;
 };
 
 /// Summarises a multi-year weather series, one entry per July-to-June year.

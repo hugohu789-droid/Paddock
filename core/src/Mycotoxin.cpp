@@ -44,6 +44,15 @@ std::string MycotoxinParameters::invalid_reason() const {
   if (reactor_ggt_iu_per_l <= 0.0) {
     return "reactor_ggt_iu_per_l must be positive";
   }
+  if (full_dose_spores_per_g < monitor_spores_per_g) {
+    return "full_dose_spores_per_g cannot be below the count that starts monitoring";
+  }
+  if (stand_down_spores_per_g > monitor_spores_per_g) {
+    return "stand_down_spores_per_g must sit at or below the monitoring count";
+  }
+  if (stand_down_weeks < 1) {
+    return "stand_down_weeks must be at least one";
+  }
   if (clinical_fraction_of_affected < 0.0 || clinical_fraction_of_affected > 1.0) {
     return "clinical_fraction_of_affected is a share and must lie in [0, 1]";
   }
@@ -164,6 +173,13 @@ std::vector<MycotoxinYear> mycotoxin_years(const WeatherSeries& weather,
   std::vector<MycotoxinYear> years;
   double carried = 0.0;
 
+  // **The published programme, replayed.** DairyNZ start it at the full dose
+  // when farm counts reach 30,000 and end it only after three weeks at or below
+  // 10,000 - the stand-down is the part a model must not shorten, because it is
+  // what stops a farmer walking away from a season that is not over.
+  bool on_zinc = false;
+  int days_below_stand_down = 0;
+
   for (std::size_t day = 0; day < counts.size() && day < weather.records.size(); ++day) {
     const Date& date = weather.records[day].date;
 
@@ -188,6 +204,27 @@ std::vector<MycotoxinYear> mycotoxin_years(const WeatherSeries& weather,
     }
     if (counts[day] >= dangerous_spores_per_g) {
       ++year.days_at_or_above_dangerous;
+    }
+
+    if (!on_zinc) {
+      if (counts[day] >= parameters.full_dose_spores_per_g) {
+        on_zinc = true;
+        days_below_stand_down = 0;
+        if (!year.started_this_year) {
+          year.started_this_year = true;
+          year.programme_started = date;
+        }
+      }
+    } else {
+      days_below_stand_down =
+          counts[day] <= parameters.stand_down_spores_per_g ? days_below_stand_down + 1 : 0;
+      if (days_below_stand_down >= parameters.stand_down_weeks * 7) {
+        on_zinc = false;
+      }
+    }
+
+    if (on_zinc) {
+      ++year.zinc_programme_days;
     }
   }
   return years;
