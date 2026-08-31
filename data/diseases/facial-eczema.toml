@@ -61,6 +61,17 @@ rise_per_favourable_day = { value = 3.0, status = "fitted", source = "field_guid
 decay_per_unfavourable_day = { value = 0.93, status = "fitted", source = "field_guidance" }
 background_spores_per_g = { value = 2000.0, status = "fitted", source = "field_guidance" }
 
+# **The most litter can carry.** Without a ceiling the rise above is unbounded:
+# a fifteen-night warm wet spell - one really happened here in December 2022 -
+# takes the count past a billion spores per gram, about two thousand times
+# anything the guidance describes. A single year hid it, because the year first
+# tested had no run longer than six nights.
+#
+# FITTED to DairyNZ's own figure for how far paddocks on one farm can differ,
+# 500,000 spores/g, which is the largest count their guidance implies is
+# reachable.
+carrying_capacity_spores_per_g = { value = 500000.0, status = "fitted", source = "dairynz_fe_management" }
+
 [counting]
 # DairyNZ, Facial Eczema - Management for New Zealand dairy herds. A model that
 # reports one clean count would be claiming a precision the test does not have.

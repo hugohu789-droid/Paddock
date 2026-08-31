@@ -81,6 +81,8 @@ DiseaseDefinition read(const toml::table& root, const std::string& path) {
       read_sourced(sporulation, "decay_per_unfavourable_day", path, definition);
   toxin.background_spores_per_g =
       read_sourced(sporulation, "background_spores_per_g", path, definition);
+  toxin.carrying_capacity_spores_per_g =
+      read_sourced(sporulation, "carrying_capacity_spores_per_g", path, definition);
 
   const toml::table& counting = detail::require_table(root, "counting", path);
   definition.variability_below_50k =

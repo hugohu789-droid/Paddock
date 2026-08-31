@@ -88,6 +88,12 @@ COLUMNS = [
     "uv_index",
 ]
 
+# The columns a snapshot carries when the ultraviolet is left out. `uv_index` is
+# optional to the reader - core's snapshot parser reads it with optional_number
+# and no model consumes it - so a series without it is a complete series, not a
+# damaged one.
+COLUMNS_WITHOUT_UV = [name for name in COLUMNS if name != "uv_index"]
+
 
 class Failure(Exception):
     """An error with something the user can do about it."""
@@ -208,10 +214,11 @@ def add_uv(rows: list[dict], lat: float, lon: float, start: dt.date, end: dt.dat
         row["uv_index"] = value
 
 
-def write_snapshot(rows: list[dict], out: Path) -> str:
+def write_snapshot(rows: list[dict], out: Path, without_uv: bool = False) -> str:
     out.parent.mkdir(parents=True, exist_ok=True)
+    columns = COLUMNS_WITHOUT_UV if without_uv else COLUMNS
     with out.open("w", encoding="utf-8", newline="\n") as handle:
-        writer = csv.DictWriter(handle, fieldnames=COLUMNS, lineterminator="\n")
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -236,6 +243,11 @@ def main() -> int:
                              "New Zealand farm puts half of each afternoon in the wrong day")
     parser.add_argument("--out", type=Path, required=True,
                         help="Where to write the snapshot, normally under data/snapshots/")
+    parser.add_argument("--no-uv", action="store_true",
+                        help="Omit the ultraviolet column. The CAMS archive it comes from only "
+                             "reaches back a couple of years, so a longer series needs this. No "
+                             "model in this project reads ultraviolet and the snapshot reader "
+                             "treats the column as optional, so the series is complete without it.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print what would be fetched without writing anything")
     arguments = parser.parse_args()
@@ -262,8 +274,12 @@ def main() -> int:
 
     payload = fetch_json(url)
     rows = rows_from(payload, start, end)
-    add_uv(rows, arguments.lat, arguments.lon, start, end, arguments.timezone)
-    digest = write_snapshot(rows, arguments.out)
+    if arguments.no_uv:
+        for row in rows:
+            row.pop("uv_index", None)
+    else:
+        add_uv(rows, arguments.lat, arguments.lon, start, end, arguments.timezone)
+    digest = write_snapshot(rows, arguments.out, arguments.no_uv)
 
     provenance = {
         "source": "Open-Meteo historical weather API (ERA5 reanalysis)",
@@ -291,7 +307,9 @@ def main() -> int:
             "rainfall_mm, min_air_temperature_c, max_air_temperature_c, "
             "solar_radiation_mj_per_m2, wind_speed_m_per_s":
                 "Open-Meteo historical archive (ERA5)",
-            "uv_index": "Open-Meteo air quality API (CAMS), daily maximum - the archive carries "
+            "uv_index": "not fetched - the CAMS archive does not reach this far back"
+                        if arguments.no_uv else
+                        "Open-Meteo air quality API (CAMS), daily maximum - the archive carries "
                         "no ultraviolet",
         },
         "wind_height_m": 10,

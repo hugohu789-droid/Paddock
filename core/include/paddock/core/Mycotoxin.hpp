@@ -47,6 +47,21 @@ struct MycotoxinParameters {
   double decay_per_unfavourable_day = 0.75;
   double background_spores_per_g = 2000.0;
 
+  /// The most litter can carry, spores per gram.
+  ///
+  /// **Without a ceiling a long warm wet spell has no bound.** The count
+  /// multiplies by the rise every day the run continues, and a fifteen-night
+  /// spell - one of which really happened at Ruakura in December 2022 - takes
+  /// it past a billion spores per gram. A single year hid this: the year first
+  /// tested had no run longer than six nights, so the test passed on the luck
+  /// of the year chosen rather than on the model being bounded.
+  ///
+  /// The fungus grows on dead litter, and there is only so much of it. FITTED
+  /// to DairyNZ's own figure for how far paddocks on one farm can differ,
+  /// 500,000 spores/g, which is the largest count their guidance implies is
+  /// reachable.
+  double carrying_capacity_spores_per_g = 500'000.0;
+
   // Toxin.
   double picograms_per_spore = 1.41;
 

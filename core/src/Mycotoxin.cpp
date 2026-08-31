@@ -26,6 +26,9 @@ std::string MycotoxinParameters::invalid_reason() const {
   if (background_spores_per_g < 0.0) {
     return "background_spores_per_g cannot be negative";
   }
+  if (carrying_capacity_spores_per_g <= background_spores_per_g) {
+    return "carrying_capacity_spores_per_g must exceed the background it rises from";
+  }
   if (background_spore_days_per_year < 0.0) {
     return "background_spore_days_per_year cannot be negative";
   }
@@ -76,7 +79,10 @@ double next_spore_count(double today_per_g, int consecutive_favourable_nights,
   // an outbreak the "major rapid rise" the source describes rather than a slope
   // that starts on the first warm night.
   if (consecutive_favourable_nights >= parameters.consecutive_nights) {
-    return from * parameters.rise_per_favourable_day;
+    // Bounded, because litter is. An unbounded rise turns a long spell into a
+    // number with no physical meaning - see carrying_capacity_spores_per_g.
+    return std::min(from * parameters.rise_per_favourable_day,
+                    parameters.carrying_capacity_spores_per_g);
   }
   return std::max(floor_count, from * parameters.decay_per_unfavourable_day);
 }

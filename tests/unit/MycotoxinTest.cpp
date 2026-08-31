@@ -39,6 +39,7 @@ MycotoxinParameters a_mycotoxin() {
   parameters.rise_per_favourable_day = 1.9;
   parameters.decay_per_unfavourable_day = 0.75;
   parameters.background_spores_per_g = 2000.0;
+  parameters.carrying_capacity_spores_per_g = 500'000.0;
   parameters.picograms_per_spore = 1.41;
   parameters.reactor_spore_days = 1'500'000.0;
   parameters.reactor_ggt_iu_per_l = 55.0;
@@ -99,6 +100,24 @@ TEST(MycotoxinTest, TheCountDecaysToTheBackgroundAndNoFurther) {
     count = next_spore_count(count, 0, fe);
   }
   EXPECT_DOUBLE_EQ(count, fe.background_spores_per_g);
+}
+
+// **A long spell must not run away.** The rise is geometric, so without a
+// ceiling a fortnight of favourable nights takes the count past a billion
+// spores per gram - and a fifteen-night spell really happened at Ruakura in
+// December 2022. A single year hid this: the year first tested had no run
+// longer than six nights, so the suite passed on the luck of the year chosen.
+TEST(MycotoxinTest, ALongFavourableSpellSaturatesRatherThanExploding) {
+  const MycotoxinParameters fe = a_mycotoxin();
+
+  double count = fe.background_spores_per_g;
+  for (int night = 1; night <= 40; ++night) {
+    count = next_spore_count(count, night, fe);
+    ASSERT_LE(count, fe.carrying_capacity_spores_per_g)
+        << "night " << night << " took the count past what litter can carry";
+  }
+  EXPECT_DOUBLE_EQ(count, fe.carrying_capacity_spores_per_g)
+      << "forty favourable nights should sit at the ceiling, not below it";
 }
 
 // Fitzgerald, Collin and Towers (1998): 113 ng/g grass at 80,000 spores/g in
