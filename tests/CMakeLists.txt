@@ -136,6 +136,36 @@ if(PADDOCK_BUILD_CONFIG)
                        DISCOVERY_TIMEOUT 120)
 endif()
 
+# T4: the golden regression.
+#
+# A fixed farm, a fixed weather year and a fixed seed, compared point by point
+# against a series committed under regression/baselines/. It says nothing about
+# whether the model is right - the conservation and validation suites do that -
+# only whether it still answers what it answered yesterday.
+#
+# Labelled "regression" and outside the fast subset: it runs a whole year, and
+# the nightly gate is where a suite that costs a second belongs.
+if(PADDOCK_BUILD_CONFIG)
+  set(PADDOCK_REGRESSION_OUTPUT_DIR "${CMAKE_BINARY_DIR}/regression")
+  file(MAKE_DIRECTORY "${PADDOCK_REGRESSION_OUTPUT_DIR}")
+
+  add_executable(paddock_regression_tests regression/GoldenScenarioTest.cpp)
+
+  target_link_libraries(paddock_regression_tests PRIVATE Paddock::config GTest::gtest_main
+                                                         Paddock::project_options)
+
+  target_include_directories(paddock_regression_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+  target_compile_definitions(
+    paddock_regression_tests
+    PRIVATE PADDOCK_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+            PADDOCK_REGRESSION_BASELINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/regression/baselines"
+            PADDOCK_REGRESSION_OUTPUT_DIR="${PADDOCK_REGRESSION_OUTPUT_DIR}")
+
+  gtest_discover_tests(paddock_regression_tests PROPERTIES LABELS "regression"
+                       DISCOVERY_TIMEOUT 120)
+endif()
+
 # The colour mapping, tested without a display: which value gets which colour is
 # the part of a map view that can be measurably wrong.
 if(PADDOCK_BUILD_VIZ)

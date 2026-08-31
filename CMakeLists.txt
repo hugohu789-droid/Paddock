@@ -29,6 +29,7 @@ option(PADDOCK_BUILD_GIS "Build gis/ (requires GDAL, PROJ, GEOS)" OFF)
 option(PADDOCK_BUILD_VIZ "Build viz/ (colour mapping; no external dependencies)" ON)
 option(PADDOCK_BUILD_GUI "Build the Qt6 + VTK desktop application" OFF)
 option(PADDOCK_WITH_AI "Build the optional ai/ module (requires libcurl)" OFF)
+option(PADDOCK_BUILD_BENCHMARKS "Build the google-benchmark performance baselines (T4)" OFF)
 option(PADDOCK_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 set(PADDOCK_SANITIZE
     ""
@@ -72,7 +73,12 @@ if(PADDOCK_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
+if(PADDOCK_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
+
 message(STATUS "Paddock ${PROJECT_VERSION}")
 message(STATUS "  tests: ${PADDOCK_BUILD_TESTS}  app: ${PADDOCK_BUILD_APP}  config: ${PADDOCK_BUILD_CONFIG}")
 message(STATUS "  gis: ${PADDOCK_BUILD_GIS}  viz: ${PADDOCK_BUILD_VIZ}  gui: ${PADDOCK_BUILD_GUI}  ai: ${PADDOCK_WITH_AI}")
+message(STATUS "  benchmarks: ${PADDOCK_BUILD_BENCHMARKS}")
 message(STATUS "  sanitizers: '${PADDOCK_SANITIZE}'")

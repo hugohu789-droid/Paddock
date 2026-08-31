@@ -285,12 +285,14 @@ CI build.
   interface; GUI panels only where a milestone explicitly lists them)
 - Web frontend (this is a Qt desktop application)
 - Parallelism inside a simulation run (threads, OpenMP, parallel algorithms in
-  core). Single-threaded stepping is ~1s per simulated year at target scale,
-  and parallel floating-point reductions would break the 1e-9 conservation
-  assertions and golden baselines. Ensemble and parameter-sweep workloads are
-  handled by running independent processes, which needs no core changes. Keep
-  the door open — entity-ID-keyed RNG, double-buffered state, per-partition
-  ledgers merged in fixed order — but do not implement threading.
+  core). Single-threaded stepping is ~2s per simulated year at target scale
+  (22,500 cells, a 200 ha farm at 10 m — measured, see
+  `benchmarks/StepBenchmark.cpp`), and parallel floating-point reductions would
+  break the 1e-9 conservation assertions and golden baselines. Ensemble and
+  parameter-sweep workloads are handled by running independent processes, which
+  needs no core changes. Keep the door open — entity-ID-keyed RNG,
+  double-buffered state, per-partition ledgers merged in fixed order — but do
+  not implement threading.
 
 ## Items to verify before hardcoding (tracked in docs/validation/verify.md)
 
