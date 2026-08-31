@@ -13,6 +13,7 @@ add_library(
   src/FarmDecision.cpp
   src/Farmer.cpp
   src/FarmletGrid.cpp
+  src/Flock.cpp
   src/Geometry.cpp
   src/Grazing.cpp
   src/GrazingCalendar.cpp
