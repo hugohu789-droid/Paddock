@@ -18,6 +18,8 @@
 /// in the environment - and the diff is then reviewed like any other change,
 /// because that diff *is* the record of what the model now says differently.
 
+#include <gtest/gtest.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -25,8 +27,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#include <gtest/gtest.h>
 
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/ScenarioRun.hpp>
@@ -191,8 +191,7 @@ TEST(GoldenScenarioTest, TheYearStillRunsTheWayItRan) {
     };
     compare("cover_kg_dm_per_ha", baseline[day].cover_kg_dm_per_ha, now[day].cover_kg_dm_per_ha);
     compare("liveweight_kg", baseline[day].liveweight_kg, now[day].liveweight_kg);
-    compare("water_growth_factor", baseline[day].water_growth_factor,
-            now[day].water_growth_factor);
+    compare("water_growth_factor", baseline[day].water_growth_factor, now[day].water_growth_factor);
     compare("irrigation_mm", baseline[day].irrigation_mm, now[day].irrigation_mm);
   }
 

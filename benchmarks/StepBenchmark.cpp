@@ -38,14 +38,14 @@
 /// supports is unchanged - but the figure in the roadmap was never measured
 /// until now, and these numbers are what it should be reconciled against.
 
+#include <benchmark/benchmark.h>
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-#include <benchmark/benchmark.h>
 
 #include <paddock/core/DataSource.hpp>
 #include <paddock/core/Farm.hpp>
@@ -147,8 +147,8 @@ BoundingBox area_of(std::size_t cells) {
 
 FarmletGrid grid_of(const BoundingBox& area) {
   const Raster<double> elevation = SyntheticElevationSource().fetch(area, kCellSize);
-  const Raster<SoilWaterParameters> soils(elevation.cols(), elevation.rows(),
-                                          elevation.transform(), soil());
+  const Raster<SoilWaterParameters> soils(elevation.cols(), elevation.rows(), elevation.transform(),
+                                          soil());
   return FarmletGrid(soils, sward(), initial_state(), kLatitude);
 }
 
