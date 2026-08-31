@@ -1,4 +1,4 @@
-include(PaddockGoogleTest)
+﻿include(PaddockGoogleTest)
 paddock_provide_googletest()
 include(GoogleTest)
 
@@ -11,6 +11,7 @@ add_executable(
   unit/DistributionsTest.cpp
   unit/EntityTest.cpp
   unit/FarmAccountTest.cpp
+  unit/FarmDecisionTest.cpp
   unit/FarmerTest.cpp
   unit/FarmletGridTest.cpp
   unit/GeometryTest.cpp
