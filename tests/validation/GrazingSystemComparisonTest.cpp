@@ -185,8 +185,16 @@ TEST(GrazingSystemComparisonTest, TheAnimalSideAdvantageIsNotReproducedAndTheRea
   EXPECT_GT(advantage, -12.0) << "and the gap has grown beyond anything explicable";
 
   // The confinement is the cause, and it is visible in the shortfall days.
-  EXPECT_EQ(result.set_stocked.days_short, 0)
-      << "a mob with the run of the farm should always find feed at this stocking rate";
+  //
+  // **This used to be exactly zero, and charging the walking is what changed
+  // it.** Once TMC Eq. 24 was fed a distance (see WalkingDistance), every
+  // animal costs about a megajoule a day more, and at 1400 head this farm
+  // stopped being comfortably inside its feed supply - three days of the year
+  // it is not. That is the model getting more expensive, not the comparison
+  // breaking: a handful of days against the rotational arm's sixty-odd leaves
+  // the contrast the test is about entirely intact.
+  EXPECT_LT(result.set_stocked.days_short, 10)
+      << "a mob with the run of the farm should find feed nearly always at this stocking rate";
   EXPECT_GT(result.rotational.days_short, 20)
       << "and a confined one should not, which is what drives the difference";
 }

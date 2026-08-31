@@ -313,5 +313,84 @@ TEST(AnimalEnergyTest, TheSpeciesFactorChangesMaintenanceByTheAmountTheSourcesDi
   EXPECT_NEAR((with_csiro - with_nb) / with_nb, 0.0769, 1e-3) << "about 8%";
 }
 
+// TMC Table 30, and the slope boundaries this project maps onto it. The values
+// are published (Nicol and Brookes 2007 via OVERSEER v6.3); the degrees where
+// one class becomes the next are this model's decision, so both are pinned.
+TEST(WalkingDistanceTest, EachTopographyClassGetsItsPublishedDistance) {
+  struct Case {
+    double slope_degrees;
+    double horizontal_km;
+    double vertical_km;
+  };
+
+  // A representative slope from inside each LUC band, and the two degrees on
+  // either side of every boundary.
+  const std::vector<Case> cases{
+      {0.0, 0.5, 0.0},   {3.0, 0.5, 0.0},   {7.0, 0.5, 0.0},  // flat: LUC A and B
+      {8.0, 1.0, 0.1},   {15.0, 1.0, 0.1},                    // rolling: LUC C
+      {16.0, 1.5, 0.15}, {25.0, 1.5, 0.15},                   // easy hill: LUC D and E
+      {26.0, 2.0, 0.2},  {40.0, 2.0, 0.2},                    // steep hill: LUC F and G
+  };
+
+  for (const Case& one : cases) {
+    const WalkingDistance walk = walking_distance_on(one.slope_degrees);
+    EXPECT_DOUBLE_EQ(walk.horizontal_km_per_day, one.horizontal_km)
+        << "horizontal distance at " << one.slope_degrees << " degrees";
+    EXPECT_DOUBLE_EQ(walk.vertical_km_per_day, one.vertical_km)
+        << "vertical distance at " << one.slope_degrees << " degrees";
+  }
+}
+
+// A terrain model that produced a negative slope would be broken, and reading it
+// as steep would quietly charge the animals for it.
+TEST(WalkingDistanceTest, NegativeSlopeIsReadAsFlatRatherThanSteep) {
+  const WalkingDistance walk = walking_distance_on(-5.0);
+  EXPECT_DOUBLE_EQ(walk.horizontal_km_per_day, 0.5);
+  EXPECT_DOUBLE_EQ(walk.vertical_km_per_day, 0.0);
+}
+
+// The point of E10: the term exists, is summed into maintenance, and is no
+// longer zero for an animal standing on real ground.
+TEST(WalkingDistanceTest, ActivityReachesTheRequirementOnSlopingGround) {
+  AnimalClassParameters animal;
+  animal.class_id = "sheep_ewe";
+  animal.species_factor = 1.0;
+  animal.sex_factor = 1.0;
+  animal.standard_reference_weight_kg = 65.0;
+  animal.grazing_coefficient = 0.0025;
+  animal.gain_energy_ceiling_mj_per_kg = 20.3;
+
+  AnimalState state;
+  state.liveweight_kg = 60.0;
+  state.age_days = 1200.0;
+
+  DietQuality diet;
+  diet.metabolisable_energy_mj_per_kg_dm = 10.5;
+  diet.digestibility_percent = 75.0;
+
+  GrazingConditions flat;
+  flat.pasture_mass_t_dm_per_ha = 2.0;
+  flat.area_per_animal_ha = 0.2;
+  flat.slope_degrees = 0.0;
+  const WalkingDistance on_flat = walking_distance_on(flat.slope_degrees);
+  flat.horizontal_km_per_day = on_flat.horizontal_km_per_day;
+  flat.vertical_km_per_day = on_flat.vertical_km_per_day;
+
+  GrazingConditions hill = flat;
+  hill.slope_degrees = 30.0;
+  const WalkingDistance on_hill = walking_distance_on(hill.slope_degrees);
+  hill.horizontal_km_per_day = on_hill.horizontal_km_per_day;
+  hill.vertical_km_per_day = on_hill.vertical_km_per_day;
+
+  const EnergyRequirement on_the_flat = daily_energy_requirement(animal, state, diet, flat);
+  const EnergyRequirement on_the_hill = daily_energy_requirement(animal, state, diet, hill);
+
+  EXPECT_GT(on_the_flat.activity_net_mj, 0.0) << "the activity term is fed on flat ground too";
+  EXPECT_GT(on_the_hill.activity_net_mj, on_the_flat.activity_net_mj)
+      << "a steep paddock costs more walking than a terrace";
+  EXPECT_GT(on_the_hill.total_me_mj, on_the_flat.total_me_mj)
+      << "and that reaches what the animal has to eat";
+}
+
 }  // namespace
 }  // namespace paddock::core

@@ -182,6 +182,17 @@ GrazingConditions Farm::conditions_on(const std::vector<std::size_t>& held, cons
     }
     ground.slope_degrees = slope_total / static_cast<double>(cells.size());
   }
+
+  // **The mean slope is classified once, rather than every cell being classified
+  // and the answers averaged.** That is what OVERSEER does - its Eq. 54 averages
+  // the topography integer over a block and looks the distances up from the
+  // result - and it is the same simplification the cover and slope above already
+  // make. On a paddock that is half terrace and half face it charges the walking
+  // of neither half.
+  const WalkingDistance walk = walking_distance_on(ground.slope_degrees);
+  ground.horizontal_km_per_day = walk.horizontal_km_per_day;
+  ground.vertical_km_per_day = walk.vertical_km_per_day;
+
   return ground;
 }
 

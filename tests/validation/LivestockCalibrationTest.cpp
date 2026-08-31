@@ -104,6 +104,13 @@ TEST(LivestockCalibrationTest, SheepMaintenanceAgainstAdjabuiWithGrazingIncluded
   // Hill country stocking, since their Table 1 does not state one. The sweep
   // below shows the choice barely matters, which is itself the point.
   ground.area_per_animal_ha = 1.0 / 10.0;
+  // The distances the model now supplies for this slope, rather than the zeros
+  // this test used to leave here. atan(0.5) is 26.6 degrees, which is steep
+  // hill: Hk 2.0 km, Vk 0.2 km (OVERSEER v6.3 Table 30, from Nicol and Brookes
+  // 2007). Setting them by hand would be this test grading its own homework.
+  const WalkingDistance walk = walking_distance_on(ground.slope_degrees);
+  ground.horizontal_km_per_day = walk.horizontal_km_per_day;
+  ground.vertical_km_per_day = walk.vertical_km_per_day;
 
   DietQuality diet;
   diet.metabolisable_energy_mj_per_kg_dm = 11.0;
@@ -138,25 +145,30 @@ TEST(LivestockCalibrationTest, SheepMaintenanceAgainstAdjabuiWithGrazingIncluded
   const double their_grazing_terms = kPublishedCsiro - theirs_basal;
 
   EXPECT_GT(their_grazing_terms, 1.4) << "the published figure carries a substantial grazing cost";
-  EXPECT_LT(our_grazing_terms, their_grazing_terms / 5.0)
+
+  // **This used to be a tenth, and supplying the walking distance is what
+  // changed it.** Before E10 was wired up the model charged under 0.2 MJ ME/d
+  // here against the 1.48 CSIRO's total implies; it now charges about 1.03, or
+  // roughly seven tenths. What is still missing is charged to chewing and
+  // ruminating, which CSIRO carries inside km, and to the difference between a
+  // published average animal and this one.
+  EXPECT_GT(our_grazing_terms, their_grazing_terms * 0.5)
       << "this model's grazing, movement and activity terms come to " << our_grazing_terms
       << " MJ ME/d against the " << their_grazing_terms << " implied by CSIRO's total";
+  EXPECT_LT(our_grazing_terms, their_grazing_terms)
+      << "and they should still sit under it rather than over";
 
   // The two are far enough apart that which one is quoted changes the number a
   // reader takes away, which is why the report gives both.
   EXPECT_GT(kPublishedNicolAndBrookes - kPublishedCsiro, 0.5)
       << "if these ever converge, the reason for preferring CSIRO here should be revisited";
 
-  // **The activity term is zero in every run this project makes.** TMC Eq. 24
-  // charges for kilometres walked beyond grazing, and nothing ever supplies a
-  // distance: Farm::conditions_on fills the pasture mass, the slope and the
-  // area per animal, and leaves horizontal_km_per_day and vertical_km_per_day
-  // at zero. The equation is implemented, tested in isolation, and fed by
-  // nothing - the same shape of gap terrain had before it was wired up. See
-  // docs/validation/verify.md, engineering caveat E10.
-  EXPECT_DOUBLE_EQ(need.activity_net_mj, 0.0)
-      << "if this ever becomes non-zero somebody has started supplying a distance, and the "
-         "caveat about it should go";
+  // **The activity term is now fed.** It used to be zero in every run this
+  // project made - TMC Eq. 24 was implemented, tested in isolation and reached
+  // by nothing, which is what engineering caveat E10 recorded. It is now
+  // supplied from the slope, so the walking a hill charges is in this number.
+  EXPECT_GT(need.activity_net_mj, 0.0)
+      << "the distance is supplied from the slope; a zero here means it stopped being";
 
   const double against_csiro = (kPublishedCsiro - need.maintenance_me_mj) / kPublishedCsiro;
   const double against_nicol =
@@ -164,8 +176,9 @@ TEST(LivestockCalibrationTest, SheepMaintenanceAgainstAdjabuiWithGrazingIncluded
 
   // Both are pinned, because the report quotes both and a change that moved one
   // without the other would go unnoticed.
-  EXPECT_NEAR(against_csiro, 0.15, 0.02) << "against CSIRO: " << need.maintenance_me_mj;
-  EXPECT_NEAR(against_nicol, 0.21, 0.02) << "against Nicol and Brookes: " << need.maintenance_me_mj;
+  EXPECT_NEAR(against_csiro, 0.048, 0.02) << "against CSIRO: " << need.maintenance_me_mj;
+  EXPECT_NEAR(against_nicol, 0.117, 0.02)
+      << "against Nicol and Brookes: " << need.maintenance_me_mj;
 
   GTEST_LOG_(INFO) << "basal: theirs " << theirs_basal << ", ours " << ours_basal
                    << "; maintenance: CSIRO " << kPublishedCsiro << ", Nicol and Brookes "
