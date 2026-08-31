@@ -185,26 +185,62 @@ TEST(DataFilesTest, EveryShippedNumberDeclaresWhereItCameFrom) {
   }
 }
 
-// Standard reference weight is unresolved everywhere, and it is the number a
-// growth rate rests on (TMC Eq. 45). While that is true, no absolute liveweight
-// gain from this model is quotable - only comparisons that hold it fixed.
+// **Standard reference weight: resolved for sheep, still open for the rest.**
 //
-// When a breed mature weight is found and cited, this test should be updated
-// rather than deleted: it is recording a state of the evidence, not a rule.
-TEST(DataFilesTest, StandardReferenceWeightIsStillUnresolvedEverywhere) {
+// This test used to assert it was unresolved everywhere, and said in its own
+// comment that finding a cited breed mature weight should update it rather than
+// delete it, because it records a state of the evidence and not a rule. That
+// happened: OVERSEER's Characteristics of animals chapter, Table 8, gives
+// Romney ewes 66 kg, so the ewe's 65 kg "verify" became a sourced 66.
+//
+// The cattle and deer definitions are still unevidenced, and while that is true
+// no absolute liveweight gain for those classes is quotable - only comparisons
+// that hold the weight fixed.
+TEST(DataFilesTest, StandardReferenceWeightIsEvidencedOnlyWhereItHasBeenFound) {
   const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
 
+  bool saw_the_ewe = false;
   for (const SpeciesDefinition& definition : species) {
+    if (definition.name == "sheep_ewe") {
+      saw_the_ewe = true;
+      EXPECT_TRUE(definition.standard_reference_weight.is_evidence())
+          << "the ewe's reference weight is Table 8 of the OVERSEER characteristics chapter";
+      EXPECT_DOUBLE_EQ(definition.standard_reference_weight.value, 66.0);
+      continue;
+    }
+
     EXPECT_FALSE(definition.standard_reference_weight.is_evidence())
         << definition.name
         << " now claims an evidenced reference weight; if that is right, cite it in "
            "sources.toml and docs/validation/verify.md and update this test to match";
   }
+  EXPECT_TRUE(saw_the_ewe) << "data/species/ no longer has the ewe this test is about";
 }
 
-// A dairy cow in this model is a dry cow, because lactation is not implemented.
-// The definition is named for what it models, and this test is what keeps that
-// true if someone later adds a milking class without adding lactation.
+// **What a ewe carries and milks is data, like everything else about her.** A
+// class with no [reproduction] table does not breed, which is how the same
+// energy model feeds a wether, a store lamb and a ewe in her last week.
+TEST(DataFilesTest, TheEweBreedsAndSaysWhatItCostsFromData) {
+  const SpeciesDefinition ewe = load_species(data_path("species/sheep-ewe.toml"));
+
+  // TMC Characteristics of animals, Table 28, from Freer et al. (2006).
+  EXPECT_DOUBLE_EQ(ewe.energy.gestation_length_days, 150.0);
+  EXPECT_TRUE(ewe.gestation_length_days.is_evidence());
+
+  // Milk composition is the weak link and is marked as such: published sheep
+  // milk fat runs from 4.6% to 12.6% across breeds.
+  EXPECT_GT(ewe.energy.milk_fat_percent, 0.0);
+  EXPECT_GT(ewe.energy.milk_protein_percent, 0.0);
+  EXPECT_FALSE(ewe.milk_fat_percent.is_evidence())
+      << "no New Zealand Romney milk fat figure has been read; see verify.md E23";
+}
+
+// **A dairy cow in this model is still a dry cow**, and the reason changed:
+// lactation is implemented now, but for sheep. No cattle reproduction data has
+// been written, so cattle-dry-cow.toml has no [reproduction] table and the
+// energy model charges it nothing for milk - correctly, for a dry cow. The
+// definition is named for what it models, and this test keeps that true if
+// someone later adds a milking class without the data behind it.
 TEST(DataFilesTest, TheDairyDefinitionIsNamedForTheDryCowItActuallyModels) {
   const SpeciesDefinition cow = load_species(data_path("species/cattle-dry-cow.toml"));
 

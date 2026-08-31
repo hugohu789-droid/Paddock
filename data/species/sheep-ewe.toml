@@ -25,12 +25,14 @@ species_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
 # S, TMC Eq. 14: 1.0 for females and castrated males.
 sex_factor = { value = 1.0, status = "direct", source = "tmc_animal_me" }
 
-# SRW. No source: the OVERSEER chapter that carries breed characteristics has
-# not been retrieved, and Beef + Lamb NZ's feeding tables give liveweight
-# classes rather than breed mature weights - which their own guidance says must
-# not be read as one. SRW drives the energy value of gain (TMC Eq. 45), so a
-# growth rate resting on this number is not quotable.
-standard_reference_weight_kg = { value = 65.0, status = "verify" }
+# SRW. **Sourced at last.** This said 65.0 and "verify", because the OVERSEER
+# chapter carrying breed characteristics had not been retrieved. It has now:
+# TMC Characteristics of animals, Table 8, "Female standard reference weight
+# (SRWf, kg) for sheep breeds", gives Romney 66. A kilogram is a small change
+# and the reason for making it is not: this number drives the energy value of
+# gain (TMC Eq. 45) and, now, lamb birth weight and the pregnancy condition
+# factor, so it was worth having from the source rather than from nowhere.
+standard_reference_weight_kg = { value = 66.0, status = "direct", source = "tmc_characteristics" }
 
 # SpGraze, TMC Eq. 20. The manual gives 0.0025 for dairy and beef and states no
 # sheep value in the chapter read, so this is the cattle figure carried across.
@@ -38,6 +40,30 @@ grazing_coefficient = { value = 0.0025, status = "placeholder" }
 
 # k1, TMC Eq. 44: 16.5 for large lean cattle breeds, 20.3 otherwise.
 gain_energy_ceiling_mj_per_kg = { value = 20.3, status = "direct", source = "tmc_animal_me" }
+
+# What it costs to carry a lamb and to milk one. A file without this table is a
+# class that does not breed.
+[reproduction]
+# GL, TMC Characteristics of animals Table 28, from Freer et al. (2006).
+gestation_length_days = { value = 150.0, status = "direct", source = "tmc_characteristics" }
+
+# Cmilkfat and Cmilkprotein, the percentages TMC Eq. 46 turns into the energy in
+# a kilogram of milk.
+#
+# **The manual's own cross-reference is broken here** - Eq. 46 sends the reader
+# to section 5.8 for these, and 5.8 is about the monthly distribution of milk
+# yield. So they come from the literature instead. Protein is the 5.8% commonly
+# reported for sheep. Fat is the weaker of the two: published values run from
+# 4.6% in Iraqi Kurdi to 12.6% in Dorset ewes, no New Zealand Romney figure has
+# been read, and 7.0 is mid-range. Milk energy moves about 0.38 MJ/kg per point
+# of fat, so this is worth verifying before a lactation result is quoted.
+# docs/validation/verify.md, E23.
+milk_fat_percent = { value = 7.0, status = "verify" }
+milk_protein_percent = { value = 5.8, status = "verify" }
+
+# Breedeffect, TMC Eq. 38: 0.2 East Friesian, 0.1 Romney/East Friesian cross,
+# 0.01 otherwise. A straight Romney takes the "otherwise" branch.
+breed_effect = { value = 0.01, status = "direct", source = "tmc_animal_me" }
 
 [typical]
 liveweight_kg = 60.0

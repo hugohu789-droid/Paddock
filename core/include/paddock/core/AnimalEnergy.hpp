@@ -31,6 +31,13 @@ inline constexpr double kGrossEnergyMjPerKgDm = 18.4;
 /// Ratio of empty body weight to liveweight, TMC Eq. 43.
 inline constexpr double kEmptyBodyFraction = 0.92;
 
+/// kp, the efficiency with which ME is used for pregnancy. TMC Eq. 4.
+///
+/// A flat 0.13, and strikingly low beside maintenance's 0.70: growing a lamb is
+/// the most expensive thing a ewe does with a megajoule, which is why late
+/// pregnancy dominates a ewe's feed demand before a drop of milk is made.
+inline constexpr double kPregnancyEfficiency = 0.13;
+
 /// What the animal is eating.
 struct DietQuality {
   /// dietME: metabolisable energy per kilogram of dry matter eaten.
@@ -55,6 +62,10 @@ struct DietQuality {
   /// (1978b) published for sheep. That agreement is what fixes which case is
   /// which; see docs/validation/verify.md.
   [[nodiscard]] double maintenance_efficiency() const noexcept;
+
+  /// kl, the efficiency with which ME is used for lactation. TMC Eq. 3:
+  /// 0.35 qm + 0.42, which is 0.62 on a 10.5 MJ/kg pasture diet.
+  [[nodiscard]] double lactation_efficiency() const noexcept;
 
   /// kg, the efficiency with which ME is used for liveweight gain.
   ///
@@ -139,6 +150,27 @@ struct AnimalClassParameters {
   /// ceiling the energy value of gain approaches at maturity.
   double gain_energy_ceiling_mj_per_kg = 0.0;
 
+  /// GL, the gestation length in days. TMC Table 28 gives sheep 150, from Freer
+  /// et al. (2006). Zero means this class does not breed, and both the
+  /// pregnancy and the lactation terms stay at zero for it.
+  double gestation_length_days = 0.0;
+
+  /// Milk fat and protein, percent, which set the energy in a kilogram of milk
+  /// through TMC Eq. 46.
+  ///
+  /// **VERIFY, and it matters more than most.** Protein is the 5.8% commonly
+  /// reported for sheep; fat is the weak one, because published fat runs from
+  /// 4.6% in Iraqi Kurdi to 12.6% in Dorset ewes and no New Zealand Romney
+  /// figure has been read yet. 7.0 sits mid-range. The energy in milk moves
+  /// about 0.38 MJ/kg for each point of fat, so a Dorset flock would be some
+  /// 40% dearer to milk than this says. docs/validation/verify.md, E23.
+  double milk_fat_percent = 0.0;
+  double milk_protein_percent = 0.0;
+
+  /// Breedeffect, TMC Eq. 38: 0.2 East Friesian, 0.1 Romney/EF cross, 0.01
+  /// otherwise. It scales the milk a ewe gives for twins and triplets.
+  double breed_effect = 0.01;
+
   [[nodiscard]] std::string validation_error() const;
 };
 
@@ -149,6 +181,19 @@ struct AnimalState {
 
   /// Positive when gaining, negative when losing. TMC Eq. 43.
   double liveweight_change_kg_per_day = 0.0;
+
+  /// Days since conception, or zero when the animal is not pregnant. Counted
+  /// rather than dated so the energy model stays a function of state and never
+  /// has to know what day of the year it is.
+  int days_pregnant = 0;
+
+  /// Days since lambing, or zero when the animal is not lactating.
+  int days_lactating = 0;
+
+  /// Young carried or reared, per animal. **Not an integer**: a mob's
+  /// representative ewe rears the flock's mean, and a 132.3% lambing is 1.323
+  /// lambs a ewe, not one ewe with one lamb and another with two.
+  double young = 0.0;
 };
 
 /// The ground the animal is grazing, and how far it walks over it.
@@ -277,6 +322,47 @@ struct WalkingDistance {
 [[nodiscard]] double energy_value_of_gain_mj_per_kg(const AnimalClassParameters& animal,
                                                     const AnimalState& state) noexcept;
 
+/// NEmilk, TMC Eq. 46: the net energy in a kilogram of ewe milk, from its fat
+/// and protein. Nicol and Brookes (2007), by way of the manual.
+[[nodiscard]] double milk_net_energy_mj_per_kg(const AnimalClassParameters& animal) noexcept;
+
+/// Birth weight of one lamb, TMC (Characteristics of animals) Eq. 11-14: a
+/// share of the standard reference weight that falls as the litter grows -
+/// 0.100 of SRW for a single, 0.085 twins, 0.070 triplets, 0.055 quads. The
+/// same shares appear as NBW in TMC Eq. 31, which is what makes the condition
+/// factor dimensionless.
+///
+/// `young` is a mean rather than a count, so this interpolates between the
+/// published shares instead of choosing one: a flock at 1.32 lambs sits between
+/// singles and twins, and so does its lambs' birth weight.
+[[nodiscard]] double birth_weight_kg(const AnimalClassParameters& animal, double young) noexcept;
+
+/// NEpregnancy, TMC Eq. 26 with the gestation proportion of Eq. 28 and the
+/// condition factor of Eq. 29-31. Freer et al. (2006), with BCfoet replaced by
+/// a condition factor.
+///
+/// **Nearly all of it lands in the last six weeks.** The Eq. 26 shape returns
+/// 0.2% of its final value at conception and 100% at term, which is the whole
+/// reason a ewe's feed demand climbs before lambing rather than after mating.
+[[nodiscard]] double pregnancy_net_energy_mj(const AnimalClassParameters& animal,
+                                             const AnimalState& state) noexcept;
+
+/// Daily milk yield in kg, TMC Eq. 35 for sheep, with the multiple-young factor
+/// of Eq. 36 and the breed factor of Eq. 38. Litherland (pers. comm.), by way
+/// of the manual.
+///
+/// **Pasture mass is in the equation**, which is unusual and useful: a ewe on a
+/// bare paddock gives less milk. The quadratic term turns the response over, so
+/// grass beyond about 3,400 kg DM/ha buys no more milk.
+[[nodiscard]] double daily_milk_yield_kg(const AnimalClassParameters& animal,
+                                         const AnimalState& state,
+                                         const GrazingConditions& ground) noexcept;
+
+/// NElactation, TMC Eq. 33: the day's milk times the energy in a kilogram of it.
+[[nodiscard]] double lactation_net_energy_mj(const AnimalClassParameters& animal,
+                                             const AnimalState& state,
+                                             const GrazingConditions& ground) noexcept;
+
 /// NElwt, TMC Eq. 43.
 [[nodiscard]] double liveweight_change_net_energy_mj(const AnimalClassParameters& animal,
                                                      const AnimalState& state) noexcept;
@@ -290,6 +376,16 @@ struct EnergyRequirement {
 
   /// ME rather than NE: liveweight change is converted by kg at TMC Eq. 81.
   double liveweight_change_me_mj = 0.0;
+
+  /// MEpregnancy, TMC Eq. 49: NEpregnancy over kp.
+  ///
+  /// **Stands beside production rather than inside it.** TMC Eq. 1 reads
+  /// `MEmaintenance + productionME + MEpregnancy`, so pregnancy is not charged
+  /// the tenth of production that Eq. 54 adds to maintenance. Lactation is.
+  double pregnancy_me_mj = 0.0;
+
+  /// MElactation, TMC Eq. 50: NElactation over kl. Part of productionME.
+  double lactation_me_mj = 0.0;
 
   /// MEmaintenance, TMC Eq. 54 - the net terms over km, plus a tenth of the
   /// production cost, which is Freer et al.'s way of charging the maintenance

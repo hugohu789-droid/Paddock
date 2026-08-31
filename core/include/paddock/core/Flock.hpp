@@ -103,8 +103,19 @@ struct FlockRates {
 /// are management choices rather than measurements - a farmer picks them - so
 /// they are configurable and marked PLACEHOLDER where a scenario does not say.
 struct FlockCalendar {
-  int mating_month = 4;
-  int mating_day = 1;
+  /// **23 March, which is 150 days before lambing and not a round date.**
+  ///
+  /// It was 1 April, which is what a farmer would say and what a calendar would
+  /// print - but 1 April to 20 August is 141 days against the 150 that OVERSEER
+  /// (Table 28, from Freer et al. 2006) gives a ewe's gestation. The two dates
+  /// described a pregnancy nine days shorter than a sheep has. Nothing read
+  /// the mating date until pregnancy did, so nothing had caught it.
+  ///
+  /// A farmer sets both dates and the ram settles the interval; a scenario that
+  /// wants 1 April should move lambing to 29 August rather than shorten the
+  /// gestation. `invalid_reason` says so if the two drift apart again.
+  int mating_month = 3;
+  int mating_day = 23;
 
   int lambing_month = 8;
   int lambing_day = 20;
@@ -117,6 +128,14 @@ struct FlockCalendar {
   int year_turns_day = 1;
 
   [[nodiscard]] std::string invalid_reason() const;
+
+  /// Days from mating to lambing, which should be a ewe's gestation.
+  [[nodiscard]] int gestation_days() const;
+
+  /// Days from lambing to weaning. TMC (Characteristics of animals) Eq. 27
+  /// defines a sheep's lactation length as exactly this, so the calendar
+  /// already carries it and nothing else needs to state it.
+  [[nodiscard]] int lactation_days() const;
 };
 
 /// What happened to the flock today.
@@ -189,6 +208,18 @@ class Flock {
   /// not. A scenario that wants a bad year should say so with weather rather
   /// than with a seed.
   FlockDay step(const Date& today, const FlockCalendar& calendar, const FlockRates& rates);
+
+  /// Sets each breeding cohort's pregnancy and lactation for today.
+  ///
+  /// **The flock's calendar is what makes a ewe expensive in August.** Until
+  /// this existed every ewe was fed maintenance every day of the year, which is
+  /// about a third of a New Zealand stock unit - so a farm's whole feed demand
+  /// was a third of what a farm's is. The dates were already here; nothing read
+  /// them.
+  ///
+  /// Called from `step`, and separately testable.
+  void set_reproductive_state(const Date& today, const FlockCalendar& calendar,
+                              const FlockRates& rates);
 
  private:
   std::vector<AgeCohort> cohorts_;

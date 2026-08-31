@@ -47,6 +47,14 @@ struct SpeciesDefinition {
   SourcedValue grazing_coefficient;
   SourcedValue gain_energy_ceiling;
 
+  /// Reproduction. Optional: a class that does not breed - a wether, a store
+  /// lamb - simply omits the whole `[reproduction]` table, and a gestation
+  /// length of zero switches both the pregnancy and lactation terms off.
+  SourcedValue gestation_length_days;
+  SourcedValue milk_fat_percent;
+  SourcedValue milk_protein_percent;
+  SourcedValue breed_effect;
+
   /// Every sourced value in this definition, for a caller that wants to report
   /// on the lot rather than name them one at a time.
   [[nodiscard]] std::vector<const SourcedValue*> sourced_values() const;

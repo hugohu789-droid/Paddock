@@ -179,6 +179,22 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // a liveweight nothing drives. The lambs graze in reality and do not here;
   // see docs/validation/verify.md (E21), whose fix is grazing per cohort.
   farm.set_mob_head(0, business.flock.breeding_head());
+
+  // **And what they are carrying, not only how many there are.** The flock's
+  // calendar now says whether a ewe is pregnant or milking, and OVERSEER's
+  // equations 26 and 35 turn that into feed demand - which is where the missing
+  // two-thirds of a stock unit was. A ewe fed maintenance all year eats 0.52 kg
+  // DM a day; the New Zealand stock unit is 1.51.
+  //
+  // Taken from the oldest breeding cohort because the mob carries one animal's
+  // state, and every breeding cohort is on the same calendar anyway.
+  for (const core::AgeCohort& cohort : business.flock.cohorts()) {
+    if (cohort.age_years >= 2 && !cohort.is_finishing) {
+      farm.set_mob_reproduction(0, cohort.mob.state.days_pregnant, cohort.mob.state.days_lactating,
+                                cohort.mob.state.young);
+      break;
+    }
+  }
 }
 
 }  // namespace
