@@ -126,6 +126,17 @@ class Farm {
   /// change the mob actually made.
   void set_target_gain(std::size_t mob, double kg_per_day);
 
+  /// Sets how many head a mob carries.
+  ///
+  /// **The one place a flock and the grass it eats meet.** Without this the
+  /// farmer's flock and the mob on the paddock are two separate populations:
+  /// lambing, culling and destocking change the first and nothing about the
+  /// second, so a farm that sold half its stock went on eating for all of it.
+  /// It is why the drought scenario could not be made to bite - selling stock
+  /// relieved no feed pressure, because the animals sold were never the animals
+  /// grazing.
+  void set_mob_head(std::size_t mob, int head);
+
   /// Which mob has a paddock, or kNobody. A paddock carries at most one mob
   /// here: two mobs sharing ground is a real practice, but it needs a rule for
   /// how they divide the feed, and inventing one would be inventing a result.

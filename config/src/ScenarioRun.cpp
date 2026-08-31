@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -98,12 +99,111 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{});
 }
 
+namespace {
+
+/// The money side of a day, when a run keeps books.
+///
+/// **Money observes and decides; it does not feed the grass.** Everything this
+/// touches is the account and the flock, so a priced run and an unpriced one of
+/// the same scenario grow identical pasture - which is what makes the optional
+/// argument safe, and is asserted by a test rather than assumed.
+void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::FarmManager& manager,
+                    core::Farm& farm, double hectares, const core::ManagementPolicy& policy,
+                    const core::Date& today, RunSummary& summary) {
+  account.charge_day(today);
+
+  const core::FlockDay flock_day = business.flock.step(today, business.calendar, business.rates);
+  summary.flock_days.push_back(flock_day);
+
+  if (flock_day.sold_store > 0) {
+    // Store lambs at the schedule, on the carcass weight a lamb drafts at.
+    const double carcass_kg =
+        business.decisions.draft_liveweight_kg * business.decisions.dressing_out_fraction;
+    account.record(today, core::LedgerReason::SoldStock,
+                   static_cast<double>(flock_day.sold_store) * carcass_kg *
+                       business.prices.lamb_dollars_per_kg_carcass,
+                   "sold " + std::to_string(flock_day.sold_store) + " store lambs at weaning");
+  }
+  if (flock_day.culled > 0) {
+    account.record(
+        today, core::LedgerReason::SoldStock,
+        static_cast<double>(flock_day.culled) * business.prices.cull_ewe_dollars_per_head,
+        "sold " + std::to_string(flock_day.culled) + " cull ewes");
+  }
+
+  core::FarmOutlook outlook;
+  outlook.today = today;
+  outlook.head = business.flock.head();
+  // **False, and it has to be until lambs grow on this farm's grass.** A lamb
+  // cohort exists and ages, but nothing drives its liveweight: the Farm holds
+  // mobs, not the flock, so a lamb's weight is whatever it was born with.
+  // Drafting on that weight would sell animals whose weight the model never
+  // earned - and did, at 74 head a day for three hundred days, because the rule
+  // had no reason to stop. The lamb crop's income comes from the weaning split
+  // instead, which is a sourced rate rather than an unearned weight.
+  outlook.is_finishing_class = false;
+  outlook.cover_kg_dm_per_ha = farm.grid().mean_cover_kg_dm();
+  outlook.minimum_cover_kg_dm_per_ha = policy.minimum_cover_kg_dm_per_ha;
+  outlook.days_short = summary.days_short;
+  outlook.hectares = hectares;
+  outlook.balance_dollars = account.balance();
+  outlook.daily_operating_cost_dollars = business.costs.annual_per_hectare() * hectares / 365.0;
+  if (!business.flock.cohorts().empty()) {
+    outlook.liveweight_kg = business.flock.cohorts().front().mob.state.liveweight_kg;
+  }
+
+  // **Every sale takes the animals with it.** Applying a proposal to the
+  // account and not to the flock is how the same lambs came to be sold three
+  // hundred times: the money arrived and the stock never left. Anything that
+  // sells head, sells them.
+  for (const core::Proposal& done : manager.decide(outlook, account)) {
+    const bool sells_stock = done.kind == core::ActionKind::Destock ||
+                             done.kind == core::ActionKind::SellFinishedStock ||
+                             done.kind == core::ActionKind::SellCullStock;
+    if (sells_stock && done.head > 0) {
+      business.flock.sell_oldest(done.head);
+    }
+  }
+
+  // **What the farmer sells stops eating.** The flock and the mob on the
+  // paddock used to be separate populations, and the whole year of grazing was
+  // the same however the flock went: 1,305 kg DM/ha eaten in the driest year in
+  // ten and 1,297 in the wettest, on a farm whose flock doubled at lambing and
+  // halved at weaning. Nothing a farmer did could change the feed pressure, so
+  // destocking relieved nothing and a drought had no way to reach the stock.
+  //
+  // **Ewes only, and that is a shortfall rather than a choice.** The mob's
+  // liveweight is a ewe's and the energy model feeds the mob's representative
+  // animal, so counting the lamb crop here would feed 529 lambs as 529 fully
+  // grown ewes - intake this model never earned, the same error as drafting on
+  // a liveweight nothing drives. The lambs graze in reality and do not here;
+  // see docs/validation/verify.md (E21), whose fix is grazing per cohort.
+  farm.set_mob_head(0, business.flock.breeding_head());
+}
+
+}  // namespace
+
+RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
+                                const core::DietQuality& diet, std::string label,
+                                FarmBusiness business) {
+  RunSummary summary = run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{},
+                                            {}, {}, &business);
+  return summary;
+}
+
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label,
                                 const DayObserver& each_day,
                                 const core::IrrigationPolicy& irrigation,
-                                const core::IrrigationSystem& system) {
+                                const core::IrrigationSystem& system, FarmBusiness* business) {
   core::Farm farm = bundle.make_farm();
+
+  // The farm's area, derived the way the report derives it: from the grid the
+  // bundle describes rather than from the farm, which does not carry one.
+  const double farm_hectares =
+      bundle.grid.has_value() ? static_cast<double>(bundle.grid->cols * bundle.grid->rows) *
+                                    bundle.grid->cell_size_m * bundle.grid->cell_size_m / 10000.0
+                              : 0.0;
 
   // The bundle's own calendar, when it has one.
   //
@@ -135,6 +235,14 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   core::IrrigationSchedule schedule(irrigation, system, farm.grid().cell_count());
   summary.irrigation_mm.reserve(weather.records.size());
 
+  std::optional<core::FarmManager> manager;
+  if (business != nullptr) {
+    summary.account.emplace(business->opening_balance_dollars, business->costs, business->prices,
+                            farm_hectares);
+    manager.emplace(business->decisions, core::standard_rules(business->decisions));
+    summary.flock_days.reserve(weather.records.size());
+  }
+
   for (const core::DailyWeather& day : weather.records) {
     const core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
 
@@ -163,6 +271,11 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     }
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
+    if (business != nullptr && manager.has_value() && summary.account.has_value()) {
+      keep_the_books(*business, *summary.account, *manager, farm, farm_hectares, policy, day.date,
+                     summary);
+    }
+
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
@@ -184,6 +297,9 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     }
   }
 
+  if (business != nullptr) {
+    summary.closing_head = business->flock.head();
+  }
   summary.irrigation = schedule.tally();
   summary.closing_cover_kg_dm = farm.grid().mean_cover_kg_dm();
   summary.closing_nitrogen_kg = farm.grid().mean_total_nitrogen_kg();
