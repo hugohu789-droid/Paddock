@@ -71,7 +71,7 @@ int days_at_or_above(const std::vector<double>& counts, double threshold) {
 // The Waikato year. AgResearch's own facial eczema site, on recorded weather.
 TEST(FacialEczemaGeographyTest, TheWaikatoYearProducesAnOutbreak) {
   const WeatherSeries weather = year_at("ruakura-fe/weather-2023.csv");
-  ASSERT_EQ(weather.records.size(), 366u);
+  ASSERT_EQ(weather.records.size(), 366U);
 
   const std::vector<double> counts = spore_count_series(weather, facial_eczema());
   const double peak = *std::max_element(counts.begin(), counts.end());
@@ -87,7 +87,7 @@ TEST(FacialEczemaGeographyTest, TheWaikatoYearProducesAnOutbreak) {
 // assertion that would catch a model that manufactures disease from nothing.
 TEST(FacialEczemaGeographyTest, TheCanterburyYearProducesNone) {
   const WeatherSeries weather = year_at("lincoln-lurdf/weather-2023.csv");
-  ASSERT_EQ(weather.records.size(), 366u);
+  ASSERT_EQ(weather.records.size(), 366U);
 
   const MycotoxinParameters fe = facial_eczema();
   const std::vector<double> counts = spore_count_series(weather, fe);

@@ -13,10 +13,11 @@
 # a difference between the two runs is a difference between two climates, not
 # between two farms.
 #
-# **The ground is not measured.** No LiDAR snapshot has been fetched for this
-# site, so the farm is drawn flat and says so. Facial eczema is a question about
-# the air and the litter at the base of the sward rather than about slope, so
-# flat ground costs this scenario nothing it needs.
+# **The ground is measured**, from the same LINZ elevation service the Canterbury
+# bundle uses. A build without the geospatial stack, or a checkout that has not
+# fetched the tile, draws the farm flat and says which - and that is still a
+# working scenario, because facial eczema is a question about the air and the
+# litter at the base of the sward rather than about slope.
 
 [scenario]
 name = "ruakura_fe"
@@ -73,18 +74,55 @@ soil_mineral_nitrogen_kg_per_ha = 60.0
 # The same 40 x 32 cells at 25 m as lincoln-lurdf - 1000 by 800 m, 80 hectares -
 # so the two farms differ in their weather and in nothing else.
 #
-# The origin is the north-west corner of a block centred on Ruakura at
-# 1803023.5 E, 5816390.7 N (NZTM2000, from 175.3053 E, 37.7773 S).
+# The origin is the north-west corner of a block centred on the Ruakura centre
+# this repository already carries: 1804011.1268 E, 5815700.0870 N in
+# data/farms/ruakura-research-centre.toml, which is LINZ's own Concord
+# conversion of the Ruakura locality and is pinned in tests/gis/ProjectionTest.cpp.
+# That file records it as a locality reference and **not** a surveyed farm
+# centroid - see open item 8 - so this block is placed near Ruakura rather than
+# on it.
+#
+# The weather was fetched at 175.3053 E, 37.7773 S, about 1.2 km from that
+# point. It makes no difference to what falls on the farm: ERA5 answers from a
+# grid cell tens of kilometres across, and the provenance file records the cell
+# that replied as -37.785587, 175.30121 - the same cell either coordinate lands in.
 cols = 40
 rows = 32
 cell_size_m = 25.0
 available_water_west_mm = 60.0   # PLACEHOLDER - demonstration gradient
 available_water_east_mm = 140.0  # PLACEHOLDER - demonstration gradient
-origin_easting = 1802523.5
-origin_northing = 5816790.7
+#
+# **Placed to sit inside the LiDAR tile, with the margins checked.** The tile
+# runs 1799200-1804000 E and 5809200-5816400 N, so a 1000 by 800 m block at
+# this origin has 200 m of clearance at its nearest edge, the eastern one, and
+# 300 m at the northern. That puts the block about 700 m west of the Ruakura
+# centre named above, which is within the accuracy that centre claims for
+# itself - it is a locality reference, not a survey.
+origin_easting = 1802800.0
+origin_northing = 5816100.0
 
 # 80 ha at 2 ha gives 40 paddocks of 2.0 ha, as on the Canterbury block.
 paddock_hectares = 2.0
+
+[terrain]
+# Measured ground, not a formula.
+#
+# Waikato - Hamilton LiDAR 1m DEM (2023), tile BD33_10000_0405, flown
+# 9 November 2023, 1 m, already in NZTM2000. A DEM and not a DSM: bare earth,
+# because grass grows on the ground and not on the woolshed roof. Licensed
+# CC BY 4.0, hosted and processed by Toitu Te Whenua LINZ.
+#
+# **The file is not committed** - snapshots never are - and the hash is what
+# makes that safe. Fetch it once with:
+#
+#   python scripts/nz-elevation-snapshot.py --lon 175.3167 --lat -37.7833 #       --collection waikato/hamilton_2023 #       --out data/snapshots/ruakura-dem-1m.tiff
+#
+# Without it this bundle runs on flat ground and says so, which is a working
+# scenario rather than a broken one: facial eczema is a question about the air
+# and the litter at the base of the sward rather than about slope.
+kind = "snapshot"
+path = "../../snapshots/ruakura-dem-1m.tiff"
+sha256 = "fdd4a1c86a4d280a582c2d89d589c38339909c4ee6e47573e73fc69cde30bb8a"
 
 [[mob]]
 name = "main mob"
