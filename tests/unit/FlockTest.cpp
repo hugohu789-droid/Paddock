@@ -100,11 +100,21 @@ TEST(FlockTest, TurningTheYearAgesEveryCohortAndSellsThePastCullAge) {
   EXPECT_DOUBLE_EQ(flock.cohorts().front().mob.state.age_days, 730.0)
       << "no day passed, so no day was added";
 
+  // **Ten calls, nine days.** The first step establishes where the calendar is
+  // and adds nothing; each one after it adds the days that actually passed
+  // since the last. That is the fencepost, and it is the right way round: a
+  // flock stepped once has not aged, and a flock stepped twice on the same date
+  // has not aged twice.
   const FlockCalendar calendar;
   for (int i = 0; i < 10; ++i) {
     flock.step(Date{2025, 5, 10 + i}, calendar, rates);
   }
-  EXPECT_DOUBLE_EQ(flock.cohorts().front().mob.state.age_days, 740.0) << "ten days, ten days older";
+  EXPECT_DOUBLE_EQ(flock.cohorts().front().mob.state.age_days, 739.0);
+
+  // Stepping the same day again changes nothing, which is what the date being
+  // the authority means.
+  flock.step(Date{2025, 5, 19}, calendar, rates);
+  EXPECT_DOUBLE_EQ(flock.cohorts().front().mob.state.age_days, 739.0);
 }
 
 // **Ten years without replacements empties the flock**, which is the finding

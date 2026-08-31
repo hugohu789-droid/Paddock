@@ -1509,6 +1509,10 @@ void MapWindow::simulate_pasture_only(RunProducts& into, const config::ScenarioB
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(grid.mean_cover_kg_dm());
+    // Green as well as cover, so a run driven from the window and a run driven
+    // from the CLI fill the same summary. A field populated on one path and not
+    // the other is a report that changes with how it was produced.
+    summary.green_kg_dm_per_ha.push_back(grid.mean_green_kg_dm());
   }
 
   into.irrigation = schedule.tally();

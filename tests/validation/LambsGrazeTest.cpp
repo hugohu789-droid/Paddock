@@ -16,6 +16,7 @@
 
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/ScenarioRun.hpp>
+#include <paddock/core/AnimalEnergy.hpp>
 #include <paddock/core/SnapshotWeather.hpp>
 
 #include "../support/ShippedBundle.hpp"
@@ -160,6 +161,55 @@ TEST(LambsGrazeTest, MilkIsChargedOnceAndTheFarmIsNotFedTwice) {
   EXPECT_GT(eaten_per_ha, 700.0);
   EXPECT_LT(eaten_per_ha, 1'800.0)
       << "an intake this high would mean the lambs are grazing for milk they already drank";
+}
+
+// **The udder balances, and the loss across it is real.** The ewes are charged
+// for the milk they make and the lambs are credited with drinking it, so this is
+// a transfer - but making milk is only 62% efficient (kl, TMC Eq. 3), so the
+// ewes eat more dry matter than the lambs are spared. Energy is conserved with a
+// loss, which is what a udder is; a transfer that broke even would be creating
+// energy somewhere.
+//
+// Checked on the equations rather than through a run, because a run's totals
+// mix this with everything else the farm did that day.
+TEST(LambsGrazeTest, MakingMilkCostsMoreThanDrinkingItSaves) {
+  core::AnimalClassParameters ewe;
+  ewe.class_id = "sheep_ewe";
+  ewe.kind = core::AnimalKind::Sheep;
+  ewe.species_factor = 1.0;
+  ewe.sex_factor = 1.0;
+  ewe.standard_reference_weight_kg = 66.0;
+  ewe.grazing_coefficient = 0.0025;
+  ewe.gain_energy_ceiling_mj_per_kg = 20.3;
+  ewe.gestation_length_days = 150.0;
+  ewe.milk_fat_percent = 7.0;
+  ewe.milk_protein_percent = 5.8;
+  ewe.breed_effect = 0.01;
+
+  core::AnimalState milking;
+  milking.liveweight_kg = 66.0;
+  milking.age_days = 1500.0;
+  milking.young = 1.323;
+  milking.days_lactating = 20;
+
+  core::GrazingConditions ground;
+  ground.pasture_mass_t_dm_per_ha = 2.0;
+  ground.area_per_animal_ha = 0.2;
+
+  const core::DietQuality diet = pasture_diet();
+
+  // What she puts in the milk, and what it costs her to put it there.
+  const double net_in_milk = core::lactation_net_energy_mj(ewe, milking, ground);
+  const double cost_to_her = net_in_milk / diet.lactation_efficiency();
+
+  ASSERT_GT(net_in_milk, 0.0);
+  EXPECT_GT(cost_to_her, net_in_milk) << "milk cannot cost less to make than it contains";
+  EXPECT_NEAR(cost_to_her / net_in_milk, 1.0 / diet.lactation_efficiency(), 1e-9);
+
+  // A lamb is credited with the net energy, not with what she spent - so the
+  // farm's feed demand rises by the difference and not by the whole of it.
+  EXPECT_NEAR(cost_to_her - net_in_milk, net_in_milk * (1.0 / 0.6197 - 1.0), 0.05)
+      << "the loss across the udder is one over kl, about 61% on this diet";
 }
 
 }  // namespace

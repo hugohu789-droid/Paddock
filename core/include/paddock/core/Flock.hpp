@@ -250,6 +250,11 @@ class Flock {
   std::vector<AgeCohort> cohorts_;
   Mob lamb_template_;
   bool has_lamb_template_ = false;
+
+  /// The last date `step` was given, so ages advance by the days that actually
+  /// passed rather than by the number of times somebody called it.
+  Date last_stepped_{};
+  bool has_stepped_ = false;
 };
 
 }  // namespace paddock::core

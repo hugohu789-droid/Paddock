@@ -208,16 +208,6 @@ class Farm {
   /// Cover on one paddock, kg DM per hectare, averaged over its cells.
   [[nodiscard]] double paddock_cover_kg_dm_per_ha(std::size_t paddock) const;
 
-  /// The GREEN dry matter on a paddock, kg DM/ha - what a mob can eat there.
-  ///
-  /// **What management decisions are made on.** Cover is green plus the dead
-  /// standing material above it; a mob eats only the green. On this farm the
-  /// two part company by up to 45% in late summer, and every rule that read
-  /// cover was reading a feed situation padded with thatch no animal would
-  /// touch: a paddock reporting 1,640 kg DM/ha of cover in September had 968 of
-  /// grass on it. The rules that decide whether stock go hungry read this.
-  [[nodiscard]] double paddock_green_kg_dm_per_ha(std::size_t paddock) const;
-
   /// Total stock units of dry matter standing above the residual on a paddock,
   /// which is what is actually available to eat.
   [[nodiscard]] double paddock_offer_kg_dm(std::size_t paddock) const;

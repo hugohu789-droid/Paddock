@@ -156,14 +156,21 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   core::FarmOutlook outlook;
   outlook.today = today;
   outlook.head = business.flock.head();
-  // **False, and it has to be until lambs grow on this farm's grass.** A lamb
-  // cohort exists and ages, but nothing drives its liveweight: the Farm holds
-  // mobs, not the flock, so a lamb's weight is whatever it was born with.
-  // Drafting on that weight would sell animals whose weight the model never
-  // earned - and did, at 74 head a day for three hundred days, because the rule
-  // had no reason to stop. The lamb crop's income comes from the weaning split
-  // instead, which is a sourced rate rather than an unearned weight.
-  outlook.is_finishing_class = false;
+  // **Whether there is a finishing class, and if so what it weighs.**
+  //
+  // This read a flat `false` because nothing drove a lamb's liveweight: a lamb
+  // was born holding its mother's 55 kg and never changed, so drafting on that
+  // weight sold animals whose weight the model had never earned - and did, at
+  // 74 head a day for three hundred days. Lambs graze now (E22) and their
+  // weight is an outcome of the grass, so the rule can have it.
+  //
+  // **Setting it to a flat `true` put the same bug back**, in an hour, by a
+  // different door: `liveweight_kg` was being read off the front cohort, which
+  // is the oldest, which is a 55 kg ewe. The rule saw a finished animal, drafted
+  // the flock, and closed the year with nothing on the farm. So the two have to
+  // be set together from the same cohort, and there is no finishing class when
+  // there is no finishing stock.
+  outlook.is_finishing_class = business.flock.finishing_head() > 0;
   // **Cover, not green, and that is a decision rather than an oversight.** Cover
   // is green plus the dead standing above it, and on this farm the two part
   // company by up to 45% in late summer - a paddock reporting 1,640 kg DM/ha of
@@ -183,8 +190,13 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   outlook.hectares = hectares;
   outlook.balance_dollars = account.balance();
   outlook.daily_operating_cost_dollars = business.costs.annual_per_hectare() * hectares / 365.0;
-  if (!business.flock.cohorts().empty()) {
-    outlook.liveweight_kg = business.flock.cohorts().front().mob.state.liveweight_kg;
+  // The weight the drafting rule reads: the finishing cohort's when there is
+  // one, and the oldest breeding cohort's otherwise - never the two mixed.
+  for (const core::AgeCohort& cohort : business.flock.cohorts()) {
+    if (cohort.is_finishing == outlook.is_finishing_class) {
+      outlook.liveweight_kg = cohort.mob.state.liveweight_kg;
+      break;
+    }
   }
 
   // **Every sale takes the animals with it.** Applying a proposal to the

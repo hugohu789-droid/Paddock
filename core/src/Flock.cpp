@@ -223,12 +223,26 @@ void Flock::set_reproductive_state(const Date& today, const FlockCalendar& calen
 FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const FlockRates& rates) {
   FlockDay day;
 
-  // **A day older, every day.** The milk share of a lamb's diet is a function
-  // of its age in days (TMC Eq. 15), so an age that only moved once a year
-  // would have kept every lamb newborn until the following July.
-  for (AgeCohort& cohort : cohorts_) {
-    cohort.mob.state.age_days += 1.0;
+  // **Older by the days that passed, not by the number of calls.** The milk
+  // share of a lamb's diet is a function of its age in days (TMC Eq. 15), so
+  // this has to move - an age that only advanced once a year kept every lamb
+  // newborn until the following July.
+  //
+  // Advancing by one per call would have been enough for the run loop, which
+  // steps every day, and wrong for everything else: a test stepping five
+  // scattered dates aged its flock five days across ten months, and a caller
+  // that stepped the same date twice aged it twice. The date is the authority.
+  if (has_stepped_) {
+    const auto elapsed =
+        static_cast<double>(today.days_since_epoch() - last_stepped_.days_since_epoch());
+    if (elapsed > 0.0) {
+      for (AgeCohort& cohort : cohorts_) {
+        cohort.mob.state.age_days += elapsed;
+      }
+    }
   }
+  last_stepped_ = today;
+  has_stepped_ = true;
 
   const auto is = [&today](int month, int date) {
     return today.month == month && today.day == date;
