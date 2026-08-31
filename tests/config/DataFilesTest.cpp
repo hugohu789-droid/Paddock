@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include <paddock/config/DiseaseConfig.hpp>
 #include <paddock/config/FarmConfig.hpp>
 #include <paddock/config/PastureConfig.hpp>
 #include <paddock/config/SoilConfig.hpp>
@@ -212,6 +213,84 @@ TEST(DataFilesTest, TheDairyDefinitionIsNamedForTheDryCowItActuallyModels) {
       << "the description has to say lactation is absent: " << cow.description;
   // CSIRO (2007) for dairy, which is the value the OVERSEER manual follows.
   EXPECT_DOUBLE_EQ(cow.energy.species_factor, 1.4);
+}
+
+// Diseases are discovered rather than enumerated, like the farms and the
+// species: naming the files here would mean adding one is a code change, which
+// is what the data-not-classes rule exists to prevent.
+TEST(DataFilesTest, EveryShippedDiseaseLoadsAndIsUsable) {
+  const std::vector<DiseaseDefinition> diseases = load_disease_directory(data_path("diseases"));
+
+  ASSERT_FALSE(diseases.empty()) << "data/diseases/ has no definitions";
+  for (const DiseaseDefinition& disease : diseases) {
+    EXPECT_FALSE(disease.name.empty());
+    EXPECT_FALSE(disease.affects.empty()) << disease.name << " says nothing about what it affects";
+    EXPECT_EQ(disease.mycotoxin.invalid_reason(), "") << disease.name;
+    EXPECT_FALSE(disease.provenance.empty())
+        << disease.name << " records no provenance, so nothing in it can be quoted";
+  }
+}
+
+// **The test that stops the file and the code drifting apart again.**
+//
+// The sporulation rates lived in two places for a few hours - the data file and
+// a hand-written struct in the unit suite - and by the time anyone looked they
+// disagreed, while every test passed. This asserts the model built from the
+// shipped file behaves the way the shipped file says, so a change to one that
+// is not made to the other fails here.
+TEST(DataFilesTest, FacialEczemaBehavesTheWayItsFileDescribes) {
+  const DiseaseDefinition fe = load_disease(data_path("diseases/facial-eczema.toml"));
+  const core::MycotoxinParameters& p = fe.mycotoxin;
+
+  EXPECT_EQ(fe.name, "facial_eczema");
+
+  // A night at the threshold with the rain the file asks for is favourable; a
+  // fraction under it is not. If the file's numbers move, these move with them.
+  core::DailyWeather night;
+  night.date = core::Date{2024, 2, 1};
+  night.min_air_temperature_c = p.grass_minimum_temperature_c;
+  EXPECT_TRUE(core::night_favours_sporulation(night, p.rainfall_mm_per_48h, p));
+
+  night.min_air_temperature_c = p.grass_minimum_temperature_c - 0.1;
+  EXPECT_FALSE(core::night_favours_sporulation(night, p.rainfall_mm_per_48h, p));
+
+  // The count rises only after a full run, and never falls below background.
+  EXPECT_GT(core::next_spore_count(10000.0, p.consecutive_nights, p), 10000.0);
+  EXPECT_LT(core::next_spore_count(10000.0, p.consecutive_nights - 1, p), 10000.0);
+  EXPECT_DOUBLE_EQ(core::next_spore_count(0.0, 0, p), p.background_spores_per_g);
+
+  // Every number the file marks fitted has to name what it was fitted to, and
+  // every citation has to resolve - load_disease enforces the second, so this
+  // checks the first is actually being used rather than quietly absent.
+  int fitted = 0;
+  for (const auto& [key, sourced] : fe.provenance) {
+    if (sourced.status == Provenance::Fitted) {
+      ++fitted;
+      EXPECT_FALSE(sourced.source_id.empty()) << key << " is fitted and names nothing";
+    }
+  }
+  EXPECT_GT(fitted, 0) << "this file is expected to carry fitted values and say so";
+}
+
+// **Clean pasture must not damage a liver, however long the run.**
+//
+// The count never falls below its background, so a running total of exposure
+// rises every day whether or not anything happened. Three simulated years of
+// Canterbury pasture that never sporulated once used to put a mob over the
+// reactor threshold. This is the assertion that would catch it coming back.
+TEST(DataFilesTest, YearsOfCleanPastureNeverReachTheReactorThreshold) {
+  const core::MycotoxinParameters p =
+      load_disease(data_path("diseases/facial-eczema.toml")).mycotoxin;
+
+  double carried = 0.0;
+  for (int day = 0; day < 365 * 5; ++day) {
+    carried = core::next_exposure(carried, p.background_spores_per_g, p);
+  }
+
+  const double ggt = core::ggt_from_exposure(carried, p);
+  EXPECT_LT(ggt, p.reactor_ggt_iu_per_l)
+      << "five years of pasture that never sporulated should leave a liver alone; GGT " << ggt;
+  EXPECT_DOUBLE_EQ(core::liver_injury_score(ggt, p), 0.0);
 }
 
 }  // namespace

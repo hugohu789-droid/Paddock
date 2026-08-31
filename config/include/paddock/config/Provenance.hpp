@@ -31,6 +31,18 @@ enum class Provenance : std::uint8_t {
   /// transcription needs confirming before the value carries any weight.
   Verify,
 
+  /// Calibrated so that published observations reproduce, rather than stated by
+  /// any source. Not evidence-free like a Placeholder, and not a citation like
+  /// a Direct value: a fitted number is only as good as the observations it was
+  /// fitted to, and a report must say which those were.
+  ///
+  /// It exists because facial eczema needed it. The step from toxin load to
+  /// serum GGT cannot be derived - working the sourced numbers through gives an
+  /// answer sixteen times out of step with field observation - so it is fitted
+  /// to the published spore-count thresholds and labelled as fitted. Calling
+  /// that Placeholder would understate it and Derived would overstate it.
+  Fitted,
+
   /// An engineering value with no evidence behind it. The model will run on it;
   /// nothing may be published from it.
   Placeholder,
@@ -54,12 +66,17 @@ struct SourcedValue {
   /// An identifier into data/calibration/livestock/sources.toml. Required for
   /// Direct and Derived - a citation with nothing to cite is decoration - and
   /// empty is allowed for Verify and Placeholder, which are by definition not
-  /// yet attached to a source.
+  /// yet attached to a source. Fitted values must name what they were fitted to.
   std::string source_id;
 
   /// True when this number rests on something somebody published.
+  ///
+  /// Fitted counts, and that is the point of including it: a value calibrated
+  /// against observations has to name which observations, or nobody can tell
+  /// what it would take to falsify it.
   [[nodiscard]] bool is_evidence() const noexcept {
-    return status == Provenance::Direct || status == Provenance::Derived;
+    return status == Provenance::Direct || status == Provenance::Derived ||
+           status == Provenance::Fitted;
   }
 
   /// Empty when the value and its status are consistent; otherwise what is

@@ -52,6 +52,30 @@ struct MycotoxinParameters {
 
   // Response.
   double reactor_spore_days = 1'500'000.0;
+
+  /// Exposure a year of clean pasture delivers, subtracted before any damage is
+  /// counted.
+  ///
+  /// **Without this the model gives sheep liver damage for standing on clean
+  /// grass.** The count never falls below a background, so cumulative exposure
+  /// rises every day whether or not anything happened - and three years of
+  /// Canterbury pasture that never once sporulated put a mob over the reactor
+  /// threshold. The fungus lives on dead litter year round, so the background
+  /// is real; what is not real is charging liver damage for it.
+  double background_spore_days_per_year = 732'000.0;
+
+  /// Share of accumulated exposure cleared each day.
+  ///
+  /// A liver repairs. GGT peaks about three weeks after a challenge - which is
+  /// why the national tolerance test reads it at 21 days - and then falls back
+  /// over weeks. Cumulative-forever exposure has no way to say that, so a farm
+  /// that had a bad January would still be reporting it the following spring.
+  ///
+  /// **FITTED**, to a half-life of about a month: 0.023/day halves what is
+  /// carried in 30 days. No published clearance curve for sporidesmin exposure
+  /// has been located, so this is calibrated to the 21-day peak the test
+  /// protocol implies rather than measured.
+  double clearance_per_day = 0.023;
   double reactor_ggt_iu_per_l = 55.0;
   double liver_injury_intercept = -2.96;
   double liver_injury_ln_ggt_slope = 0.89;
@@ -83,7 +107,7 @@ struct MycotoxinParameters {
 [[nodiscard]] double toxin_ng_per_g(double spore_count_per_g,
                                     const MycotoxinParameters& parameters) noexcept;
 
-/// **The fitted step.** Serum GGT from cumulative exposure in spore-days.
+/// **The fitted step.** Serum GGT from accumulated exposure in spore-days.
 ///
 /// Exposure is spores per gram multiplied by days spent grazing them. The
 /// reactor threshold is reached at `reactor_spore_days`, and GGT rises in
@@ -92,6 +116,15 @@ struct MycotoxinParameters {
 /// reported as one.
 [[nodiscard]] double ggt_from_exposure(double spore_days,
                                        const MycotoxinParameters& parameters) noexcept;
+
+/// Carries accumulated exposure forward one day.
+///
+/// Two things happen that a running total cannot do on its own: the day's
+/// background is not charged, because clean pasture does not damage a liver,
+/// and what is already carried decays, because a liver repairs. Both are why
+/// `ggt_from_exposure` may be given this rather than a plain sum.
+[[nodiscard]] double next_exposure(double carried_spore_days, double today_spores_per_g,
+                                   const MycotoxinParameters& parameters) noexcept;
 
 /// Liver injury score from serum GGT.
 ///

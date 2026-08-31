@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
-/// Facial eczema, checked against the numbers it was built from.
+/// The mycotoxin mechanics, on a parameter set of this suite's own.
 ///
-/// Each assertion here names the source it comes from, so a failure says which
-/// published figure stopped being reproduced rather than only which line moved.
-/// The one exception is the fitted step, which is checked against the field
-/// thresholds it was calibrated to - and labelled as that rather than as a
-/// validation.
+/// Assertions that come from a publication name it, so a failure says which
+/// figure stopped being reproduced rather than only which line moved. Nothing
+/// here reads the shipped disease file: this suite links core alone, and the
+/// tests that hold the file and the model together live where config is
+/// available - see `FacialEczemaBehavesTheWayItsFileDescribes`.
 
 #include <gtest/gtest.h>
 
@@ -19,8 +19,19 @@
 namespace paddock::core {
 namespace {
 
-/// data/diseases/facial-eczema.toml, in the shape the model reads.
-MycotoxinParameters facial_eczema() {
+/// **Not the shipped disease.** A parameter set for exercising the mechanics,
+/// which is all this suite can do: it links core only, and reading
+/// data/diseases/facial-eczema.toml needs config. The tests that check the
+/// shipped file are in the config and validation suites, where the file can
+/// actually be loaded - `FacialEczemaBehavesTheWayItsFileDescribes` and
+/// `FacialEczemaGeographyTest`.
+///
+/// The numbers below that come from publications are marked where they are
+/// used. The two sporulation rates are deliberately left at the values this
+/// suite was written against rather than tracking the file, because nothing
+/// here asserts anything about their size - only that a rise rises and a decay
+/// decays.
+MycotoxinParameters a_mycotoxin() {
   MycotoxinParameters parameters;
   parameters.grass_minimum_temperature_c = 12.0;
   parameters.consecutive_nights = 4;
@@ -45,15 +56,15 @@ DailyWeather a_night(double minimum_c) {
   return day;
 }
 
-TEST(MycotoxinTest, TheShippedParametersAreValid) {
-  EXPECT_EQ(facial_eczema().invalid_reason(), "");
+TEST(MycotoxinTest, TheParameterSetIsValid) {
+  EXPECT_EQ(a_mycotoxin().invalid_reason(), "");
 }
 
 // DairyNZ Technical Series (February 2012): favourable when overnight minimum
 // grass temperature is at or above 12 C and humidity is high, given here as
 // drizzly rain of 4-6 mm per 48 hours. Both conditions, not either.
 TEST(MycotoxinTest, WarmAndDampTogetherFavourSporulation) {
-  const MycotoxinParameters fe = facial_eczema();
+  const MycotoxinParameters fe = a_mycotoxin();
 
   EXPECT_TRUE(night_favours_sporulation(a_night(12.0), 4.0, fe)) << "at the threshold, both met";
   EXPECT_TRUE(night_favours_sporulation(a_night(15.0), 9.0, fe)) << "well inside both";
@@ -66,7 +77,7 @@ TEST(MycotoxinTest, WarmAndDampTogetherFavourSporulation) {
 // "One or two small increases over several weeks, followed by a major rapid
 // rise": the count must not move until the run of nights is long enough.
 TEST(MycotoxinTest, TheCountRisesOnlyAfterAFullRunOfNights) {
-  const MycotoxinParameters fe = facial_eczema();
+  const MycotoxinParameters fe = a_mycotoxin();
   const double start = 10'000.0;
 
   for (int nights = 0; nights < fe.consecutive_nights; ++nights) {
@@ -81,7 +92,7 @@ TEST(MycotoxinTest, TheCountRisesOnlyAfterAFullRunOfNights) {
 // The fungus lives on dead litter year round, so a count of exactly zero would
 // be a claim nobody has made.
 TEST(MycotoxinTest, TheCountDecaysToTheBackgroundAndNoFurther) {
-  const MycotoxinParameters fe = facial_eczema();
+  const MycotoxinParameters fe = a_mycotoxin();
 
   double count = 200'000.0;
   for (int day = 0; day < 200; ++day) {
@@ -94,7 +105,7 @@ TEST(MycotoxinTest, TheCountDecaysToTheBackgroundAndNoFurther) {
 // untreated pasture. That measurement is what the per-spore figure is derived
 // from, so the model must reproduce it.
 TEST(MycotoxinTest, TheToxinLoadReproducesTheMeasuredPasture) {
-  const MycotoxinParameters fe = facial_eczema();
+  const MycotoxinParameters fe = a_mycotoxin();
   EXPECT_NEAR(toxin_ng_per_g(80'000.0, fe), 113.0, 1.0)
       << "Fitzgerald et al. (1998) measured 113 ng/g at this count";
 
@@ -108,7 +119,7 @@ TEST(MycotoxinTest, TheToxinLoadReproducesTheMeasuredPasture) {
 
 // Morris, Smith and Hickey (2002): LIS = -2.96 + 0.89 ln(GGT).
 TEST(MycotoxinTest, LiverInjuryFollowsThePublishedRegression) {
-  const MycotoxinParameters fe = facial_eczema();
+  const MycotoxinParameters fe = a_mycotoxin();
 
   // Worked by hand from the published coefficients rather than from the code.
   const double at_250 = -2.96 + (0.89 * std::log(250.0));
@@ -128,7 +139,7 @@ TEST(MycotoxinTest, LiverInjuryFollowsThePublishedRegression) {
 // clinical case there will be 10 cows with sub-clinical FE". A mob can be well
 // over the reactor threshold and still show a farmer nothing.
 TEST(MycotoxinTest, MostOfAnAffectedMobShowsNothing) {
-  const MycotoxinParameters fe = facial_eczema();
+  const MycotoxinParameters fe = a_mycotoxin();
 
   EXPECT_EQ(clinically_affected(400, 300.0, fe), 40) << "one in ten of a big mob";
   EXPECT_EQ(clinically_affected(400, 10.0, fe), 0) << "below the reactor GGT, nobody is affected";
@@ -144,7 +155,7 @@ TEST(MycotoxinTest, MostOfAnAffectedMobShowsNothing) {
 // validation - it cannot be, because the calibration and the check share a
 // source. It is here so that a change to the index has to be deliberate.
 TEST(MycotoxinTest, TheFittedIndexReproducesTheFieldThresholds) {
-  const MycotoxinParameters fe = facial_eczema();
+  const MycotoxinParameters fe = a_mycotoxin();
 
   // Field guidance: 100,000 spores/g is dangerous, and clinical signs follow
   // intake by 10 to 18 days. A fortnight there should reach the reactor GGT.

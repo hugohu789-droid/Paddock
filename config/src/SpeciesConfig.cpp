@@ -35,7 +35,7 @@ SourcedValue read_sourced(const toml::table& parent, std::string_view key,
   if (!provenance_from_string(status, sourced.status)) {
     detail::throw_in(entry, path,
                      "'" + std::string(key) + "' has status '" + status +
-                         "'. It must be one of: direct, derived, verify, placeholder");
+                         "'. It must be one of: direct, derived, verify, fitted, placeholder");
   }
 
   sourced.source_id = detail::optional_string(entry, "source", "");

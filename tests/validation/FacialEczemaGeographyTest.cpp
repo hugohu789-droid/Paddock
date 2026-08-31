@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include <paddock/config/DiseaseConfig.hpp>
 #include <paddock/core/Mycotoxin.hpp>
 #include <paddock/core/SnapshotWeather.hpp>
 #include <paddock/core/Weather.hpp>
@@ -29,21 +30,15 @@
 namespace paddock::core {
 namespace {
 
+/// **Read from data/diseases/facial-eczema.toml, never copied out of it.**
+///
+/// The values used to be written out here as a C++ struct, and within hours of
+/// the file being created the two had drifted: the file said one sporulation
+/// rate and the test asserted another, and every test passed. A disease is data
+/// in this project, so a test of it reads the data.
 MycotoxinParameters facial_eczema() {
-  MycotoxinParameters parameters;
-  parameters.grass_minimum_temperature_c = 12.0;
-  parameters.consecutive_nights = 4;
-  parameters.rainfall_mm_per_48h = 4.0;
-  parameters.rise_per_favourable_day = 3.0;
-  parameters.decay_per_unfavourable_day = 0.93;
-  parameters.background_spores_per_g = 2000.0;
-  parameters.picograms_per_spore = 1.41;
-  parameters.reactor_spore_days = 1'500'000.0;
-  parameters.reactor_ggt_iu_per_l = 55.0;
-  parameters.liver_injury_intercept = -2.96;
-  parameters.liver_injury_ln_ggt_slope = 0.89;
-  parameters.clinical_fraction_of_affected = 0.10;
-  return parameters;
+  return config::load_disease(std::string(PADDOCK_DATA_DIR) + "/diseases/facial-eczema.toml")
+      .mycotoxin;
 }
 
 /// Thresholds from data/diseases/facial-eczema.toml, all DairyNZ.

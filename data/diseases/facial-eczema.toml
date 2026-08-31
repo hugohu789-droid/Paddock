@@ -94,7 +94,7 @@ picograms_per_spore_low = { value = 0.52, status = "direct", source = "fitzgeral
 # liveweight. 1.0 "produced severe disease with uniformity". **Recorded, and
 # deliberately not used as a cumulative threshold** - see the arithmetic at the
 # top of this file.
-acute_severe_mg_per_kg = { value = 1.0, status = "reference_only", source = "experimental_literature" }
+acute_severe_mg_per_kg = { value = 1.0, status = "direct", source = "experimental_literature" }
 
 # ---------------------------------------------------------------- response
 
@@ -105,6 +105,21 @@ acute_severe_mg_per_kg = { value = 1.0, status = "reference_only", source = "exp
 # spores/g that guidance calls dangerous. It is an empirical index and must be
 # reported as one - the toxin mass balance above does not support it.
 reactor_spore_days = { value = 1500000.0, status = "fitted", source = "field_guidance" }
+
+# **Exposure a clean year delivers, subtracted before any damage is counted.**
+# The count never falls below the background above, so a running total rises
+# every day whether or not anything happened: three years of Canterbury pasture
+# that never once sporulated used to put a mob over the reactor threshold. The
+# fungus does live on dead litter year round, so the background is real - what
+# is not real is charging a liver for it. 2000 spores/g over 366 days.
+background_spore_days_per_year = { value = 732000.0, status = "fitted", source = "field_guidance" }
+
+# **A liver repairs.** GGT peaks about three weeks after a challenge, which is
+# why the national tolerance test reads it at 21 days, and then falls back over
+# weeks. 0.023/day halves what is carried in about a month. FITTED to that
+# 21-day peak rather than measured: no published clearance curve for sporidesmin
+# exposure has been located.
+clearance_per_day = { value = 0.023, status = "fitted", source = "morris_2002" }
 
 # Morris, Smith and Hickey (2002), New Zealand Veterinary Journal 50(1):14-18.
 # Serum GGT above which a lamb is a reactor in the national ram-breeding
