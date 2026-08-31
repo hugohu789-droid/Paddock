@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include <paddock/core/Mycotoxin.hpp>
 
@@ -43,12 +44,18 @@ std::string MycotoxinParameters::invalid_reason() const {
 bool night_favours_sporulation(const DailyWeather& weather, double rain_previous_48h_mm,
                                const MycotoxinParameters& parameters) noexcept {
   // **Grass minimum, not air minimum.** The source says grass, and the two
-  // differ: on a clear still night the sward surface radiates and sits several
-  // degrees below the screen reading. This model carries air temperature only,
-  // so it reads the air minimum and is therefore conservative in the direction
-  // that matters - it will miss marginal nights rather than invent them. The
-  // gap is recorded in docs/validation/verify.md rather than closed with a
-  // correction nobody has published.
+  // differ: a grass-level thermometer radiates to the sky and reads below the
+  // screen minimum, which is what a ground frost is. So grass minimum sits at
+  // or under air minimum, and testing the air minimum against a grass
+  // threshold **accepts nights the source would reject** - it over-triggers
+  // rather than under-triggers.
+  //
+  // It is least wrong exactly where it matters. Radiative cooling is what
+  // opens the gap, and it is suppressed under the damp overcast skies that the
+  // rainfall half of this test is selecting for, so on the nights that pass
+  // both conditions the two readings are closest. Recorded in
+  // docs/validation/verify.md rather than closed with a correction nobody has
+  // published.
   const bool warm = weather.min_air_temperature_c >= parameters.grass_minimum_temperature_c;
   const bool damp = rain_previous_48h_mm >= parameters.rainfall_mm_per_48h;
   return warm && damp;
@@ -103,6 +110,25 @@ int clinically_affected(int head, double ggt_iu_per_l,
   // mob where a farmer would see nothing, which is the point being made.
   const double affected = static_cast<double>(head) * parameters.clinical_fraction_of_affected;
   return static_cast<int>(std::floor(affected));
+}
+
+std::vector<double> spore_count_series(const WeatherSeries& weather,
+                                       const MycotoxinParameters& parameters) {
+  std::vector<double> counts;
+  counts.reserve(weather.records.size());
+
+  double count = std::max(0.0, parameters.background_spores_per_g);
+  int run = 0;
+  double yesterday_rain_mm = 0.0;
+
+  for (const DailyWeather& day : weather.records) {
+    const double rain_48h = day.rainfall_mm + yesterday_rain_mm;
+    run = night_favours_sporulation(day, rain_48h, parameters) ? run + 1 : 0;
+    count = next_spore_count(count, run, parameters);
+    counts.push_back(count);
+    yesterday_rain_mm = day.rainfall_mm;
+  }
+  return counts;
 }
 
 }  // namespace paddock::core

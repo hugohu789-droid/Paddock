@@ -114,7 +114,8 @@ if(PADDOCK_BUILD_CONFIG)
   set(PADDOCK_VALIDATION_OUTPUT_DIR "${CMAKE_BINARY_DIR}/validation")
   file(MAKE_DIRECTORY "${PADDOCK_VALIDATION_OUTPUT_DIR}")
 
-  add_executable(paddock_validation_tests validation/GrazedYearTest.cpp
+  add_executable(paddock_validation_tests validation/FacialEczemaGeographyTest.cpp
+                                          validation/GrazedYearTest.cpp
                                           validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp
                                           validation/ManagedFarmTest.cpp

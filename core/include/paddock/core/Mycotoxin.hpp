@@ -4,6 +4,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include <paddock/core/Weather.hpp>
 
@@ -108,5 +109,14 @@ struct MycotoxinParameters {
 /// make visible.
 [[nodiscard]] int clinically_affected(int head, double ggt_iu_per_l,
                                       const MycotoxinParameters& parameters) noexcept;
+
+/// The spore count on one piece of ground for every day of a weather series.
+///
+/// **This is where the disease meets the weather.** Rain is read as a rolling
+/// 48-hour total because that is the window the source states, so the first day
+/// of a series sees only its own rain and can never open an outbreak on its
+/// own - which is right: an outbreak needs four nights, not one.
+[[nodiscard]] std::vector<double> spore_count_series(const WeatherSeries& weather,
+                                                     const MycotoxinParameters& parameters);
 
 }  // namespace paddock::core

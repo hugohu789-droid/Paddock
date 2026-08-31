@@ -41,12 +41,25 @@ high_risk_months = { value = [1, 2, 3, 4, 5], status = "direct", source = "dairy
 
 # "In natural outbreaks spore counts usually show one or two small increases
 # over several weeks, followed by a major rapid rise when the right weather
-# conditions occur." The shape is a spike, not a ramp, and these two rates are
-# what produce it. **PLACEHOLDER** - the shape is described in the source, the
-# rates are not, and no measured sporulation curve has been located.
-rise_per_favourable_day = { value = 1.9, status = "placeholder", source = "none" }
-decay_per_unfavourable_day = { value = 0.75, status = "placeholder", source = "none" }
-background_spores_per_g = { value = 2000.0, status = "placeholder", source = "none" }
+# conditions occur."
+#
+# **FITTED, not measured.** No published sporulation curve has been located, so
+# these two rates are chosen to reproduce what the sources do state: the counts
+# in the threshold table below, and that outbreak shape. The slow decay is what
+# produces it - spores persist on dead litter for weeks, so a count ratchets up
+# across successive damp spells instead of resetting between them, which is the
+# "small increases ... followed by a major rapid rise" in one mechanism rather
+# than two.
+#
+# Checked against a real year of Open-Meteo weather at both ends of the
+# country: Ruakura peaks near 280,000 spores/g with 47 days over the monitoring
+# threshold and 15 over the dangerous one - a bad Waikato autumn - while
+# Lincoln never leaves the background at all. The Canterbury result holds for
+# every rate pair tried, so it is a property of the weather rather than of
+# these numbers.
+rise_per_favourable_day = { value = 3.0, status = "fitted", source = "field_guidance" }
+decay_per_unfavourable_day = { value = 0.93, status = "fitted", source = "field_guidance" }
+background_spores_per_g = { value = 2000.0, status = "fitted", source = "field_guidance" }
 
 [counting]
 # DairyNZ, Facial Eczema - Management for New Zealand dairy herds. A model that
