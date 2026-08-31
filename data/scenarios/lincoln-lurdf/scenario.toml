@@ -76,8 +76,17 @@ latitude_degrees = -43.641
 # E12. It is a daily maximum at 10 m, not a mean at the 2 m most agronomic
 # equations expect, which is another reason not to feed it to one yet.
 kind = "snapshot"
-path = "weather-2023.csv"
-sha256 = "8252d1baf9399fd77d6420bc72e4ac0a1e60f59721c5e363f217104f4475e552"
+# **Ten years, not one.** This named weather-2023.csv, which covers exactly the
+# run's own dates - so any command asking this farm about a different year got a
+# refusal rather than an answer, and the ten-year file sitting beside it was
+# reachable only by a test that built its own source. Nitrogen leaching is the
+# case that made it matter: one year of leaching says almost nothing, because
+# leaching moves with drainage and drainage is weather.
+#
+# The run range below is unchanged, so a plain `scenario run` gets the same
+# 2023-24 weather it always did, byte for byte.
+path = "weather-2015-2025.csv"
+sha256 = "a9a6dbd52e2e4f0d6d001a8e381477489aae0adb0576b154fad20f5d5e10a230"
 dataset = "Open-Meteo historical weather API (ERA5 reanalysis)"
 licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5)."
 

@@ -99,6 +99,10 @@ void Farm::set_target_gain(std::size_t mob, double kg_per_day) {
   mobs_[mob].mob.target_gain_kg_per_day = kg_per_day;
 }
 
+void Farm::set_excreta(const ExcretaParameters& excreta) {
+  excreta_ = excreta;
+}
+
 void Farm::set_mob_head(std::size_t mob, int head) {
   if (mob >= mobs_.size()) {
     return;
@@ -392,6 +396,49 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     }
 
     mob_day.response = advance_one_day(farm_mob.mob, mob_day.grazing, diet, ground);
+
+    // **What the stock ate comes back, less what they kept.** Nitrogen used to
+    // leave with the grazed dry matter and never return, so a grazed farm ran
+    // its soil down and the budget closed anyway - which is what an outflow
+    // with no matching inflow does. A grazing animal keeps about a tenth and
+    // gives the rest back within days, and in New Zealand that excreta, not
+    // fertiliser, is the primary source of nitrate leaching.
+    //
+    // **Bought feed's nitrogen counts too.** It comes through the gate, the
+    // stock eat it and excrete it onto the paddock like anything else; on this
+    // farm in a dry year it is half of what they eat.
+    const double supplement_nitrogen =
+        mob_day.supplement_kg_dm * excreta_.supplement_nitrogen_fraction;
+    const double nitrogen_eaten = mob_day.grazing.nitrogen_removed_kg + supplement_nitrogen;
+
+    const Excreta given_back = excreta_from_intake(
+        nitrogen_eaten, mob_day.grazing.eaten_kg_dm + mob_day.supplement_kg_dm,
+        mob_day.response.liveweight_change_kg, static_cast<double>(farm_mob.mob.head), excreta_);
+
+    if (given_back.total_kg() > 0.0 && !cells.empty()) {
+      // Spread evenly over the ground the mob had the run of. Real stock camp,
+      // and a camped paddock leaches more from less of itself - modelling that
+      // needs a source for where they camp, which this project does not have.
+      const auto share = static_cast<double>(cells.size());
+      const double per_cell_urine = given_back.urine_nitrogen_kg / cell_hectares / share;
+      const double per_cell_dung = given_back.dung_nitrogen_kg / cell_hectares / share;
+
+      for (const std::size_t index : cells) {
+        grid_.return_excreta_to_cell(index % grid_.cols(), index / grid_.cols(), per_cell_urine,
+                                     per_cell_dung, excreta_);
+
+        if (ledger != nullptr) {
+          // **One inflow, not two.** Grazing books the nitrogen out of these
+          // pools and into an animal this model does not carry; excreta books
+          // what the animal gives back in. The difference between them is
+          // exactly right without any further entries: what the stock kept
+          // stays out, and the nitrogen that came in on a truck as supplement
+          // arrives here, because that is where it physically arrives.
+          grazing_scratch_.record_inflow(Budget::Nitrogen, "excreta_returned",
+                                         per_cell_urine + per_cell_dung);
+        }
+      }
+    }
 
     day.total_eaten_kg_dm += mob_day.grazing.eaten_kg_dm;
     day.total_supplement_kg_dm += mob_day.supplement_kg_dm;

@@ -97,6 +97,20 @@ class FarmletGrid {
   PastureSward::Defoliation graze_cell(std::size_t col, std::size_t row,
                                        double requested_kg_dm_per_ha);
 
+  /// Returns a day's dung and urine to one cell, in kg N per hectare.
+  void return_excreta_to_cell(std::size_t col, std::size_t row, double urine_kg_n_per_ha,
+                              double dung_kg_n_per_ha, const ExcretaParameters& excreta);
+
+  /// Nitrate leached past the root zone across the whole grid today, kg N/ha as
+  /// a mean of the cells. Driven by each cell's own drainage, so a wet corner
+  /// leaches and a dry one does not.
+  [[nodiscard]] double mean_nitrate_leached_kg_per_ha() const noexcept {
+    return leached_today_kg_per_ha_;
+  }
+
+  /// Nitrate waiting under urine patches, kg N/ha, mean over the grid.
+  [[nodiscard]] double mean_patch_nitrate_kg_per_ha() const;
+
   /// Snapshots for the map view. Each returns a raster sharing this grid's
   /// georeferencing, so the view never has to reconstruct it.
   [[nodiscard]] Raster<double> cover_kg_dm() const;
@@ -160,6 +174,9 @@ class FarmletGrid {
   std::size_t rows_ = 0;
   GeoTransform transform_{};
   std::vector<Farmlet> cells_;
+
+  /// What today's drainage carried past the root zone, kg N/ha, grid mean.
+  double leached_today_kg_per_ha_ = 0.0;
 
   /// The water applied on the last day stepped, one entry per cell.
   std::vector<double> last_irrigation_mm_;

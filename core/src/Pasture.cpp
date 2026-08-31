@@ -112,6 +112,107 @@ double PastureSward::legume_fraction() const noexcept {
   return green > 0.0 ? legume_kg_dm_ / green : 0.0;
 }
 
+std::string ExcretaParameters::invalid_reason() const {
+  if (urine_patch_loading_kg_n_per_ha <= 0.0) {
+    return "a urine patch has to land at some nitrogen";
+  }
+  if (urine_patch_uptake_kg_n_per_ha < 0.0) {
+    return "patch uptake cannot be negative";
+  }
+  if (urine_patch_uptake_kg_n_per_ha > urine_patch_loading_kg_n_per_ha) {
+    return "a patch cannot take up more nitrogen than lands on it - if it could, "
+           "urine patches would not leach and they are what does";
+  }
+  if (drainage_mixing_fraction <= 0.0 || drainage_mixing_fraction > 1.0) {
+    return "drainage_mixing_fraction is a share and must lie in (0, 1]";
+  }
+  return {};
+}
+
+Excreta excreta_from_intake(double nitrogen_eaten_kg, double intake_kg_dm,
+                            double liveweight_gain_kg, double head,
+                            const ExcretaParameters& excreta) noexcept {
+  Excreta out;
+  if (nitrogen_eaten_kg <= 0.0) {
+    return out;
+  }
+
+  // What the animal keeps: what it laid down as body, and what it grew as wool.
+  // Everything else comes back out.
+  const double retained =
+      (std::max(0.0, liveweight_gain_kg) * head * excreta.body_nitrogen_per_kg_gain) +
+      (excreta.wool_nitrogen_kg_per_head_per_day * head);
+
+  const double excreted = std::max(0.0, nitrogen_eaten_kg - retained);
+
+  // TMC Eq. 137: dung carries a fixed concentration per kilogram eaten, and the
+  // urine is what is left. Capped at the excreted total, because an animal on a
+  // diet poorer in nitrogen than its own dung cannot excrete more than it ate.
+  out.dung_nitrogen_kg =
+      std::min(excreted, std::max(0.0, intake_kg_dm) * excreta.dung_nitrogen_per_kg_intake);
+  out.urine_nitrogen_kg = excreted - out.dung_nitrogen_kg;
+  return out;
+}
+
+void PastureSward::return_excreta(double urine_nitrogen_kg, double dung_nitrogen_kg,
+                                  const ExcretaParameters& excreta, BudgetLedger* ledger) {
+  const double urine = std::max(0.0, urine_nitrogen_kg);
+  const double dung = std::max(0.0, dung_nitrogen_kg);
+  if (urine <= 0.0 && dung <= 0.0) {
+    return;
+  }
+
+  // **The patch, in one line.** Urine lands at a loading, the plants under it
+  // take up what they can, and the share of the nitrogen that is surplus is the
+  // share of the loading they could not reach. It does not depend on how much
+  // urine there was - a bigger crop of urine makes more patches, not richer
+  // ones - which is why this is a fraction and not a subtraction.
+  const double surplus_share =
+      1.0 - (excreta.urine_patch_uptake_kg_n_per_ha / excreta.urine_patch_loading_kg_n_per_ha);
+
+  const double to_patch = urine * surplus_share;
+  const double to_soil = urine - to_patch;
+
+  patch_nitrate_kg_ += to_patch;
+  soil_mineral_nitrogen_kg_ += to_soil;
+
+  // Dung is organic and joins the litter, mineralising through the decomposition
+  // this sward already models rather than arriving as nitrate.
+  dead_nitrogen_kg_ += dung;
+
+  if (ledger != nullptr) {
+    // **An inflow, because it is one.** The nitrogen in grazed dry matter is
+    // booked out of this system when the animal eats it, and the animal is not
+    // in this system - so what it gives back arrives from outside. A farm whose
+    // stock ate and never returned anything ran its soil to nothing and the
+    // budget still closed, which is what an outflow with no matching inflow
+    // does.
+    ledger->record_inflow(Budget::Nitrogen, "excreta_urine", urine);
+    ledger->record_inflow(Budget::Nitrogen, "excreta_dung", dung);
+  }
+}
+
+double PastureSward::leach_nitrate(double drainage_mm, double soil_water_mm, BudgetLedger* ledger) {
+  if (drainage_mm <= 0.0 || patch_nitrate_kg_ <= 0.0) {
+    return 0.0;
+  }
+
+  // The share of the water in the root zone that left today is the share of the
+  // nitrate dissolved in it that went with it.
+  const double water = std::max(0.0, soil_water_mm) + drainage_mm;
+  const double share = water > 0.0 ? std::clamp(drainage_mm / water, 0.0, 1.0) : 0.0;
+
+  const double leached = patch_nitrate_kg_ * share;
+  patch_nitrate_kg_ -= leached;
+
+  if (ledger != nullptr) {
+    // Past the root zone is out of this model, the way OVERSEER treats 60 cm:
+    // what happens between there and a river is somebody else's question.
+    ledger->record_outflow(Budget::Nitrogen, "nitrate_leaching", leached);
+  }
+  return leached;
+}
+
 PastureSward::Defoliation PastureSward::remove_green_dry_matter(double requested_kg_dm) {
   Defoliation taken;
   if (requested_kg_dm <= 0.0) {

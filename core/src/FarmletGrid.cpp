@@ -62,6 +62,7 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger,
     last_irrigation_mm_[index] = std::max(0.0, irrigation_mm[index]);
   }
   last_growth_kg_dm_.assign(cells_.size(), 0.0);
+  double leached_total = 0.0;
 
   const auto water_for = [&irrigation_mm](std::size_t index) {
     return index < irrigation_mm.size() ? std::max(0.0, irrigation_mm[index]) : 0.0;
@@ -71,12 +72,13 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger,
     for (std::size_t row = 0; row < rows_; ++row) {
       for (std::size_t col = 0; col < cols_; ++col) {
         const std::size_t index = (row * cols_) + col;
-        last_growth_kg_dm_[index] =
-            cells_[index]
-                .step(weather, radiation_ratio(col, row, day), nullptr, water_for(index))
-                .growth_kg_dm;
+        const DailyRecord record =
+            cells_[index].step(weather, radiation_ratio(col, row, day), nullptr, water_for(index));
+        last_growth_kg_dm_[index] = record.growth_kg_dm;
+        leached_total += record.nitrate_leached_kg;
       }
     }
+    leached_today_kg_per_ha_ = leached_total / static_cast<double>(cells_.size());
     return;
   }
 
@@ -84,12 +86,13 @@ void FarmletGrid::step(const DailyWeather& weather, BudgetLedger* ledger,
   for (std::size_t row = 0; row < rows_; ++row) {
     for (std::size_t col = 0; col < cols_; ++col) {
       const std::size_t index = (row * cols_) + col;
-      last_growth_kg_dm_[index] =
-          cells_[index]
-              .step(weather, radiation_ratio(col, row, day), &scratch_, water_for(index))
-              .growth_kg_dm;
+      const DailyRecord record =
+          cells_[index].step(weather, radiation_ratio(col, row, day), &scratch_, water_for(index));
+      last_growth_kg_dm_[index] = record.growth_kg_dm;
+      leached_total += record.nitrate_leached_kg;
     }
   }
+  leached_today_kg_per_ha_ = leached_total / static_cast<double>(cells_.size());
   ledger->add_scaled(scratch_, 1.0 / static_cast<double>(cells_.size()));
 }
 
@@ -99,6 +102,15 @@ PastureSward::Defoliation FarmletGrid::graze_cell(std::size_t col, std::size_t r
     throw std::out_of_range("FarmletGrid::graze_cell: cell is outside the grid");
   }
   return cells_[(row * cols_) + col].graze(requested_kg_dm_per_ha);
+}
+
+void FarmletGrid::return_excreta_to_cell(std::size_t col, std::size_t row, double urine_kg_n_per_ha,
+                                         double dung_kg_n_per_ha,
+                                         const ExcretaParameters& excreta) {
+  if (col >= cols_ || row >= rows_) {
+    throw std::out_of_range("FarmletGrid::return_excreta_to_cell: cell is outside the grid");
+  }
+  cells_[(row * cols_) + col].return_excreta(urine_kg_n_per_ha, dung_kg_n_per_ha, excreta);
 }
 
 template <typename Fn>
@@ -172,6 +184,11 @@ double compensated_mean(const std::vector<Farmlet>& cells, Fn&& value_of) {
 }
 
 }  // namespace
+
+double FarmletGrid::mean_patch_nitrate_kg_per_ha() const {
+  return compensated_mean(
+      cells_, [](const Farmlet& farmlet) { return farmlet.sward().patch_nitrate_kg(); });
+}
 
 double FarmletGrid::mean_cover_kg_dm() const {
   return compensated_mean(cells_,

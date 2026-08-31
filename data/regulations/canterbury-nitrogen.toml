@@ -1,0 +1,58 @@
+# Nitrogen loss limits a Canterbury farm is measured against.
+#
+# **There is no single New Zealand number, and that is the first thing a report
+# has to say.** Nitrogen loss limits are set by regional councils, catchment by
+# catchment, under the Canterbury Land and Water Regional Plan - so a farm's
+# limit depends on which zone it sits in, and two farms a valley apart can be
+# held to different figures. A model that printed one national threshold would
+# be inventing a regulation.
+#
+# What this file carries is the zone the example farm is in, with the source, so
+# a compliance line names the rule it is quoting rather than asserting a number.
+
+[regulation]
+name = "selwyn_waihora"
+authority = "Environment Canterbury"
+plan = "Canterbury Land and Water Regional Plan"
+zone = "Selwyn Waihora"
+
+# The threshold above which a farm is subject to percentage reductions below its
+# own nitrogen baseline. Environment Canterbury: "Farms in Selwyn Waihora
+# leaching more than 15kg nitrogen per hectare per year are subject to
+# percentage reductions in nitrogen losses below their nitrogen baseline." The
+# figure was recommended to the Selwyn Waihora Water Zone Committee by a working
+# group of Environment Canterbury, industry and Ngai Tahu.
+#
+# **It is a trigger, not a ceiling.** A farm above it is not automatically in
+# breach; it is required to reduce against its own baseline. A report that said
+# "non-compliant" at 15.1 would be overstating the rule, so the verdict this
+# drives is worded as what the rule actually does.
+nitrogen_leaching_trigger_kg_n_per_ha_per_year = 15.0
+source = "https://www.ecan.govt.nz/your-region/farmers-hub/farming-practices/reducing-nitrogen-loss/selwyn-waihora"
+status = "direct"
+
+# The national cap on SYNTHETIC nitrogen fertiliser, which is a different
+# instrument from a loss limit: it limits what goes on rather than what comes
+# out. In force since 1 July 2021 on any contiguous parcel of pastoral land.
+#
+# Carried because a report should be able to say the farm is under it, and
+# because this model applies no synthetic nitrogen at all - its only nitrogen
+# income is clover fixation and what arrives in bought feed - so the farm is at
+# zero against a cap of 190.
+synthetic_nitrogen_fertiliser_cap_kg_n_per_ha_per_year = 190.0
+cap_source = "Resource Management (Stock Exclusion) and freshwater regulations, in force 1 July 2021"
+cap_status = "direct"
+
+# **What this model does NOT count**, listed here because a compliance figure
+# that hides its exclusions is worse than none:
+#
+#   - Attenuation between the root zone and a waterway. OVERSEER counts
+#     nitrogen past 60 cm as lost and so does this; what happens to it after
+#     that is a catchment question.
+#   - Leaching from inter-urine areas: dung, fertiliser and soil organic matter
+#     mineralisation. OVERSEER puts these at less than 15% of a grazed pastoral
+#     block's total loss, so the figure here is low by about that much.
+#   - Direct deposition into waterways by stock, runoff, and artificial drainage.
+#   - Any nitrogen from cultivation, which this farm does not do.
+#
+# See docs/validation/verify.md for the caveats these become.

@@ -37,8 +37,15 @@ DailyRecord Farmlet::step(const DailyWeather& weather, double radiation_ratio, B
   on_this_slope.solar_radiation_mj_per_m2 *= radiation_ratio;
   const PastureGrowth growth = sward_.step(on_this_slope, water.stress_coefficient, ledger);
 
+  // **Nitrate leaves with the water that leaves.** Drainage is what carries
+  // nitrate past the root zone, so leaching happens after the water balance has
+  // said how much drained and after the sward has taken what it could - a plant
+  // that grew today used nitrogen the drainage cannot then take.
+  const double leached = sward_.leach_nitrate(water.drainage_mm, soil_.water_mm(), ledger);
+
   DailyRecord record;
   record.date = weather.date;
+  record.nitrate_leached_kg = leached;
   record.rainfall_mm = water.rainfall_mm;
   record.evapotranspiration_mm = water.evapotranspiration_mm;
   record.drainage_mm = water.drainage_mm;
