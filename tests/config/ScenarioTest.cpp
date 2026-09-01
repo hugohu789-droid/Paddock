@@ -369,7 +369,7 @@ TEST(ScenarioBundleTest, AnUnknownWeatherKindIsRefused) {
 // figure in the output. Every shipped bundle now agrees with its own soil, and
 // this is what says so.
 TEST(ScenarioTest, EveryBundlesWaterGradientAgreesWithItsSoil) {
-  for (const std::string& name :
+  for (const char* name :
        {"canterbury-baseline", "canterbury-grazed", "lincoln-lurdf", "ruakura-fe"}) {
     const ScenarioBundle bundle =
         load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
@@ -408,7 +408,7 @@ TEST(ScenarioTest, ABundleWhoseGridDisagreesWithItsSoilIsRefused) {
 // with. A URL beside the hash turns that into one request against a known
 // address, checked against a hash decided before it went out.
 TEST(ScenarioTerrainTest, AShippedBundleSaysWhereItsGroundIsPublished) {
-  for (const std::string& name :
+  for (const char* name :
        {"canterbury-baseline", "canterbury-grazed", "lincoln-lurdf", "ruakura-fe"}) {
     const ScenarioBundle bundle =
         load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
@@ -453,10 +453,10 @@ TEST(ScenarioTerrainTest, AGroundSourceWithoutItsCreditIsRefused) {
 // read a file the person running it did not choose, so the string is narrowed
 // where it enters the program rather than where it is used.
 TEST(ScenarioTerrainTest, AGroundSourceThatIsNotAWebAddressIsRefused) {
-  for (const std::string& scheme : {"file:///etc/passwd", "/vsizip//tmp/x.zip/y.tif", "C:/x.tif"}) {
+  for (const char* scheme : {"file:///etc/passwd", "/vsizip//tmp/x.zip/y.tif", "C:/x.tif"}) {
     const BundleCopy copy;
     copy.edit("scenario.toml", "url = \"https://nz-elevation.s3-ap-southeast-2.amazonaws.com",
-              "url = \"" + scheme + "#");
+              std::string("url = \"") + scheme + "#");
 
     try {
       const ScenarioBundle loaded = load_scenario(copy.path());
