@@ -16,6 +16,7 @@
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/core/Simulation.hpp>
 
+#include "../support/ValueOf.hpp"
 #include "support/BitPattern.hpp"
 
 namespace paddock::config {
@@ -375,9 +376,9 @@ TEST(ScenarioTest, EveryBundlesWaterGradientAgreesWithItsSoil) {
         load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
     ASSERT_TRUE(bundle.grid.has_value()) << name;
 
-    const double gradient_mean = (bundle.grid.value().available_water_west_mm +
-                                  bundle.grid.value().available_water_east_mm) /
-                                 2.0;
+    const GridSpec& grid = tests::value_of(bundle.grid, "a [grid] section");
+    const double gradient_mean =
+        (grid.available_water_west_mm + grid.available_water_east_mm) / 2.0;
     EXPECT_NEAR(gradient_mean, bundle.soil.total_available_water_mm,
                 0.1 * bundle.soil.total_available_water_mm)
         << name << ": the grid averages " << gradient_mean
@@ -395,8 +396,9 @@ TEST(ScenarioTest, ABundleWhoseGridDisagreesWithItsSoilIsRefused) {
       load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/canterbury-grazed");
   ASSERT_TRUE(bundle.grid.has_value());
 
-  bundle.grid.value().available_water_west_mm = 20.0;
-  bundle.grid.value().available_water_east_mm = 40.0;  // averages 30 against a stated 120
+  GridSpec& grid = tests::value_of(bundle.grid, "a [grid] section");
+  grid.available_water_west_mm = 20.0;
+  grid.available_water_east_mm = 40.0;  // averages 30 against a stated 120
 
   EXPECT_THROW(static_cast<void>(bundle.make_soil_raster()), std::runtime_error);
 }

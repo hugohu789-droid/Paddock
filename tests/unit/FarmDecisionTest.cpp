@@ -15,6 +15,8 @@
 #include <paddock/core/FarmAccount.hpp>
 #include <paddock/core/FarmDecision.hpp>
 
+#include "../support/ValueOf.hpp"
+
 namespace paddock::core {
 namespace {
 
@@ -189,11 +191,12 @@ TEST(FarmDecisionTest, ARuleCanBeAskedInIsolation) {
   // touches one.
   const std::optional<Proposal> draft = rules[1](fat, canterbury_prices());
   ASSERT_TRUE(draft.has_value());
-  EXPECT_EQ(draft.value().kind, ActionKind::SellFinishedStock);
+  EXPECT_EQ(tests::value_of(draft, "a drafting proposal").kind, ActionKind::SellFinishedStock);
 
   // 41 head at 38 kg liveweight and 43% dressing, at $7.80/kg carcass.
-  EXPECT_NEAR(draft.value().dollars_in, 41.0 * 38.0 * 0.43 * 7.80, 0.01);
-  EXPECT_DOUBLE_EQ(draft.value().dollars_out, 0.0);
+  EXPECT_NEAR(tests::value_of(draft, "a drafting proposal").dollars_in, 41.0 * 38.0 * 0.43 * 7.80,
+              0.01);
+  EXPECT_DOUBLE_EQ(tests::value_of(draft, "a drafting proposal").dollars_out, 0.0);
 }
 
 }  // namespace

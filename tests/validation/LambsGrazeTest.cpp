@@ -21,6 +21,7 @@
 #include <paddock/core/SnapshotWeather.hpp>
 
 #include "../support/ShippedBundle.hpp"
+#include "../support/ValueOf.hpp"
 
 namespace paddock::config {
 namespace {
@@ -94,10 +95,12 @@ TEST(LambsGrazeTest, ALambCropEatsGrass) {
   ScenarioBundle ewes_only = year_of(2015);
   ewes_only.mobs.pop_back();  // the way the farm was before E22 was closed
 
-  const RunSummary lambs = run_managed_scenario(with_lambs, with_lambs.management.value(),
-                                                pasture_diet(), "lambs", a_business());
-  const RunSummary without = run_managed_scenario(ewes_only, ewes_only.management.value(),
-                                                  pasture_diet(), "ewes only", a_business());
+  const RunSummary lambs = run_managed_scenario(
+      with_lambs, tests::value_of(with_lambs.management, "a [management] section"), pasture_diet(),
+      "lambs", a_business());
+  const RunSummary without = run_managed_scenario(
+      ewes_only, tests::value_of(ewes_only.management, "a [management] section"), pasture_diet(),
+      "ewes only", a_business());
 
   EXPECT_GT(lambs.eaten_kg_dm, without.eaten_kg_dm)
       << "a lamb crop that ate nothing is what E22 recorded";
@@ -122,8 +125,9 @@ TEST(LambsGrazeTest, TheFlockWeansAboutWhatBeefAndLambAskOfATopFlock) {
   const ScenarioBundle bundle = year_of(2015);
   ASSERT_TRUE(bundle.management.has_value());
 
-  const RunSummary run = run_managed_scenario(bundle, bundle.management.value(), pasture_diet(),
-                                              "weaning", a_business());
+  const RunSummary run =
+      run_managed_scenario(bundle, tests::value_of(bundle.management, "a [management] section"),
+                           pasture_diet(), "weaning", a_business());
 
   const double weaning_weight = run.lamb_weaning_weight_kg;
   ASSERT_GT(weaning_weight, 0.0) << "the weaning weight should be recorded whichever way the "
@@ -152,8 +156,9 @@ TEST(LambsGrazeTest, MilkIsChargedOnceAndTheFarmIsNotFedTwice) {
   const ScenarioBundle bundle = year_of(2015);
   ASSERT_TRUE(bundle.management.has_value());
 
-  const RunSummary run = run_managed_scenario(bundle, bundle.management.value(), pasture_diet(),
-                                              "udder", a_business());
+  const RunSummary run =
+      run_managed_scenario(bundle, tests::value_of(bundle.management, "a [management] section"),
+                           pasture_diet(), "udder", a_business());
 
   // Roughly 440 lambs join about 310 ewes for a hundred days. If they grazed as
   // grown ewes the year's intake would rise by something near a third; the milk
