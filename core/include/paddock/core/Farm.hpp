@@ -168,6 +168,18 @@ class Farm {
   /// class of stock or a different supplement.
   void set_excreta(const ExcretaParameters& excreta);
 
+  /// Cuts every cell down to `leave_kg_dm_per_ha` and returns what came off, in
+  /// kg DM over the whole farm.
+  ///
+  /// **A mower does not select.** Grazing takes green in proportion to what is
+  /// on offer and leaves the residual a plant regrows from; a cut takes green
+  /// and dead together down to a stubble, which is why silage carries the dead
+  /// material with it and why cutting cleans a rank paddock up.
+  ///
+  /// The dry matter leaves the paddock here and comes back when it is fed out,
+  /// so the ledger sees it go and return rather than vanish.
+  double cut_for_conservation(double leave_kg_dm_per_ha, BudgetLedger* ledger = nullptr);
+
   [[nodiscard]] const ExcretaParameters& excreta() const noexcept { return excreta_; }
 
   /// Sets what a mob is carrying and rearing, so the energy model charges it.

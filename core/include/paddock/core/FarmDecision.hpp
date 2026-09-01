@@ -121,6 +121,14 @@ struct FarmOutlook {
   /// What the farm has in the bank, and what a day of it costs.
   double balance_dollars = 0.0;
   double daily_operating_cost_dollars = 0.0;
+
+  /// Feed the farm has in its own stack, kg DM.
+  ///
+  /// **A farm with silage does not ring a merchant.** The buying rule fires on
+  /// cover, and cover says nothing about whether the farmer already has the
+  /// answer in a pit. Without this a farm that had cut a surplus in spring
+  /// bought hay against it in February.
+  double stored_feed_kg_dm = 0.0;
 };
 
 /// A rule: reads the outlook, proposes or declines. Never mutates anything.

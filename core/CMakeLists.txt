@@ -12,6 +12,7 @@ add_library(
   src/FarmAccount.cpp
   src/FarmDecision.cpp
   src/Farmer.cpp
+  src/FeedStore.cpp
   src/FarmletGrid.cpp
   src/Flock.cpp
   src/Geometry.cpp

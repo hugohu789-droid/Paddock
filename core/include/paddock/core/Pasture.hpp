@@ -322,6 +322,19 @@ class PastureSward {
   /// Nitrogen leaves with the dry matter, at each species' own content.
   Defoliation remove_green_dry_matter(double requested_kg_dm);
 
+  /// Cuts the sward down to `leave_kg_dm_per_ha` of cover and returns what came
+  /// off, kg DM/ha.
+  ///
+  /// **A mower is not an animal.** Grazing takes green in proportion to what is
+  /// on offer and leaves each species' residual; a cut takes green and dead
+  /// together down to a stubble. That is why cutting cleans a rank paddock up -
+  /// the dead goes into the stack with the green - and why silage made off a
+  /// summer surplus is poorer feed than the pasture it came from.
+  ///
+  /// The residuals are still respected: a cut takes nothing below the crown a
+  /// plant regrows from, so a farm cannot mow itself out of existence.
+  double cut_to(double leave_kg_dm_per_ha);
+
   /// Returns a day's dung and urine to this sward, in kg N over its area.
   ///
   /// **Closing the loop the animal used to break.** Nitrogen left with the

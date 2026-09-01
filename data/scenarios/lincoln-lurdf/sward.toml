@@ -40,19 +40,28 @@ par_fraction = 0.5  # PLACEHOLDER - conventional value, no source recorded yet
 # pool settles where senescence in equals decomposition out, so the dead share
 # of standing dry matter is s / (s + d) - and this file used to carry 0.02
 # against a senescence of 0.02, which is exactly half dead whatever else the
-# model did. It measured 50 to 64%. A grazed New Zealand sward runs 10 to 20%.
+# model did. It measured 50 to 64%.
 #
 # **What the pool actually holds is standing dead**, and that leaves fast: it is
 # trodden in, broken off and taken incidentally in a mouthful, and it stops
 # being part of the standing crop in about a week. True decomposition to soil
-# organic matter is far slower, but this model has no litter layer beneath the
-# sward, so the one rate it has is the one that governs cover - and cover is
-# what a plate meter reads and what a farmer manages to.
+# organic matter is far slower - standing dead in a dry savanna loses only 40%
+# of its weight in two years - but this model has no litter layer beneath the
+# sward, so the one rate it has is the one that governs cover, and cover is what
+# a plate meter reads and what a farmer manages to.
 #
-# 0.12 a day is a residence time of about eight days. **PLACEHOLDER**: the
-# mechanism is not in doubt and the number is not measured. It is also the
-# single most sensitive figure in the sward, because of that s / (s + d).
-decomposition_rate_per_day = 0.12  # PLACEHOLDER - see the note above
+# **FITTED, and to the outcome rather than to itself.** No measured
+# disappearance rate for New Zealand standing dead has been found. What is
+# described is the outcome: rotational grazing "circumvents the accumulation of
+# dead matter", low-stocked swards leave "greater potential for dead material to
+# accumulate", and a dry autumn pasture "may contain predominantly dead
+# material". 0.12 a day - about eight days' residence - puts this farm at 3 to
+# 16% dead through the year, which is a well-managed sward's territory. The
+# validation test holds it there, so the fit is checked rather than asserted.
+#
+# It is the most sensitive figure in the sward, and the one to replace first if
+# a measured disappearance rate turns up.
+decomposition_rate_per_day = 0.12  # FITTED - see the note above
 
 [grass]
 species_id = "ryegrass_perennial"

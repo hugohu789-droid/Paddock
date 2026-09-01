@@ -101,6 +101,11 @@ class FarmletGrid {
   void return_excreta_to_cell(std::size_t col, std::size_t row, double urine_kg_n_per_ha,
                               double dung_kg_n_per_ha, const ExcretaParameters& excreta);
 
+  /// Cuts every cell down to `leave_kg_dm_per_ha` and returns the mean taken,
+  /// kg DM/ha. **A mower takes green and dead together**, which is why cutting
+  /// cleans a rank paddock up and why the silage carries the dead with it.
+  double cut_every_cell_to(double leave_kg_dm_per_ha);
+
   /// Nitrate leached past the root zone across the whole grid today, kg N/ha as
   /// a mean of the cells. Driven by each cell's own drainage, so a wet corner
   /// leaches and a dry one does not.

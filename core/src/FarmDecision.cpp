@@ -127,7 +127,15 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
         if (short_of_cash(outlook, policy)) {
           return std::nullopt;
         }
+
         const double kg = static_cast<double>(outlook.head) * kSupplementKgPerHeadPerDay;
+
+        // **What the stack covers is not bought.** A farm that made silage in
+        // spring is not in the market in February, and a rule that fired on
+        // cover alone had it buying hay it was standing on.
+        if (outlook.stored_feed_kg_dm >= kg) {
+          return std::nullopt;
+        }
 
         Proposal feed;
         feed.kind = ActionKind::BuyFeed;
