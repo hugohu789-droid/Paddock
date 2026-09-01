@@ -1,4 +1,4 @@
-﻿include(PaddockGoogleTest)
+include(PaddockGoogleTest)
 paddock_provide_googletest()
 include(GoogleTest)
 
@@ -234,9 +234,9 @@ endif()
 # built, and a developer without it should not see failures.
 if(PADDOCK_BUILD_GIS)
   add_executable(
-    paddock_gis_tests gis/AttachElevationTest.cpp gis/EnvironmentTest.cpp
-                      gis/GeoPackageParcelsTest.cpp gis/GeoTiffElevationTest.cpp
-                      gis/ProjectionTest.cpp)
+    paddock_gis_tests gis/AttachElevationTest.cpp gis/ElevationDownloadTest.cpp
+                      gis/EnvironmentTest.cpp gis/GeoPackageParcelsTest.cpp
+                      gis/GeoTiffElevationTest.cpp gis/ProjectionTest.cpp)
 
   # config as well as gis: AttachElevationTest covers the application's wiring
   # between the two, which is the only place that knows about both.

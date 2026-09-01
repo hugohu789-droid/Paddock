@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <optional>
 #include <ostream>
 #include <stdexcept>
@@ -17,9 +19,11 @@
 
 #include <paddock/config/DiseaseConfig.hpp>
 #include <paddock/config/DiseaseReport.hpp>
+#include <paddock/core/Sha256.hpp>
 #include <paddock/core/SnapshotWeather.hpp>
 
 #ifdef PADDOCK_WITH_GIS
+#include <paddock/gis/ElevationDownload.hpp>
 #include <paddock/gis/GeoPackageParcels.hpp>
 #include <paddock/gis/GeoTiffElevation.hpp>
 #endif
@@ -392,6 +396,97 @@ int run_nitrogen(const std::vector<std::string>& arguments) {
   return 0;
 }
 
+#if defined(PADDOCK_WITH_CONFIG) && defined(PADDOCK_WITH_GIS)
+/// `paddock ground fetch <bundle>` - puts the ground a scenario names on this
+/// machine.
+///
+/// **This exists so that measured terrain is not an installation step.** Every
+/// download of this simulator arrives without ground: snapshots are bulk, they
+/// go stale, and the directory they live in is shared with sources whose
+/// licences forbid passing them on at all, so nothing in data/snapshots/ ever
+/// ships. Until now the instruction was to run a Python script, which asks
+/// somebody who wants to look at a farm to install a language runtime first.
+///
+/// It fetches one known address and checks it against a hash the bundle decided
+/// on before any request went out. It does not search: finding which of
+/// thousands of tiles covers a farm is what scripts/nz-elevation-snapshot.py is
+/// for, and it is something you do once, when you decide where the farm is.
+int run_ground_fetch(const std::string& bundle_directory) {
+  const paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(bundle_directory);
+
+  if (bundle.terrain.is_flat()) {
+    std::cout << bundle.name << " is modelled on flat ground and names no elevation to fetch.\n";
+    return 0;
+  }
+  if (!bundle.terrain.is_fetchable()) {
+    std::cerr << "paddock: '" << bundle.name
+              << "' names an elevation file but not where it is published, so there is nothing "
+                 "to fetch it from. Add a 'url' and an 'attribution' to [terrain], or fetch it "
+                 "with scripts/nz-elevation-snapshot.py.\n";
+    return 2;
+  }
+
+  const std::filesystem::path destination =
+      (std::filesystem::path(bundle_directory) / bundle.terrain.elevation_path).lexically_normal();
+
+  // **Already here is a success, not a no-op to report as one.** The hash is
+  // what decides that, not the file's presence: something at that path which is
+  // not this scenario's ground would otherwise be left in place by a command
+  // whose whole job is to put the right file there.
+  if (std::ifstream existing(destination, std::ios::binary); existing) {
+    const std::string contents((std::istreambuf_iterator<char>(existing)),
+                               std::istreambuf_iterator<char>());
+    if (paddock::core::Sha256::hex_of(contents) == bundle.terrain.elevation_sha256) {
+      std::cout << "The ground for " << bundle.name << " is already here and is the right file.\n"
+                << "  " << destination.string() << '\n';
+      return 0;
+    }
+    std::cout << "There is a file at " << destination.string()
+              << " and it is not this scenario's ground. Fetching the right one over it.\n";
+  }
+
+  std::cout << "Fetching the ground for " << bundle.name << "\n"
+            << "  from " << bundle.terrain.elevation_url << "\n"
+            << "  to   " << destination.string() << "\n"
+            << "\n"
+            << bundle.terrain.elevation_attribution << "\n\n";
+
+  paddock::gis::ElevationDownload request;
+  request.url = bundle.terrain.elevation_url;
+  request.destination = destination.string();
+  request.expected_sha256 = bundle.terrain.elevation_sha256;
+
+  // Progress on one line that rewrites itself, and only when the size is known.
+  // A percentage the server never gave would be a made-up number in a project
+  // that spends most of its comments not making numbers up.
+  std::int64_t reported = -1;
+  const paddock::gis::DownloadOutcome outcome = paddock::gis::download_elevation(
+      request, [&reported](std::int64_t so_far, std::int64_t total) {
+        if (total > 0) {
+          const std::int64_t percent = so_far * 100 / total;
+          if (percent != reported) {
+            reported = percent;
+            std::cout << "\r  " << percent << "% of " << (total / (1024 * 1024)) << " MB"
+                      << std::flush;
+          }
+        }
+        return true;
+      });
+  if (reported >= 0) {
+    std::cout << '\n';
+  }
+
+  if (!outcome.ok) {
+    std::cerr << "paddock: " << outcome.reason << '\n';
+    return 1;
+  }
+
+  std::cout << "  " << (outcome.bytes / (1024 * 1024)) << " MB, sha256 " << outcome.sha256
+            << "\n\nThis scenario will now run on its measured ground.\n";
+  return 0;
+}
+#endif
+
 int run_scenario(const std::string& bundle_directory, const std::string& csv_path) {
   const paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(bundle_directory);
   paddock::core::Farmlet farmlet = bundle.make_farmlet();
@@ -498,6 +593,12 @@ int main(int argc, char** argv) {
       }
       return run_nitrogen(rest);
     }
+
+#ifdef PADDOCK_WITH_GIS
+    if (args.size() == 3 && args[0] == "ground" && args[1] == "fetch") {
+      return run_ground_fetch(std::string(args[2]));
+    }
+#endif
 
     if (args.size() >= 3 && args[0] == "scenario" && args[1] == "run") {
       std::string csv_path;

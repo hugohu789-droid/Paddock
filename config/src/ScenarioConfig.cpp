@@ -298,11 +298,38 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                          "a flat surface, it is a division by zero");
       }
     } else if (terrain_kind == "snapshot") {
-      detail::reject_unknown_keys(*terrain, {"kind", "path", "sha256"}, manifest_path,
-                                  "[terrain] with kind = \"snapshot\"");
+      detail::reject_unknown_keys(*terrain, {"kind", "path", "sha256", "url", "attribution"},
+                                  manifest_path, "[terrain] with kind = \"snapshot\"");
       bundle.terrain.kind = TerrainSpec::Kind::Snapshot;
       bundle.terrain.elevation_path = detail::require_string(*terrain, "path", manifest_path);
       bundle.terrain.elevation_sha256 = detail::require_string(*terrain, "sha256", manifest_path);
+      bundle.terrain.elevation_url = detail::optional_string(*terrain, "url", "");
+      bundle.terrain.elevation_attribution = detail::optional_string(*terrain, "attribution", "");
+
+      // **A URL that is not a URL we will fetch over.** The downloader hands
+      // this to GDAL's virtual file system, which will open a great many
+      // things - a local path, an archive member, another machine's share -
+      // and a manifest that could name any of them is a manifest that can be
+      // made to read a file the person running it did not choose. Http and
+      // https only, decided here where the string enters the program rather
+      // than at the point of use.
+      if (!bundle.terrain.elevation_url.empty() &&
+          bundle.terrain.elevation_url.rfind("https://", 0) != 0 &&
+          bundle.terrain.elevation_url.rfind("http://", 0) != 0) {
+        detail::throw_in(
+            *terrain, manifest_path,
+            "'url' must begin with https:// or http://, and this one begins '" +
+                bundle.terrain.elevation_url.substr(
+                    0, std::min<std::size_t>(12, bundle.terrain.elevation_url.size())) +
+                "'. The ground is fetched over the web or it is not fetched.");
+      }
+      if (!bundle.terrain.elevation_url.empty() && bundle.terrain.elevation_attribution.empty()) {
+        detail::throw_in(*terrain, manifest_path,
+                         "a [terrain] that names a 'url' must also carry an 'attribution'. The "
+                         "data this fetches belongs to somebody, its licence asks to be "
+                         "credited, and a credit that only exists after a successful download "
+                         "is not a credit.");
+      }
     } else {
       detail::throw_in(*terrain, manifest_path,
                        "unknown terrain kind '" + terrain_kind +

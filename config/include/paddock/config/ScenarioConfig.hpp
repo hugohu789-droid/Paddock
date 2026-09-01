@@ -99,7 +99,30 @@ struct TerrainSpec {
   std::string elevation_path;
   std::string elevation_sha256;
 
+  /// Where the file came from, and the words its licence asks be shown. Both
+  /// optional: a bundle written against a snapshot somebody produced themselves
+  /// has neither, and is still a valid bundle.
+  ///
+  /// **This is what lets a download replace an installation step.** The hash
+  /// already says which file a scenario means; the URL says where to get it,
+  /// and together they are enough to fetch the ground without searching for it.
+  /// Finding *which* tile covers a new farm is a different problem - a walk
+  /// over a STAC catalogue, hundreds of requests, a JSON parser - and it stays
+  /// in scripts/nz-elevation-snapshot.py, because it is a thing you do once
+  /// when you define a farm and never again.
+  ///
+  /// **The attribution is pinned rather than fetched** so that it is in the
+  /// archive whether or not anybody downloads anything. A licence that is only
+  /// satisfied after a successful network call is not satisfied.
+  std::string elevation_url;
+  std::string elevation_attribution;
+
   [[nodiscard]] bool is_flat() const noexcept { return kind == Kind::Flat; }
+
+  /// Whether the ground could be fetched if it is not already here.
+  [[nodiscard]] bool is_fetchable() const noexcept {
+    return kind == Kind::Snapshot && !elevation_url.empty();
+  }
 };
 
 struct MobSpec {

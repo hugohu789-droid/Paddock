@@ -68,8 +68,10 @@ TEST(AttachElevation, MissingFileDrawsFlatAndSaysSo) {
   EXPECT_FALSE(reason.empty()) << "a farm running flat without saying so is the failure this "
                                   "whole arrangement exists to prevent";
   EXPECT_NE(reason.find("not on this machine"), std::string::npos);
-  EXPECT_NE(reason.find("nz-elevation-snapshot.py"), std::string::npos)
-      << "the message has to say what to do about it";
+  EXPECT_NE(reason.find("ground fetch"), std::string::npos)
+      << "the message has to say what to do about it, and what it says has to be the thing that "
+         "works from a downloaded release - which the snapshot script, being a catalogue search "
+         "that needs Python, is not";
 
   // Demoted, so that the bundle's own refusal - Snapshot with no reader behind
   // it - does not fire on the way to the map.
