@@ -417,9 +417,8 @@ TEST(DataFilesTest, EveryDataDirectoryIsShippedOrExplicitlyExcluded) {
   // **Everything else ships.** Named one by one rather than iterated, because a
   // loop over what happens to be in data/ today would pass on the day somebody
   // adds an exclusion and never notices - which is the failure this is for.
-  for (const char* shipped :
-       {"scenarios", "species", "pastures", "soils", "weather", "calibration", "farms", "diseases",
-        "economics", "regulations"}) {
+  for (const char* shipped : {"scenarios", "species", "pastures", "soils", "weather", "calibration",
+                              "farms", "diseases", "economics", "regulations"}) {
     EXPECT_TRUE(fs::is_directory(data / shipped)) << shipped << " is gone from data/ entirely";
     EXPECT_EQ(excluded.find(shipped), std::string::npos)
         << shipped
