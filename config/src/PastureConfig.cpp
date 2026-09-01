@@ -18,8 +18,9 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
       table,
       {"species_id", "specific_leaf_area_m2_per_kg", "extinction_coefficient",
        "radiation_use_efficiency_g_per_mj", "base_temperature_c", "optimum_temperature_c",
-       "maximum_temperature_c", "senescence_rate_per_day", "residual_kg_dm_per_ha",
-       "nitrogen_content_fraction", "nitrogen_fixation_kg_per_t_dm"},
+       "maximum_temperature_c", "senescence_rate_per_day", "degree_days_per_leaf",
+       "leaves_per_tiller", "residual_kg_dm_per_ha", "nitrogen_content_fraction",
+       "nitrogen_fixation_kg_per_t_dm"},
       path, context);
 
   core::PastureSpeciesParameters species;
@@ -33,6 +34,13 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
   species.optimum_temperature_c = detail::require_double(table, "optimum_temperature_c", path);
   species.maximum_temperature_c = detail::require_double(table, "maximum_temperature_c", path);
   species.senescence_rate_per_day = detail::require_double(table, "senescence_rate_per_day", path);
+
+  // **Optional, and it should be stated.** With a leaf lifespan, senescence is
+  // a season; without one it is a constant, which gets the annual total roughly
+  // right and the season exactly wrong. Zero leaves the flat rate in charge, so
+  // a sward file written before this existed still loads and still runs.
+  species.degree_days_per_leaf = detail::optional_double(table, "degree_days_per_leaf", 0.0, path);
+  species.leaves_per_tiller = detail::optional_double(table, "leaves_per_tiller", 3.0, path);
   species.residual_kg_dm_per_ha = detail::require_double(table, "residual_kg_dm_per_ha", path);
   species.nitrogen_content_fraction =
       detail::require_double(table, "nitrogen_content_fraction", path);
