@@ -33,7 +33,9 @@ class Covering : public core::WeatherSource {
 
   [[nodiscard]] core::ConnectionStatus test_connection() const override { return {}; }
 
-  [[nodiscard]] core::WeatherSeries fetch(const core::DateRange&) const override { return {}; }
+  [[nodiscard]] core::WeatherSeries fetch(const core::DateRange& /*range*/) const override {
+    return {};
+  }
 
   [[nodiscard]] std::optional<core::DateRange> covers() const override { return range_; }
 
