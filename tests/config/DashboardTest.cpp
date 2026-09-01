@@ -129,13 +129,13 @@ FarmDashboard a_dashboard(bool with_money) {
 
   if (!with_money) {
     return build_dashboard(
-        bundle, run_managed_scenario(bundle, *bundle.management, pasture_diet(), "plain"), "plain",
-        rule);
+        bundle, run_managed_scenario(bundle, bundle.management.value(), pasture_diet(), "plain"),
+        "plain", rule);
   }
   const FarmEconomics economics = load_economics(data_path("economics/canterbury-sheep.toml"));
   return build_dashboard(bundle,
-                         run_managed_scenario(bundle, *bundle.management, pasture_diet(), "priced",
-                                              business_from(bundle, economics)),
+                         run_managed_scenario(bundle, bundle.management.value(), pasture_diet(),
+                                              "priced", business_from(bundle, economics)),
                          "priced", rule);
 }
 
@@ -252,7 +252,7 @@ TEST(DashboardTest, AnUnpricedRunHasNoMoneyPanelAtAll) {
 TEST(DashboardTest, WithoutARuleThereIsNoComplianceClaim) {
   const ScenarioBundle bundle = a_bundle();
   const FarmDashboard board = build_dashboard(
-      bundle, run_managed_scenario(bundle, *bundle.management, pasture_diet(), "no rule"),
+      bundle, run_managed_scenario(bundle, bundle.management.value(), pasture_diet(), "no rule"),
       "no rule");
 
   for (const Indicator& indicator : board.all_indicators()) {
@@ -273,7 +273,7 @@ TEST(DashboardTest, YearsCompareIndicatorByIndicator) {
     one.range = core::DateRange{core::Date{start, 7, 1}, core::Date{start + 1, 6, 30}};
     const std::string label = std::to_string(start);
     boards.push_back(build_dashboard(
-        one, run_managed_scenario(one, *one.management, pasture_diet(), label), label));
+        one, run_managed_scenario(one, one.management.value(), pasture_diet(), label), label));
   }
 
   const std::string table = compare_dashboards_as_text(boards);

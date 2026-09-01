@@ -115,7 +115,7 @@ int destockings(const RunSummary& run) {
     return 0;
   }
   return static_cast<int>(
-      std::count_if(run.account->entries().begin(), run.account->entries().end(),
+      std::count_if(run.account.value().entries().begin(), run.account.value().entries().end(),
                     [](const core::CashEntry& entry) {
                       return entry.detail.find("short of feed") != std::string::npos ||
                              entry.detail.find("stay solvent") != std::string::npos;
@@ -168,9 +168,9 @@ TEST(DroughtDestockingTest, TheDroughtShowsInTheSummerAndNotInTheAnnualLow) {
   ASSERT_TRUE(dry.management.has_value());
 
   const RunSummary drought =
-      run_managed_scenario(dry, *dry.management, pasture_diet(), "drought", a_business());
-  const RunSummary wet =
-      run_managed_scenario(year_of(2024), *dry.management, pasture_diet(), "wet", a_business());
+      run_managed_scenario(dry, dry.management.value(), pasture_diet(), "drought", a_business());
+  const RunSummary wet = run_managed_scenario(year_of(2024), dry.management.value(), pasture_diet(),
+                                              "wet", a_business());
 
   ASSERT_TRUE(drought.account.has_value()) << "a run given a business should keep books";
 
@@ -207,11 +207,11 @@ TEST(DroughtDestockingTest, TheLedgerReadsLikeAFarmYear) {
   ASSERT_TRUE(year.management.has_value());
 
   const RunSummary run =
-      run_managed_scenario(year, *year.management, pasture_diet(), "ledger", a_business());
+      run_managed_scenario(year, year.management.value(), pasture_diet(), "ledger", a_business());
   ASSERT_TRUE(run.account.has_value());
 
-  const double sold = run.account->total_for(core::LedgerReason::SoldStock);
-  const double wool = run.account->total_for(core::LedgerReason::SoldWool);
+  const double sold = run.account.value().total_for(core::LedgerReason::SoldStock);
+  const double wool = run.account.value().total_for(core::LedgerReason::SoldWool);
 
   EXPECT_GT(sold, 40'000.0) << "cull ewes and a lamb crop";
   EXPECT_LT(sold, 100'000.0)
@@ -248,9 +248,9 @@ TEST(DroughtDestockingTest, WhatTheFarmerSellsStopsEating) {
   ASSERT_GT(culled, 0);
 
   const RunSummary big =
-      run_managed_scenario(year, *year.management, pasture_diet(), "big", a_business());
+      run_managed_scenario(year, year.management.value(), pasture_diet(), "big", a_business());
   const RunSummary few =
-      run_managed_scenario(year, *year.management, pasture_diet(), "few", std::move(small));
+      run_managed_scenario(year, year.management.value(), pasture_diet(), "few", std::move(small));
 
   EXPECT_LT(few.eaten_kg_dm, big.eaten_kg_dm * 0.75)
       << "half a flock has to eat markedly less grass, or selling stock relieves nothing";
@@ -265,7 +265,7 @@ TEST(DroughtDestockingTest, TheWettestYearDoesNot) {
   ASSERT_TRUE(wet.management.has_value());
 
   const RunSummary run =
-      run_managed_scenario(wet, *wet.management, pasture_diet(), "wet year", a_business());
+      run_managed_scenario(wet, wet.management.value(), pasture_diet(), "wet year", a_business());
 
   ASSERT_TRUE(run.account.has_value());
   EXPECT_EQ(destockings(run), 0) << "a wet year should not force anybody to sell";
@@ -294,14 +294,15 @@ TEST(DroughtDestockingTest, TheBooksThemselvesDoNotChangeThePasture) {
   FarmBusiness comfortable = a_business();
   comfortable.opening_balance_dollars = 320'000.0;
 
-  const RunSummary ordinary =
-      run_managed_scenario(dry, *dry.management, pasture_diet(), "ordinary", std::move(ordinary_b));
-  const RunSummary rich =
-      run_managed_scenario(dry, *dry.management, pasture_diet(), "rich", std::move(comfortable));
+  const RunSummary ordinary = run_managed_scenario(dry, dry.management.value(), pasture_diet(),
+                                                   "ordinary", std::move(ordinary_b));
+  const RunSummary rich = run_managed_scenario(dry, dry.management.value(), pasture_diet(), "rich",
+                                               std::move(comfortable));
 
   ASSERT_TRUE(ordinary.account.has_value());
   ASSERT_TRUE(rich.account.has_value());
-  EXPECT_NE(ordinary.account->balance(), rich.account->balance()) << "the money did differ";
+  EXPECT_NE(ordinary.account.value().balance(), rich.account.value().balance())
+      << "the money did differ";
 
   ASSERT_EQ(ordinary.cover_kg_dm_per_ha.size(), rich.cover_kg_dm_per_ha.size());
   EXPECT_EQ(ordinary.cover_kg_dm_per_ha, rich.cover_kg_dm_per_ha)
@@ -311,7 +312,7 @@ TEST(DroughtDestockingTest, TheBooksThemselvesDoNotChangeThePasture) {
   // An unpriced run keeps no books at all - and now grazes differently, because
   // it carries no flock to graze with.
   const RunSummary unpriced =
-      run_managed_scenario(dry, *dry.management, pasture_diet(), "unpriced");
+      run_managed_scenario(dry, dry.management.value(), pasture_diet(), "unpriced");
   EXPECT_FALSE(unpriced.account.has_value());
 }
 
@@ -321,7 +322,7 @@ TEST(DroughtDestockingTest, TheFlockRunsItsYearInsideTheRun) {
   ASSERT_TRUE(year.management.has_value());
 
   const RunSummary run =
-      run_managed_scenario(year, *year.management, pasture_diet(), "flock", a_business());
+      run_managed_scenario(year, year.management.value(), pasture_diet(), "flock", a_business());
 
   const int born =
       std::accumulate(run.flock_days.begin(), run.flock_days.end(), 0,
