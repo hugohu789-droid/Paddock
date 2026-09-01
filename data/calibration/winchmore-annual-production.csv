@@ -1,0 +1,75 @@
+# Winchmore irrigation trial: annual pasture production by treatment, kg DM/ha.
+#
+# **The measured series, replacing figures derived from reviews of it.** E21
+# recorded that no unfertilised Canterbury reference series had been found, then
+# that one existed, and carried numbers worked out of the published summaries -
+# 5.5 to 6.5 t DM/ha for the dryland treatment, from a review's statement that
+# irrigation "roughly doubles" production and adds 5.2 to 5.5 t. The data itself
+# is on Figshare under CC BY 4.0 and says something the summaries did not:
+#
+#   dryland          mean 6,442   range 3,904 to 9,845   (25 years)
+#   irrigated 10%    mean 9,646   ratio to dryland 1.50
+#   irrigated 15%    mean 10,788  ratio 1.67
+#   irrigated 20%    mean 11,648  ratio 1.81
+#
+# **Two things the derived band had wrong.** The mean is 6,442 where the band
+# topped out at 6,500, so it sat at the very edge; and the RANGE is 3.9 to 9.8
+# tonnes where the band was 1 tonne wide. A dryland Canterbury year is not a
+# number, it is a distribution two and a half times wide, and a validation band
+# built on the mean alone would have failed the model for having weather.
+#
+# Irrigation adds 50 to 81% rather than "roughly doubling"; the 80% the reviews
+# quote is the 20% soil-moisture treatment, the wettest of the four.
+#
+# SOURCE
+#   Winchmore Database, AgResearch. doi:10.6084/m9.figshare.13530209
+#   File: "Irrigation trial pasture production and composition data.xlsx"
+#   sha256 76ed719f1171a5309bc85285c9ab997c48e2121d7d5c620d0fdace1daecab00b
+#   Licence: CC BY 4.0. The dataset's ReadMeFirst strongly encourages users to
+#   send a Data Use form to winchmore@agresearch.co.nz saying who they are and
+#   what the data is for; that is a courtesy for the repository's owner to
+#   extend and has not been done on their behalf.
+#   Data originally from Rickard, D.S. and McBride, S.D. (1986), "Irrigated and
+#   non-irrigated pasture production at Winchmore 1960 to 1985", Technical
+#   Report 21, MAF Winchmore Irrigation Research Station.
+#
+#   Fetch it again with scripts/winchmore-fetch.py, which checks the hash.
+#
+# THE SITE
+#   Mid-Canterbury, Lismore stony silt loam (Orthic Brown), perennial ryegrass
+#   and white clover under sheep grazing, 250 kg single superphosphate/ha/yr.
+#   Mean annual rainfall 745 mm, range 491 to 949.
+#
+# **Not the same farm as the model's**, and the differences run both ways: this
+# trial is fertilised with phosphorus where the model applies none, and its
+# rainfall record is its own. What it fixes is the shape of the answer - what a
+# rain-fed Canterbury sward on a stony soil produces, and how far it swings.
+#
+# year is the farm year, June to May, as the trial recorded it.
+
+year,dryland,irrigated_10pc,irrigated_15pc,irrigated_20pc
+1960-61,8599,12767,13178,13245
+1961-62,6043,10292,11651,12654
+1962-63,6232,10217,10278,10656
+1963-64,4331,9008,9825,10780
+1964-65,5185,9364,10321,10833
+1965-66,7241,11209,12153,12719
+1966-67,6869,10091,11273,11325
+1967-68,8315,12508,11379,12492
+1968-69,5655,10405,10853,12301
+1969-70,6295,12571,12637,13630
+1970-71,6422,11042,12595,13038
+1971-72,4911,10316,12073,13098
+1972-73,4190,9378,10869,11216
+1973-74,6516,10318,12422,12394
+1974-75,8826,9580,10161,10529
+1975-76,6192,5492,7783,8220
+1976-77,7785,7495,9111,8903
+1977-78,4350,7339,9034,10971
+1978-79,7646,10259,11520,11999
+1979-80,9467,12078,12218,11638
+1980-81,3904,5354,8018,8552
+1981-82,4952,6204,7887,10530
+1982-83,5476,8621,11253,13155
+1983-84,9845,10075,11978,13523
+1984-85,5806,9155,9228,12810

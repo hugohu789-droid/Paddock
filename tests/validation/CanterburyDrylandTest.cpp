@@ -83,49 +83,105 @@ YearOfPasture pasture_year(int starting_year) {
   return year;
 }
 
-// **The independent check.** Winchmore's dryland treatment implies 5.5 to 6.5
-// t DM/ha a year at a mean rainfall of 745 mm. Nothing in this model was fitted
-// to that number - the fit was to water use efficiency - so this is the
-// assertion that can fail on its own.
-//
-// The band is widened to 4 to 9 t and the reason is stated rather than hidden:
-// Lincoln's ten recorded years run from 527 mm to 1,036 mm against Winchmore's
-// 745 mm mean, and a 527 mm year should not be asked to grow what a 745 mm one
-// does. The narrow test is the middle year.
-TEST(CanterburyDrylandTest, AnnualProductionSitsInTheDrylandBand) {
-  for (const int start : {2015, 2019, 2024}) {
-    const YearOfPasture year = pasture_year(start);
-    EXPECT_GT(year.grown_kg_dm_per_ha, 4'000.0)
-        << start << "/" << (start + 1) << " grew " << year.grown_kg_dm_per_ha
-        << " kg DM/ha, below anything a Canterbury dryland farm produces";
-    EXPECT_LT(year.grown_kg_dm_per_ha, 9'800.0)
-        << start << "/" << (start + 1) << " grew " << year.grown_kg_dm_per_ha
-        << " kg DM/ha, which is what an IRRIGATED Canterbury farm grows - the model would be "
-           "converting water at a rate its rainfall does not buy";
+/// Winchmore's dryland treatment, measured. 25 farm years, 1960-61 to 1984-85,
+/// out of `data/calibration/winchmore-annual-production.csv`.
+///
+/// **These replaced figures derived from reviews of the same trial**, and the
+/// derived ones were narrower than the truth in a way that mattered: 5.5 to 6.5
+/// t DM/ha, from a review saying irrigation "roughly doubles" production. The
+/// measured mean is 6,442 - at the very top of that band - and the measured
+/// range is 3,904 to 9,845, which is two and a half times wide. A dryland
+/// Canterbury year is a distribution, not a number, and a band built on the
+/// mean alone would fail a model for having weather.
+constexpr double kWinchmoreDrylandMean = 6'442.0;
+constexpr double kWinchmoreDrylandLowest = 3'904.0;
+constexpr double kWinchmoreDrylandHighest = 9'845.0;
+
+/// Lincoln's ten recorded years, which is every year the bundle's weather has.
+std::vector<YearOfPasture> the_decade() {
+  std::vector<YearOfPasture> years;
+  for (int start = 2015; start <= 2024; ++start) {
+    years.push_back(pasture_year(start));
+  }
+  return years;
+}
+
+// **Every year inside the measured range.** Not the mean - a single year has no
+// business matching a 25-year mean - but inside what the trial actually saw.
+TEST(CanterburyDrylandTest, EveryYearSitsInsideWhatWinchmoreMeasured) {
+  for (const YearOfPasture& year : the_decade()) {
+    EXPECT_GT(year.grown_kg_dm_per_ha, kWinchmoreDrylandLowest * 0.9)
+        << "grew " << year.grown_kg_dm_per_ha << " kg DM/ha on " << year.rainfall_mm
+        << " mm, below anything Winchmore's dryland treatment did in 25 years";
+    EXPECT_LT(year.grown_kg_dm_per_ha, kWinchmoreDrylandHighest * 1.1)
+        << "grew " << year.grown_kg_dm_per_ha << " kg DM/ha on " << year.rainfall_mm
+        << " mm, above anything it did - and Winchmore is 745 mm against this "
+           "farm's rainfall";
   }
 }
 
-// The middle year, at 663 mm, is the one closest to Winchmore's 745 mm mean and
-// so the one the published band applies to most directly.
-TEST(CanterburyDrylandTest, AnOrdinaryYearGrowsAnOrdinaryDrylandCrop) {
-  const YearOfPasture year = pasture_year(2019);
+// **The decade's mean against the trial's**, which is the comparison a single
+// year cannot make. Both are rain-fed Canterbury ryegrass and clover on a stony
+// soil; the differences are stated rather than corrected for.
+TEST(CanterburyDrylandTest, TheDecadeAveragesWhatADrylandCanterburyFarmAverages) {
+  const std::vector<YearOfPasture> years = the_decade();
+  ASSERT_EQ(years.size(), 10u);
 
-  EXPECT_NEAR(year.rainfall_mm, 663.0, 5.0) << "the year this band is being applied to";
-  EXPECT_GT(year.grown_kg_dm_per_ha, 4'800.0);
-  EXPECT_LT(year.grown_kg_dm_per_ha, 8'000.0)
-      << "Winchmore's dryland treatment implies 5.5 to 6.5 t DM/ha at 745 mm, and this year is "
-         "drier than that";
+  double grown = 0.0;
+  double rain = 0.0;
+  for (const YearOfPasture& year : years) {
+    grown += year.grown_kg_dm_per_ha;
+    rain += year.rainfall_mm;
+  }
+  grown /= static_cast<double>(years.size());
+  rain /= static_cast<double>(years.size());
+
+  // **A third either way**, and the band is wide on purpose. Winchmore is
+  // fertilised with phosphorus where this farm applies none, its rainfall is
+  // its own, and its 25 years are not these 10. What the comparison can settle
+  // is whether the model is producing a Canterbury dryland quantity at all -
+  // it read 11.4 t DM/ha before it was calibrated, which is an irrigated farm.
+  EXPECT_GT(grown, kWinchmoreDrylandMean * 0.67)
+      << "the decade averaged " << grown << " kg DM/ha on " << rain << " mm against Winchmore's "
+      << kWinchmoreDrylandMean << " on 745";
+  EXPECT_LT(grown, kWinchmoreDrylandMean * 1.33)
+      << "the decade averaged " << grown << " kg DM/ha on " << rain << " mm against Winchmore's "
+      << kWinchmoreDrylandMean << " on 745";
+
+  GTEST_LOG_(INFO) << "decade mean " << grown << " kg DM/ha at " << rain
+                   << " mm; Winchmore dryland " << kWinchmoreDrylandMean << " at 745 mm";
+}
+
+// **The spread, which is the half the derived band got wrong.** Winchmore's
+// dryland years run from 3,904 to 9,845 - a factor of 2.5 - because a rain-fed
+// farm's year is mostly its weather. A model whose decade was flat would be
+// describing an irrigated farm however well its mean landed.
+TEST(CanterburyDrylandTest, TheDecadeSwingsTheWayARainFedFarmSwings) {
+  const std::vector<YearOfPasture> years = the_decade();
+
+  double lowest = years.front().grown_kg_dm_per_ha;
+  double highest = lowest;
+  for (const YearOfPasture& year : years) {
+    lowest = std::min(lowest, year.grown_kg_dm_per_ha);
+    highest = std::max(highest, year.grown_kg_dm_per_ha);
+  }
+
+  const double measured_spread = kWinchmoreDrylandHighest / kWinchmoreDrylandLowest;
+  const double modelled_spread = highest / lowest;
+
+  EXPECT_GT(modelled_spread, 1.4) << "ten years spanning " << lowest << " to " << highest
+                                  << " kg DM/ha is a farm whose weather does not reach it";
+  EXPECT_LT(modelled_spread, measured_spread * 1.5)
+      << "and " << modelled_spread << " times is wider than the 2.5 Winchmore measured";
 }
 
 // **Water use efficiency is what was fitted, so this checks the fit took**
-// rather than checking the model. It is here because a fit that quietly stops
-// holding - because something else changed - should fail somewhere, and this is
-// where. Both years, because a single year could match by luck.
+// rather than checking the model. Martin et al. (2006): 12.3 kg DM/ha/mm for
+// Canterbury dryland, 20 for irrigated ryegrass and clover.
 TEST(CanterburyDrylandTest, WaterUseEfficiencyIsNearTheDrylandFigureItWasFittedTo) {
   const double dry = pasture_year(2015).water_use_efficiency();
   const double wet = pasture_year(2024).water_use_efficiency();
 
-  // Martin et al. (2006): 12.3 kg DM/ha/mm dryland, 20 irrigated.
   EXPECT_GT(dry, 8.0);
   EXPECT_LT(dry, 16.0);
   EXPECT_GT(wet, 10.0);
@@ -137,9 +193,7 @@ TEST(CanterburyDrylandTest, WaterUseEfficiencyIsNearTheDrylandFigureItWasFittedT
   // **It varies between years now, and it did not before.** With the old
   // unsourced efficiency this was 19.8 in a 527 mm year and 19.8 in a 1,036 mm
   // one - identical to three figures, because growth and evapotranspiration are
-  // scaled by the same water stress coefficient and their ratio never moved. A
-  // figure that cannot respond to a doubling of rainfall is not measuring
-  // anything about water.
+  // scaled by the same water stress coefficient and their ratio never moved.
   EXPECT_GT(std::abs(wet - dry), 1.0)
       << "water use efficiency should differ between the driest year in ten and the wettest";
 }

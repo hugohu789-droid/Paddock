@@ -1,5 +1,21 @@
 # Canterbury dryland pasture production, for calibrating what a rain-fed farm grows.
 #
+# ---------------------------------------------------------------------------
+# **SUPERSEDED for annual production by winchmore-annual-production.csv**, which
+# carries the trial's own 25 measured years instead of figures worked out of
+# reviews of it. What the derived rows below got wrong is worth leaving here:
+#
+#   derived    5.5 to 6.5 t DM/ha, from "irrigation roughly doubles production"
+#   measured   mean 6,442, range 3,904 to 9,845
+#
+# The mean sat at the very top of the derived band, and the derived band was one
+# tonne wide where the truth is nearly six. A validation built on it would have
+# failed the model for having weather.
+#
+# The water use efficiency rows are still the best figures held for that, and
+# are what the sward's radiation use efficiency is fitted to.
+# ---------------------------------------------------------------------------
+#
 # **The reference series caveat E8 said did not exist.** E7 recorded that the
 # pasture growth parameters are fixtures rather than a calibration, and E8 that
 # no unfertilised Canterbury reference series had been found to calibrate them
