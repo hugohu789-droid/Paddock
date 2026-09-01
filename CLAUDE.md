@@ -184,7 +184,7 @@ Do not start a milestone before the previous one's acceptance passes.
 
 **M1 — Skeleton and automation, before any business logic (~5 days).**
 Repo bootstrap: `main`, `.gitattributes`, `core.ignorecase=false`,
-clang-format/tidy, editorconfig, PR + squash flow; CMakePresets + vcpkg.json;
+clang-format/tidy, editorconfig, PR flow (see below); CMakePresets + vcpkg.json;
 four module skeletons with core at zero deps; T0–T2 live (placeholder tests
 are fine — the pipeline must be real); core types: georeferenced `Raster<T>`,
 `Polygon`, `Entity` + components, `SimulationClock`, explicit RNG engines.
@@ -259,6 +259,14 @@ CI build.
 
 - Small, focused changes. Conventional commits (`feat:`, `fix:`, `test:`,
   `docs:`, `chore:`), imperative mood, no emoji. English only.
+- **Everything reaches `main` through a pull request, and `main` keeps a linear
+  history.** Branch protection requires both, along with all ten CI checks.
+  Squash a branch that is one change written in several attempts; **rebase a
+  branch whose commits each say something worth keeping** - a milestone's worth
+  of separate features is not one commit, and this repository is read by people
+  deciding whether to interview its author. Merge commits are allowed by the
+  repository and cannot actually be used while linear history is required;
+  rebase is the way to keep every message.
 - Every feature lands with tests. Conservation, determinism and validation
   gates are never bypassed to make a PR green.
 - **Build on a second compiler before pushing, not after.** This is a
