@@ -80,7 +80,7 @@ ScenarioBundle year_of(int starting_year) {
 // season's crop through spring, zero after the weaning draft.
 TEST(LambsGrazeTest, TheBundleDeclaresALambMobAndTheFlockFillsIt) {
   const ScenarioBundle bundle = year_of(2015);
-  ASSERT_EQ(bundle.mobs.size(), 2u) << "the bundle should carry ewes and lambs";
+  ASSERT_EQ(bundle.mobs.size(), 2U) << "the bundle should carry ewes and lambs";
   EXPECT_EQ(bundle.mobs[1].head, 0)
       << "a mob stocked by a flock starts empty; December is not an error state";
 }
@@ -94,10 +94,10 @@ TEST(LambsGrazeTest, ALambCropEatsGrass) {
   ScenarioBundle ewes_only = year_of(2015);
   ewes_only.mobs.pop_back();  // the way the farm was before E22 was closed
 
-  const RunSummary lambs = run_managed_scenario(with_lambs, *with_lambs.management, pasture_diet(),
-                                                "lambs", a_business());
-  const RunSummary without = run_managed_scenario(ewes_only, *ewes_only.management, pasture_diet(),
-                                                  "ewes only", a_business());
+  const RunSummary lambs = run_managed_scenario(with_lambs, with_lambs.management.value(),
+                                                pasture_diet(), "lambs", a_business());
+  const RunSummary without = run_managed_scenario(ewes_only, ewes_only.management.value(),
+                                                  pasture_diet(), "ewes only", a_business());
 
   EXPECT_GT(lambs.eaten_kg_dm, without.eaten_kg_dm)
       << "a lamb crop that ate nothing is what E22 recorded";
@@ -122,8 +122,8 @@ TEST(LambsGrazeTest, TheFlockWeansAboutWhatBeefAndLambAskOfATopFlock) {
   const ScenarioBundle bundle = year_of(2015);
   ASSERT_TRUE(bundle.management.has_value());
 
-  const RunSummary run =
-      run_managed_scenario(bundle, *bundle.management, pasture_diet(), "weaning", a_business());
+  const RunSummary run = run_managed_scenario(bundle, bundle.management.value(), pasture_diet(),
+                                              "weaning", a_business());
 
   const double weaning_weight = run.lamb_weaning_weight_kg;
   ASSERT_GT(weaning_weight, 0.0) << "the weaning weight should be recorded whichever way the "
@@ -152,8 +152,8 @@ TEST(LambsGrazeTest, MilkIsChargedOnceAndTheFarmIsNotFedTwice) {
   const ScenarioBundle bundle = year_of(2015);
   ASSERT_TRUE(bundle.management.has_value());
 
-  const RunSummary run =
-      run_managed_scenario(bundle, *bundle.management, pasture_diet(), "udder", a_business());
+  const RunSummary run = run_managed_scenario(bundle, bundle.management.value(), pasture_diet(),
+                                              "udder", a_business());
 
   // Roughly 440 lambs join about 310 ewes for a hundred days. If they grazed as
   // grown ewes the year's intake would rise by something near a third; the milk

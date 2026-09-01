@@ -64,7 +64,7 @@ struct YearOfPasture {
 YearOfPasture pasture_year(int starting_year) {
   const ScenarioBundle bundle = year_of(starting_year);
   const RunSummary run =
-      run_managed_scenario(bundle, *bundle.management, pasture_diet(), "dryland");
+      run_managed_scenario(bundle, bundle.management.value(), pasture_diet(), "dryland");
 
   YearOfPasture year;
   for (const core::ProcessEntry& entry : run.ledger.entries(core::Budget::DryMatter)) {
@@ -125,7 +125,7 @@ TEST(CanterburyDrylandTest, EveryYearSitsInsideWhatWinchmoreMeasured) {
 // soil; the differences are stated rather than corrected for.
 TEST(CanterburyDrylandTest, TheDecadeAveragesWhatADrylandCanterburyFarmAverages) {
   const std::vector<YearOfPasture> years = the_decade();
-  ASSERT_EQ(years.size(), 10u);
+  ASSERT_EQ(years.size(), 10U);
 
   double grown = 0.0;
   double rain = 0.0;

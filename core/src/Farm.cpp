@@ -99,11 +99,12 @@ void Farm::set_target_gain(std::size_t mob, double kg_per_day) {
   }
   // A mob with a target of its own keeps it: the farm policy speaks for the
   // mobs that have not been spoken for.
-  if (mobs_[mob].own_target_gain_kg_per_day.has_value()) {
-    mobs_[mob].mob.target_gain_kg_per_day = *mobs_[mob].own_target_gain_kg_per_day;
-    return;
-  }
-  mobs_[mob].mob.target_gain_kg_per_day = kg_per_day;
+  //
+  // Bound to a reference rather than subscripted three times, because the guard
+  // and the read were separate expressions and nothing tied them to the same
+  // object - which is a fair complaint from an analyser and reads better fixed.
+  FarmMob& entry = mobs_[mob];
+  entry.mob.target_gain_kg_per_day = entry.own_target_gain_kg_per_day.value_or(kg_per_day);
 }
 
 void Farm::set_own_target_gain(std::size_t mob, double kg_per_day) {

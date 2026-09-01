@@ -261,6 +261,23 @@ CI build.
   `docs:`, `chore:`), imperative mood, no emoji. English only.
 - Every feature lands with tests. Conservation, determinism and validation
   gates are never bypassed to make a PR green.
+- **Build on a second compiler before pushing, not after.** This is a
+  three-platform project and MSVC is the most permissive of the three. A branch
+  once reached twenty commits carrying four gcc errors and thirty-five
+  clang-tidy errors, because CI triggers on pull requests and the pull request
+  came last. WSL builds the whole core with gcc under the CI's own
+  warnings-as-errors in about two minutes:
+
+  ```bash
+  cmake -S . -B ~/pcore -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release         -DPADDOCK_WARNINGS_AS_ERRORS=ON && cmake --build ~/pcore -j 8
+  ```
+
+  Watch particularly for `std::int64_t`, which is `long long` on Windows and
+  `long` on Linux, and for `const std::string&` in a range-for over string
+  literals. **A clean local clang-tidy proves less than it looks**: parsed
+  against the MSVC standard library, `bugprone-unchecked-optional-access`
+  silently finds nothing. For that one, open the pull request early and let CI
+  run on every push rather than on the last.
 - Record each significant design decision as a short ADR in `docs/adr/`.
 - At the end of each milestone, write a devlog entry in `docs/devlog/`:
   what shipped, one concrete problem solved, one NZ-domain insight (a CliFlo
