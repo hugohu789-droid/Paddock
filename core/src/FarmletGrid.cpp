@@ -185,6 +185,14 @@ double compensated_mean(const std::vector<Farmlet>& cells, Fn&& value_of) {
 
 }  // namespace
 
+double FarmletGrid::cut_every_cell_to(double leave_kg_dm_per_ha) {
+  double taken = 0.0;
+  for (Farmlet& cell : cells_) {
+    taken += cell.cut_to(leave_kg_dm_per_ha);
+  }
+  return cells_.empty() ? 0.0 : taken / static_cast<double>(cells_.size());
+}
+
 double FarmletGrid::mean_patch_nitrate_kg_per_ha() const {
   return compensated_mean(
       cells_, [](const Farmlet& farmlet) { return farmlet.sward().patch_nitrate_kg(); });

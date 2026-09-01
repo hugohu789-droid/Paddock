@@ -83,6 +83,9 @@ class Farmlet {
     sward_.return_excreta(urine_kg_n_per_ha, dung_kg_n_per_ha, excreta);
   }
 
+  /// Cuts this cell down to `leave_kg_dm_per_ha` and returns what came off.
+  double cut_to(double leave_kg_dm_per_ha) { return sward_.cut_to(leave_kg_dm_per_ha); }
+
   [[nodiscard]] const SoilWaterBucket& soil() const noexcept { return soil_; }
 
   [[nodiscard]] const PastureSward& sward() const noexcept { return sward_; }

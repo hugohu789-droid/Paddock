@@ -216,6 +216,7 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   outlook.hectares = hectares;
   outlook.balance_dollars = account.balance();
   outlook.daily_operating_cost_dollars = business.costs.annual_per_hectare() * hectares / 365.0;
+  outlook.stored_feed_kg_dm = summary.feed_store.held_kg_dm();
   // The weight the drafting rule reads: the finishing cohort's when there is
   // one, and the oldest breeding cohort's otherwise - never the two mixed.
   for (const core::AgeCohort& cohort : business.flock.cohorts()) {
@@ -425,6 +426,48 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     // what a season-long comparison reads; where the stress fell is the map's
     // job.
     summary.water_stress.push_back(mean_of(farm.grid().water_stress()));
+
+    // **Cut the surplus, and feed the stack before buying anything.**
+    //
+    // A real Canterbury farm shuts paddocks up in a wet spring and feeds the
+    // result back in a dry summer, which is what turns a good year's growth
+    // into a bad year's feed. Without it this farm's intake ran flat across a
+    // decade while its growth nearly doubled, so a wet spring simply grew grass
+    // that died where it stood.
+    if (business != nullptr) {
+      const core::ConservationPolicy& policy_for_cutting = business->conservation;
+      const double cover = farm.grid().mean_cover_kg_dm();
+
+      if (policy_for_cutting.may_cut_on(day.date.month, day.date.day) &&
+          cover > policy_for_cutting.surplus_cover_kg_dm_per_ha) {
+        // Taken off the paddock the way a mower takes it: everything above what
+        // the cut leaves behind, over the whole farm.
+        const double standing =
+            (cover - policy_for_cutting.cut_to_cover_kg_dm_per_ha) * farm_hectares;
+        const double cut = farm.cut_for_conservation(policy_for_cutting.cut_to_cover_kg_dm_per_ha,
+                                                     &summary.ledger);
+        static_cast<void>(standing);
+        summary.feed_store.add(cut, business->conservation_losses);
+      }
+
+      // **Fed before anything is bought**, because a farm with a stack does not
+      // ring a merchant.
+      //
+      // The stack supplies part of the same feed the mobs are already being
+      // given - it changes where the day's supplement came from, not how much
+      // of it there is. Reducing what the mobs were handed would have fed them
+      // less for having made silage, which is the opposite of the point.
+      if (summary.feed_store.held_kg_dm() > 0.0) {
+        double wanted = 0.0;
+        for (const double each : supplement) {
+          wanted += each;
+        }
+        if (wanted > 0.0) {
+          summary.conserved_fed_kg_dm +=
+              summary.feed_store.take(wanted, business->conservation_losses);
+        }
+      }
+    }
 
     const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger, water);
     if (farm_day.any_mob_short) {

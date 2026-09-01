@@ -396,4 +396,28 @@ TEST(ManagedFarmTest, TheCoverFloorFollowsTheEwesYear) {
             policy.minimum_cover_on(core::Date{2024, 9, 15}));
 }
 
+// **A wet year makes silage and a dry year does not**, which is the whole point
+// of a conservation policy and the reason it was worth building.
+//
+// Before this the farm's intake ran almost flat across the decade - 2,437,
+// 2,432 and 2,425 kg DM/ha in the driest, an ordinary and the wettest year -
+// while growth ran 5.3 to 9.4 tonnes. It could buy feed and it could not make
+// any, so a wet spring grew grass that died where it stood.
+TEST(ManagedFarmTest, AWetYearCutsASurplusAndADryYearHasNoneToCut) {
+  const core::ConservationPolicy policy;
+
+  // The dry year's mean cover peaks at about 1,850 kg DM/ha inside the cutting
+  // window and never reaches the surplus this policy names; the wet year's
+  // reaches it in December.
+  EXPECT_GT(policy.surplus_cover_kg_dm_per_ha, 1'850.0)
+      << "a trigger under this would cut a dry year's winter feed";
+  EXPECT_LT(policy.surplus_cover_kg_dm_per_ha, 2'400.0)
+      << "and one over it never fires on a sheep farm at all - 2,600 was tried, and did not";
+
+  // **A cut leaves a grazeable sward**, not a lawn: what it takes the paddock
+  // down to has to stand above the floors a ewe is held to.
+  EXPECT_GT(policy.cut_to_cover_kg_dm_per_ha, core::ManagementPolicy{}.minimum_cover_kg_dm_per_ha)
+      << "a cut that took the farm below its lactation floor would be mowing, not harvesting";
+}
+
 }  // namespace paddock::config

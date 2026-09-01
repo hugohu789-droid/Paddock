@@ -265,6 +265,46 @@ double PastureSward::leach_nitrate(double drainage_mm, double soil_water_mm,
   return from_patches + from_soil;
 }
 
+double PastureSward::cut_to(double leave_kg_dm_per_ha) {
+  const double standing = cover_kg_dm();
+  const double floor = std::max(0.0, leave_kg_dm_per_ha);
+  if (standing <= floor) {
+    return 0.0;
+  }
+
+  // **The residuals hold**, so a farm cannot mow itself out of existence: the
+  // crown and stubble a plant regrows from are not cuttable however low the
+  // target.
+  const double residual =
+      parameters_.grass.residual_kg_dm_per_ha + parameters_.legume.residual_kg_dm_per_ha;
+  const double target = std::max(floor, residual);
+  if (standing <= target) {
+    return 0.0;
+  }
+
+  // **A mower takes what is there in the proportions it is there**, green and
+  // dead together - which is why cutting cleans a rank paddock up, and why the
+  // silage carries the dead with it.
+  const double share = (standing - target) / standing;
+
+  const double grass_cut =
+      std::max(0.0, grass_kg_dm_ - parameters_.grass.residual_kg_dm_per_ha) * share;
+  const double legume_cut =
+      std::max(0.0, legume_kg_dm_ - parameters_.legume.residual_kg_dm_per_ha) * share;
+  const double dead_cut = dead_kg_dm_ * share;
+
+  grass_kg_dm_ -= grass_cut;
+  legume_kg_dm_ -= legume_cut;
+  dead_kg_dm_ -= dead_cut;
+
+  // The nitrogen leaves with it. Dead nitrogen in proportion to the dead taken;
+  // the green at each species' own content.
+  const double dead_nitrogen = dead_nitrogen_kg_ * share;
+  dead_nitrogen_kg_ -= dead_nitrogen;
+
+  return grass_cut + legume_cut + dead_cut;
+}
+
 PastureSward::Defoliation PastureSward::remove_green_dry_matter(double requested_kg_dm) {
   Defoliation taken;
   if (requested_kg_dm <= 0.0) {

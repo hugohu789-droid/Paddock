@@ -14,6 +14,7 @@
 #include <paddock/core/FarmAccount.hpp>
 #include <paddock/core/FarmDecision.hpp>
 #include <paddock/core/Farmer.hpp>
+#include <paddock/core/FeedStore.hpp>
 #include <paddock/core/Flock.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
 #include <paddock/core/Irrigation.hpp>
@@ -117,6 +118,17 @@ struct RunSummary {
   /// given a flock.
   std::vector<core::FlockDay> flock_days;
 
+  /// What the farm cut, kept and fed back. **The mechanism that turns a good
+  /// year's growth into a bad year's feed**, and the reason utilisation used to
+  /// read 46% in a dry year and 26% in a wet one for the same farm doing the
+  /// same thing.
+  core::FeedStore feed_store;
+
+  /// Supplement that came off this farm rather than through the gate, kg DM.
+  /// Separate from `bought_feed_kg_dm` because one is a cost and the other is
+  /// a harvest.
+  double conserved_fed_kg_dm = 0.0;
+
   /// Head at the close, when a flock was run.
   int closing_head = 0;
 
@@ -169,6 +181,11 @@ struct FarmBusiness {
   core::FlockCalendar calendar;
   core::FlockRates rates;
   core::DecisionPolicy decisions;
+
+  /// When this farm cuts a surplus and what it costs to keep it. A farm that
+  /// does not conserve is the same farm with `conserves` off.
+  core::ConservationPolicy conservation;
+  core::ConservationLosses conservation_losses;
 };
 
 /// Runs a bundle for its own date range under a calendar the caller supplies.

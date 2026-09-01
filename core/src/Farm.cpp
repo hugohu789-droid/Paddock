@@ -118,6 +118,19 @@ void Farm::set_excreta(const ExcretaParameters& excreta) {
   excreta_ = excreta;
 }
 
+double Farm::cut_for_conservation(double leave_kg_dm_per_ha, BudgetLedger* ledger) {
+  const double cut_per_hectare = grid_.cut_every_cell_to(leave_kg_dm_per_ha);
+  const double hectares = mask_.cell_area_hectares() * static_cast<double>(grid_.cell_count());
+  const double taken = cut_per_hectare * hectares;
+
+  if (ledger != nullptr && cut_per_hectare > 0.0) {
+    // Out of the standing crop, per hectare, the way everything else the grid
+    // folds is measured. It comes back as bought_feed does when it is fed out.
+    ledger->record_outflow(Budget::DryMatter, "conserved_cut", cut_per_hectare);
+  }
+  return taken;
+}
+
 void Farm::set_mob_head(std::size_t mob, int head) {
   if (mob >= mobs_.size()) {
     return;
