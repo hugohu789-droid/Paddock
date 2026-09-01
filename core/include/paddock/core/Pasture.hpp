@@ -39,7 +39,26 @@ struct PastureSpeciesParameters {
 
   /// Fraction of green dry matter that senesces each day, applied only to the
   /// dry matter above `residual_kg_dm_per_ha`.
+  /// **A fallback, used only where no leaf lifespan is stated.** A flat rate is
+  /// the wrong shape for a grass: a leaf's life is measured in thermal time, so
+  /// it turns over in a few days in January and takes a month in July. Setting
+  /// `degree_days_per_leaf` below replaces this, and should.
   double senescence_rate_per_day = 0.0;
+
+  /// Thermal time a tiller needs to put out one new leaf, degree-days above
+  /// this species' base temperature.
+  ///
+  /// **This is what makes senescence a season rather than a number.** DairyNZ
+  /// call ryegrass a "three leaf plant": a tiller sustains three live leaves,
+  /// so when the fourth appears the first dies, and a leaf therefore lives
+  /// three leaf-appearance intervals. They also state the interval directly -
+  /// "a new leaf growing every 8 days in mid-spring" - and that is what this
+  /// figure is derived from. Zero leaves `senescence_rate_per_day` in charge.
+  double degree_days_per_leaf = 0.0;
+
+  /// Live leaves a tiller carries before the oldest dies. Three for ryegrass,
+  /// which is the whole of DairyNZ's leaf-stage grazing rule.
+  double leaves_per_tiller = 3.0;
 
   /// Dry matter that does not senesce, kg/ha: crown, stubble and the reserves a
   /// plant regrows from. Without it a sward grazed or dried to nothing would
@@ -112,6 +131,35 @@ struct ExcretaParameters {
 
   [[nodiscard]] std::string invalid_reason() const;
 };
+
+/// The share of standing leaf that dies today, from the thermal time a leaf
+/// lives for.
+///
+/// **A leaf's life is measured in degree-days, not in days.** A tiller carries
+/// `leaves_per_tiller` live leaves and pushes out a new one every
+/// `degree_days_per_leaf`, so the oldest dies on the same schedule: the rate is
+/// one over the thermal time a leaf survives. In a Canterbury January that is
+/// about 7% of the standing leaf a day; in July it is under 1%.
+///
+/// A flat rate - which is what this replaced - gets the annual total roughly
+/// right and the season exactly wrong, and the season is what a farmer plans
+/// around. It also fixes the ratio of dead to green at senescence over
+/// decomposition, so a model with both at 2% a day sits at equilibrium with as
+/// much dead standing as green, which is not a pasture anybody grazes.
+///
+/// Falls back to `senescence_rate_per_day` when no leaf lifespan is stated.
+/// `water_factor` is the same water stress coefficient that scales growth, and
+/// it belongs here for the reason DairyNZ state: the time a tiller takes to
+/// produce a new leaf "is largely dependent on temperature **and moisture**". A
+/// thirsty plant turns its leaves over more slowly, which is why a Canterbury
+/// summer rotation is longer than a spring one and not shorter.
+///
+/// **Leaving moisture out was worth 65 kg DM/ha a day.** With temperature
+/// alone, February senescence came to three times February growth and the green
+/// pool collapsed - a sward dying faster than any Canterbury pasture does,
+/// from reading half of a sentence.
+[[nodiscard]] double senescence_share(const PastureSpeciesParameters& species,
+                                      double mean_temperature_c, double water_factor) noexcept;
 
 /// A day's dung and urine from one mob, in kg N.
 struct Excreta {

@@ -129,6 +129,35 @@ std::string ExcretaParameters::invalid_reason() const {
   return {};
 }
 
+double senescence_share(const PastureSpeciesParameters& species, double mean_temperature_c,
+                        double water_factor) noexcept {
+  if (species.degree_days_per_leaf <= 0.0 || species.leaves_per_tiller <= 0.0) {
+    return std::clamp(species.senescence_rate_per_day, 0.0, 1.0);
+  }
+
+  // Thermal time this species banked today. Below its base temperature a grass
+  // makes no new leaf, and the one it is carrying does not die on schedule
+  // either - which is why a winter sward holds its cover for weeks.
+  const double degree_days = std::max(0.0, mean_temperature_c - species.base_temperature_c);
+
+  // **Temperature and moisture**, which is how DairyNZ state it. A thirsty
+  // tiller takes longer to push out its next leaf, so the one it is carrying
+  // lives longer - which is why a Canterbury summer rotation is longer than a
+  // spring one rather than shorter.
+  const double effective = degree_days * std::clamp(water_factor, 0.0, 1.0);
+  if (effective <= 0.0) {
+    return 0.0;
+  }
+
+  const double days_per_leaf = species.degree_days_per_leaf / effective;
+  const double leaf_lifespan_days = species.leaves_per_tiller * days_per_leaf;
+
+  // One over the lifespan: the share of standing leaf that reaches the end of
+  // it today. Clamped, because a hot enough day would otherwise kill more leaf
+  // than is standing.
+  return std::clamp(1.0 / leaf_lifespan_days, 0.0, 1.0);
+}
+
 Excreta excreta_from_intake(double nitrogen_eaten_kg, double intake_kg_dm,
                             double liveweight_gain_kg, double head,
                             const ExcretaParameters& excreta) noexcept {
@@ -337,12 +366,18 @@ PastureGrowth PastureSward::step(const DailyWeather& weather, double water_stres
   // what stands above the residual: the crown and stubble a plant regrows from
   // do not senesce away, so a sward can be grazed or dried back hard and still
   // recover.
+  //
+  // **How much dies is a function of the day's temperature**, through the
+  // thermal time a leaf lives for - fast in January, slow in July. A flat rate
+  // gets the annual total roughly right and the season exactly wrong, and it
+  // was the reason this farm's cover peaked in February where a Canterbury
+  // farm's bottoms out.
   const double grass_senescence =
       std::max(0.0, grass_kg_dm_ - parameters_.grass.residual_kg_dm_per_ha) *
-      parameters_.grass.senescence_rate_per_day;
+      senescence_share(parameters_.grass, mean_temperature, growth.water_factor);
   const double legume_senescence =
       std::max(0.0, legume_kg_dm_ - parameters_.legume.residual_kg_dm_per_ha) *
-      parameters_.legume.senescence_rate_per_day;
+      senescence_share(parameters_.legume, mean_temperature, growth.water_factor);
   growth.senescence_kg_dm = grass_senescence + legume_senescence;
   grass_kg_dm_ -= grass_senescence;
   legume_kg_dm_ -= legume_senescence;

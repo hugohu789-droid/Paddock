@@ -34,9 +34,25 @@
 # Photosynthetically active radiation as a share of global solar radiation.
 par_fraction = 0.5  # PLACEHOLDER - conventional value, no source recorded yet
 
-# Share of the dead pool that decomposes each day. Its carbon leaves the tracked
-# pools as soil organic matter; its nitrogen mineralises back into the soil.
-decomposition_rate_per_day = 0.02  # PLACEHOLDER
+# Share of the dead pool that leaves the standing crop each day.
+#
+# **This alone decides how much of the sward is dead.** At equilibrium the dead
+# pool settles where senescence in equals decomposition out, so the dead share
+# of standing dry matter is s / (s + d) - and this file used to carry 0.02
+# against a senescence of 0.02, which is exactly half dead whatever else the
+# model did. It measured 50 to 64%. A grazed New Zealand sward runs 10 to 20%.
+#
+# **What the pool actually holds is standing dead**, and that leaves fast: it is
+# trodden in, broken off and taken incidentally in a mouthful, and it stops
+# being part of the standing crop in about a week. True decomposition to soil
+# organic matter is far slower, but this model has no litter layer beneath the
+# sward, so the one rate it has is the one that governs cover - and cover is
+# what a plate meter reads and what a farmer manages to.
+#
+# 0.12 a day is a residence time of about eight days. **PLACEHOLDER**: the
+# mechanism is not in doubt and the number is not measured. It is also the
+# single most sensitive figure in the sward, because of that s / (s + d).
+decomposition_rate_per_day = 0.12  # PLACEHOLDER - see the note above
 
 [grass]
 species_id = "ryegrass_perennial"
@@ -48,7 +64,36 @@ radiation_use_efficiency_g_per_mj = 0.932
 base_temperature_c = 4.4                   # cool limit for temperate grasses
 optimum_temperature_c = 20.0               # PLACEHOLDER
 maximum_temperature_c = 35.0               # PLACEHOLDER
+# A fallback now, and used only if the leaf lifespan below is removed.
 senescence_rate_per_day = 0.02             # PLACEHOLDER
+
+# **How long a leaf lives, in thermal time.**
+#
+# DairyNZ call ryegrass a "three leaf plant": a tiller sustains three live
+# leaves, so when the fourth appears the first dies and a leaf therefore lives
+# three leaf-appearance intervals. That is the mechanism, and it is what makes
+# senescence a season rather than a number - a leaf turns over in a fortnight in
+# a Canterbury January and takes months in July.
+#
+# **Two sources disagree about the interval and both are recorded.** DairyNZ
+# state it directly - "a new leaf growing every 8 days in mid-spring" - which at
+# Lincoln's measured October mean of 11.9 C, 7.5 degree-days a day above this
+# species' 4.4 C base, works out at 60 degree-days a leaf. The published
+# phyllochron for a ryegrass is about double that: 120 +- 4.2 degree-days a
+# leaf for Italian ryegrass, a congener of this one.
+#
+# 120 is used, and the reason is that the two are not measuring the same sward.
+# DairyNZ's audience is irrigated, fertilised dairy pasture, which pushes leaves
+# out roughly twice as fast as the unfertilised dryland this farm is. Running
+# the model at 60 made the point: leaf died faster than the stock could graze
+# it, the sward handed its animals 6% of what it grew, and the farm sold down to
+# 44 head. That is not a Canterbury farm; it is a dairy phyllochron on a dryland
+# block.
+#
+# **VERIFY** - Italian ryegrass is a relative and not this species, and no
+# perennial ryegrass figure has been read directly.
+degree_days_per_leaf = 120.0
+leaves_per_tiller = 3.0
 # Crown and stubble that do not senesce and that the plant regrows from.
 residual_kg_dm_per_ha = 400.0              # PLACEHOLDER
 nitrogen_content_fraction = 0.035          # PLACEHOLDER
@@ -66,6 +111,14 @@ base_temperature_c = 5.0                   # PLACEHOLDER
 optimum_temperature_c = 22.0               # PLACEHOLDER
 maximum_temperature_c = 35.0               # PLACEHOLDER
 senescence_rate_per_day = 0.025            # PLACEHOLDER
+
+# **PLACEHOLDER, and taken from the grass.** White clover is a stolon rather
+# than a tiller and its leaves are trifoliate, so "three live leaves" is the
+# wrong picture for it - the number here is the ryegrass figure carried across
+# because no clover equivalent has been read, and the shape of the seasonal
+# response matters more than its exact level. See docs/validation/verify.md.
+degree_days_per_leaf = 120.0
+leaves_per_tiller = 3.0
 residual_kg_dm_per_ha = 100.0              # PLACEHOLDER
 nitrogen_content_fraction = 0.045          # PLACEHOLDER
 # Published New Zealand range is 20 to 28 kg N fixed per tonne of clover dry
