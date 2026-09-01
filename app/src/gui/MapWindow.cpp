@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QCoreApplication>
 #include <QDir>
 #include <QDockWidget>
 #include <QEvent>
@@ -18,6 +19,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QProgressDialog>
 #include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScrollArea>
@@ -30,6 +32,7 @@
 #include <array>
 #include <cstddef>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <limits>
 #include <stdexcept>
@@ -55,6 +58,10 @@
 #include <paddock/core/Weather.hpp>
 
 #include "../AttachElevation.hpp"
+
+#ifdef PADDOCK_WITH_GIS
+#include <paddock/gis/ElevationDownload.hpp>
+#endif
 #include "ComparisonDialog.hpp"
 #include "DashboardDialog.hpp"
 #include "PagePrinter.hpp"
@@ -581,6 +588,20 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   disease_report_button_->setEnabled(false);
   connect(disease_report_button_, &QPushButton::clicked, this, &MapWindow::open_disease_report);
 
+  // **Hidden unless there is ground to fetch.** A button offering to download
+  // something that is already here, or that this scenario never wanted, is a
+  // button that teaches people to ignore buttons.
+  fetch_ground_button_ = new QPushButton("Fetch ground", this);
+  fetch_ground_button_->setObjectName("quietAction");
+  fetch_ground_button_->setToolTip(
+      "This farm has measured ground and the file is not on this machine, so the map is drawn "
+      "flat.\n\n"
+      "Downloads the LiDAR tile this scenario names - open data from Toitu Te Whenua "
+      "LINZ, no account needed - and checks it against the hash the scenario pins before putting "
+      "it anywhere.");
+  fetch_ground_button_->setVisible(false);
+  connect(fetch_ground_button_, &QPushButton::clicked, this, &MapWindow::fetch_ground);
+
   dashboard_button_ = new QPushButton("Indicators", this);
   dashboard_button_->setObjectName("quietAction");
   dashboard_button_->setToolTip(
@@ -613,6 +634,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   auto* report_row = new QHBoxLayout;
   report_row->setContentsMargins(10, 0, 10, 8);
   report_row->addStretch(1);
+  report_row->addWidget(fetch_ground_button_);
   report_row->addWidget(dashboard_button_);
   report_row->addWidget(disease_report_button_);
   report_row->addWidget(run_report_button_);
@@ -968,6 +990,22 @@ MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
   try {
     config::ScenarioBundle bundle = config::load_scenario(choices.scenario_directory);
     products.no_ground_reason = attach_elevation(bundle, choices.scenario_directory);
+
+    // Missing, and the bundle says where it is published. attach_elevation has
+    // already demoted the scenario to flat and written the sentence; this only
+    // adds what would be needed to put that right.
+    if (!products.no_ground_reason.empty() && bundle.terrain.is_fetchable()) {
+      GroundOffer offer;
+      offer.url = bundle.terrain.elevation_url;
+      offer.attribution = bundle.terrain.elevation_attribution;
+      offer.sha256 = bundle.terrain.elevation_sha256;
+      offer.scenario = bundle.name;
+      offer.destination =
+          (std::filesystem::path(choices.scenario_directory) / bundle.terrain.elevation_path)
+              .lexically_normal()
+              .string();
+      products.ground_offer = std::move(offer);
+    }
     if (!bundle.grid.has_value()) {
       throw std::runtime_error("This scenario has no [grid] section, so there is no map to draw.");
     }
@@ -1125,6 +1163,10 @@ void MapWindow::adopt_run(RunProducts products) {
   latitude_degrees_ = products.latitude_degrees;
   last_run_had_stock_ = products.had_stock;
   no_ground_reason_ = std::move(products.no_ground_reason);
+  ground_offer_ = std::move(products.ground_offer);
+  if (fetch_ground_button_ != nullptr) {
+    fetch_ground_button_->setVisible(ground_offer_.has_value());
+  }
   last_failure_.clear();
   setup_->show_measured_ground(products.measured_ground);
   setup_->show_paddock_note(last_bundle_.has_value()
@@ -1194,6 +1236,79 @@ void MapWindow::open_report() {
       QString::fromStdString(last_bundle_->name + "-report.md"), this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->show();
+}
+
+void MapWindow::fetch_ground() {
+#ifdef PADDOCK_WITH_GIS
+  if (!ground_offer_.has_value()) {
+    return;
+  }
+  const GroundOffer offer = *ground_offer_;
+
+  // **The credit is shown before the download, not after.** It is pinned in the
+  // bundle precisely so that it does not depend on a successful network call,
+  // and showing it here is the point of pinning it.
+  const QMessageBox::StandardButton answer = QMessageBox::question(
+      this, "Fetch ground",
+      QString("%1 has measured ground and it is not on this machine.\n\n"
+              "Download it from Toitu Te Whenua LINZ? It is open data and needs no account. "
+              "The file is checked against the hash this scenario pins before it is put "
+              "anywhere.\n\n%2")
+          .arg(QString::fromStdString(offer.scenario), QString::fromStdString(offer.attribution)),
+      QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+  if (answer != QMessageBox::Yes) {
+    return;
+  }
+
+  QProgressDialog progress("Fetching the ground...", "Cancel", 0, 100, this);
+  progress.setWindowModality(Qt::WindowModal);
+  progress.setMinimumDuration(0);
+  progress.setValue(0);
+
+  gis::ElevationDownload request;
+  request.url = offer.url;
+  request.destination = offer.destination;
+  request.expected_sha256 = offer.sha256;
+
+  // **Pumped from the progress callback rather than run on another thread.**
+  // The dialog is modal, so the only interface this reaches is its own Cancel
+  // button, and the alternative - a worker plus a queued connection for every
+  // block - is a great deal of machinery for a bar that moves for half a
+  // minute. The cancel is real: the callback returns false and the partial file
+  // is removed.
+  const gis::DownloadOutcome outcome =
+      gis::download_elevation(request, [&progress](std::int64_t so_far, std::int64_t total) {
+        if (total > 0) {
+          progress.setValue(static_cast<int>(so_far * 100 / total));
+          progress.setLabelText(QString("Fetching the ground... %1 of %2 MB")
+                                    .arg(so_far / (1024 * 1024))
+                                    .arg(total / (1024 * 1024)));
+        }
+        QCoreApplication::processEvents();
+        return !progress.wasCanceled();
+      });
+  progress.close();
+
+  if (!outcome.ok) {
+    if (outcome.reason != "cancelled") {
+      QMessageBox::warning(this, "Fetch ground", QString::fromStdString(outcome.reason));
+    }
+    return;
+  }
+
+  // The ground is here; the run on screen was made without it. Saying so and
+  // leaving the run alone is better than silently re-running something the
+  // person may have spent a minute setting up - and the button going away is
+  // itself the signal that it worked.
+  ground_offer_.reset();
+  fetch_ground_button_->setVisible(false);
+  QMessageBox::information(this, "Fetch ground",
+                           QString("The ground for %1 is here (%2 MB).\n\n"
+                                   "The run on screen was made on flat ground. "
+                                   "Run it again to see it on the measured surface.")
+                               .arg(QString::fromStdString(offer.scenario))
+                               .arg(outcome.bytes / (1024 * 1024)));
+#endif
 }
 
 void MapWindow::open_dashboard() {

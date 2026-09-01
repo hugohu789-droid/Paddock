@@ -400,4 +400,85 @@ TEST(ScenarioTest, ABundleWhoseGridDisagreesWithItsSoilIsRefused) {
   EXPECT_THROW(static_cast<void>(bundle.make_soil_raster()), std::runtime_error);
 }
 
+// **A bundle says where its ground is published, not only what it must be.**
+//
+// The hash was always enough to know *which* file a scenario means. It was
+// never enough to get it: the instruction was to run a Python script, and every
+// download of this simulator arrives with no ground and no runtime to fetch it
+// with. A URL beside the hash turns that into one request against a known
+// address, checked against a hash decided before it went out.
+TEST(ScenarioTerrainTest, AShippedBundleSaysWhereItsGroundIsPublished) {
+  for (const std::string& name :
+       {"canterbury-baseline", "canterbury-grazed", "lincoln-lurdf", "ruakura-fe"}) {
+    const ScenarioBundle bundle =
+        load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
+    EXPECT_TRUE(bundle.terrain.is_fetchable()) << name;
+    EXPECT_EQ(bundle.terrain.elevation_url.rfind("https://", 0), 0U) << name;
+    EXPECT_FALSE(bundle.terrain.elevation_attribution.empty()) << name;
+
+    // The licence asks for the licensor by name, and this is the string that
+    // will be shown. LINZ elevation is CC BY 4.0 and the credit says so.
+    EXPECT_NE(bundle.terrain.elevation_attribution.find("LINZ"), std::string::npos) << name;
+    EXPECT_NE(bundle.terrain.elevation_attribution.find("CC-BY-4.0"), std::string::npos) << name;
+  }
+}
+
+// **A url with no attribution is refused at load.**
+//
+// Not a lint. The file this fetches belongs to somebody and its licence asks to
+// be credited, and the credit has to be in the archive whether or not anybody
+// ever runs the download - an attribution that only exists after a successful
+// network call is not an attribution. Pinning it in the manifest is what makes
+// that true, and requiring it is what keeps it true.
+TEST(ScenarioTerrainTest, AGroundSourceWithoutItsCreditIsRefused) {
+  const BundleCopy copy;
+  copy.edit("scenario.toml", "attribution = \"Canterbury", "# attribution = \"Canterbury");
+
+  try {
+    const ScenarioBundle loaded = load_scenario(copy.path());
+    FAIL() << "a [terrain] naming a url and no attribution loaded, with url "
+           << loaded.terrain.elevation_url;
+  } catch (const std::exception& trouble) {
+    const std::string said = trouble.what();
+    EXPECT_NE(said.find("attribution"), std::string::npos) << said;
+  }
+}
+
+// **The manifest decides what the downloader may open, and it may only open the
+// web.**
+//
+// The URL goes to GDAL's virtual file system, which opens a great deal more
+// than http - a local path, a member of an archive, another machine's share.
+// A manifest that could name any of those is a manifest that can be made to
+// read a file the person running it did not choose, so the string is narrowed
+// where it enters the program rather than where it is used.
+TEST(ScenarioTerrainTest, AGroundSourceThatIsNotAWebAddressIsRefused) {
+  for (const std::string& scheme : {"file:///etc/passwd", "/vsizip//tmp/x.zip/y.tif", "C:/x.tif"}) {
+    const BundleCopy copy;
+    copy.edit("scenario.toml", "url = \"https://nz-elevation.s3-ap-southeast-2.amazonaws.com",
+              "url = \"" + scheme + "#");
+
+    try {
+      const ScenarioBundle loaded = load_scenario(copy.path());
+      FAIL() << "a [terrain] url of '" << scheme << "' loaded as '" << loaded.terrain.elevation_url
+             << "'";
+    } catch (const std::exception& trouble) {
+      const std::string said = trouble.what();
+      EXPECT_NE(said.find("https://"), std::string::npos) << said;
+    }
+  }
+}
+
+// A bundle may still carry ground somebody produced themselves, with nowhere to
+// fetch it from. That is a valid bundle and it simply is not fetchable.
+TEST(ScenarioTerrainTest, GroundWithNoPublishedAddressIsStillValidAndSimplyNotFetchable) {
+  const BundleCopy copy;
+  copy.edit("scenario.toml", "url = \"https://", "# url = \"https://");
+  copy.edit("scenario.toml", "attribution = \"Canterbury", "# attribution = \"Canterbury");
+
+  const ScenarioBundle bundle = load_scenario(copy.path());
+  EXPECT_EQ(bundle.terrain.kind, TerrainSpec::Kind::Snapshot);
+  EXPECT_FALSE(bundle.terrain.is_fetchable());
+}
+
 }  // namespace paddock::config

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Gejile Hu. All rights reserved.
 #
@@ -169,15 +169,20 @@ for path in data/*/; do
 done
 
 # **The fetch scripts, because the NOTICE sends people to them.** Everything
-# this archive does not carry - measured ground, cadastre, climate from a source
-# that will not let us pass it on - is reachable only by running one of these,
-# and until now they stayed in the repository while the instruction to run them
-# went out in the box. Somebody who downloaded a release was told to run a file
-# they did not have.
+# this archive does not carry - cadastre, climate from a source that will not
+# let us pass it on, and the ground for a farm somebody defines themselves - is
+# reachable only by running one of these, and until now they stayed in the
+# repository while the instruction to run them went out in the box. Somebody
+# who downloaded a release was told to run a file they did not have.
+#
+# The common case no longer needs them: `paddock ground fetch` downloads the
+# tile a shipped scenario names, because the bundle pins its address and its
+# hash. What is left for the scripts is the harder half - *searching* a
+# catalogue for the tile that covers a farm nobody has defined yet - and the
+# sources a user must fetch under their own licence.
 #
 # They are ours, GPL-3.0 like the rest, standard library only, and about 40 kB
-# of text. What they cost the archive is nothing; what they buy is the only
-# route to tier B and tier C data that does not involve cloning the repository.
+# of text.
 mkdir -p "${stage}/scripts"
 cp scripts/*-snapshot.py scripts/winchmore-fetch.py "${stage}/scripts/"
 
@@ -198,28 +203,45 @@ notice="${stage}/NOTICE.txt"
   echo "under its own terms and is redistributed here with the attribution its"
   echo "licence requires."
   echo
+  # **One entry per distinct credit, not one per file.** The same Open-Meteo
+  # series is named by four scenarios, and a notice that repeated its
+  # attribution four times read as a machine's output rather than as a credit
+  # somebody is owed. Sorted so the order does not depend on directory walk
+  # order, which would make two builds of the same tree differ.
   found=0
-  while IFS= read -r prov; do
-    attribution="$(grep -oE '"attribution"[[:space:]]*:[[:space:]]*"[^"]*"' "${prov}" | cut -d'"' -f4)"
-    licence="$(grep -oE '"licence"[[:space:]]*:[[:space:]]*"[^"]*"' "${prov}" | cut -d'"' -f4)"
-    [ -n "${attribution}" ] || continue
+  while IFS= read -r line; do
+    [ -n "${line}" ] || continue
     found=1
-    echo "  $(basename "${prov%.provenance.json}")  [${licence}]"
-    echo "    ${attribution}"
-    echo
-  done < <(find "${stage}/data" -name '*.provenance.json' | sort)
+    printf '  [%s]
+    %s
+
+' "${line%%|*}" "${line#*|}"
+  done < <(
+    find "${stage}/data" -name '*.provenance.json' | sort | while IFS= read -r prov; do
+      attribution="$(grep -oE '"attribution"[[:space:]]*:[[:space:]]*"[^"]*"' "${prov}" | cut -d'"' -f4)"
+      licence="$(grep -oE '"licence"[[:space:]]*:[[:space:]]*"[^"]*"' "${prov}" | cut -d'"' -f4)"
+      [ -n "${attribution}" ] || continue
+      echo "${licence:-unstated}|${attribution}"
+    done | sort -u
+  )
   [ "${found}" -eq 1 ] || echo "  (no third-party data is shipped in this archive)"
   echo
   echo "Ground elevation and cadastre are NOT shipped. The scenarios that name"
   echo "them draw flat ground and say so, and everything else about the run is"
-  echo "unchanged. To put them on the measured surface:"
+  echo "unchanged. To put a scenario on its measured surface:"
   echo
-  echo "    python scripts/nz-elevation-snapshot.py --help"
+  echo "    bin/paddock ground fetch data/scenarios/lincoln-lurdf"
   echo
-  echo "Elevation comes from Toitu Te Whenua LINZ open data under CC BY 4.0 and"
-  echo "needs no account. Cadastre comes from the LINZ Data Service, which is"
-  echo "the same licence but needs a free API key of your own in LINZ_API_KEY;"
-  echo "scripts/linz-snapshot.py says how to get one."
+  echo "or press Fetch ground in the application, which appears when a farm has"
+  echo "ground it has not got. Either way it downloads the one tile the scenario"
+  echo "names and checks it against the hash the scenario pins before putting it"
+  echo "anywhere. Elevation is Toitu Te Whenua LINZ open data under CC BY 4.0"
+  echo "and needs no account."
+  echo
+  echo "Cadastre is the same licence but comes from the LINZ Data Service, which"
+  echo "needs a free API key of your own; scripts/linz-snapshot.py says how to"
+  echo "get one, and finding which tile covers a farm you define yourself is"
+  echo "scripts/nz-elevation-snapshot.py. Both need Python."
   echo
   echo "Two sources are not fetchable on your behalf and never will be. NIWA"
   echo "CliFlo climate data is licensed to the person who registered for it and"

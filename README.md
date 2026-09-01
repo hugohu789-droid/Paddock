@@ -361,6 +361,39 @@ farm flat whatever its manifest says. [docs/setup.md](docs/setup.md) has the
 clean-machine instructions, including the Windows vcpkg flags and the elevation
 snapshot script.
 
+### Measured ground
+
+A fresh clone has none. LiDAR tiles are tens of megabytes and go stale, so
+nothing under `data/snapshots/` is committed or shipped, and a scenario whose
+ground is missing draws flat and says so on the line under the map.
+
+Each shipped scenario records where its tile is published and what it must hash
+to, so one command puts it there:
+
+```bash
+./build/desktop/bin/paddock ground fetch data/scenarios/lincoln-lurdf
+```
+
+or press **Fetch ground** in the application, which appears when a farm has
+ground it has not got. Either way the file is checked against the hash the
+scenario pins before it is put anywhere. LINZ publishes elevation as open data
+under CC BY 4.0 and **no account is needed**.
+
+The other sources are not alike, and the differences are licence rather than
+effort ([verify.md item 7](docs/validation/verify.md)):
+
+| Source | Licence | Needs | Redistributable |
+|---|---|---|---|
+| LINZ elevation | CC BY 4.0 | nothing | yes — kept out as bulk, fetched on demand |
+| LINZ cadastre, Topo50 | CC BY 4.0 | free API key in `LINZ_API_KEY` | yes — `scripts/linz-snapshot.py` |
+| NIWA CliFlo | DataHub licence | your own registration | **no** — may not be passed on |
+| Manaaki Whenua S-map | CC BY-NC-ND 3.0 NZ | LRIS account | **no** |
+
+The last two have to be fetched by the person licensed for them, under their own
+agreement. The weather that ships is Open-Meteo, CC BY 4.0, which carries no such
+restriction. Finding which tile covers a farm *you* define is
+`scripts/nz-elevation-snapshot.py`, which walks the LINZ catalogue.
+
 ## Repository Structure
 
 ```

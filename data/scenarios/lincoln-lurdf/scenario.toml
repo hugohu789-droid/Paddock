@@ -166,6 +166,23 @@ kind = "snapshot"
 path = "../../snapshots/lincoln-dem-1m.tiff"
 sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"
 
+# **Where it comes from, so the ground is a download rather than an errand.**
+# The hash above already says which file this scenario means; the address below
+# says where that exact file is published, and together they are enough for
+# `paddock ground fetch` to put it on this machine without anybody searching a
+# catalogue for it. Finding which tile covers a *new* farm is the harder job and
+# stays in scripts/nz-elevation-snapshot.py, where it belongs - it is something
+# you do once, when you decide where the farm is.
+#
+# No account and no key. LINZ publishes elevation as open data on S3; it is the
+# Data Service, which serves the cadastre, that wants an API key.
+#
+# The attribution is written here rather than read out of the download, because
+# a credit that only exists once somebody has successfully fetched something is
+# not a credit. It ships in the archive whether or not the file ever arrives.
+url = "https://nz-elevation.s3-ap-southeast-2.amazonaws.com/canterbury/selwyn_2023/dem_1m/2193/BX23_10000_0404.tiff"
+attribution = "Canterbury - Selwyn LiDAR 1m DEM (2023). Sourced from LINZ elevation open data (https://nz-elevation.s3-ap-southeast-2.amazonaws.com) and licensed for re-use under CC-BY-4.0."
+
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"

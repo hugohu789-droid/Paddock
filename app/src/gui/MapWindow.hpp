@@ -206,6 +206,21 @@ class MapWindow : public QMainWindow {
   /// The report says what happened; this says where each figure stands against
   /// what it is measured by, and how many of them rest on evidence at all.
   void open_dashboard();
+
+  /// **Downloads the ground this scenario named**, so that measured terrain is
+  /// a button rather than an installation step.
+  ///
+  /// Snapshots are never shipped - they are bulk, they go stale, and the
+  /// directory they live in is shared with sources whose licences forbid
+  /// passing them on at all - so every download of this simulator arrives
+  /// drawing flat. The instruction used to be to run a Python script, which
+  /// asks somebody who wants to look at a farm to install a language runtime
+  /// first.
+  ///
+  /// One known address, checked against a hash the bundle settled on before the
+  /// request went out. It does not search: which of thousands of tiles covers a
+  /// new farm is what scripts/nz-elevation-snapshot.py is for.
+  void fetch_ground();
   void show_day(int day);
   void change_field(int field);
   void change_scale(int mode);
@@ -221,6 +236,20 @@ class MapWindow : public QMainWindow {
   /// everything - and blocking everything is exactly the lag being fixed. A run
   /// now fills one of these on a worker and the interface adopts it whole when
   /// it is finished, so the two threads never touch the same vector.
+  /// The ground a scenario named, where it is published, and where it goes.
+  ///
+  /// **Assembled on the worker thread and acted on from the window**, because
+  /// the only thing that knows the ground is missing is the attempt to attach
+  /// it, and the only thing that may open a dialog about it is the interface.
+  struct GroundOffer {
+    std::string url;
+    std::string attribution;
+    std::string destination;
+    std::string sha256;
+    /// Bundle name, for the sentence the dialog opens with.
+    std::string scenario;
+  };
+
   struct RunProducts {
     std::vector<core::Raster<double>> cover;
     std::vector<core::Raster<double>> soil_water;
@@ -260,6 +289,10 @@ class MapWindow : public QMainWindow {
     double latitude_degrees = 0.0;
     bool had_stock = false;
     std::string no_ground_reason;
+    /// Where the ground this scenario wanted is published, when it is missing
+    /// and can be fetched. Empty when the ground is here, when the scenario is
+    /// flat, or when the bundle does not say where its ground came from.
+    std::optional<GroundOffer> ground_offer;
     /// What went wrong, when something did. The run is discarded and the
     /// interface says this instead.
     std::string failure;
@@ -538,6 +571,7 @@ class MapWindow : public QMainWindow {
   QPushButton* run_report_button_ = nullptr;
   QPushButton* disease_report_button_ = nullptr;
   QPushButton* dashboard_button_ = nullptr;
+  QPushButton* fetch_ground_button_ = nullptr;
 
   /// The last table produced, so the report can be reopened without running
   /// everything again. Empty until something has been run.
@@ -649,6 +683,7 @@ class MapWindow : public QMainWindow {
   /// Why this run has no measured ground, when it was supposed to. Empty when
   /// it has some, and when it never asked for any.
   std::string no_ground_reason_;
+  std::optional<GroundOffer> ground_offer_;
 
   /// A level surface for a run that has no elevation, kept because the scene
   /// holds a reference to what it is shown.

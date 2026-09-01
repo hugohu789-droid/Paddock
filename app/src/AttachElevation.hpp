@@ -70,9 +70,12 @@ namespace paddock::app {
     // that knows the file is absent rather than unreadable, and has already
     // written the sentence that says so out loud.
     bundle.terrain.kind = config::TerrainSpec::Kind::Flat;
+    // **Names the easy route, not the one that needs Python.** This used to
+    // send people to scripts/nz-elevation-snapshot.py, which walks a catalogue
+    // looking for the tile that covers a point - work this scenario has already
+    // had done for it, since its manifest pins the tile's address. See ADR 0015.
     return "This farm has measured ground and the file is not on this machine, so it is being "
-           "drawn flat. Snapshots are not committed; fetch it with "
-           "scripts/nz-elevation-snapshot.py.";
+           "drawn flat. Fetch it with 'paddock ground fetch', or the Fetch ground button.";
   }
   const std::string contents((std::istreambuf_iterator<char>(file)),
                              std::istreambuf_iterator<char>());
