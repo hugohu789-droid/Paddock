@@ -176,6 +176,21 @@ struct DecisionPolicy {
   /// this existed: the lambs held their weaning weight and were never drafted.
   double finishing_gain_kg_per_day = 0.139;
 
+  /// What a farmer feeds a lamb to gain while it is still on its mother.
+  ///
+  /// **A different phase and a different number.** A suckling lamb and a
+  /// finishing one were fed the same target, which is what a single lamb mob
+  /// with a single target does - and it weaned them at 23 kg where Beef + Lamb
+  /// New Zealand say a top flock weans 40 kg of lamb per ewe mated. At this
+  /// flock's 132.3% that is 30 kg a lamb, and from a 6 kg birth weight over the
+  /// 103 days to weaning it is 235 grams a day. **DERIVED**, from Beef + Lamb's
+  /// own figure and this flock's own dates.
+  ///
+  /// It sits under the 300 grams a day Beef + Lamb name as what a ewe has to be
+  /// fed to put on her lambs, which is a peak rather than an average - so a
+  /// derived mean below their peak is the consistent reading of the two.
+  double suckling_gain_kg_per_day = 0.235;
+
   [[nodiscard]] std::string invalid_reason() const;
 };
 

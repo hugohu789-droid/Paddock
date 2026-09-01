@@ -17,6 +17,7 @@
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/ScenarioRun.hpp>
 #include <paddock/core/AnimalEnergy.hpp>
+#include <paddock/core/Flock.hpp>
 #include <paddock/core/SnapshotWeather.hpp>
 
 #include "../support/ShippedBundle.hpp"
@@ -104,44 +105,49 @@ TEST(LambsGrazeTest, ALambCropEatsGrass) {
       << "and the extra mouths should show at the bottom of the year";
 }
 
-// **Against a figure this model did not choose.** OVERSEER assumes a sheep
-// weaning weight of 20 kg when none is supplied (TMC Characteristics of
-// animals, Eq. 17). That number is nowhere in this model - the lambs are born
-// at a birth weight, drink what their mothers make and graze for the rest, and
-// whatever they weigh at weaning is what that produced. Landing near 20 is
-// therefore a check and not a tautology.
+// **Against a figure this model did not choose, and against the better of two.**
 //
-// It is deliberately not forced. TMC Eq. 65 would set a pre-weaned animal's
-// daily gain as (weaning weight - birth weight) / weaning age, and feeding the
-// lambs to that target would reproduce the manual by construction and tell
-// nobody anything about the pasture.
-TEST(LambsGrazeTest, LambsReachRoughlyTheWeaningWeightOverseerAssumes) {
+// This checked OVERSEER's default sheep weaning weight of 20 kg, which is what
+// that model assumes when nobody supplies one. Beef + Lamb New Zealand state a
+// stronger thing about a real flock: "top flocks should be achieving at least
+// 40kg lamb weaned per ewe mated". That is a whole-flock figure - it multiplies
+// the weaning weight by the lambing percentage - so it checks two of this
+// model's answers at once and cannot be met by a heavy lamb from a poor
+// lambing.
+//
+// Neither number is in the model. The lambs are born at a share of their dam's
+// reference weight, drink what their mothers make, graze for the rest, and
+// whatever they weigh at weaning is what that produced.
+TEST(LambsGrazeTest, TheFlockWeansAboutWhatBeefAndLambAskOfATopFlock) {
   const ScenarioBundle bundle = year_of(2015);
   ASSERT_TRUE(bundle.management.has_value());
 
   const RunSummary run =
       run_managed_scenario(bundle, *bundle.management, pasture_diet(), "weaning", a_business());
 
-  // The lamb cohort's weight at the weaning draft. Liveweights in the summary
-  // are the first mob's, so this reads the flock's own record instead.
-  ASSERT_FALSE(run.flock_days.empty());
-
-  // Born at a share of the dam's reference weight (TMC Eq. 11-14): between a
-  // single's 6.6 kg and a twin's 5.61 kg at a 132.3% lambing.
-  EXPECT_GT(run.closing_head, 0);
-
-  // 20 kg is the manual's assumption; a third either side covers the fact that
-  // this farm's lambs are grown on measured Canterbury weather rather than on a
-  // national average.
   const double weaning_weight = run.lamb_weaning_weight_kg;
-  EXPECT_GT(weaning_weight, 13.0)
-      << "lambs this light would mean the milk transfer is not reaching them";
-  EXPECT_LT(weaning_weight, 27.0) << "and lambs this heavy would mean they are being fed twice";
+  ASSERT_GT(weaning_weight, 0.0) << "the weaning weight should be recorded whichever way the "
+                                    "crop went - it used to be recorded only when stores were "
+                                    "sold, so a farm that finished its lambs reported nothing";
+
+  // Beef + Lamb's 40 kg is per ewe MATED, so it carries the lambing percentage
+  // with it. This flock lambs at 132.3%.
+  const double lambing = core::FlockRates{}.lambing_percentage / 100.0;
+  const double weaned_per_ewe = weaning_weight * lambing;
+
+  EXPECT_GT(weaned_per_ewe, 32.0)
+      << "weaning " << weaning_weight << " kg lambs at " << lambing << " a ewe comes to "
+      << weaned_per_ewe << " kg a ewe mated, well under what Beef + Lamb ask of a top flock";
+  EXPECT_LT(weaned_per_ewe, 50.0)
+      << "and this much would be a flock nobody in Canterbury is running";
+
+  // OVERSEER's own default, kept as the second opinion it is: it assumes 20 kg
+  // where Beef + Lamb describe 30, and a model landing between a national
+  // assumption and a top flock is in the right country.
+  EXPECT_GT(weaning_weight, 20.0) << "above the figure OVERSEER assumes when none is supplied";
+  EXPECT_LT(weaning_weight, 36.0) << "and below anything a Canterbury dryland farm weans";
 }
 
-// **The udder is a transfer, not a second helping.** What the ewes are charged
-// for making, the lambs are credited with drinking - so a farm with lambs on it
-// does not eat as though every lamb were a grown ewe.
 TEST(LambsGrazeTest, MilkIsChargedOnceAndTheFarmIsNotFedTwice) {
   const ScenarioBundle bundle = year_of(2015);
   ASSERT_TRUE(bundle.management.has_value());

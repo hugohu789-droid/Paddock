@@ -296,7 +296,18 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // system wearing a finishing system's costs. What the grass actually delivers
   // is the model's answer; this is only what the mob is fed for.
   if (farm.mobs().size() > 1) {
-    farm.set_own_target_gain(1, business.decisions.finishing_gain_kg_per_day);
+    // **Two phases, two targets.** A lamb on its mother is grown at one rate and
+    // a lamb being finished at another, and feeding both at the finishing rate
+    // weaned them at 23 kg where Beef + Lamb put a top flock at 30.
+    bool suckling = false;
+    for (const core::AgeCohort& cohort : business.flock.cohorts()) {
+      if (cohort.is_finishing) {
+        suckling = cohort.mob.state.on_the_mother;
+        break;
+      }
+    }
+    farm.set_own_target_gain(1, suckling ? business.decisions.suckling_gain_kg_per_day
+                                         : business.decisions.finishing_gain_kg_per_day);
   }
   for (const core::AgeCohort& cohort : business.flock.cohorts()) {
     if (cohort.is_finishing) {

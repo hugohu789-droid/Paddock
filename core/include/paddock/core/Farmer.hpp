@@ -105,11 +105,49 @@ struct ManagementPolicy {
   /// buys feed instead of asking the pasture for more, because a sward taken
   /// too low stops growing and takes months to come back.
   ///
-  /// PLACEHOLDER. New Zealand extension material talks about residuals in
-  /// terms a farmer can see - a sward height, a cover after grazing - and this
-  /// project has no sourced figure for the level at which a farmer should start
-  /// feeding out. See docs/validation/verify.md.
-  double minimum_cover_kg_dm_per_ha = 1600.0;
+  /// **The lactation floor, and the binding one.** Beef + Lamb New Zealand:
+  /// "individual paddocks should be set-stocked so covers never go below
+  /// 1200 kg DM/ha during lactation" (4 cm). It was an unsourced 1,600, which
+  /// is a dairy figure - DairyNZ put a dairy post-grazing residual at 1,500 to
+  /// 1,600 - and sheep graze closer than cattle.
+  double minimum_cover_kg_dm_per_ha = 1200.0;
+
+  /// **What a ewe can be held to in mid-pregnancy**, which is a good deal
+  /// lower. Beef + Lamb: "for single-bearing ewes from day 70 of pregnancy,
+  /// post-grazing covers of around 800 kg DM/ha (a sward height of 2 cm) are
+  /// recommended".
+  ///
+  /// A single floor flattens a seasonal one, and flattening it upward means
+  /// buying feed in autumn to defend a cover the ewes do not need yet.
+  double pregnancy_cover_kg_dm_per_ha = 800.0;
+
+  /// **And lifted again before lambing.** Beef + Lamb: "three weeks out from
+  /// lambing, post-grazing residuals should be lifted to 1000-1100 kg DM/ha".
+  /// The lower end of their range.
+  double pre_lambing_cover_kg_dm_per_ha = 1000.0;
+
+  /// When the floor lifts from `pregnancy_cover` to `pre_lambing_cover`, and
+  /// from there to `minimum_cover`. Dates rather than a flock reference,
+  /// because a feed plan is written on a calendar and this policy has no
+  /// business knowing what a flock is.
+  ///
+  /// Defaults follow the shipped flock: lambing 20 August, so the lift is three
+  /// weeks before it; weaning 1 December, when a ewe stops milking and can be
+  /// held lower again.
+  int pre_lambing_month = 7;
+  int pre_lambing_day = 30;
+  int lactation_month = 8;
+  int lactation_day = 20;
+  int dry_month = 12;
+  int dry_day = 1;
+
+  /// The floor that applies on a given day.
+  ///
+  /// **Three figures rather than one, because Beef + Lamb give three.** A ewe in
+  /// mid-pregnancy can be held to 800 and a ewe in milk cannot be held below
+  /// 1,200, and a model with one number either starves the second or buys feed
+  /// for the first.
+  [[nodiscard]] double minimum_cover_on(const Date& today) const;
 
   /// What the stock are meant to be doing, kg per head per day. **Stock are
   /// sold by the kilogram**, so holding weight is the floor rather than the

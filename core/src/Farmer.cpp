@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +48,35 @@ std::string to_string(FloorPurchase purchase) {
   return "unknown";
 }
 
+double ManagementPolicy::minimum_cover_on(const Date& today) const {
+  // Which of the three seasons the day is in, by comparing recencies: the
+  // phase that started most recently is the one in force. Comparing dates
+  // rather than ranges is what lets a season cross the new year without a
+  // special case.
+  const auto since = [&today](int month, int day) {
+    Date candidate{today.year, month, day};
+    if (!candidate.is_valid()) {
+      return std::numeric_limits<long long>::max();
+    }
+    if (candidate.days_since_epoch() > today.days_since_epoch()) {
+      candidate = Date{today.year - 1, month, day};
+    }
+    return today.days_since_epoch() - candidate.days_since_epoch();
+  };
+
+  const long long since_pre_lambing = since(pre_lambing_month, pre_lambing_day);
+  const long long since_lactation = since(lactation_month, lactation_day);
+  const long long since_dry = since(dry_month, dry_day);
+
+  if (since_lactation <= since_pre_lambing && since_lactation <= since_dry) {
+    return minimum_cover_kg_dm_per_ha;
+  }
+  if (since_pre_lambing <= since_dry) {
+    return pre_lambing_cover_kg_dm_per_ha;
+  }
+  return pregnancy_cover_kg_dm_per_ha;
+}
+
 std::string ManagementPolicy::validation_error() const {
   if (minimum_cover_kg_dm_per_ha <= 0.0) {
     return "the cover floor must be positive";
@@ -82,6 +112,7 @@ double Farmer::mean_cover(const Farm& farm) {
 
 GrazingSystem Farmer::system_for(const Farm& farm, const Date& date) const {
   const double mean = mean_cover(farm);
+  const double floor = policy_.minimum_cover_on(date);
 
   switch (policy_.preference) {
     case GrazingPreference::AlwaysSetStock:
@@ -91,8 +122,7 @@ GrazingSystem Farmer::system_for(const Farm& farm, const Date& date) const {
       // Held to while the sward can stand it. At the floor even a determined
       // rotator spreads out, because concentrating stock on ground that is
       // already at the line is how a sward gets taken below it.
-      return mean > policy_.minimum_cover_kg_dm_per_ha ? GrazingSystem::Rotational
-                                                       : GrazingSystem::SetStocking;
+      return mean > floor ? GrazingSystem::Rotational : GrazingSystem::SetStocking;
 
     case GrazingPreference::FollowCalendar:
       // The plan the scenario wrote down. It is a plan and not a promise: what
@@ -154,7 +184,8 @@ Farmer::Day Farmer::manage(Farm& farm, const Date& date, const DietQuality& diet
   }
 
   const double farm_cover = mean_cover(farm);
-  const bool at_the_floor = farm_cover <= policy_.minimum_cover_kg_dm_per_ha;
+  const double floor = policy_.minimum_cover_on(date);
+  const bool at_the_floor = farm_cover <= floor;
 
   for (std::size_t index = 0; index < farm.mobs().size(); ++index) {
     const FarmMob& farm_mob = farm.mobs()[index];
@@ -195,8 +226,7 @@ Farmer::Day Farmer::manage(Farm& farm, const Date& date, const DietQuality& diet
       } else {
         double above_the_floor_kg_dm = 0.0;
         for (const std::size_t paddock : farm_mob.paddocks) {
-          const double over =
-              farm.paddock_cover_kg_dm_per_ha(paddock) - policy_.minimum_cover_kg_dm_per_ha;
+          const double over = farm.paddock_cover_kg_dm_per_ha(paddock) - floor;
           if (over > 0.0) {
             above_the_floor_kg_dm += over * farm.paddocks()[paddock].area_hectares();
           }
