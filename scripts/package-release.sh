@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Gejile Hu. All rights reserved.
 #
@@ -14,10 +14,22 @@
 # CMakeCache.txt, so this script works on a developer machine and on a CI runner
 # without either one hardcoding the other's paths.
 #
-# **Snapshots are never packaged.** data/snapshots/ holds fetched LiDAR and
-# cadastre; it is gitignored for licence reasons and the same reasoning applies
-# to an archive that leaves this machine. A scenario whose ground is missing
-# says so and draws flat - which is checked below rather than assumed.
+# **Snapshots are never packaged**, and the reason splits in two - which is
+# worth stating precisely, because getting it wrong in either direction is a
+# mistake. What is in data/snapshots/ today is LINZ LiDAR and cadastre, and
+# that is CC BY 4.0: it *may* lawfully travel, with attribution. It is kept out
+# because it is bulk and goes stale, and because a hash plus a fetch script
+# reproduces it exactly - the rule the whole project runs on.
+#
+# But data/snapshots/ is also where a NIWA CliFlo extract or a Manaaki Whenua
+# S-map layer lands, and those may **not** travel: NIWA's DataHub licence
+# forbids passing the data to third parties, and S-map Online is CC BY-NC-ND
+# 3.0 NZ. See docs/validation/verify.md item 7. So the exclusion is by
+# directory rather than by inspecting each file's licence, because the
+# directory is the drop zone for sources that differ and the strictest governs.
+#
+# A scenario whose ground is missing draws flat and says so - app/src/
+# AttachElevation.hpp - and the smoke test below now exercises that path.
 #
 # Usage:
 #   scripts/package-release.sh --build build/desktop --out dist [--version 0.1.0]
@@ -125,13 +137,49 @@ fi
 
 # ---------------------------------------------------------------- data
 #
-# Everything a scenario needs that is not a fetched snapshot. The exclusion is
-# explicit rather than a pattern, so adding a directory to data/ cannot smuggle
-# a payload into a release by accident.
-for dir in scenarios species pastures soils weather calibration farms; do
-  [ -d "data/${dir}" ] && cp -r "data/${dir}" "${stage}/data/"
+# Everything a scenario needs that is not a fetched snapshot.
+#
+# **This was an allow-list and it silently shipped three releases short.** The
+# list read `scenarios species pastures soils weather calibration farms`, which
+# was every directory data/ held when it was written - and data/diseases has
+# been missing from every release since M4, with data/economics and
+# data/regulations missing since they were added. A released `paddock disease`
+# had nothing to read.
+#
+# It is a deny-list now. Adding a directory to data/ ships it; leaving one out
+# takes a deliberate line here, and the reason goes beside it. The property the
+# allow-list was protecting - that nothing large or unlicensed leaves the
+# machine by accident - is kept by naming what is excluded, by
+# scripts/check-data-licences.sh refusing to let such a file into the
+# repository at all, and by DataFilesTest.EveryDataDirectoryIsShippedOr
+# ExplicitlyExcluded failing when a directory is neither shipped nor named
+# here.
+data_excluded="snapshots"
+
+for path in data/*/; do
+  dir="$(basename "${path}")"
+  case " ${data_excluded} " in
+    # Fetched LiDAR and cadastre. Gitignored for licence reasons, and the same
+    # reasoning applies to an archive that leaves this machine. A scenario whose
+    # ground is missing says so and draws flat - checked below rather than
+    # assumed.
+    *" ${dir} "*) continue ;;
+  esac
+  cp -r "${path}" "${stage}/data/"
 done
-rm -rf "${stage}/data/snapshots"
+
+# **The fetch scripts, because the NOTICE sends people to them.** Everything
+# this archive does not carry - measured ground, cadastre, climate from a source
+# that will not let us pass it on - is reachable only by running one of these,
+# and until now they stayed in the repository while the instruction to run them
+# went out in the box. Somebody who downloaded a release was told to run a file
+# they did not have.
+#
+# They are ours, GPL-3.0 like the rest, standard library only, and about 40 kB
+# of text. What they cost the archive is nothing; what they buy is the only
+# route to tier B and tier C data that does not involve cloning the repository.
+mkdir -p "${stage}/scripts"
+cp scripts/*-snapshot.py scripts/winchmore-fetch.py "${stage}/scripts/"
 
 cp LICENSE "${stage}/" 2>/dev/null || cp COPYING "${stage}/" 2>/dev/null || true
 cp README.md "${stage}/"
@@ -163,9 +211,22 @@ notice="${stage}/NOTICE.txt"
   [ "${found}" -eq 1 ] || echo "  (no third-party data is shipped in this archive)"
   echo
   echo "Ground elevation and cadastre are NOT shipped. The scenarios that name"
-  echo "them draw flat ground and say so. To run them on the measured surface,"
-  echo "fetch the snapshots with the scripts named in each scenario file; they"
-  echo "come from Toitu Te Whenua LINZ under CC BY 4.0."
+  echo "them draw flat ground and say so, and everything else about the run is"
+  echo "unchanged. To put them on the measured surface:"
+  echo
+  echo "    python scripts/nz-elevation-snapshot.py --help"
+  echo
+  echo "Elevation comes from Toitu Te Whenua LINZ open data under CC BY 4.0 and"
+  echo "needs no account. Cadastre comes from the LINZ Data Service, which is"
+  echo "the same licence but needs a free API key of your own in LINZ_API_KEY;"
+  echo "scripts/linz-snapshot.py says how to get one."
+  echo
+  echo "Two sources are not fetchable on your behalf and never will be. NIWA"
+  echo "CliFlo climate data is licensed to the person who registered for it and"
+  echo "may not be passed on, and Manaaki Whenua S-map is CC BY-NC-ND. If you"
+  echo "want either, you agree to their terms yourself and the data stays on"
+  echo "your machine. The weather this release ships is Open-Meteo, CC BY 4.0,"
+  echo "which carries no such restriction."
 } > "${notice}"
 
 # ---------------------------------------------------------------- prove it runs
@@ -179,6 +240,21 @@ echo "package-release: checking the staged tree runs"
   cd "${stage}"
   ./bin/paddock${exe_suffix} scenario run data/scenarios/canterbury-grazed > /dev/null
 ) || { echo "package-release: the staged build does not run" >&2; exit 1; }
+
+# **And that a scenario whose ground is missing still runs**, which is the state
+# every archive is in and no other check here reaches.
+#
+# The comment above this used to claim `scenario run` proved it. It does not:
+# that command builds a farmlet, a point model with no ground under it, so it
+# would have passed with the terrain handling removed entirely. `dashboard` does
+# take the ground, and for as long as it existed it exited 1 when the snapshot
+# was absent - so this exact command failed in every release that shipped it,
+# and the packaging test passed anyway.
+echo "package-release: checking a scenario with no snapshot still runs"
+(
+  cd "${stage}"
+  ./bin/paddock${exe_suffix} dashboard data/scenarios/lincoln-lurdf 2015 > /dev/null
+) || { echo "package-release: a scenario whose LiDAR is absent does not run flat" >&2; exit 1; }
 
 # ---------------------------------------------------------------- archive
 

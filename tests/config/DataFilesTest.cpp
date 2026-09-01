@@ -11,6 +11,8 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -368,4 +370,78 @@ TEST(DataFilesTest, AnAtoxigenicPastureDamagesLessThanAToxigenicOne) {
 }
 
 }  // namespace
+
+// **Every directory under data/ is either shipped or deliberately left out.**
+//
+// This exists because the packaging script silently shipped three releases
+// short. It carried an allow-list - `scenarios species pastures soils weather
+// calibration farms`, every directory data/ held the day it was written - so
+// data/diseases went missing from every release from M4 onward, and
+// data/economics and data/regulations from the day they were added. A released
+// `paddock disease` had nothing to read, and nothing said so: the archive built
+// cleanly, the tests passed, and the gap only showed on a machine that had
+// unpacked it.
+//
+// The script is a deny-list now, and this is the other half: a directory that
+// should ship must not appear in the exclusions, and the exclusions must still
+// be there to read. Neither is a decision anybody can forget to make.
+TEST(DataFilesTest, EveryDataDirectoryIsShippedOrExplicitlyExcluded) {
+  namespace fs = std::filesystem;
+
+  // The script sits beside data/, so the data directory locates it and no
+  // second build definition has to be kept in step with the first. Taken from
+  // the macro rather than from data_path(""), whose trailing slash would leave
+  // parent_path() pointing back at data/ itself.
+  const fs::path data = fs::path(std::string(PADDOCK_DATA_DIR));
+  const fs::path root = data.parent_path();
+  const fs::path script = root / "scripts" / "package-release.sh";
+  ASSERT_TRUE(fs::exists(script)) << script.string();
+
+  std::ifstream in(script);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  ASSERT_FALSE(text.empty());
+
+  const std::size_t at = text.find("data_excluded=\"");
+  ASSERT_NE(at, std::string::npos)
+      << "the packaging script no longer names what it excludes; if it went back to an "
+         "allow-list, this test cannot tell a new directory from a forgotten one";
+  const std::size_t open = text.find('"', at);
+  const std::size_t close = text.find('"', open + 1);
+  ASSERT_NE(close, std::string::npos);
+  const std::string excluded = text.substr(open + 1, close - open - 1);
+
+  // **Fetched ground stays out**, for the licence reason the script gives.
+  EXPECT_NE(excluded.find("snapshots"), std::string::npos)
+      << "fetched LiDAR and cadastre must not leave this machine in an archive";
+
+  // **Everything else ships.** Named one by one rather than iterated, because a
+  // loop over what happens to be in data/ today would pass on the day somebody
+  // adds an exclusion and never notices - which is the failure this is for.
+  for (const std::string& shipped :
+       {"scenarios", "species", "pastures", "soils", "weather", "calibration", "farms", "diseases",
+        "economics", "regulations"}) {
+    EXPECT_TRUE(fs::is_directory(data / shipped)) << shipped << " is gone from data/ entirely";
+    EXPECT_EQ(excluded.find(shipped), std::string::npos)
+        << shipped
+        << " is excluded from releases. diseases, economics and regulations were "
+           "each missing for months and a released paddock could not read them";
+  }
+
+  // And a directory in data/ that this test has never heard of is a directory
+  // nobody has decided about.
+  const std::vector<std::string> known = {"scenarios", "species",     "pastures", "soils",
+                                          "weather",   "calibration", "farms",    "diseases",
+                                          "economics", "regulations", "snapshots"};
+  for (const fs::directory_entry& entry : fs::directory_iterator(data)) {
+    if (!entry.is_directory()) {
+      continue;
+    }
+    const std::string name = entry.path().filename().string();
+    EXPECT_NE(std::find(known.begin(), known.end(), name), known.end())
+        << "data/" << name
+        << " is new. Add it to this test once you have decided whether a "
+           "release should carry it, and to the script's exclusions if it should not";
+  }
+}
+
 }  // namespace paddock::config
