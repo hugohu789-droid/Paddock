@@ -143,18 +143,34 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
 
   // Caught on the day of the draft, because the cohort that was sold is gone
   // by the next one.
-  if (flock_day.sold_store > 0 && farm.mobs().size() > 1) {
+  if ((flock_day.sold_store > 0 || flock_day.kept_to_finish > 0) && farm.mobs().size() > 1 &&
+      summary.lamb_weaning_weight_kg <= 0.0) {
+    // The weaning weight, whichever way the crop went - it used to be recorded
+    // only when stores were sold, so a farm that finished its lambs reported
+    // nothing.
     summary.lamb_weaning_weight_kg = farm.mobs()[1].mob.state.liveweight_kg;
   }
 
   if (flock_day.sold_store > 0) {
-    // Store lambs at the schedule, on the carcass weight a lamb drafts at.
-    const double carcass_kg =
-        business.decisions.draft_liveweight_kg * business.decisions.dressing_out_fraction;
+    // **A store lamb is priced on what it weighs, not on what a finished one
+    // weighs.** This used the draft weight - 38 kg - for every store sold,
+    // which paid a finished lamb's cheque for an animal that had not been
+    // finished. The lambs leaving this farm weigh about 17 at weaning and
+    // rather more if they have been carried to autumn.
+    //
+    // **Still a carcass price on a live animal**, which a saleyard is not: a
+    // store is sold per head on its own market, and the schedule this quotes is
+    // for meat. See docs/validation/verify.md, E28.
+    double liveweight = business.decisions.draft_liveweight_kg;
+    if (farm.mobs().size() > 1 && farm.mobs()[1].mob.state.liveweight_kg > 0.0) {
+      liveweight = farm.mobs()[1].mob.state.liveweight_kg;
+    }
+    const double carcass_kg = liveweight * business.decisions.dressing_out_fraction;
     account.record(today, core::LedgerReason::SoldStock,
                    static_cast<double>(flock_day.sold_store) * carcass_kg *
                        business.prices.lamb_dollars_per_kg_carcass,
-                   "sold " + std::to_string(flock_day.sold_store) + " store lambs at weaning");
+                   "sold " + std::to_string(flock_day.sold_store) + " store lambs at " +
+                       std::to_string(static_cast<int>(liveweight)) + " kg");
   }
   if (flock_day.culled > 0) {
     account.record(
@@ -214,11 +230,25 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // hundred times: the money arrived and the stock never left. Anything that
   // sells head, sells them.
   for (const core::Proposal& done : manager.decide(outlook, account)) {
-    const bool sells_stock = done.kind == core::ActionKind::Destock ||
-                             done.kind == core::ActionKind::SellFinishedStock ||
-                             done.kind == core::ActionKind::SellCullStock;
-    if (sells_stock && done.head > 0) {
-      business.flock.sell_oldest(done.head);
+    if (done.head <= 0) {
+      continue;
+    }
+
+    // **Which animals leave depends on why they are leaving**, and getting it
+    // wrong sells the farm's mothers to fill a lamb order. A draft takes the
+    // lambs that have come to weight; a cull or a destocking takes the oldest
+    // ewes, which is what a farmer sells when they have to sell.
+    switch (done.kind) {
+      case core::ActionKind::SellFinishedStock:
+        business.flock.sell_finishing(done.head);
+        break;
+      case core::ActionKind::Destock:
+      case core::ActionKind::SellCullStock:
+        business.flock.sell_oldest(done.head);
+        break;
+      case core::ActionKind::SellWool:
+      case core::ActionKind::BuyFeed:
+        break;
     }
   }
 
@@ -260,6 +290,14 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // is not there does nothing - so the older scenarios still describe ewes
   // alone.
   farm.set_mob_head(1, business.flock.finishing_head());
+
+  // **Fed for what the farmer wants of them.** A finishing mob left at
+  // maintenance holds its weaning weight and is never drafted, which is a store
+  // system wearing a finishing system's costs. What the grass actually delivers
+  // is the model's answer; this is only what the mob is fed for.
+  if (farm.mobs().size() > 1) {
+    farm.set_own_target_gain(1, business.decisions.finishing_gain_kg_per_day);
+  }
   for (const core::AgeCohort& cohort : business.flock.cohorts()) {
     if (cohort.is_finishing) {
       core::AnimalState lamb = cohort.mob.state;

@@ -209,7 +209,12 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
   // Pinned from the run, at the same 1e-6 relative tolerance the series uses and
   // for the same reason: three platforms, one committed set of numbers.
   //
-  // **Repinned twice.** First when the grid stopped overriding the soil file,
+  // **Repinned three times.** The third when nitrate began leaching from the
+  // soil's own mineral pool and not only from urine patches (E31): every
+  // scenario now loses a little nitrogen to drainage whether or not it carries
+  // stock, so this one grows very slightly less.
+  //
+  // First when the grid stopped overriding the soil file,
   // and again when the nitrogen cycle was closed at the animal: excreta returns
   // to the paddock now instead of leaving with the grazed dry matter, so the
   // sward has nitrogen it did not have and grows more on it. Cover rose another
@@ -226,9 +231,9 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
   // gradient is now centred on the soil at 100 to 140, and this farm holds a
   // fifth more water than the numbers below were pinned against. Cover rose by
   // 78 kg DM/ha on the mean and the mob was moved once more.
-  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3139.1836894794083, 3.2e-3);
-  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1833.2600658840947, 1.9e-3);
-  EXPECT_NEAR(run.closing_cover_kg_dm, 1833.2600658840947, 1.9e-3);
+  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3134.8714162923825, 3.2e-3);
+  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1831.2973628439277, 1.9e-3);
+  EXPECT_NEAR(run.closing_cover_kg_dm, 1831.2973628439277, 1.9e-3);
   EXPECT_NEAR(run.eaten_kg_dm, 125219.06421844629, 1.3e-1);
   EXPECT_NEAR(run.closing_liveweight_kg(), 55.000014928809946, 5.5e-5);
 

@@ -76,6 +76,10 @@ class Farmlet {
   /// Returns a day's dung and urine to this cell, kg N per hectare.
   void return_excreta(double urine_kg_n_per_ha, double dung_kg_n_per_ha,
                       const ExcretaParameters& excreta) {
+    // Kept, because leaching happens in `step` and needs the same parameters
+    // the excreta arrived under - a cell whose leaching used different figures
+    // from its excreta would be two farms.
+    excreta_ = excreta;
     sward_.return_excreta(urine_kg_n_per_ha, dung_kg_n_per_ha, excreta);
   }
 
@@ -99,6 +103,7 @@ class Farmlet {
  private:
   SoilWaterBucket soil_;
   PastureSward sward_;
+  ExcretaParameters excreta_;
   double latitude_degrees_ = 0.0;
 };
 

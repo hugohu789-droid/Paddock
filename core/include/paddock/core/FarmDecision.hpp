@@ -155,6 +155,27 @@ struct DecisionPolicy {
   double draft_liveweight_kg = 38.0;
   double dressing_out_fraction = 0.43;
 
+  /// What a farmer feeds a finishing lamb to gain, kg a day.
+  ///
+  /// **DERIVED from the farmer's own two dates and one weight.** A lamb weaned
+  /// at about 17 kg has to reach `draft_liveweight_kg` before the tail is sold:
+  /// weaning on 1 December to the autumn store sale on 1 May is 151 days, and
+  /// 21 kg over that is 139 grams a day, which sits inside the 100 to 200 a
+  /// finishing lamb is grown at.
+  ///
+  /// **The first version of this used 210 days** - weaning to the end of the
+  /// farm year - and asked for 100 grams. The lambs delivered exactly that and
+  /// reached 36 kg on the day they were sold, two short of drafting, because
+  /// they had been fed to arrive two months after the farmer wanted them. A
+  /// target is a date as much as a weight.
+  ///
+  /// It is what the mob is fed for rather than what it achieves; whether the
+  /// grass delivers is the model's answer, not this number's.
+  ///
+  /// Zero feeds a finishing mob for maintenance, which is what happened before
+  /// this existed: the lambs held their weaning weight and were never drafted.
+  double finishing_gain_kg_per_day = 0.139;
+
   [[nodiscard]] std::string invalid_reason() const;
 };
 

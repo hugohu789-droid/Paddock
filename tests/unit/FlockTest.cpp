@@ -210,12 +210,16 @@ TEST(FlockTest, WeaningCullsTheOlderEwes) {
   EXPECT_LT(flock.cohorts().front().mob.head, 80);
 }
 
-// **Weaning splits the lamb crop**, which is where the farm's income comes
-// from and what stops a flock growing without limit.
-TEST(FlockTest, WeaningKeepsReplacementsAndSellsTheRest) {
+// **Weaning splits the lamb crop three ways**, which is where the farm's income
+// comes from and what stops a flock growing without limit.
+//
+// Replacements, finishers and stores. It used to split two ways - replacements
+// and stores - which made this a store farm without anybody choosing that, and
+// its own Beef + Lamb cost survey is Class 6, "S.I. Finishing Breeding".
+TEST(FlockTest, WeaningKeepsReplacementsAndFinishesOrSellsTheRest) {
   Flock flock = a_flock();
   const FlockCalendar calendar;
-  const FlockRates rates;
+  const FlockRates rates;  // finished_fraction 1.0: this farm finishes
 
   const FlockDay lambing = flock.step(Date{2024, 8, 20}, calendar, rates);
   ASSERT_GT(lambing.born, 0);
@@ -225,14 +229,78 @@ TEST(FlockTest, WeaningKeepsReplacementsAndSellsTheRest) {
 
   // Replacements are the rate applied to the ewes that remain, not a share of
   // the lambs: a farmer keeps enough to replace what is leaving.
-  EXPECT_EQ(weaning.kept_as_replacements + weaning.sold_store, lambing.born)
-      << "every lamb is either kept or sold";
-  EXPECT_GT(weaning.sold_store, weaning.kept_as_replacements)
-      << "most of a lamb crop is sold, or there would be no income";
+  EXPECT_EQ(weaning.kept_as_replacements + weaning.kept_to_finish + weaning.sold_store,
+            lambing.born)
+      << "every lamb is kept, finished or sold";
+  EXPECT_GT(weaning.kept_to_finish, weaning.kept_as_replacements)
+      << "most of a crop is finished on a finishing farm";
+  EXPECT_EQ(weaning.sold_store, 0) << "at finished_fraction 1.0 nothing leaves as a store";
 
-  // What is kept stops being finishing stock: it is next year's flock.
+  // What is kept as a replacement stops being finishing stock; what is kept to
+  // finish stays it, so the drafting rule can take it as it comes to weight.
+  EXPECT_EQ(flock.finishing_head(), weaning.kept_to_finish);
+  EXPECT_EQ(flock.head(),
+            flock.breeding_head() + weaning.kept_as_replacements + weaning.kept_to_finish);
+}
+
+// **A store farm is the same flock with one number changed**, which is what
+// makes this a management choice rather than a code path.
+TEST(FlockTest, AFlockThatFinishesNothingSellsTheCropAtWeaning) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  FlockRates rates;
+  rates.finished_fraction = 0.0;
+
+  const FlockDay lambing = flock.step(Date{2024, 8, 20}, calendar, rates);
+  const FlockDay weaning = flock.step(Date{2024, 12, 1}, calendar, rates);
+
+  EXPECT_EQ(weaning.kept_to_finish, 0);
+  EXPECT_GT(weaning.sold_store, weaning.kept_as_replacements)
+      << "most of a store farm's crop leaves at weaning";
+  EXPECT_EQ(weaning.kept_as_replacements + weaning.sold_store, lambing.born);
   EXPECT_EQ(flock.finishing_head(), 0);
-  EXPECT_EQ(flock.head(), flock.breeding_head() + weaning.kept_as_replacements);
+}
+
+// **The tail goes in autumn.** A farmer does not carry stock that will not make
+// weight into a winter to find out.
+TEST(FlockTest, WhatHasNotMadeWeightIsSoldInAutumn) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  flock.step(Date{2024, 8, 20}, calendar, rates);
+  const FlockDay weaning = flock.step(Date{2024, 12, 1}, calendar, rates);
+  ASSERT_GT(weaning.kept_to_finish, 0);
+  ASSERT_GT(flock.finishing_head(), 0);
+
+  const FlockDay autumn = flock.step(Date{2025, 5, 1}, calendar, rates);
+  EXPECT_EQ(autumn.sold_store, weaning.kept_to_finish)
+      << "whatever the drafting rule has not taken goes as a store";
+  EXPECT_EQ(flock.finishing_head(), 0) << "and the farm goes into winter with ewes only";
+}
+
+// A draft takes the lambs; selling the oldest takes the ewes. Routing one to
+// the other sells the farm's mothers to fill a lamb order.
+TEST(FlockTest, DraftingTakesTheFinishingStockAndNotTheEwes) {
+  Flock flock = a_flock();
+  const FlockCalendar calendar;
+  const FlockRates rates;
+
+  flock.step(Date{2024, 8, 20}, calendar, rates);
+  flock.step(Date{2024, 12, 1}, calendar, rates);
+
+  const int breeding_before = flock.breeding_head();
+  const int finishing_before = flock.finishing_head();
+  ASSERT_GT(finishing_before, 20);
+
+  EXPECT_EQ(flock.sell_finishing(20), 20);
+  EXPECT_EQ(flock.finishing_head(), finishing_before - 20);
+  EXPECT_EQ(flock.breeding_head(), breeding_before) << "no ewe was sold to fill a lamb draft";
+
+  // And selling more than there is sells what there is.
+  EXPECT_EQ(flock.sell_finishing(100'000), finishing_before - 20);
+  EXPECT_EQ(flock.finishing_head(), 0);
+  EXPECT_EQ(flock.breeding_head(), breeding_before);
 }
 
 // **The question the whole age structure exists to answer.** Run ten years of

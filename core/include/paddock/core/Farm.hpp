@@ -60,6 +60,29 @@ struct FarmMob {
   /// number a graze-length rule is checked against.
   int days_on_paddock = 0;
 
+  /// Whether this mob goes into a paddock ahead of the others.
+  ///
+  /// **Leader-follower, which is a named New Zealand practice and was backwards
+  /// here.** Young stock lead and take the leaf off the top; the ewes follow
+  /// and clean up what is left. The reason is exactly the one this model made
+  /// visible by getting it wrong: a lamb needs the best of the feed to grow,
+  /// and lambs put in behind the ewes got the residual. Weaned at 17 kg on the
+  /// first of December, they were still 17 kg on the first of May - five months
+  /// of grazing and no gain at all - because the mob ahead of them had already
+  /// taken everything above the residual.
+  bool grazes_ahead = false;
+
+  /// A gain this mob is fed for whatever the farm policy says.
+  ///
+  /// **Because the farm policy says one thing for every mob.** `Farmer::manage`
+  /// sets every mob to `target_liveweight_gain_kg_per_day` each day, which is
+  /// right for a breeding flock held at weight and wrong for a finishing mob
+  /// that is meant to be growing. Setting the finishing target anywhere the
+  /// farmer's loop could reach it meant setting it and watching it be
+  /// overwritten before the mob ate: the lambs were fed for maintenance,
+  /// ate exactly maintenance, and gained 1e-7 kg a day for five months.
+  std::optional<double> own_target_gain_kg_per_day;
+
   /// Convenience for the common case of a mob on one paddock.
   [[nodiscard]] std::size_t paddock() const { return paddocks.front(); }
 };
@@ -105,7 +128,7 @@ class Farm {
   void set_slopes(const Raster<double>& slope_degrees);
 
   /// Puts a mob on a paddock, and returns its index.
-  std::size_t add_mob(Mob mob, std::size_t paddock);
+  std::size_t add_mob(Mob mob, std::size_t paddock, bool grazes_ahead = false);
 
   /// Moves a mob onto one paddock, and resets its count of days where it
   /// stands. This is all a farmer agent needs from the farm; deciding *when* to
@@ -125,6 +148,9 @@ class Farm {
   /// Mob::target_gain_kg_per_day for why this is not the same field as the
   /// change the mob actually made.
   void set_target_gain(std::size_t mob, double kg_per_day);
+
+  /// Gives a mob a gain of its own, which the farm policy will not overwrite.
+  void set_own_target_gain(std::size_t mob, double kg_per_day);
 
   /// Sets how many head a mob carries.
   ///

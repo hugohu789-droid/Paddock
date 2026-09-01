@@ -62,6 +62,21 @@ struct NitrogenYear {
   core::DateRange range;
 
   double leached_kg_n_per_ha = 0.0;
+
+  /// The two halves OVERSEER reports apart: the urine patches, where most of
+  /// the nitrogen is past what a plant can use, and everything between them,
+  /// where the plants get first call.
+  double leached_from_patches_kg_n_per_ha = 0.0;
+  double leached_between_patches_kg_n_per_ha = 0.0;
+
+  /// The inter-patch share of the loss. **OVERSEER puts this under 15% on a
+  /// grazed pastoral block**, which is the check on whether the split is
+  /// plausible.
+  [[nodiscard]] double inter_patch_share() const {
+    return leached_kg_n_per_ha > 0.0 ? leached_between_patches_kg_n_per_ha / leached_kg_n_per_ha
+                                     : 0.0;
+  }
+
   double drainage_mm = 0.0;
   double rainfall_mm = 0.0;
 

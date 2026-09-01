@@ -41,7 +41,8 @@ DailyRecord Farmlet::step(const DailyWeather& weather, double radiation_ratio, B
   // nitrate past the root zone, so leaching happens after the water balance has
   // said how much drained and after the sward has taken what it could - a plant
   // that grew today used nitrogen the drainage cannot then take.
-  const double leached = sward_.leach_nitrate(water.drainage_mm, soil_.water_mm(), ledger);
+  const double leached =
+      sward_.leach_nitrate(water.drainage_mm, soil_.water_mm(), excreta_, ledger);
 
   DailyRecord record;
   record.date = weather.date;

@@ -326,12 +326,14 @@ TEST(DroughtDestockingTest, TheFlockRunsItsYearInsideTheRun) {
   const int born =
       std::accumulate(run.flock_days.begin(), run.flock_days.end(), 0,
                       [](int running, const core::FlockDay& day) { return running + day.born; });
-  const int sold = std::accumulate(
+  const int finished = std::accumulate(
       run.flock_days.begin(), run.flock_days.end(), 0,
-      [](int running, const core::FlockDay& day) { return running + day.sold_store; });
+      [](int running, const core::FlockDay& day) { return running + day.kept_to_finish; });
 
   EXPECT_GT(born, 0) << "a year with a lambing date in it should produce lambs";
-  EXPECT_GT(sold, 0) << "and a weaning date should send most of them away";
+  EXPECT_GT(finished, 0)
+      << "and a weaning date should put most of them into the finishing mob - this farm's own "
+         "cost survey is Beef + Lamb's Class 6, which finishes";
   EXPECT_GT(run.closing_head, 0) << "leaving a flock behind";
 }
 

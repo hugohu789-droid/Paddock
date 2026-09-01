@@ -158,8 +158,11 @@ TEST(LambsGrazeTest, MilkIsChargedOnceAndTheFarmIsNotFedTwice) {
   // take off the paddock is bounded by the grass rather than by their appetite,
   // and the rest of the year's feed is bought.
   const double eaten_per_ha = run.eaten_kg_dm / 80.0;
-  EXPECT_GT(eaten_per_ha, 700.0);
-  EXPECT_LT(eaten_per_ha, 1'800.0)
+  // The band moved up when the farm started finishing its lambs rather than
+  // selling them at weaning: a crop carried to autumn eats five more months of
+  // grass, which is most of why utilisation went from 21% to 46%.
+  EXPECT_GT(eaten_per_ha, 1'500.0);
+  EXPECT_LT(eaten_per_ha, 3'200.0)
       << "an intake this high would mean the lambs are grazing for milk they already drank";
 }
 

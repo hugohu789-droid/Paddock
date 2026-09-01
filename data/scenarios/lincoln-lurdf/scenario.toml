@@ -198,6 +198,13 @@ paddock = 0
 liveweight_kg = 6.0
 age_days = 0.0
 
+# **Leader-follower**, which is a named New Zealand practice: young stock go
+# into a paddock first and take the leaf off the top, the ewes follow and clean
+# up behind them. The reason is what this model made visible by getting it
+# backwards - lambs grazing behind the ewes got the residual, and a crop weaned
+# at 17 kg on 1 December was still 17 kg on 1 May. Five months, no gain.
+grazes_ahead = true
+
 # Managed as canterbury-grazed is: set stocked over lambing, rotating the rest
 # of the year, after Smith and Dawson (1976). See docs/validation/verify.md.
 
@@ -234,7 +241,34 @@ minimum_spell_days = 35
 # The same rules canterbury-grazed carries, so the two differ in their ground
 # and their stocking and in nothing else.
 [management]
-minimum_cover_kg_dm_per_ha = 1600.0
+# **1,200 kg DM/ha, from Beef + Lamb New Zealand, replacing an admitted round
+# number.** This was 1,600, and canterbury-grazed still says plainly where that
+# came from: "the only reason to prefer them to any other round number: they are
+# the ones the loop is known to settle under". It is a dairy-shaped figure -
+# DairyNZ put a dairy post-grazing residual at 1,500 to 1,600 (3.5 to 4 cm) -
+# and sheep are not cattle. They graze more closely and hold lower, evener
+# residuals.
+#
+# Beef + Lamb's own floors for a ewe flock are seasonal:
+#
+#   from day 70 of pregnancy   ~800 kg DM/ha  (2 cm)
+#   three weeks before lambing  1,000-1,100
+#   through lactation           never below 1,200  (4 cm)
+#
+# 1,200 is the binding one - the highest of the three - so a single floor set
+# there is the conservative reading of the series.
+#
+# **What 1,600 was doing.** The farmer buys feed whenever cover is under this,
+# and bought feed substitutes for grazing rather than adding to it. An honest
+# cover on this farm runs 1,300 to 2,800, so a 1,600 floor had the flock eating
+# hay for much of the year and harvesting 30% of what the farm grew. The
+# stocking rate was never the problem: 417 ewes on 80 ha is about 7.0 SU/ha
+# against Beef + Lamb's Class 6 survey at 7.74.
+#
+# **A single floor flattens a seasonal one**, which is a caveat rather than a
+# fix - see docs/validation/verify.md, E20. A ewe in mid-pregnancy can be held
+# to 800 and this will not let her be.
+minimum_cover_kg_dm_per_ha = 1200.0
 rotation_cover_threshold_kg_dm_per_ha = 2200.0
 target_liveweight_gain_kg_per_day = 0.0
 maximum_graze_days = 3
