@@ -21,6 +21,7 @@
 #include <paddock/core/SnapshotWeather.hpp>
 
 #include "../support/ShippedBundle.hpp"
+#include "../support/ValueOf.hpp"
 
 namespace paddock::config {
 namespace {
@@ -75,7 +76,7 @@ RunSummary year_of(int starting_year) {
       core::DateRange{core::Date{starting_year, 7, 1}, core::Date{starting_year + 1, 6, 30}};
 
   return run_managed_scenario(
-      bundle, bundle.management.value(), pasture_diet(),
+      bundle, tests::value_of(bundle.management, "a [management] section"), pasture_diet(),
       std::to_string(starting_year) + "-" + std::to_string((starting_year + 1) % 100),
       a_business());
 }

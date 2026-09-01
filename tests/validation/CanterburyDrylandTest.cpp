@@ -26,6 +26,7 @@
 #include <paddock/core/SnapshotWeather.hpp>
 
 #include "../support/ShippedBundle.hpp"
+#include "../support/ValueOf.hpp"
 
 namespace paddock::config {
 namespace {
@@ -64,7 +65,8 @@ struct YearOfPasture {
 YearOfPasture pasture_year(int starting_year) {
   const ScenarioBundle bundle = year_of(starting_year);
   const RunSummary run =
-      run_managed_scenario(bundle, bundle.management.value(), pasture_diet(), "dryland");
+      run_managed_scenario(bundle, tests::value_of(bundle.management, "a [management] section"),
+                           pasture_diet(), "dryland");
 
   YearOfPasture year;
   for (const core::ProcessEntry& entry : run.ledger.entries(core::Budget::DryMatter)) {
