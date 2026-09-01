@@ -227,10 +227,27 @@ int run_dashboard(const std::vector<std::string>& arguments) {
   }
 
   paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(arguments.front());
+  // **Missing ground is a warning, not a refusal**, and this said otherwise for
+  // as long as the command existed.
+  //
+  // attach_elevation demotes a scenario whose snapshot is absent to flat and
+  // hands back a sentence to show somebody - that is its documented contract,
+  // and it is what the map window and the report path both do with it. Here the
+  // sentence was printed and then treated as fatal.
+  //
+  // Which meant the command refused to run in precisely the state every
+  // download is in. Snapshots are fetched, never shipped, so a release archive
+  // has none; all four scenarios that ship name one; so `paddock dashboard`
+  // exited 1 on every scenario in every release, and only ever worked on a
+  // machine that had already fetched LiDAR. The one build nobody tries it on is
+  // a developer's.
+  //
+  // Slope changes growth, so a flat run is a different farm and the reason goes
+  // to stderr where it will be read.
   if (const std::string trouble = paddock::app::attach_elevation(bundle, arguments.front());
       !trouble.empty()) {
-    std::cerr << "paddock: " << trouble << '\n';
-    return 1;
+    std::cerr << "paddock: " << trouble
+              << "\n         The indicators below are for that flat farm.\n";
   }
   if (!bundle.management.has_value()) {
     std::cerr << "paddock: '" << bundle.name
@@ -313,12 +330,22 @@ int run_dashboard(const std::vector<std::string>& arguments) {
 int run_nitrogen(const std::vector<std::string>& arguments) {
   paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(arguments.front());
 
-  // The same attachment `scenario run` makes: a bundle that names a LiDAR
-  // snapshot needs a reader for it, and refuses rather than running flat.
+  // Flat rather than refused, for the reason set out in run_dashboard. The
+  // comment this replaces claimed to be "the same attachment `scenario run`
+  // makes" - and `scenario run` makes no such attachment. It builds a farmlet,
+  // which is a point model with no ground under it at all.
+  //
+  // **Leaching is the indicator where flat ground is a real omission**, which
+  // is why it is worth saying rather than only logging. Leaching follows
+  // drainage, and on a slope some of the water that would have drained runs off
+  // instead - so a flat farm over-drains and this report reads high. That is
+  // the safe direction for a compliance report and it is still not the farm's
+  // number.
   if (const std::string trouble = paddock::app::attach_elevation(bundle, arguments.front());
       !trouble.empty()) {
-    std::cerr << "paddock: " << trouble << '\n';
-    return 1;
+    std::cerr << "paddock: " << trouble
+              << "\n         Leaching is reported for that flat farm, and flat "
+                 "ground drains where a slope would shed, so this reads high.\n";
   }
   const paddock::config::NitrogenRegulation rule =
       paddock::config::load_nitrogen_regulation(arguments[1]);
