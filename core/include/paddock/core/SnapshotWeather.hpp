@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,10 @@ class SnapshotWeatherSource final : public WeatherSource {
 
   /// The span the snapshot actually covers. Empty when it holds no rows.
   [[nodiscard]] DateRange coverage() const noexcept;
+
+  /// The same, through the interface, so a caller holding a WeatherSource can
+  /// ask without knowing which one it has.
+  [[nodiscard]] std::optional<DateRange> covers() const override;
 
  private:
   SnapshotWeatherSource(std::vector<DailyWeather> records, std::string content_hash,

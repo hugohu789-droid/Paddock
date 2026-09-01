@@ -39,6 +39,7 @@ add_executable(
   unit/TopographyTest.cpp
   unit/VersionTest.cpp
   unit/WeatherTest.cpp
+  unit/WholeYearsTest.cpp
   property/DeterminismTest.cpp)
 
 target_link_libraries(paddock_unit_tests PRIVATE Paddock::core GTest::gtest_main

@@ -87,13 +87,48 @@ void apply_theme(QApplication& application) {
           "QFrame#panelCard > QWidget { background: transparent; }"
 
           // An action on the panel it sits in rather than a call to arms: the
-          // report button is one of these, in the corner of the readings it
-          // expands on. Lighter than the buttons that start a run, because it
-          // is not one.
-          "QPushButton#quietAction { background: transparent; border: 1px solid %BORDER%; "
-          "  border-radius: 6px; padding: 4px 10px; color: %DIM%; min-height: 18px; }"
-          "QPushButton#quietAction:hover:enabled { color: %TEXT%; border-color: %ACCENT%; }"
-          "QPushButton#quietAction:disabled { color: %SURFACE%; border-color: %SURFACE%; }"
+          // report buttons are these, at the foot of the readings they expand
+          // on. Lighter than the button that starts a run, because they are not
+          // that - but **quiet is not the same as invisible**, and this style
+          // had crossed the line.
+          //
+          // Transparent over %DIM% text was hard enough to read. The disabled
+          // rule was worse: it painted both the text and the border in
+          // %SURFACE%, which is the colour of the card the buttons sit on, so a
+          // disabled action was not dim - it was gone. Since these only enable
+          // once a run has finished, the way into the indicators page was a
+          // blank strip of panel until you happened to run something, and a
+          // person looking for it before then had nothing to find.
+          //
+          // Now: a surface of its own so the shape reads as a button, full text
+          // colour so the words read at a glance, and a disabled state that is
+          // faint but still there.
+          "QPushButton#quietAction { background: %SURFACE%; border: 1px solid %BORDER%; "
+          "  border-radius: 6px; padding: 4px 12px; color: %TEXT%; min-height: 18px; }"
+          "QPushButton#quietAction:hover:enabled { border-color: %ACCENT%; background: %RAISED%; }"
+          "QPushButton#quietAction:disabled { color: %DIM%; border-color: %BORDER%; "
+          "  background: transparent; }"
+
+          // **A headline number and what stands behind it.**
+          //
+          // The dashboard's tiles. A card with a hairline top edge in the
+          // accent, a caption in small caps above, the figure large, and the
+          // provenance under it in the dim grey - so the eye lands on the
+          // number and the next thing it finds is how far the number can be
+          // trusted. That order is deliberate: a tile is the part of a page
+          // that ends up quoted in a slide, and this project's whole discipline
+          // is that a model output must not travel without its caveat.
+          "QFrame#kpiTile { background: %SURFACE%; border: 1px solid %BORDER%; "
+          "  border-top: 2px solid %ACCENT%; border-radius: 8px; }"
+          "QLabel#kpiCaption { color: %DIM%; font-size: 10px; letter-spacing: 1px; }"
+          "QLabel#kpiValue { color: %TEXT%; }"
+          "QLabel#kpiUnit { color: %DIM%; font-size: 11px; padding-bottom: 4px; }"
+          "QLabel#kpiTrust { color: %DIM%; font-size: 10px; font-style: italic; }"
+
+          // The title on a chart card, quieter than the chart itself.
+          "QLabel#cardTitle { color: %TEXT%; font-weight: 600; padding: 2px 4px; }"
+
+          "QLabel#donutCentre { color: %TEXT%; font-weight: 600; }"
 
           // One height for every button in the window. Left to itself a button
           // is as tall as its own text, so a bold one - the default action -

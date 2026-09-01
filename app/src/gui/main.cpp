@@ -11,6 +11,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QSurfaceFormat>
+#include <QTabWidget>
 #include <QVTKOpenGLNativeWidget.h>
 #include <algorithm>
 #include <cstdio>
@@ -27,6 +28,7 @@
 
 #include "MapWindow.hpp"
 #include "Theme.hpp"
+#include "TrendDialog.hpp"
 
 namespace {
 
@@ -96,6 +98,8 @@ void print_usage() {
             << "  --layers       Show every layer of the scene\n"
             << "  --report-pdf F   Write this run's report to a PDF\n"
             << "  --compare      Run a rain-fed and an irrigated scenario and print the table\n"
+            << "  --trends       Report the whole farm years this bundle's weather holds,\n"
+            << "                 run two of them and build the years page\n"
             << "  --window-shot F  Save the whole window, controls included\n"
             << "  --field NAME   Draw a named field, as the list under the map does\n"
             << "  --heights N    Stretch the terrain's heights N times. The factor stays\n"
@@ -141,6 +145,7 @@ int main(int argc, char** argv) {
                        std::find(args.begin(), args.end(), "--panel-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--inspect") != args.end() ||
                        std::find(args.begin(), args.end(), "--compare") != args.end() ||
+                       std::find(args.begin(), args.end(), "--trends") != args.end() ||
                        std::find(args.begin(), args.end(), "--report-pdf") != args.end() ||
                        std::find(args.begin(), args.end(), "--window-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--smoke") != args.end();
@@ -327,6 +332,75 @@ int main(int argc, char** argv) {
           return 1;
         }
         std::cout << table;
+      }
+
+      // **The years page, driven the way a person drives it.** The window has no
+      // test binary of its own, so the way GUI work is checked here is a
+      // headless run that exercises the same methods the menu item calls -
+      // which is why open_trends() was split into the discovery and the runs
+      // rather than doing both inside a slot.
+      if (std::find(args.begin(), args.end(), "--trends") != args.end()) {
+        const std::vector<int> years = window.years_available();
+        std::cout << "paddock-gui: " << years.size() << " whole farm years";
+        if (!years.empty()) {
+          std::cout << ", " << years.front() << " to " << years.back();
+        }
+        std::cout << '\n';
+        if (years.size() < 2) {
+          std::cerr << "paddock-gui: this bundle's weather holds fewer than two whole farm "
+                       "years, so there is nothing to compare\n";
+          return 1;
+        }
+
+        // **Every year, because that is what the button does.** Two would prove
+        // the page builds and would not prove the picture is right: the chart
+        // draws one line per year on a shared scale, and a two-line version of
+        // it is not the thing anybody looks at.
+        std::string failure;
+        std::vector<paddock::config::FarmDashboard> boards =
+            window.run_year_boards(years, {}, failure);
+        if (boards.size() != years.size()) {
+          std::cerr << "paddock-gui: the years did not run: " << failure << '\n';
+          return 1;
+        }
+
+        paddock::app::TrendDialog trends(std::move(boards));
+        std::cout << "paddock-gui: the years page built\n";
+
+        // A path after the flag saves the page, which is how it gets looked at
+        // without a person at the screen - the same bargain --window-shot makes
+        // for the map.
+        if (const auto shot = std::find(args.begin(), args.end(), "--trends");
+            std::next(shot) != args.end() && std::next(shot)->substr(0, 2) != "--") {
+          const QString path = QString::fromStdString(std::string(*std::next(shot)));
+          trends.show();
+          QCoreApplication::processEvents();
+
+          // **Every tab, not the one that happens to be in front.** The page is
+          // four different pages, and a screenshot of the first says nothing
+          // about whether the other three draw at all - which is exactly the
+          // kind of fault that goes unnoticed until somebody clicks.
+          auto* tabs = trends.findChild<QTabWidget*>();
+          const int pages = tabs != nullptr ? tabs->count() : 1;
+          for (int page = 0; page < pages; ++page) {
+            if (tabs != nullptr) {
+              tabs->setCurrentIndex(page);
+            }
+            QCoreApplication::processEvents();
+            QString each = path;
+            if (tabs != nullptr && pages > 1) {
+              const int dot = each.lastIndexOf('.');
+              const QString stem = dot > 0 ? each.left(dot) : each;
+              const QString suffix = dot > 0 ? each.mid(dot) : QString(".png");
+              each = stem + "-" + tabs->tabText(page).toLower().replace(' ', '-') + suffix;
+            }
+            if (!trends.grab().save(each)) {
+              std::cerr << "paddock-gui: could not write " << each.toStdString() << '\n';
+              return 1;
+            }
+            std::cout << "paddock-gui: wrote " << each.toStdString() << '\n';
+          }
+        }
       }
 
       if (const auto pdf_flag = std::find(args.begin(), args.end(), "--report-pdf");

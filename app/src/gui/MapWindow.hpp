@@ -16,11 +16,13 @@
 #include <QVTKOpenGLNativeWidget.h>
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <paddock/config/FarmDashboard.hpp>
 #include <paddock/config/ScenarioComparison.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/ScenarioRun.hpp>
@@ -115,6 +117,22 @@ class MapWindow : public QMainWindow {
   /// the snapshot was never fetched.
   [[nodiscard]] const std::string& no_ground_reason() const noexcept { return no_ground_reason_; }
 
+  /// Every whole farm year this run's weather can answer for, earliest first.
+  /// Empty when the weather is generated rather than recorded, because then no
+  /// year is any more real than another.
+  [[nodiscard]] std::vector<int> years_available() const;
+
+  /// Runs the farm for each of `years` and builds a dashboard from each.
+  ///
+  /// **Separated from the menu item so that the headless path runs the same
+  /// code a person does.** `report` is called before each year with how many
+  /// are done, and returns false to give up; pass nothing to run them all
+  /// without interruption. On failure the vector comes back empty and `failure`
+  /// says why.
+  [[nodiscard]] std::vector<config::FarmDashboard> run_year_boards(
+      const std::vector<int>& years, const std::function<bool(std::size_t)>& report,
+      std::string& failure);
+
   /// Writes the setup panel to a PNG.
   ///
   /// The map has had a way to be looked at without a person since it was drawn,
@@ -206,6 +224,16 @@ class MapWindow : public QMainWindow {
   /// The report says what happened; this says where each figure stands against
   /// what it is measured by, and how many of them rest on evidence at all.
   void open_dashboard();
+
+  /// **The same indicators across every year the weather holds.**
+  ///
+  /// A single year's leaching or growth says very little on a farm whose
+  /// rainfall runs from 527 mm to 1,036 mm - what a reader needs is the same
+  /// indicator across years, which config::compare_dashboards_* was written for
+  /// and which only the command line could reach until now.
+  ///
+  /// Runs one simulation per year, so it asks first and shows progress.
+  void open_trends();
 
   /// **Downloads the ground this scenario named**, so that measured terrain is
   /// a button rather than an installation step.
@@ -571,6 +599,7 @@ class MapWindow : public QMainWindow {
   QPushButton* run_report_button_ = nullptr;
   QPushButton* disease_report_button_ = nullptr;
   QPushButton* dashboard_button_ = nullptr;
+  QPushButton* trends_button_ = nullptr;
   QPushButton* fetch_ground_button_ = nullptr;
 
   /// The last table produced, so the report can be reopened without running
