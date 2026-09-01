@@ -156,13 +156,27 @@ TEST(TerrainReachesTheModelTest, TheSameFarmOnASlopeIsNotTheTerraceItUsedToBe) {
       << "a run over a hill came out identical to a run over a terrace, which means the terrain "
          "did not reach the model";
 
-  // The direction: a shaded slope grows less, so the farm needs more bought
-  // feed to hold the same stock at the same weight.
-  EXPECT_GT(steep.bought_feed_kg_dm(), flat.bought_feed_kg_dm())
-      << "flat " << flat.bought_feed_kg_dm() << " kg DM, slope " << steep.bought_feed_kg_dm();
+  // **The direction: a shaded slope grows less.**
+  //
+  // This used to be measured in bought feed - a shaded farm needing more of it
+  // to hold the same stock - and that stopped separating the two farms when the
+  // cover floor became seasonal and the farm stopped buying feed at all. It was
+  // never the direct measure anyway: bought feed is a management response, and
+  // what the terrain changes is the grass. So the grass is what this reads.
+  const auto grown = [](const RunSummary& run) {
+    for (const core::ProcessEntry& entry : run.ledger.entries(core::Budget::DryMatter)) {
+      if (entry.process == "pasture_growth") {
+        return entry.inflow;
+      }
+    }
+    return 0.0;
+  };
 
-  GTEST_LOG_(INFO) << "bought feed: flat " << flat.bought_feed_kg_dm() << " kg DM, south slope "
-                   << steep.bought_feed_kg_dm() << " kg DM";
+  EXPECT_LT(grown(steep), grown(flat)) << "a south face should grow less than level ground: flat "
+                                       << grown(flat) << ", slope " << grown(steep);
+
+  GTEST_LOG_(INFO) << "growth: flat " << grown(flat) << " kg DM/ha, south slope " << grown(steep)
+                   << " kg DM/ha";
 }
 
 // A bundle may take its ground from a file instead of a formula.

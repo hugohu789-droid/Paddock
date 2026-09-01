@@ -362,4 +362,38 @@ TEST(ManagedFarmTest, GainIsPaidForInGrassOrInBoughtFeed) {
       << " to " << grown.bought_feed_kg_dm() << " kg DM";
 }
 
+// **Three floors, because Beef + Lamb New Zealand give three.** A ewe in
+// mid-pregnancy can be held to 800 kg DM/ha and a ewe in milk cannot be held
+// below 1,200, and a model with one number either starves the second or buys
+// feed to defend a cover the first does not need. The single 1,600 this
+// replaced was neither: it was a dairy residual on a sheep farm, and
+// canterbury-grazed still says where it came from - "the only reason to prefer
+// them to any other round number: they are the ones the loop is known to settle
+// under".
+TEST(ManagedFarmTest, TheCoverFloorFollowsTheEwesYear) {
+  const core::ManagementPolicy policy;
+
+  // Through lactation: the binding one. "Individual paddocks should be
+  // set-stocked so covers never go below 1200 kg DM/ha during lactation."
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_on(core::Date{2024, 9, 15}), 1200.0);
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_on(core::Date{2024, 11, 20}), 1200.0);
+
+  // After weaning and through mid-pregnancy a ewe can be held far lower:
+  // "post-grazing covers of around 800 kg DM/ha (a sward height of 2cm)".
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_on(core::Date{2024, 12, 15}), 800.0);
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_on(core::Date{2025, 5, 1}), 800.0);
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_on(core::Date{2025, 7, 20}), 800.0);
+
+  // And lifted three weeks out from lambing: "residuals should be lifted to
+  // 1000-1100 kg DM/ha".
+  EXPECT_DOUBLE_EQ(policy.minimum_cover_on(core::Date{2024, 8, 5}), 1000.0);
+
+  // **The lift happens, and in the right direction.** A flat floor gives the
+  // same answer on all four days, which is what this replaced.
+  EXPECT_LT(policy.minimum_cover_on(core::Date{2024, 6, 1}),
+            policy.minimum_cover_on(core::Date{2024, 8, 5}));
+  EXPECT_LT(policy.minimum_cover_on(core::Date{2024, 8, 5}),
+            policy.minimum_cover_on(core::Date{2024, 9, 15}));
+}
+
 }  // namespace paddock::config
