@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
@@ -53,10 +54,17 @@ double ManagementPolicy::minimum_cover_on(const Date& today) const {
   // phase that started most recently is the one in force. Comparing dates
   // rather than ranges is what lets a season cross the new year without a
   // special case.
-  const auto since = [&today](int month, int day) {
+  // **The return type is written down because the two branches disagree
+  // otherwise, and only on one platform.** days_since_epoch() is std::int64_t,
+  // which is `long` on Linux and `long long` on Windows; a bare
+  // numeric_limits<long long>::max() in the first branch therefore matches the
+  // subtraction in the second on MSVC and does not on gcc, which refuses to
+  // deduce a lambda return type from two different types. This compiled
+  // cleanly on Windows for four commits while Linux would not build at all.
+  const auto since = [&today](int month, int day) -> std::int64_t {
     Date candidate{today.year, month, day};
     if (!candidate.is_valid()) {
-      return std::numeric_limits<long long>::max();
+      return std::numeric_limits<std::int64_t>::max();
     }
     if (candidate.days_since_epoch() > today.days_since_epoch()) {
       candidate = Date{today.year - 1, month, day};
@@ -64,9 +72,9 @@ double ManagementPolicy::minimum_cover_on(const Date& today) const {
     return today.days_since_epoch() - candidate.days_since_epoch();
   };
 
-  const long long since_pre_lambing = since(pre_lambing_month, pre_lambing_day);
-  const long long since_lactation = since(lactation_month, lactation_day);
-  const long long since_dry = since(dry_month, dry_day);
+  const std::int64_t since_pre_lambing = since(pre_lambing_month, pre_lambing_day);
+  const std::int64_t since_lactation = since(lactation_month, lactation_day);
+  const std::int64_t since_dry = since(dry_month, dry_day);
 
   if (since_lactation <= since_pre_lambing && since_lactation <= since_dry) {
     return minimum_cover_kg_dm_per_ha;
