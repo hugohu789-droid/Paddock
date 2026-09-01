@@ -58,6 +58,7 @@
 #include <paddock/core/Weather.hpp>
 
 #include "../AttachElevation.hpp"
+#include "../WholeYears.hpp"
 
 #ifdef PADDOCK_WITH_GIS
 #include <paddock/gis/ElevationDownload.hpp>
@@ -66,6 +67,7 @@
 #include "DashboardDialog.hpp"
 #include "PagePrinter.hpp"
 #include "ReportDialog.hpp"
+#include "TrendDialog.hpp"
 
 namespace paddock::app {
 
@@ -602,6 +604,17 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   fetch_ground_button_->setVisible(false);
   connect(fetch_ground_button_, &QPushButton::clicked, this, &MapWindow::fetch_ground);
 
+  trends_button_ = new QPushButton("Every year", this);
+  trends_button_->setObjectName("quietAction");
+  trends_button_->setToolTip(
+      "The same indicators for every year this farm's weather covers, side by side, with each "
+      "year's season drawn over the others.\n\n"
+      "One year on its own says very little here: this "
+      "farm's rainfall runs from 527 to 1,036 mm, so a figure only means something next to the "
+      "years around it. Runs one simulation per year, which takes a moment.");
+  trends_button_->setEnabled(false);
+  connect(trends_button_, &QPushButton::clicked, this, &MapWindow::open_trends);
+
   dashboard_button_ = new QPushButton("Indicators", this);
   dashboard_button_->setObjectName("quietAction");
   dashboard_button_->setToolTip(
@@ -631,11 +644,20 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // **Bottom right, where a thing you do with a page belongs.** Left-aligned it
   // sat under the first words of the readings and read as another of them; in
   // the corner it reads as an action on the panel it closes.
+  //
+  // **And the row says what it is.** Three unlabelled words in a corner read as
+  // captions, not as a way in; a reader looking for the indicators page did not
+  // find it, which is the only test of a control that matters. The word in
+  // front turns them into a set of things you can open.
   auto* report_row = new QHBoxLayout;
   report_row->setContentsMargins(10, 0, 10, 8);
+  auto* report_label = new QLabel("Open:", this);
+  report_label->setObjectName("caveat");
+  report_row->addWidget(report_label);
   report_row->addStretch(1);
   report_row->addWidget(fetch_ground_button_);
   report_row->addWidget(dashboard_button_);
+  report_row->addWidget(trends_button_);
   report_row->addWidget(disease_report_button_);
   report_row->addWidget(run_report_button_);
 
@@ -897,6 +919,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
     run_report_button_->setEnabled(setup_->can_report());
     disease_report_button_->setEnabled(setup_->can_report());
     dashboard_button_->setEnabled(setup_->can_report());
+    trends_button_->setEnabled(setup_->can_report());
   });
   connect(scenario_list_, &QListWidget::currentRowChanged, this, &MapWindow::show_scenario);
 
@@ -1337,6 +1360,125 @@ void MapWindow::open_dashboard() {
   } catch (const std::exception& error) {
     QMessageBox::warning(this, "Indicators", QString::fromStdString(error.what()));
   }
+}
+
+std::vector<int> MapWindow::years_available() const {
+  if (!last_bundle_.has_value() || !last_bundle_->weather) {
+    return {};
+  }
+  return whole_farm_years(*last_bundle_->weather);
+}
+
+std::vector<config::FarmDashboard> MapWindow::run_year_boards(
+    const std::vector<int>& years, const std::function<bool(std::size_t)>& report,
+    std::string& failure) {
+  std::vector<config::FarmDashboard> boards;
+  if (!last_bundle_.has_value() || !last_bundle_->management.has_value()) {
+    failure = "this scenario has no [management] section, so it has no stock to compare";
+    return boards;
+  }
+
+  // The rule comes from the data directory exactly as the single-year page
+  // takes it, so a column here and that page cannot disagree about which
+  // threshold this farm is measured against.
+  std::optional<config::NitrogenRegulation> rule;
+  try {
+    rule =
+        config::load_nitrogen_regulation(data_directory_ + "/regulations/canterbury-nitrogen.toml");
+  } catch (const std::exception&) {
+    rule.reset();
+  }
+
+  core::DietQuality diet;
+  diet.metabolisable_energy_mj_per_kg_dm = 10.5;
+  diet.digestibility_percent = 75.0;
+
+  boards.reserve(years.size());
+  try {
+    for (std::size_t i = 0; i < years.size(); ++i) {
+      if (report && !report(i)) {
+        return {};
+      }
+      const int start = years[i];
+      config::ScenarioBundle one = *last_bundle_;
+      one.range = core::DateRange{core::Date{start, 7, 1}, core::Date{start + 1, 6, 30}};
+
+      const std::string label = std::to_string(start) + "-" +
+                                (((start + 1) % 100) < 10 ? "0" : "") +
+                                std::to_string((start + 1) % 100);
+      boards.push_back(config::build_dashboard(
+          one, config::run_managed_scenario(one, *one.management, diet, label), label, rule));
+    }
+  } catch (const std::exception& error) {
+    failure = error.what();
+    return {};
+  }
+  return boards;
+}
+
+void MapWindow::open_trends() {
+  if (!last_bundle_.has_value()) {
+    return;
+  }
+
+  // **Which years exist is asked of the weather, not assumed.** A snapshot of
+  // recorded years knows exactly what it holds; a generator will make any year
+  // and says so by answering with nothing, in which case no year is more real
+  // than another and there is nothing here to compare.
+  const std::vector<int> years = years_available();
+  if (years.empty() && last_bundle_->weather && !last_bundle_->weather->covers().has_value()) {
+    QMessageBox::information(
+        this, "Every year",
+        "This farm's weather is generated rather than recorded, so it has no particular years to "
+        "compare - every year it makes is a draw from the same distribution. Point the scenario "
+        "at a weather snapshot to see real years side by side.");
+    return;
+  }
+  if (years.size() < 2) {
+    QMessageBox::information(this, "Every year",
+                             "This farm's weather covers less than two whole farm years, so there "
+                             "is nothing to compare it with. A farm year runs 1 July to 30 June.");
+    return;
+  }
+
+  if (QMessageBox::question(
+          this, "Every year",
+          QString("Run %1 years of this farm and compare them?").arg(years.size()) +
+              "\n\nOne simulation per year, so it takes a moment. Everything else about the farm "
+              "stays as it is on screen - only the weather differs between the columns.",
+          QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) != QMessageBox::Yes) {
+    return;
+  }
+
+  QProgressDialog progress("Running the years...", "Cancel", 0, static_cast<int>(years.size()),
+                           this);
+  progress.setWindowModality(Qt::WindowModal);
+  progress.setMinimumDuration(0);
+
+  std::string failure;
+  std::vector<config::FarmDashboard> boards = run_year_boards(
+      years,
+      [&progress, &years](std::size_t done) {
+        progress.setValue(static_cast<int>(done));
+        progress.setLabelText(QString("Running %1-%2...")
+                                  .arg(years[done])
+                                  .arg((years[done] + 1) % 100, 2, 10, QChar('0')));
+        QCoreApplication::processEvents();
+        return !progress.wasCanceled();
+      },
+      failure);
+  progress.close();
+
+  if (boards.empty()) {
+    if (!failure.empty()) {
+      QMessageBox::warning(this, "Every year", QString::fromStdString(failure));
+    }
+    return;
+  }
+
+  auto* dialog = new TrendDialog(std::move(boards), this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->show();
 }
 
 void MapWindow::open_disease_report() {

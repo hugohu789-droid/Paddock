@@ -93,7 +93,7 @@ void SeasonChart::clear() {
 }
 
 void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<Line>& lines,
-                           const std::vector<Events>& events) {
+                           const std::vector<Events>& events, Scale scale) {
   // **The old axes are deleted, not merely detached.**
   //
   // They are built with the chart as their parent, so removeAxis takes them off
@@ -159,20 +159,41 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
   // stops halfway through a word. The axis is drawn in its line's own colour
   // and the key beside it gives the unit, so nothing is lost by shortening it.
   const auto describe = [](const Line& line) { return line.name; };
-  left_axis_->setTitleText(lines.empty() ? QString() : describe(lines.front()));
+  left_axis_->setTitleText(lines.empty()            ? QString()
+                           : scale == Scale::Shared ? lines.front().unit
+                                                    : describe(lines.front()));
   dress(left_axis_);
   chart_->addAxis(left_axis_, Qt::AlignLeft);
   right_axis_ = new QValueAxis(chart_);
-  right_axis_->setTitleText(lines.size() > 1 ? describe(lines[1]) : QString());
+  right_axis_->setTitleText(scale == Scale::PerLine && lines.size() > 1 ? describe(lines[1])
+                                                                        : QString());
   dress(right_axis_);
   chart_->addAxis(right_axis_, Qt::AlignRight);
 
   // First chosen on the left, second on the right. Position rather than a fixed
   // side, so any two quantities can be put beside each other - the pair
   // somebody wants to compare is not something this can know in advance.
-  for (std::size_t i = 0; i < lines.size() && i < 2; ++i) {
+  // On a shared scale the range has to cover every line before any of them is
+  // drawn, because they all read off the one axis. Worked out first for that
+  // reason; PerLine sets its own inside the loop from each line alone.
+  double shared_top = 0.0;
+  if (scale == Scale::Shared) {
+    for (const Line& line : lines) {
+      const auto highest = std::max_element(line.values.begin(), line.values.end());
+      if (highest != line.values.end()) {
+        shared_top = std::max(shared_top, *highest);
+      }
+      if (line.reference.has_value()) {
+        shared_top = std::max(shared_top, *line.reference);
+      }
+    }
+  }
+
+  const std::size_t drawn =
+      scale == Scale::Shared ? lines.size() : std::min<std::size_t>(2, lines.size());
+  for (std::size_t i = 0; i < drawn; ++i) {
     const Line& line = lines[i];
-    QValueAxis* axis = (i == 0) ? left_axis_ : right_axis_;
+    QValueAxis* axis = (scale == Scale::Shared || i == 0) ? left_axis_ : right_axis_;
 
     auto* series = new QLineSeries(chart_);
     series->setName(line.unit.isEmpty() ? line.name
@@ -211,15 +232,23 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
       top = std::max(top, *line.reference);
     }
 
-    axis->setRange(0.0, top > 0.0 ? top * 1.05 : 1.0);
-    axis->setLabelFormat(top < 10.0 ? "%.2f" : "%.0f");
-    axis->setLabelsColor(line.colour);
-    axis->setTitleBrush(QBrush(line.colour));
+    if (scale == Scale::Shared) {
+      // **One range, and the axis stays the panel's own grey.** Coloured to any
+      // one year it would claim that year owns the scale, when the whole point
+      // is that every line is read off it.
+      axis->setRange(0.0, shared_top > 0.0 ? shared_top * 1.05 : 1.0);
+      axis->setLabelFormat(shared_top < 10.0 ? "%.2f" : "%.0f");
+    } else {
+      axis->setRange(0.0, top > 0.0 ? top * 1.05 : 1.0);
+      axis->setLabelFormat(top < 10.0 ? "%.2f" : "%.0f");
+      axis->setLabelsColor(line.colour);
+      axis->setTitleBrush(QBrush(line.colour));
+    }
   }
 
   // An axis with nothing on it is not drawn: an empty scale beside a chart is a
   // reader looking for the line that belongs to it.
-  right_axis_->setVisible(lines.size() > 1);
+  right_axis_->setVisible(scale == Scale::PerLine && lines.size() > 1);
 
   // The left axis starts at zero rather than at the lowest cover of the year.
   // A cover axis that begins at 1,900 makes a farm that dropped a fifth look
@@ -273,9 +302,15 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
 
   QString plotted;
   for (const Line& line : lines) {
-    // With the unit, because the axis no longer carries it.
-    const QString named =
-        line.unit.isEmpty() ? line.name : QString("%1 (%2)").arg(line.name).arg(line.unit);
+    // With the unit, because on a per-line scale the axis no longer carries it.
+    //
+    // **Except on a shared scale, where it does.** Ten years of cover put
+    // "(kg DM/ha)" after every one of ten names and wrapped the key onto three
+    // rows to say the same three words ten times - while the one axis they all
+    // read off had it written once already.
+    const QString named = (line.unit.isEmpty() || scale == Scale::Shared)
+                              ? line.name
+                              : QString("%1 (%2)").arg(line.name).arg(line.unit);
     plotted += (plotted.isEmpty() ? "" : "&nbsp;&nbsp;&nbsp;") +
                entry(line.colour, "&#9473;&#9473;", named);
   }

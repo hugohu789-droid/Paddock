@@ -56,6 +56,8 @@ if(PADDOCK_BUILD_GUI)
     src/gui/PagePrinter.hpp
     src/gui/MapWindow.hpp
     src/gui/DashboardDialog.cpp
+    src/gui/DashboardWidgets.cpp
+    src/gui/TrendDialog.cpp
     src/gui/ReportDialog.cpp
     src/gui/ReportDialog.hpp
     src/gui/SeasonChart.cpp

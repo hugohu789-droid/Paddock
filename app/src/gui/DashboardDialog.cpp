@@ -103,9 +103,28 @@ DashboardDialog::DashboardDialog(config::FarmDashboard dashboard, QWidget* paren
   build_table();
   build_chart();
 
+  // **Which colour is which**, which SeasonChart emits and neither dialog was
+  // listening for. The main window has carried this label since the chart was
+  // written; these two pages showed the same chart with nothing to read it by.
+  // Ten years of one quantity make that unmissable - the axis says kg DM/ha and
+  // says nothing at all about which line is 2015.
+  auto* key = new QLabel(this);
+  key->setTextFormat(Qt::RichText);
+  key->setWordWrap(true);
+  key->setContentsMargins(8, 4, 8, 0);
+  connect(chart_, &SeasonChart::keyChanged, key, &QLabel::setText);
+  key->setText(chart_->colour_key());
+
+  auto* chart_side = new QWidget(this);
+  auto* chart_column = new QVBoxLayout;
+  chart_column->setContentsMargins(0, 0, 0, 0);
+  chart_column->addWidget(key);
+  chart_column->addWidget(chart_, 1);
+  chart_side->setLayout(chart_column);
+
   auto* split = new QSplitter(Qt::Vertical, this);
   split->addWidget(table_);
-  split->addWidget(chart_);
+  split->addWidget(chart_side);
   split->setStretchFactor(0, 3);
   split->setStretchFactor(1, 2);
 

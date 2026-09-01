@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -256,6 +257,17 @@ DateRange SnapshotWeatherSource::coverage() const noexcept {
     return DateRange{};
   }
   return DateRange{records_.front().date, records_.back().date};
+}
+
+std::optional<DateRange> SnapshotWeatherSource::covers() const {
+  // **No rows is unknown, not "covers nothing".** A snapshot that failed to
+  // load has no records either, and answering with an empty range would have a
+  // caller conclude this farm has no years rather than that the file is
+  // missing - which is a worse thing to say and a harder one to notice.
+  if (records_.empty()) {
+    return std::nullopt;
+  }
+  return coverage();
 }
 
 WeatherSeries SnapshotWeatherSource::fetch(const DateRange& range) const {

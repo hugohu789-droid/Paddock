@@ -65,11 +65,23 @@ class SeasonChart : public QChartView {
     std::vector<bool> days;
   };
 
+  /// How the lines are scaled against each other.
+  ///
+  /// **Two different quantities and ten of the same one want opposite things.**
+  /// Cover against soil moisture share nothing but a time axis, so each takes a
+  /// side and a range of its own - that is `PerLine`, and it is what a run is
+  /// drawn with. Ten years of cover are the same quantity ten times, and
+  /// putting two of them on separate scales would draw a 5,675 kg year and a
+  /// 9,779 kg year as very nearly the same picture. That is `Shared`: one axis,
+  /// one range wide enough for all of them, and every line drawn rather than
+  /// the first two.
+  enum class Scale { PerLine, Shared };
+
   explicit SeasonChart(QWidget* parent = nullptr);
 
   /// `dates` are ISO strings, one per day, and become the time axis.
   void show_run(const std::vector<QString>& dates, const std::vector<Line>& lines,
-                const std::vector<Events>& events);
+                const std::vector<Events>& events, Scale scale = Scale::PerLine);
 
   /// Marks the day the rest of the window is showing, so the chart and the map
   /// cannot disagree about which day is being looked at.

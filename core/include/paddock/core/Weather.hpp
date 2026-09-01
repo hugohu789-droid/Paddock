@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -108,6 +109,18 @@ class WeatherSource {
   /// cannot cover the whole range: a silently short series would look like a
   /// dry spell to every process downstream.
   [[nodiscard]] virtual WeatherSeries fetch(const DateRange& range) const = 0;
+
+  /// The span this source can answer for, when it is bounded.
+  ///
+  /// **A recorded year is finite and a generated one is not**, and something
+  /// offering to run "every year this farm has" needs to know which of the two
+  /// it is holding. A snapshot of ten years of Lincoln weather can say so; a
+  /// synthetic generator will make any year asked of it and returns nothing,
+  /// which means unbounded rather than empty.
+  ///
+  /// Deliberately not pure: a source that has not thought about it answers the
+  /// safe way round, and every existing source keeps compiling.
+  [[nodiscard]] virtual std::optional<DateRange> covers() const { return std::nullopt; }
 };
 
 }  // namespace paddock::core
