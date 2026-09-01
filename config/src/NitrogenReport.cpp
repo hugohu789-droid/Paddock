@@ -147,6 +147,12 @@ NitrogenYear nitrogen_year(const RunSummary& run, std::string label) {
     if (entry.process == "excreta_returned") {
       year.excreta_returned_kg_n_per_ha = entry.inflow;
     }
+    if (entry.process == "nitrate_leaching") {
+      year.leached_from_patches_kg_n_per_ha = entry.outflow;
+    }
+    if (entry.process == "nitrate_leaching_inter_patch") {
+      year.leached_between_patches_kg_n_per_ha = entry.outflow;
+    }
     if (entry.process == "fertiliser") {
       year.fertiliser_kg_n_per_ha = entry.inflow;
     }
@@ -192,6 +198,15 @@ std::string nitrogen_compliance_report(const NitrogenYear& year, const NitrogenR
   out << "    Drained past the root zone " << right(fixed(year.drainage_mm, 0), 8) << " mm\n";
   out << "    Leached per mm of drainage " << right(fixed(year.kg_n_per_mm_drainage(), 3), 8)
       << " kg N/ha/mm\n";
+  // **The two halves, apart**, because they are not the same problem: patch
+  // leaching is what stocking and grazing move, and inter-patch leaching is
+  // mostly what the soil does on its own.
+  out << "    From urine patches         "
+      << right(fixed(year.leached_from_patches_kg_n_per_ha, 1), 8) << " kg N/ha\n";
+  out << "    From between the patches   "
+      << right(fixed(year.leached_between_patches_kg_n_per_ha, 1), 8) << " kg N/ha  ("
+      << fixed(year.inter_patch_share() * 100.0, 0)
+      << "% of the loss; OVERSEER puts it under 15)\n";
   out << "    Returned as dung and urine " << right(fixed(year.excreta_returned_kg_n_per_ha, 1), 8)
       << " kg N/ha\n";
   out << "    Fixed by clover            " << right(fixed(year.fixed_kg_n_per_ha, 1), 8)

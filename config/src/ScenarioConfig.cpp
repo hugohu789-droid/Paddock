@@ -379,9 +379,10 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
       if (entry == nullptr) {
         detail::throw_at(element, manifest_path, "each [[mob]] must be a table");
       }
-      detail::reject_unknown_keys(
-          *entry, {"name", "path", "sha256", "head", "paddock", "liveweight_kg", "age_days"},
-          manifest_path, "[[mob]]");
+      detail::reject_unknown_keys(*entry,
+                                  {"name", "path", "sha256", "head", "paddock", "liveweight_kg",
+                                   "age_days", "grazes_ahead"},
+                                  manifest_path, "[[mob]]");
 
       MobSpec mob;
       mob.name = detail::require_string(*entry, "name", manifest_path);
@@ -402,6 +403,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                                                   species.typical_liveweight_kg, manifest_path);
       mob.age_days =
           detail::optional_double(*entry, "age_days", species.typical_age_days, manifest_path);
+      mob.grazes_ahead = detail::optional_bool(*entry, "grazes_ahead", false, manifest_path);
 
       // **Zero head is a mob something else fills.** The lamb crop is declared
       // by the scenario - this is what a lamb on this farm is - and stocked by
@@ -689,7 +691,7 @@ core::Farm ScenarioBundle::make_farm() const {
     mob.state.liveweight_kg = spec_mob.liveweight_kg;
     mob.state.age_days = spec_mob.age_days;
     mob.state.liveweight_change_kg_per_day = 0.0;
-    farm.add_mob(std::move(mob), spec_mob.paddock);
+    farm.add_mob(std::move(mob), spec_mob.paddock, spec_mob.grazes_ahead);
   }
   return farm;
 }

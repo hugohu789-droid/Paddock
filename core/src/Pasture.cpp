@@ -221,8 +221,9 @@ void PastureSward::return_excreta(double urine_nitrogen_kg, double dung_nitrogen
   }
 }
 
-double PastureSward::leach_nitrate(double drainage_mm, double soil_water_mm, BudgetLedger* ledger) {
-  if (drainage_mm <= 0.0 || patch_nitrate_kg_ <= 0.0) {
+double PastureSward::leach_nitrate(double drainage_mm, double soil_water_mm,
+                                   const ExcretaParameters& excreta, BudgetLedger* ledger) {
+  if (drainage_mm <= 0.0) {
     return 0.0;
   }
 
@@ -230,16 +231,38 @@ double PastureSward::leach_nitrate(double drainage_mm, double soil_water_mm, Bud
   // nitrate dissolved in it that went with it.
   const double water = std::max(0.0, soil_water_mm) + drainage_mm;
   const double share = water > 0.0 ? std::clamp(drainage_mm / water, 0.0, 1.0) : 0.0;
+  if (share <= 0.0) {
+    return 0.0;
+  }
 
-  const double leached = patch_nitrate_kg_ * share;
-  patch_nitrate_kg_ -= leached;
+  // **The patches**, where the nitrogen is past what a plant can use and is
+  // simply waiting for water.
+  const double from_patches = patch_nitrate_kg_ * share;
+  patch_nitrate_kg_ -= from_patches;
+
+  // **And between them.** Mineral nitrogen off the patches is spread thin
+  // enough for the plants to have first call on it, so only a fraction of what
+  // the water could carry actually goes - which is why OVERSEER puts this at
+  // under 15% of a grazed block's loss and why a model counting only patches
+  // reads about that much low.
+  const double inter_patch_share =
+      share * std::clamp(excreta.inter_patch_leaching_fraction, 0.0, 1.0);
+  const double from_soil = std::max(0.0, soil_mineral_nitrogen_kg_) * inter_patch_share;
+  soil_mineral_nitrogen_kg_ -= from_soil;
 
   if (ledger != nullptr) {
     // Past the root zone is out of this model, the way OVERSEER treats 60 cm:
     // what happens between there and a river is somebody else's question.
-    ledger->record_outflow(Budget::Nitrogen, "nitrate_leaching", leached);
+    // Booked apart, because a report that could not separate them could not say
+    // which of a farm's two losses management can move.
+    if (from_patches > 0.0) {
+      ledger->record_outflow(Budget::Nitrogen, "nitrate_leaching", from_patches);
+    }
+    if (from_soil > 0.0) {
+      ledger->record_outflow(Budget::Nitrogen, "nitrate_leaching_inter_patch", from_soil);
+    }
   }
-  return leached;
+  return from_patches + from_soil;
 }
 
 PastureSward::Defoliation PastureSward::remove_green_dry_matter(double requested_kg_dm) {

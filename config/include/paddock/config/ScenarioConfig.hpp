@@ -112,6 +112,10 @@ struct MobSpec {
 
   double liveweight_kg = 0.0;
   double age_days = 0.0;
+
+  /// Whether this mob goes into a paddock ahead of the others - leader-follower,
+  /// where young stock take the leaf and the ewes clean up behind them.
+  bool grazes_ahead = false;
 };
 
 /// A scenario bundle: everything needed to reproduce a run, in one directory.

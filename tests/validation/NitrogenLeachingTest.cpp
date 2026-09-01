@@ -184,8 +184,22 @@ TEST(NitrogenLeachingTest, TheVerdictChangesWithTheYear) {
   const NitrogenYear dry = nitrogen_year(year_of(2015), "2015-16");
   const NitrogenYear wet = nitrogen_year(year_of(2024), "2024-25");
 
-  EXPECT_EQ(dry.standing(rule), NitrogenStanding::Comfortable);
+  // **Under in a dry year, over in a wet one**, which is the distinction that
+  // matters. Whether the dry year is comfortable or merely close moved when the
+  // farm started finishing its lambs - five more months of stock on the ground
+  // is five more months of excreta - and it is now close, which is a farm worth
+  // reporting on rather than one that never has to think about it.
+  EXPECT_NE(dry.standing(rule), NitrogenStanding::OverTheTrigger);
   EXPECT_EQ(wet.standing(rule), NitrogenStanding::OverTheTrigger);
+
+  // **And both halves of the loss are reported.** OVERSEER puts inter-patch
+  // leaching under 15% of a grazed block's, which is the check on the one
+  // fitted parameter in this chain.
+  EXPECT_GT(dry.leached_from_patches_kg_n_per_ha, 0.0);
+  EXPECT_GT(dry.leached_between_patches_kg_n_per_ha, 0.0)
+      << "leaving this out was a stated understatement, and it is no longer left out";
+  EXPECT_LT(dry.inter_patch_share(), 0.15)
+      << "if this drifts past OVERSEER's 15% the fit has stopped holding";
 
   const std::string wet_report = nitrogen_compliance_report(wet, rule);
   EXPECT_NE(wet_report.find("OVER THE TRIGGER"), std::string::npos);

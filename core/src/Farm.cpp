@@ -66,7 +66,7 @@ void Farm::set_slopes(const Raster<double>& slope_degrees) {
   }
 }
 
-std::size_t Farm::add_mob(Mob mob, std::size_t paddock) {
+std::size_t Farm::add_mob(Mob mob, std::size_t paddock, bool grazes_ahead) {
   const std::string error = mob.validation_error();
   if (!error.empty()) {
     throw std::invalid_argument("Farm::add_mob: " + error);
@@ -78,6 +78,7 @@ std::size_t Farm::add_mob(Mob mob, std::size_t paddock) {
   placed.mob = std::move(mob);
   placed.paddocks = {paddock};
   mobs_.push_back(std::move(placed));
+  mobs_.back().grazes_ahead = grazes_ahead;
   return mobs_.size() - 1;
 }
 
@@ -96,6 +97,20 @@ void Farm::set_target_gain(std::size_t mob, double kg_per_day) {
   if (mob >= mobs_.size()) {
     throw std::out_of_range("Farm::set_target_gain: no such mob");
   }
+  // A mob with a target of its own keeps it: the farm policy speaks for the
+  // mobs that have not been spoken for.
+  if (mobs_[mob].own_target_gain_kg_per_day.has_value()) {
+    mobs_[mob].mob.target_gain_kg_per_day = *mobs_[mob].own_target_gain_kg_per_day;
+    return;
+  }
+  mobs_[mob].mob.target_gain_kg_per_day = kg_per_day;
+}
+
+void Farm::set_own_target_gain(std::size_t mob, double kg_per_day) {
+  if (mob >= mobs_.size()) {
+    throw std::out_of_range("Farm::set_own_target_gain: no such mob");
+  }
+  mobs_[mob].own_target_gain_kg_per_day = kg_per_day;
   mobs_[mob].mob.target_gain_kg_per_day = kg_per_day;
 }
 
@@ -257,7 +272,20 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     grazing_scratch_.reset();
   }
 
-  for (FarmMob& farm_mob : mobs_) {
+  // **Leaders before followers.** Mob order in the vector is the order they
+  // were declared, which is not the order they walk into a paddock: young stock
+  // lead and take the leaf, the ewes follow and clean up. Grazing them in
+  // declaration order put the lambs behind the ewes and left them the residual.
+  std::vector<std::size_t> order(mobs_.size());
+  for (std::size_t i = 0; i < order.size(); ++i) {
+    order[i] = i;
+  }
+  std::stable_sort(order.begin(), order.end(), [this](std::size_t lhs, std::size_t rhs) {
+    return static_cast<int>(mobs_[lhs].grazes_ahead) > static_cast<int>(mobs_[rhs].grazes_ahead);
+  });
+
+  for (const std::size_t mob_position : order) {
+    FarmMob& farm_mob = mobs_[mob_position];
     // A mob eats over everything it has the run of: one paddock under rotation,
     // the whole farm under set stocking.
     std::vector<std::size_t> cells;
@@ -306,7 +334,7 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     const EnergyRequirement need =
         daily_energy_requirement(farm_mob.mob.animal, wanting, diet, ground);
 
-    const auto mob_index = static_cast<std::size_t>(&farm_mob - mobs_.data());
+    const std::size_t mob_index = mob_position;
     const double supplement =
         mob_index < supplement_kg_dm.size() ? std::max(0.0, supplement_kg_dm[mob_index]) : 0.0;
 

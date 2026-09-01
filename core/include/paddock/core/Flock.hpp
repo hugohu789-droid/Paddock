@@ -89,6 +89,16 @@ struct FlockRates {
   /// national estimate for 2024-25 is a 132.3% ewe lambing percentage.
   double lambing_percentage = 132.3;
 
+  /// Share of the lamb crop, after replacements, kept back to finish rather
+  /// than sold at weaning as stores.
+  ///
+  /// **A management choice, and the one that decides what kind of farm this
+  /// is.** One means finish everything, which is what Beef + Lamb's Class 6
+  /// "S.I. Finishing Breeding" describes; zero means sell the lot at weaning,
+  /// which is what this flock did before the choice existed. Anything between
+  /// is a farm that finishes what it can and sells the tail.
+  double finished_fraction = 1.0;
+
   /// The age at which a ewe is culled whatever else is true. **PLACEHOLDER**:
   /// the study names age as the commonest reason for culling without giving the
   /// age, and a replacement rate of 29.2% implies an average retention of about
@@ -124,6 +134,16 @@ struct FlockCalendar {
   int weaning_month = 12;
   int weaning_day = 1;
 
+  /// **When the tail goes.** Any lamb still on hand and not yet drafted is
+  /// sold as a store on this date, which is what a farmer does rather than
+  /// carry stock that will not make weight into a winter.
+  ///
+  /// 1 May: autumn, after the season's drafting and before winter feed gets
+  /// tight. **PLACEHOLDER** - a real farm's date depends on its feed, and this
+  /// one is a management choice nobody has stated.
+  int store_sale_month = 5;
+  int store_sale_day = 1;
+
   /// 1 July, when the classes are renamed and the oldest draft goes.
   int year_turns_month = 7;
   int year_turns_day = 1;
@@ -153,11 +173,23 @@ struct FlockDay {
   /// Lambs kept as replacements, which become next year's hoggets.
   int kept_as_replacements = 0;
 
+  /// Lambs kept back to finish - grown on this farm's grass and drafted as
+  /// they reach weight, rather than sold at weaning at whatever they weigh.
+  ///
+  /// **The difference between a store farm and a finishing one**, and this
+  /// flock was the first without being told to be. Beef + Lamb's Class 6, whose
+  /// costs `data/economics/` carries, is "S.I. Finishing Breeding": the whole
+  /// crop left at weaning at about 17 kg, where a finishing farm carries it
+  /// through summer and sells at 38. That is most of a year's grazing missing
+  /// from the farm, which is why utilisation sat where it did.
+  int kept_to_finish = 0;
+
   /// True on the day the year turned, so a caller knows the classes moved.
   bool year_turned = false;
 
   [[nodiscard]] bool anything_happened() const noexcept {
-    return born > 0 || died > 0 || culled > 0 || sold_store > 0 || year_turned;
+    return born > 0 || died > 0 || culled > 0 || sold_store > 0 || kept_to_finish > 0 ||
+           year_turned;
   }
 };
 
@@ -214,6 +246,15 @@ class Flock {
   /// Removes `head` from the oldest cohorts first, which is what a farmer sells
   /// when they have to sell. Returns how many actually went.
   int sell_oldest(int head);
+
+  /// Removes `head` from the FINISHING cohorts, which is what a drafting rule
+  /// sells.
+  ///
+  /// **Not the same call as `sell_oldest`, and the difference is a flock.** A
+  /// draft takes the lambs that have come to weight; `sell_oldest` takes the
+  /// breeding ewes, because they are the oldest. Routing a drafting proposal to
+  /// the wrong one sells the farm's mothers to fill a lamb order.
+  int sell_finishing(int head);
 
   /// Head in cohorts the farmer is finishing rather than keeping.
   [[nodiscard]] int finishing_head() const noexcept;

@@ -127,6 +127,29 @@ int Flock::sell_oldest(int head) {
   return sold;
 }
 
+int Flock::sell_finishing(int head) {
+  int remaining = std::max(0, head);
+  int sold = 0;
+
+  for (AgeCohort& cohort : cohorts_) {
+    if (remaining <= 0) {
+      break;
+    }
+    if (!cohort.is_finishing) {
+      continue;
+    }
+    const int from_this = std::min(cohort.mob.head, remaining);
+    cohort.mob.head -= from_this;
+    remaining -= from_this;
+    sold += from_this;
+  }
+
+  cohorts_.erase(std::remove_if(cohorts_.begin(), cohorts_.end(),
+                                [](const AgeCohort& cohort) { return cohort.mob.head <= 0; }),
+                 cohorts_.end());
+  return sold;
+}
+
 std::string FlockCalendar::invalid_reason() const {
   const auto valid = [](int month, int day) { return Date{2024, month, day}.is_valid(); };
   if (!valid(mating_month, mating_day)) {
@@ -137,6 +160,9 @@ std::string FlockCalendar::invalid_reason() const {
   }
   if (!valid(weaning_month, weaning_day)) {
     return "the weaning date is not a date";
+  }
+  if (!valid(store_sale_month, store_sale_day)) {
+    return "the date the tail is sold is not a date";
   }
   if (!valid(year_turns_month, year_turns_day)) {
     return "the date the year turns is not a date";
@@ -308,23 +334,71 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
     const int wanted = static_cast<int>(
         std::llround(static_cast<double>(remaining_ewes) * rates.replacement_fraction));
 
+    // **The crop splits three ways, not two.** Replacements first, because a
+    // farm that cannot replace its ewes has no next year. Then what is kept to
+    // finish - grown on this farm's grass and drafted as it reaches weight -
+    // and the tail goes as stores.
+    //
+    // Splitting it two ways made this a store farm, which is not what its own
+    // cost survey describes: Beef + Lamb's Class 6 is "S.I. Finishing
+    // Breeding", and the whole crop was leaving at weaning at 17 kg.
     for (AgeCohort& cohort : cohorts_) {
       if (!cohort.is_finishing || cohort.mob.head <= 0) {
         continue;
       }
       const int kept = std::min(cohort.mob.head, std::max(0, wanted - day.kept_as_replacements));
-      const int sold = cohort.mob.head - kept;
+      const int rest = cohort.mob.head - kept;
+      const int finished = static_cast<int>(
+          std::llround(static_cast<double>(rest) * std::clamp(rates.finished_fraction, 0.0, 1.0)));
+      const int sold = rest - finished;
 
       day.kept_as_replacements += kept;
+      day.kept_to_finish += finished;
       day.sold_store += sold;
+
+      if (finished > 0) {
+        // The finishers stay a cohort of their own and stay finishing stock, so
+        // the drafting rule can take them as they come to weight.
+        AgeCohort finishing = cohort;
+        finishing.mob.name = "finishing " + std::to_string(today.year);
+        finishing.mob.head = finished;
+        finishing.is_finishing = true;
+        cohorts_.push_back(std::move(finishing));
+      }
+
       cohort.mob.head = kept;
-      // What is kept stops being finishing stock: it is next year's flock.
+      // What is kept as a replacement stops being finishing stock: it is next
+      // year's flock.
       cohort.is_finishing = false;
     }
+
+    // Sorted again, because the finishers were appended rather than added.
+    std::stable_sort(
+        cohorts_.begin(), cohorts_.end(),
+        [](const AgeCohort& lhs, const AgeCohort& rhs) { return lhs.birth_year < rhs.birth_year; });
 
     cohorts_.erase(std::remove_if(cohorts_.begin(), cohorts_.end(),
                                   [](const AgeCohort& cohort) { return cohort.mob.head <= 0; }),
                    cohorts_.end());
+  }
+
+  // **The tail.** What has not made weight by autumn goes as a store, because a
+  // farmer does not carry stock through a winter to find out. Without this the
+  // finishing cohort simply accumulated: 364 lambs kept, none drafted - they
+  // reach the 38 kg draft weight on the last day of the farm year and not
+  // before - and a farm that had sold its crop for $46,000 sold nothing at all.
+  if (is(calendar.store_sale_month, calendar.store_sale_day)) {
+    int tail = 0;
+    for (AgeCohort& cohort : cohorts_) {
+      if (cohort.is_finishing) {
+        tail += cohort.mob.head;
+        cohort.mob.head = 0;
+      }
+    }
+    cohorts_.erase(std::remove_if(cohorts_.begin(), cohorts_.end(),
+                                  [](const AgeCohort& cohort) { return cohort.mob.head <= 0; }),
+                   cohorts_.end());
+    day.sold_store += tail;
   }
 
   // Last, so that a cohort born or weaned today is already in the flock when it

@@ -129,6 +129,34 @@ struct ExcretaParameters {
   /// order for pasture silage and baleage; no source is recorded.
   double supplement_nitrogen_fraction = 0.025;
 
+  /// How much more readily nitrate under a urine patch leaches than the mineral
+  /// nitrogen between the patches.
+  ///
+  /// **Both leach, and the model only counted one of them.** OVERSEER reports
+  /// leaching from urine patches and leaching from everything else - dung,
+  /// fertiliser, and soil organic matter mineralising - separately, and puts
+  /// the second at "less than 15% of total N loss" on a grazed pastoral block.
+  /// Counting only the patches therefore reads about that much low, which every
+  /// report printing the figure had to say.
+  ///
+  /// Between the patches the plants get first call on the nitrogen: it is
+  /// spread thin enough for them to take up, which is exactly why patches leach
+  /// and inter-patch ground does not. This is the share of the mixing that
+  /// reaches the drain rather than a root.
+  ///
+  /// **FITTED, and to OVERSEER's own statement of the answer.** There is no
+  /// measurement here: the figure is set so the inter-patch term comes to about
+  /// a tenth of this farm's loss, which is inside the "less than 15% of total N
+  /// loss" OVERSEER reports for a grazed pastoral block. A first attempt at one
+  /// eighth put it at 60% of the loss and tripled the farm's leaching, which is
+  /// what a parameter with no measurement behind it does when nobody checks
+  /// where it lands.
+  ///
+  /// The report prints the inter-patch share beside the total, so the fit is
+  /// visible rather than buried: if it drifts past 15% something upstream has
+  /// changed and this needs re-fitting or replacing with a measurement.
+  double inter_patch_leaching_fraction = 0.012;
+
   [[nodiscard]] std::string invalid_reason() const;
 };
 
@@ -328,7 +356,15 @@ class PastureSward {
   /// pool that goes is the share of the water that goes. OVERSEER defines the
   /// root zone at 60 cm and counts nitrogen past it as lost, accounting for
   /// nothing that happens between there and a river - and neither does this.
-  double leach_nitrate(double drainage_mm, double soil_water_mm, BudgetLedger* ledger = nullptr);
+  ///
+  /// **Two pools, because OVERSEER reports two.** The urine patches, where
+  /// nitrogen is spread far past what a plant can take up and most of it is
+  /// available to leach; and everything between them - dung, mineralising
+  /// organic matter - where the plants get first call and only a fraction
+  /// reaches the drain. The second is minor on a grazed block, under 15% of the
+  /// loss, and leaving it out was worth exactly that much of an understatement.
+  double leach_nitrate(double drainage_mm, double soil_water_mm, const ExcretaParameters& excreta,
+                       BudgetLedger* ledger = nullptr);
 
   [[nodiscard]] double soil_mineral_nitrogen_kg() const noexcept {
     return soil_mineral_nitrogen_kg_;
