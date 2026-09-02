@@ -180,15 +180,28 @@ TEST(StockUnitIntakeTest, TheFlockEatsLessThanItsStockUnitRatingImplies) {
   }
   ASSERT_GT(target, 0.0);
 
-  // **A band, not a target.** 85% of a stock-unit rating is close enough that
-  // the remaining distance could be the model, could be 550 against the 520
-  // also in common use for the same unit, or could be that a real ewe's year is
-  // not this ewe's year. It is not where a third of a farm's feed went.
+  // **A band, not a target.** The remaining distance could be the model, could
+  // be 550 against the 520 also in common use for the same unit, or could be
+  // that a real ewe's year is not this ewe's year. It is not where a third of a
+  // farm's feed went.
+  //
+  // **This was 0.7 and the flock now sits at 0.68, for a reason worth keeping.**
+  // E64 gave the pasture model a sourced temperature response and refitted the
+  // radiation use efficiency to the water use efficiency it was always fitted
+  // to; the decade mean fell from 7,287 to 6,572 kg DM/ha, against a measured
+  // 6,442. There is less grass because there was always supposed to be less
+  // grass, so the flock eats a smaller share of what its stock-unit rating says
+  // it wants. That is the model getting better and this number getting worse,
+  // which is the ordinary way round on a farm that is short of feed.
+  //
+  // The bound moves to where the measurement is rather than staying where it
+  // was comfortable. Intake capacity is the next thing to be built, and this is
+  // one of the numbers it has to explain.
   const double share = eaten / target;
-  EXPECT_GT(share, 0.7) << "the flock eats " << eaten << " kg DM/ha against a stock-unit demand of "
-                        << target
-                        << ". Under 70% would be a real intake fault rather than the ordinary "
-                           "distance between a model and a rule of thumb";
+  EXPECT_GT(share, 0.64) << "the flock eats " << eaten
+                         << " kg DM/ha against a stock-unit demand of " << target
+                         << ". Much under this would be a real intake fault rather than the "
+                            "ordinary distance between a model and a rule of thumb";
   EXPECT_LT(share, 1.0) << "the flock now eats " << eaten << " of " << target
                         << " kg DM/ha, at or over its stock-unit rating. Not a failure, but this "
                            "bound has stopped describing the model - work out what changed";

@@ -19,7 +19,8 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
       {"species_id", "specific_leaf_area_m2_per_kg", "extinction_coefficient",
        "radiation_use_efficiency_g_per_mj", "base_temperature_c", "optimum_temperature_c",
        "maximum_temperature_c", "senescence_rate_per_day", "degree_days_per_leaf",
-       "leaves_per_tiller", "drought_turnover_threshold", "drought_turnover_effect_max",
+       "temperature_response_exponent", "leaves_per_tiller", "drought_turnover_threshold",
+       "drought_turnover_effect_max",
        "drought_turnover_exponent", "residual_kg_dm_per_ha", "nitrogen_content_fraction",
        "nitrogen_fixation_kg_per_t_dm"},
       path, context);
@@ -35,6 +36,12 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
   species.optimum_temperature_c = detail::require_double(table, "optimum_temperature_c", path);
   species.maximum_temperature_c = detail::require_double(table, "maximum_temperature_c", path);
   species.senescence_rate_per_day = detail::require_double(table, "senescence_rate_per_day", path);
+
+  // **Optional, and it changes the shape of the response rather than a number
+  // in it.** Zero keeps the triangular response, so a sward file written before
+  // this existed still loads and still runs the way it was written.
+  species.temperature_response_exponent =
+      detail::optional_double(table, "temperature_response_exponent", 0.0, path);
 
   // **Optional, and it should be stated.** With a leaf lifespan, senescence is
   // a season; without one it is a constant, which gets the annual total roughly

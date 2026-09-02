@@ -1,4 +1,4 @@
-# Lincoln University Research Dairy Farm, on the ground it actually sits on.
+﻿# Lincoln University Research Dairy Farm, on the ground it actually sits on.
 #
 # The first bundle in this project whose terrain is measured rather than
 # generated. Everything else in it is still the placeholder set the Canterbury
@@ -97,7 +97,7 @@ sha256 = "93eae9f37464dfb85d72436515e6ed9266080e0f4039172732924e228f4b9d5d"
 
 [sward]
 path = "sward.toml"
-sha256 = "fe33849b26960a8b2612451140decbf582e625336fce0a63ee99d72797893aa8"
+sha256 = "16f544a5c9085feadee4c71a1dacc4794926e12965559e328dec9cd1244025be"
 
 # **What this farm is priced by and measured against.**
 #
