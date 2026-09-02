@@ -1,0 +1,65 @@
+# What a New Zealand stock unit eats, and what a sheep farm therefore removes.
+#
+# **This file exists because a dashboard was quoting a number nobody had
+# sourced.** The utilisation indicator said "New Zealand sheep farms run 65 to
+# 80%" and cited nothing. That is the same mistake E20 records for the cover
+# floor - a plausible figure, remembered rather than read, applied to a class of
+# farm it may not describe. Utilisation is a ratio, so the honest way to get a
+# target is to source its numerator instead of asserting the ratio.
+#
+# THE STOCK UNIT. Parker (1998) states the definition and its arithmetic:
+#
+#   "The base ewe was assumed to weigh 55 kg (pre-mating), wean one lamb at
+#    25 kg and consume 550 kg DM per annum."
+#
+#   "Deriving SU equivalents is then a straightforward matter of dividing the
+#    intake per stock class by a 'standard unit' - say, 550 kg DM of
+#    10.5 MJ ME/kg DM per annum."
+#
+# **The second quote matters as much as the first.** The standard unit is
+# defined at 10.5 MJ ME/kg DM, which is the diet quality this model assumes, so
+# a comparison between the two is like for like rather than an accident.
+#
+# 520 kg DM/year is also in common use for the same unit. 550 is Parker's and is
+# used here; the lower figure would make the model's shortfall smaller, so 550
+# is the demanding reading and is stated as such.
+#
+# WHAT A FARM THEREFORE EATS. Beef + Lamb New Zealand's Class 6 (South Island
+# finishing-breeding) divides its accounts at 7.74 SU/ha. The example farm in
+# this repository runs 417 ewes on 80 ha at about 1.35 SU each, which is
+# 7.0 SU/ha - the same kind of farm, slightly lighter stocked. Intake follows by
+# multiplication, and is therefore `derived`, not measured on any farm:
+#
+#   7.00 SU/ha x 550 kg DM = 3,850 kg DM/ha
+#   7.74 SU/ha x 550 kg DM = 4,257 kg DM/ha
+#
+# UTILISATION. Parker's Table 4 reports a STOCKPOL whole-farm analysis of three
+# sheep systems: pasture production 6,233 to 6,683 kg DM/ha and utilisation
+# 84.6 to 89.6%. That is a modelled farm rather than a measured one, and its
+# definition of utilisation is not stated in the table, so it is recorded here
+# as the upper end rather than as the target.
+#
+# Taking the derived intake over Winchmore's measured dryland production of
+# 6,442 kg DM/ha gives 60% at 7.0 SU/ha and 66% at 7.74. Both sit under
+# Parker's modelled 85 to 90% and well above what this model currently does,
+# which is the point of writing it down.
+#
+# Sources:
+#   Parker, W.J. (1998). "Standardisation between livestock classes: the use
+#     and misuse of the stock unit system." Proceedings of the New Zealand
+#     Grassland Association 60: 243-248. Massey University.
+#     https://www.nzgajournal.org.nz/index.php/ProNZGA/article/view/2277
+#   Beef + Lamb New Zealand, Sheep and Beef Farm Survey, Class 6 South Island
+#     Finishing Breeding - stocking rate, see data/economics/canterbury-sheep.toml
+#   Winchmore dryland production - see winchmore-annual-production.csv
+#
+# status: direct = stated in the source; derived = arithmetic on stated values.
+
+quantity,value,low,high,units,status,note
+stock_unit_intake,550,520,550,kg DM/SU/yr,direct,"Parker (1998); 520 also in common use for the same unit"
+stock_unit_diet_quality,10.5,,,MJ ME/kg DM,direct,"the energy density the standard unit is defined at"
+base_ewe_liveweight,55,,,kg,direct,"pre-mating, weaning one lamb at 25 kg"
+farm_intake_at_class_6,4257,,,kg DM/ha/yr,derived,"7.74 SU/ha x 550; Beef + Lamb Class 6 stocking rate"
+farm_intake_at_modelled_rate,3850,,,kg DM/ha/yr,derived,"7.00 SU/ha x 550; the example farm's own stocking rate"
+utilisation_modelled_stockpol,87,84.6,89.6,%,direct,"Parker (1998) Table 4, three STOCKPOL sheep systems - a modelled farm, definition of utilisation not stated"
+utilisation_derived_at_winchmore,60,60,66,%,derived,"derived intake over Winchmore's measured dryland production of 6442"

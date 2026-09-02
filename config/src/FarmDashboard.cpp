@@ -189,10 +189,26 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
            "mean, so a drier year should sit under it.",
            4'000.0, 9'800.0));
   year.indicators.push_back(make(
-      "Utilisation", grown > 0.0 ? 100.0 * eaten_per_ha / grown : 0.0, "%", Provenance::Placeholder,
-      "What the stock took off the paddock as a share of what grew. New Zealand sheep farms "
-      "run 65 to 80%; this one is far below, and E20 records why.",
-      65.0, 80.0));
+      "Utilisation", grown > 0.0 ? 100.0 * eaten_per_ha / grown : 0.0, "%", Provenance::Derived,
+      "What the stock took off as a share of what grew. The band is derived rather than "
+      "asserted: Beef + Lamb's Class 6 stocking rate at Parker's (1998) 550 kg DM a stock "
+      "unit, over Winchmore's measured dryland production. It used to read 65 to 80% and "
+      "cite nothing - see data/calibration/stock-unit-intake.csv.",
+      60.0, 90.0));
+
+  // **The numerator on its own, because utilisation is a ratio and a ratio
+  // hides which half is wrong.** A farm can miss a utilisation band by eating
+  // too little or by growing too much, and this model does both - E40 has the
+  // production half. Intake has a sourced target where utilisation does not:
+  // Parker (1998) defines the stock unit as 550 kg DM of 10.5 MJ ME/kg DM a
+  // year, which is the diet quality this model already assumes, so the two are
+  // comparable without an adjustment.
+  year.indicators.push_back(
+      make("Eaten", eaten_per_ha, "kg DM/ha", Provenance::Derived,
+           "What the stock actually removed. The band is this farm's own stocking rate and Beef + "
+           "Lamb's Class 6 rate, each at 550 kg DM a stock unit - so a figure under it is animals "
+           "eating less than their stock-unit rating implies, whatever the pasture did.",
+           3850.0, 4257.0));
   year.indicators.push_back(
       make("Lowest cover", run.lowest_cover_kg_dm_per_ha(), "kg DM/ha", Provenance::Fitted,
            "The bottom of the year. Cover includes dead standing material, "
