@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -30,6 +31,82 @@ DailyWeather growing_day(double radiation_mj, double min_c, double max_c) {
 PastureSward test_sward(double grass_kg = 1800.0, double legume_kg = 400.0,
                         double soil_nitrogen_kg = 60.0) {
   return {test_sward_parameters(), grass_kg, legume_kg, soil_nitrogen_kg};
+}
+
+// **The reproductive season is a function of latitude and nothing else**, which
+// is the whole reason it can be adopted rather than fitted. These check the
+// curve against AgPasture's arithmetic at this farm's latitude, not against any
+// production figure - a test asserting that the seasonal shape improved would
+// be asserting the very thing the model is meant to be judged on.
+PastureSpeciesParameters reproductive_species() {
+  PastureSpeciesParameters species;
+  species.repro_season_max_allocation_increase = 0.50;
+  species.repro_season_reference_latitude_degrees = 41.0;
+  species.repro_season_timing_coefficient = 0.14;
+  species.repro_season_duration_coefficient = 2.0;
+  species.repro_season_shoulders_length_factor = 1.0;
+  species.repro_season_onset_duration_factor = 0.60;
+  species.repro_season_allocation_coefficient = 0.10;
+  return species;
+}
+
+constexpr double kLincolnLatitude = -43.641;
+
+TEST(ReproductiveSeasonTest, ASwardThatAsksForNoneGetsNone) {
+  const PastureSpeciesParameters silent;
+  for (int day = 1; day <= 365; day += 7) {
+    EXPECT_DOUBLE_EQ(reproductive_growth_factor(silent, kLincolnLatitude, day), 1.0)
+        << "day " << day << " should be untouched when no increase is stated";
+  }
+}
+
+TEST(ReproductiveSeasonTest, FallsWhereLatitudePutsIt) {
+  const PastureSpeciesParameters species = reproductive_species();
+
+  // Day 244 is 1 September, where the onset ramp starts; 280 is 7 October, where
+  // the plateau begins; 320 is 16 November, inside it; 364 is 30 December, past
+  // the end of the taper.
+  EXPECT_NEAR(reproductive_growth_factor(species, kLincolnLatitude, 244), 1.0, 0.02)
+      << "the season should open on 1 September at no more than a trace";
+  EXPECT_NEAR(reproductive_growth_factor(species, kLincolnLatitude, 280), 1.283, 0.01)
+      << "and reach its full 28.3% by 7 October";
+  EXPECT_NEAR(reproductive_growth_factor(species, kLincolnLatitude, 320), 1.283, 0.01)
+      << "holding it through November";
+  EXPECT_NEAR(reproductive_growth_factor(species, kLincolnLatitude, 364), 1.0, 0.02)
+      << "and be spent by the end of December";
+
+  EXPECT_DOUBLE_EQ(reproductive_growth_factor(species, kLincolnLatitude, 172), 1.0) << "21 June";
+  EXPECT_DOUBLE_EQ(reproductive_growth_factor(species, kLincolnLatitude, 60), 1.0) << "1 March";
+}
+
+TEST(ReproductiveSeasonTest, RunsShorterAndStrongerTowardsThePole) {
+  const PastureSpeciesParameters species = reproductive_species();
+
+  const auto peak = [&species](double latitude) {
+    double best = 1.0;
+    for (int day = 1; day <= 365; ++day) {
+      best = std::max(best, reproductive_growth_factor(species, latitude, day));
+    }
+    return best;
+  };
+  const auto length = [&species](double latitude) {
+    int days = 0;
+    for (int day = 1; day <= 365; ++day) {
+      if (reproductive_growth_factor(species, latitude, day) > 1.0) {
+        ++days;
+      }
+    }
+    return days;
+  };
+
+  EXPECT_GT(peak(-55.0), peak(-43.641)) << "a stronger flush further south";
+  EXPECT_GT(peak(-43.641), peak(-20.0)) << "and a weaker one towards the equator";
+  EXPECT_LT(length(-55.0), length(-43.641)) << "a shorter season further south";
+  EXPECT_GT(length(-20.0), length(-43.641)) << "and a longer one towards the equator";
+
+  // Same shape north of the equator, half a year away: latitude is used by
+  // magnitude and the hemisphere only picks the solstice.
+  EXPECT_NEAR(peak(43.641), peak(-43.641), 1e-12) << "latitude is used by magnitude";
 }
 
 TEST(TemperatureResponseTest, IsZeroOutsideTheCardinalTemperaturesAndOneAtTheOptimum) {

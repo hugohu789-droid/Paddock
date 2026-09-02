@@ -123,6 +123,69 @@ double daily_temperature_factor(const PastureSpeciesParameters& species,
   return (0.25 * at_mean) + (0.75 * at_daylight);
 }
 
+double reproductive_growth_factor(const PastureSpeciesParameters& species,
+                                  double latitude_degrees, int day_of_year) noexcept {
+  if (species.repro_season_max_allocation_increase <= 0.0 ||
+      species.repro_season_timing_coefficient == 0.0 ||
+      species.repro_season_onset_duration_factor <= 0.0 ||
+      species.repro_season_onset_duration_factor >= 1.0) {
+    return 1.0;
+  }
+
+  constexpr double kYear = 365.25;
+  const double latitude = std::abs(latitude_degrees);
+
+  // **Where the plateau starts.** Half a year after the hemisphere's winter
+  // solstice, pulled earlier or later by how far the site is from AgPasture's
+  // reference latitude - a reproductive season opens later the nearer the pole.
+  const double solstice = latitude_degrees < 0.0 ? 172.0 : 355.0;
+  const double timing = std::exp(-species.repro_season_timing_coefficient *
+                                 (latitude - species.repro_season_reference_latitude_degrees));
+  const double plateau_start = solstice + (0.5 * kYear / (1.0 + timing));
+
+  // **How long it lasts.** About a fortnight at the pole, up to six months at
+  // the equator.
+  const double plateau = (kYear / 24.0) + ((kYear * 11.0 / 24.0) *
+                                           std::pow(1.0 - (latitude / 90.0),
+                                                    species.repro_season_duration_coefficient));
+
+  // The ramps either side, split between on and off.
+  const double shoulders =
+      std::min(kYear / 2.0, plateau * species.repro_season_shoulders_length_factor);
+  const double onset = shoulders * species.repro_season_onset_duration_factor;
+  const double outset = shoulders * (1.0 - species.repro_season_onset_duration_factor);
+  if (onset <= 0.0 || outset <= 0.0) {
+    return 1.0;
+  }
+
+  // **And how much stronger it gets with latitude**, which is the other half of
+  // why this is not a fitted seasonal curve.
+  const double allocation = std::exp(-species.repro_season_allocation_coefficient *
+                                     (latitude - species.repro_season_reference_latitude_degrees));
+  const double increase = species.repro_season_max_allocation_increase / (1.0 + allocation);
+
+  double start = plateau_start - onset;
+  if (start < 0.0) {
+    start += kYear;
+  }
+
+  double since_start = static_cast<double>(day_of_year) - start;
+  if (since_start < 0.0) {
+    since_start += kYear;
+  }
+
+  if (since_start < onset) {
+    return 1.0 + (increase * (since_start / onset));
+  }
+  if (since_start < onset + plateau) {
+    return 1.0 + increase;
+  }
+  if (since_start < onset + plateau + outset) {
+    return 1.0 + (increase * (1.0 - ((since_start - onset - plateau) / outset)));
+  }
+  return 1.0;
+}
+
 double light_interception(double leaf_area_index, double extinction_coefficient) noexcept {
   if (leaf_area_index <= 0.0 || extinction_coefficient <= 0.0) {
     return 0.0;
@@ -431,12 +494,24 @@ PastureGrowth PastureSward::step(const DailyWeather& weather, double water_stres
   const double grass_share = total_leaf_area > 0.0 ? grass_leaf_area / total_leaf_area : 0.0;
   const double legume_share = total_leaf_area > 0.0 ? legume_leaf_area / total_leaf_area : 0.0;
 
+  // **The spring flush**, which is an allocation change rather than a change in
+  // what the plant fixes - so it multiplies the potential, before nitrogen has
+  // its say. One outside the reproductive season, and one for any sward that
+  // does not ask for it.
+  const int day_of_year = weather.date.day_of_year();
+  const double grass_repro = reproductive_growth_factor(
+      parameters_.grass, parameters_.latitude_degrees, day_of_year);
+  const double legume_repro = reproductive_growth_factor(
+      parameters_.legume, parameters_.latitude_degrees, day_of_year);
+
   const double grass_potential = parameters_.grass.radiation_use_efficiency_g_per_mj *
                                  growth.intercepted_par_mj_per_m2 * grass_share *
-                                 grass_temperature * growth.water_factor * kGramsPerM2ToKgPerHa;
+                                 grass_temperature * growth.water_factor * grass_repro *
+                                 kGramsPerM2ToKgPerHa;
   const double legume_potential = parameters_.legume.radiation_use_efficiency_g_per_mj *
                                   growth.intercepted_par_mj_per_m2 * legume_share *
-                                  legume_temperature * growth.water_factor * kGramsPerM2ToKgPerHa;
+                                  legume_temperature * growth.water_factor * legume_repro *
+                                  kGramsPerM2ToKgPerHa;
 
   // Fixation covers much of a legume's nitrogen but not all of it: the
   // published 20-25 kg N fixed per tonne of dry matter sits below the 40-45 kg

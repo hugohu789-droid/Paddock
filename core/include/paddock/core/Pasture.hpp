@@ -71,6 +71,48 @@ struct PastureSpeciesParameters {
   /// figures should set `maximum_temperature_c` to that value and say so.
   double temperature_response_exponent = 0.0;
 
+  /// **The spring flush, which this model has no phenology to produce.**
+  ///
+  /// Perennial ryegrass turns reproductive in spring: it elongates stem, runs
+  /// up a seed head, and puts a far larger share of what it fixes into shoot
+  /// while it does. Afterwards it carries fewer tillers and less potential
+  /// through summer even with water in the soil. Paddock models none of that -
+  /// growth is light times temperature times water times nitrogen - so it grows
+  /// whenever conditions allow, and in Canterbury the best light and warmth are
+  /// in January. Measured against Winchmore's 25 years, spring beats summer 25
+  /// times out of 25 there and 8 times in 10 here (verify.md, E67).
+  ///
+  /// This is AgPasture's stand-in for the same missing mechanism, and its
+  /// documentation is candid about being one: "Reproductive phase of perennial
+  /// is not simulated by the model, the ReproductiveGrowthFactor attempts to
+  /// mimic the main effect, which is a higher allocation of DM to shoot during
+  /// this period."
+  ///
+  /// **Everything about the curve comes from latitude**, which is why adopting
+  /// it is not the same as fitting a seasonal multiplier to the trial it is
+  /// checked against. The season starts later and runs shorter the further from
+  /// the equator, and the allocation increase is larger. At -43.641 that gives
+  /// a season opening on 1 September, a 35.8-day ramp to a plateau on 7
+  /// October, 59.6 days of full effect, and a 23.9-day taper ending 29
+  /// December, with shoot allocation up 28.3% at the peak. Winchmore's biggest
+  /// months, in order, are October, November, September, December.
+  ///
+  /// **Zero for the increase turns the whole thing off**, which is the default,
+  /// so a sward file written before this keeps the seasons it was written with.
+  /// AgPasture has it on by default; this model makes a sward say so, the same
+  /// way `degree_days_per_leaf` and `temperature_response_exponent` do.
+  ///
+  /// Source: `InitReproductiveGrowthFactor` and `CalcReproductiveGrowthFactor`
+  /// in AgPasture's `PastureSpecies`, with that class's own default values.
+  /// Li FY, Snow VO & Holzworth DR (2011), NZJAR 54: 331-352.
+  double repro_season_max_allocation_increase = 0.0;
+  double repro_season_reference_latitude_degrees = 41.0;
+  double repro_season_timing_coefficient = 0.14;
+  double repro_season_duration_coefficient = 2.0;
+  double repro_season_shoulders_length_factor = 1.0;
+  double repro_season_onset_duration_factor = 0.60;
+  double repro_season_allocation_coefficient = 0.10;
+
   /// **How much faster leaf dies when the plant runs out of water.** A drought
   /// does two things to a sward and this model long had only one of them: it
   /// slows the tiller down, and it kills the leaf the tiller is already
@@ -256,6 +298,11 @@ struct SwardParameters {
   /// Fraction of global solar radiation that is photosynthetically active.
   double par_fraction = 0.0;
 
+  /// Where this sward is, in degrees, negative south. Read only by the
+  /// reproductive season, whose timing and strength are functions of it, and
+  /// ignored entirely when no species asks for one.
+  double latitude_degrees = 0.0;
+
   /// Fraction of the dead pool that decomposes each day. Its carbon leaves the
   /// tracked pools as soil organic matter; its nitrogen mineralises back into
   /// the soil mineral pool.
@@ -309,6 +356,20 @@ struct SwardParameters {
 [[nodiscard]] double daily_temperature_factor(const PastureSpeciesParameters& species,
                                               double min_air_temperature_c,
                                               double max_air_temperature_c) noexcept;
+
+/// How much more of what it fixes a plant sends to shoot today, because it is
+/// in its reproductive season. One outside that season, and up to
+/// `1 + repro_season_max_allocation_increase` scaled by latitude within it.
+///
+/// The season is a trapezium: a linear ramp on, a plateau, a linear ramp off.
+/// Where it falls and how long it lasts are computed from latitude alone - it
+/// starts half a year after the winter solstice adjusted for how far from the
+/// reference latitude the site is, and shortens towards the poles.
+///
+/// Returns 1.0 when the species states no increase, which is the default.
+[[nodiscard]] double reproductive_growth_factor(const PastureSpeciesParameters& species,
+                                                double latitude_degrees,
+                                                int day_of_year) noexcept;
 
 /// Fraction of light intercepted by a canopy of this leaf area index (Beer).
 [[nodiscard]] double light_interception(double leaf_area_index,

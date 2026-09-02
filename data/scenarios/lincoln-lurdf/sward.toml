@@ -123,6 +123,43 @@ senescence_rate_per_day = 0.02             # PLACEHOLDER
 degree_days_per_leaf = 120.0
 leaves_per_tiller = 3.0
 
+# **The spring flush, standing in for a phenology this model does not have.**
+# Ryegrass turns reproductive in spring - stem elongation and a seed head - and
+# puts a far larger share of what it fixes into shoot while it does. Paddock has
+# no phenology at all, so it grows whenever light, warmth and water allow, and
+# in Canterbury those peak in January. Measured against Winchmore's 25 years,
+# spring beats summer 25 times out of 25 there and 8 times in 10 here (E67).
+#
+# **DIRECT** - AgPasture's `ReproductiveGrowthFactor`, whose own documentation
+# says what it is: "Reproductive phase of perennial is not simulated by the
+# model, the ReproductiveGrowthFactor attempts to mimic the main effect, which
+# is a higher allocation of DM to shoot during this period." The seven values
+# below are that class's own defaults; the species resource files override none
+# of them. Li FY, Snow VO & Holzworth DR (2011), NZJAR 54: 331-352.
+#
+# **Every number in the curve comes from latitude**, which is what separates
+# adopting this from fitting a seasonal multiplier to the trial it is checked
+# against. Nothing here was chosen by looking at Winchmore. At this farm's
+# -43.641 it works out as a season opening on 1 September, a 35.8-day ramp to a
+# plateau on 7 October, 59.6 days at full effect, and a 23.9-day taper ending 29
+# December, with shoot allocation up 28.3% at the peak. Winchmore's biggest
+# months, in order, are October, November, September, December.
+#
+# **What it is worth, honestly**: about a quarter of the remaining seasonal gap.
+# It does not restore the 25-in-25 signature - a 28% spring boost cannot
+# outweigh a summer that grows 3,900 kg DM/ha when the rain comes - and it costs
+# a little of the winter and autumn that E64 got right. See ADR 0018.
+#
+# Zero for the increase turns the season off. AgPasture has it on by default;
+# this file says so explicitly.
+repro_season_max_allocation_increase = 0.50
+repro_season_reference_latitude_degrees = 41.0
+repro_season_timing_coefficient = 0.14
+repro_season_duration_coefficient = 2.0
+repro_season_shoulders_length_factor = 1.0
+repro_season_onset_duration_factor = 0.60
+repro_season_allocation_coefficient = 0.10
+
 # **The other half of what a drought does.** The leaf lifespan above slows the
 # tiller down when the soil dries, which keeps leaf alive; a drought also kills
 # the leaf the plant is already carrying, and until E62 nothing here did that.
@@ -175,6 +212,20 @@ senescence_rate_per_day = 0.025            # PLACEHOLDER
 # response matters more than its exact level. See docs/validation/verify.md.
 degree_days_per_leaf = 120.0
 leaves_per_tiller = 3.0
+
+# The same seven, because AgPasture applies this to its white clover too and
+# overrides none of them. **This is faithfulness, not a claim about clover**:
+# white clover flowers in summer rather than running up a spring seed head, so a
+# spring allocation shift is a poorer description of it than of the grass. It is
+# here because the source applies it to both, and departing from that would be a
+# judgement this file has no evidence for. Listed in verify.md.
+repro_season_max_allocation_increase = 0.50
+repro_season_reference_latitude_degrees = 41.0
+repro_season_timing_coefficient = 0.14
+repro_season_duration_coefficient = 2.0
+repro_season_shoulders_length_factor = 1.0
+repro_season_onset_duration_factor = 0.60
+repro_season_allocation_coefficient = 0.10
 
 # The same three figures: AgPasture gives its white clover exactly what it gives
 # its ryegrass. DIRECT, from AGPWhiteClover.json - see the grass block above for
