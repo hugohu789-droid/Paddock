@@ -2539,9 +2539,23 @@ std::vector<config::ComparedScenario> MapWindow::run_scenarios(
       entry.name = scenario.name.toStdString();
       entry.hectares = hectares;
       entry.settings = scenario.settings;
-      entry.summary = config::run_managed_scenario(bundle, scenario.choices.policy, diet,
-                                                   entry.name, nullptr, scenario.choices.irrigation,
-                                                   scenario.choices.irrigation_system);
+      // **With the books, for the reason simulate_managed has them**: they are
+      // what advances the flock. Without them every arm of a comparison carried
+      // a frozen flock, so the table reported the same kilograms eaten under
+      // irrigation as without it - two arms that differ in how much feed they
+      // grow, agreeing to the kilogram on how much of it was eaten, which
+      // should have been the tell.
+      std::optional<config::FarmEconomics> economics =
+          farm_economics((std::filesystem::path(scenario.choices.scenario_directory) / ".." / "..")
+                             .lexically_normal()
+                             .string());
+      std::optional<config::FarmBusiness> business;
+      if (economics.has_value()) {
+        business = config::business_from(bundle, *economics);
+      }
+      entry.summary = config::run_managed_scenario(
+          bundle, scenario.choices.policy, diet, entry.name, nullptr, scenario.choices.irrigation,
+          scenario.choices.irrigation_system, business.has_value() ? &*business : nullptr);
       scenario.hectares = hectares;
       scenario.result = entry.summary;
       compared.push_back(std::move(entry));
