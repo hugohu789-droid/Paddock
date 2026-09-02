@@ -64,6 +64,22 @@ sha256 = "523e37beed50db5ecb6c367a5d53cf578823561dc940fbbc6aef31facdc4a36a"
 path = "sward.toml"
 sha256 = "d33109030d022d64db408c55e99751541224e5e0f42f195f56848432f9bd6ce3"
 
+# **This farm names neither a price book nor a rule, and that is the point.**
+#
+# Ruakura is in the Waikato. The economics this repository carries are Beef +
+# Lamb's Class 6 South Island Finishing Breeding, and the only regulation it
+# carries is the Canterbury Land and Water Regional Plan's Selwyn Waihora zone.
+# Neither describes this farm, and the window used to apply both to it because
+# it reached for whatever was in data/ rather than asking the bundle.
+#
+# So this bundle stays silent. The nitrogen panel reports what leached and makes
+# no compliance claim; there are no money or flock panels. That is the honest
+# output for a farm nobody has told us the rules for, and it is a better one
+# than a confident number from the wrong island.
+#
+# To price this farm, add a Waikato cost survey under data/economics/ and a
+# Waikato Regional Plan rule under data/regulations/, and name them here.
+
 [initial_state]
 soil_water_mm = 90.0
 grass_kg_dm_per_ha = 2200.0

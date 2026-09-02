@@ -233,8 +233,6 @@ constexpr int kFrameInterval = 30;
 /// diet quality through the season, and a box a user could set would promise a
 /// precision that is not there. It is the pair the validation tests run at.
 /// See docs/validation/verify.md.
-constexpr double kPastureMe = 10.5;
-constexpr double kPastureDigestibility = 75.0;
 
 /// What grazed_on returns for a day the run does not have, and for a run with
 /// no stock in it. A reference has to refer to something.
@@ -1005,7 +1003,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
 
 namespace {
 
-/// The farm's costs and prices, read from the data directory.
+/// The farm's costs and prices, as the bundle names them.
 ///
 /// **Without these the flock does not advance at all**, which is not obvious
 /// and was wrong on this page for as long as it existed. The books are what
@@ -1013,13 +1011,40 @@ namespace {
 /// lambing and the culls and the weaning draft, and hands the grazing mob its
 /// head count back. No business, no bookkeeping - and no flock. Every flock
 /// indicator then reports the truth about a farm with no stock on it, which is
-/// zero, next to 417 ewes standing on the map.
+/// zero, next to 417 ewes standing on the map. That is E49.
 ///
-/// Optional the same way the nitrogen rule is: a bundle whose economics are
-/// missing gets fewer panels rather than invented prices.
-std::optional<config::FarmEconomics> farm_economics(const std::string& data_directory) {
+/// **And the bundle names it, rather than the window reaching for Canterbury.**
+/// This used to load `economics/canterbury-sheep.toml` whatever farm was open.
+/// A Waikato block was priced from a South Island survey and, worse, measured
+/// against the Canterbury Land and Water Regional Plan - see the companion
+/// below and E57.
+std::optional<config::FarmEconomics> farm_economics(const config::ScenarioBundle& bundle) {
+  if (bundle.economics_path.empty()) {
+    return std::nullopt;
+  }
   try {
-    return config::load_economics(data_directory + "/economics/canterbury-sheep.toml");
+    return config::load_economics(bundle.economics_path);
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
+/// The regional rule this farm is measured against, as the bundle names it.
+///
+/// **New Zealand has no national nitrogen loss limit.** Regional councils set
+/// them catchment by catchment, so reaching for one asserts which zone a farm
+/// sits in. `paddock nitrogen` has always taken the rule as an argument and
+/// refused to default one; this is the window keeping the same promise.
+///
+/// Nothing named means the nitrogen panel still reports what leached and has
+/// nothing to say about compliance, which is the honest answer when nobody has
+/// said which rule applies.
+std::optional<config::NitrogenRegulation> farm_regulation(const config::ScenarioBundle& bundle) {
+  if (bundle.regulation_path.empty()) {
+    return std::nullopt;
+  }
+  try {
+    return config::load_nitrogen_regulation(bundle.regulation_path);
   } catch (const std::exception&) {
     return std::nullopt;
   }
@@ -1084,15 +1109,11 @@ MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
     products.had_stock = !bundle.mobs.empty();
     if (products.had_stock) {
       // **The books come from beside the bundle**, the way every other input a
-      // scenario names does - `../../economics/` from a scenario directory, the
-      // same relative step the manifest already takes to reach its species and
-      // its sward. Worked out here rather than read off the window, because
-      // this runs on the worker thread and must not touch it.
-      simulate_managed(
-          products, bundle, choices.policy, choices.irrigation, choices.irrigation_system,
-          farm_economics((std::filesystem::path(choices.scenario_directory) / ".." / "..")
-                             .lexically_normal()
-                             .string()));
+      // scenario names does - the bundle says which price book applies, the
+      // same way it says which species and which sward. Read off the bundle
+      // rather than off the window because this runs on the worker thread.
+      simulate_managed(products, bundle, choices.policy, choices.irrigation,
+                       choices.irrigation_system, farm_economics(bundle));
     } else {
       simulate_pasture_only(products, bundle, choices.irrigation, choices.irrigation_system);
     }
@@ -1374,16 +1395,9 @@ void MapWindow::open_dashboard() {
   try {
     // **The rule and the economics are read from the data directory here, not
     // built in.** The command line takes them as arguments because a compliance
-    // figure is a quotation; the window knows where the data is, so it can look
-    // - but if either is missing the page simply has fewer panels rather than
-    // inventing what a farm spends or which zone it sits in.
-    std::optional<config::NitrogenRegulation> rule;
-    try {
-      rule = config::load_nitrogen_regulation(data_directory_ +
-                                              "/regulations/canterbury-nitrogen.toml");
-    } catch (const std::exception&) {
-      rule.reset();
-    }
+    // figure is a quotation, and the scenario is what says which one applies.
+    // Missing means fewer panels rather than a borrowed threshold.
+    const std::optional<config::NitrogenRegulation> rule = farm_regulation(*last_bundle_);
 
     auto* dialog = new DashboardDialog(
         config::build_dashboard(*last_bundle_, *last_run_, last_bundle_->name, rule), this);
@@ -1410,22 +1424,15 @@ std::vector<config::FarmDashboard> MapWindow::run_year_boards(
     return boards;
   }
 
-  // The rule comes from the data directory exactly as the single-year page
-  // takes it, so a column here and that page cannot disagree about which
-  // threshold this farm is measured against.
-  std::optional<config::NitrogenRegulation> rule;
-  try {
-    rule =
-        config::load_nitrogen_regulation(data_directory_ + "/regulations/canterbury-nitrogen.toml");
-  } catch (const std::exception&) {
-    rule.reset();
-  }
+  // The rule comes off the bundle exactly as the single-year page takes it, so
+  // a column here and that page cannot disagree about which threshold this farm
+  // is measured against - or about whether one applies at all.
+  const std::optional<config::NitrogenRegulation> rule = farm_regulation(*last_bundle_);
 
-  const std::optional<config::FarmEconomics> economics = farm_economics(data_directory_);
+  const std::optional<config::FarmEconomics> economics = farm_economics(*last_bundle_);
 
-  core::DietQuality diet;
-  diet.metabolisable_energy_mj_per_kg_dm = 10.5;
-  diet.digestibility_percent = 75.0;
+  // What the stock get out of the grass, as this bundle says.
+  const core::DietQuality diet = last_bundle_->diet;
 
   boards.reserve(years.size());
   try {
@@ -1721,9 +1728,7 @@ void MapWindow::simulate_managed(RunProducts& into, const config::ScenarioBundle
                                  const core::IrrigationPolicy& irrigation,
                                  const core::IrrigationSystem& system,
                                  const std::optional<config::FarmEconomics>& economics) {
-  core::DietQuality diet;
-  diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
-  diet.digestibility_percent = kPastureDigestibility;
+  const core::DietQuality diet = bundle.diet;
 
   // **The books, because they are what advance the flock.** Without them
   // ScenarioRun never reaches keep_the_books, so nothing ages, nothing lambs,
@@ -2531,9 +2536,7 @@ std::vector<config::ComparedScenario> MapWindow::run_scenarios(
                                         10000.0
                                   : 0.0;
 
-      core::DietQuality diet;
-      diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
-      diet.digestibility_percent = kPastureDigestibility;
+      const core::DietQuality diet = bundle.diet;
 
       config::ComparedScenario entry;
       entry.name = scenario.name.toStdString();
@@ -2545,10 +2548,7 @@ std::vector<config::ComparedScenario> MapWindow::run_scenarios(
       // irrigation as without it - two arms that differ in how much feed they
       // grow, agreeing to the kilogram on how much of it was eaten, which
       // should have been the tell.
-      std::optional<config::FarmEconomics> economics =
-          farm_economics((std::filesystem::path(scenario.choices.scenario_directory) / ".." / "..")
-                             .lexically_normal()
-                             .string());
+      std::optional<config::FarmEconomics> economics = farm_economics(bundle);
       std::optional<config::FarmBusiness> business;
       if (economics.has_value()) {
         business = config::business_from(bundle, *economics);

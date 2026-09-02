@@ -246,6 +246,47 @@ struct ScenarioBundle {
 
   std::vector<BundleInput> inputs;
 
+  /// The price book and the regional rule this farm is to be read against,
+  /// relative to the bundle. Both optional and both empty by default.
+  ///
+  /// **A farm has to name its own, because the alternative is a default that
+  /// is wrong somewhere.** The window used to load
+  /// `regulations/canterbury-nitrogen.toml` and `economics/canterbury-sheep.toml`
+  /// for every bundle it opened, which meant `ruakura-fe` - a Waikato block -
+  /// was measured against the Canterbury Land and Water Regional Plan. That
+  /// file's own header warns that "two farms a valley apart" can sit under
+  /// different limits.
+  ///
+  /// The command line already refused to do this: `paddock nitrogen` takes the
+  /// rule as an argument and never defaults one, on the grounds that reaching
+  /// for a rule asserts which zone a farm is in. These fields are how a window
+  /// keeps the same promise - the scenario says, or nothing does.
+  ///
+  /// Empty means the page has fewer panels, never invented prices or a borrowed
+  /// threshold.
+  std::string economics_path;
+  std::string regulation_path;
+
+  /// What the stock are eating, in energy and digestibility.
+  ///
+  /// **It drives every animal calculation in the model and it was a constant in
+  /// six places.** `10.5` and `75` were written into MapWindow.cpp three times
+  /// and main.cpp three times, with no source and no way to change them - so a
+  /// scenario could pick its sward, its soil and its species and not what its
+  /// stock got out of the grass.
+  ///
+  /// The default is not arbitrary. Parker (1998) defines the New Zealand stock
+  /// unit as "550 kg DM of 10.5 MJ ME/kg DM per annum", so 10.5 is the energy
+  /// density the whole country's stocking arithmetic is written in - which is
+  /// also why this model's intake can be compared with a stock-unit rating at
+  /// all. See data/calibration/stock-unit-intake.csv.
+  ///
+  /// **What it does not yet do is vary.** Real pasture swings roughly 9.5 to
+  /// 11.5 across a season and falls as dead material accumulates, and this
+  /// model tracks green and dead per cell without feeding either back into what
+  /// the animals are getting. That is an open loop, recorded as E58.
+  core::DietQuality diet;
+
   /// True when every input still hashes to what the manifest recorded.
   [[nodiscard]] bool inputs_unchanged() const noexcept;
 

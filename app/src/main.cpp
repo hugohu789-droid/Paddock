@@ -280,9 +280,9 @@ int run_dashboard(const std::vector<std::string>& arguments) {
     economics = paddock::config::load_economics(economics_path);
   }
 
-  paddock::core::DietQuality diet;
-  diet.metabolisable_energy_mj_per_kg_dm = 10.5;
-  diet.digestibility_percent = 75.0;
+  // What the stock get out of the grass, as the bundle says. It used to be a
+  // constant here and in two other places.
+  const paddock::core::DietQuality diet = bundle.diet;
 
   const auto board_for = [&](const paddock::config::ScenarioBundle& one, const std::string& label) {
     if (economics.has_value()) {
@@ -361,9 +361,9 @@ int run_nitrogen(const std::vector<std::string>& arguments) {
     return 2;
   }
 
-  paddock::core::DietQuality diet;
-  diet.metabolisable_energy_mj_per_kg_dm = 10.5;
-  diet.digestibility_percent = 75.0;
+  // What the stock get out of the grass, as the bundle says. It used to be a
+  // constant here and in two other places.
+  const paddock::core::DietQuality diet = bundle.diet;
 
   const auto year_of = [&bundle, &diet](int start) {
     paddock::config::ScenarioBundle one = bundle;
