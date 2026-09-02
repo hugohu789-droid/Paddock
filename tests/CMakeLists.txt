@@ -142,6 +142,7 @@ if(PADDOCK_BUILD_CONFIG)
   add_executable(paddock_validation_tests validation/FacialEczemaGeographyTest.cpp
                                           validation/DroughtDestockingTest.cpp
                                           validation/LambsGrazeTest.cpp
+                                          validation/StockUnitIntakeTest.cpp
                                           validation/NitrogenLeachingTest.cpp
                                           validation/CanterburyDrylandTest.cpp
                                           validation/GrazedYearTest.cpp
