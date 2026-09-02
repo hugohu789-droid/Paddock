@@ -1003,6 +1003,30 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   scene_.reset_camera();
 }
 
+namespace {
+
+/// The farm's costs and prices, read from the data directory.
+///
+/// **Without these the flock does not advance at all**, which is not obvious
+/// and was wrong on this page for as long as it existed. The books are what
+/// step the year: ScenarioRun charges the day, ages the flock, records the
+/// lambing and the culls and the weaning draft, and hands the grazing mob its
+/// head count back. No business, no bookkeeping - and no flock. Every flock
+/// indicator then reports the truth about a farm with no stock on it, which is
+/// zero, next to 417 ewes standing on the map.
+///
+/// Optional the same way the nitrogen rule is: a bundle whose economics are
+/// missing gets fewer panels rather than invented prices.
+std::optional<config::FarmEconomics> farm_economics(const std::string& data_directory) {
+  try {
+    return config::load_economics(data_directory + "/economics/canterbury-sheep.toml");
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
+}  // namespace
+
 MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
   // **Nothing here touches the window.** This runs on a worker thread, so every
   // result goes into the products it returns and the interface adopts them when
@@ -1059,8 +1083,16 @@ MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
     products.elevation = bundle.make_elevation();
     products.had_stock = !bundle.mobs.empty();
     if (products.had_stock) {
-      simulate_managed(products, bundle, choices.policy, choices.irrigation,
-                       choices.irrigation_system);
+      // **The books come from beside the bundle**, the way every other input a
+      // scenario names does - `../../economics/` from a scenario directory, the
+      // same relative step the manifest already takes to reach its species and
+      // its sward. Worked out here rather than read off the window, because
+      // this runs on the worker thread and must not touch it.
+      simulate_managed(
+          products, bundle, choices.policy, choices.irrigation, choices.irrigation_system,
+          farm_economics((std::filesystem::path(choices.scenario_directory) / ".." / "..")
+                             .lexically_normal()
+                             .string()));
     } else {
       simulate_pasture_only(products, bundle, choices.irrigation, choices.irrigation_system);
     }
@@ -1389,6 +1421,8 @@ std::vector<config::FarmDashboard> MapWindow::run_year_boards(
     rule.reset();
   }
 
+  const std::optional<config::FarmEconomics> economics = farm_economics(data_directory_);
+
   core::DietQuality diet;
   diet.metabolisable_energy_mj_per_kg_dm = 10.5;
   diet.digestibility_percent = 75.0;
@@ -1407,7 +1441,12 @@ std::vector<config::FarmDashboard> MapWindow::run_year_boards(
                                 (((start + 1) % 100) < 10 ? "0" : "") +
                                 std::to_string((start + 1) % 100);
       boards.push_back(config::build_dashboard(
-          one, config::run_managed_scenario(one, *one.management, diet, label), label, rule));
+          one,
+          economics.has_value()
+              ? config::run_managed_scenario(one, *one.management, diet, label,
+                                             config::business_from(one, *economics))
+              : config::run_managed_scenario(one, *one.management, diet, label),
+          label, rule));
     }
   } catch (const std::exception& error) {
     failure = error.what();
@@ -1680,10 +1719,25 @@ void MapWindow::keep_day(RunProducts& into, const core::FarmletGrid& grid,
 void MapWindow::simulate_managed(RunProducts& into, const config::ScenarioBundle& bundle,
                                  const core::ManagementPolicy& policy,
                                  const core::IrrigationPolicy& irrigation,
-                                 const core::IrrigationSystem& system) {
+                                 const core::IrrigationSystem& system,
+                                 const std::optional<config::FarmEconomics>& economics) {
   core::DietQuality diet;
   diet.metabolisable_energy_mj_per_kg_dm = kPastureMe;
   diet.digestibility_percent = kPastureDigestibility;
+
+  // **The books, because they are what advance the flock.** Without them
+  // ScenarioRun never reaches keep_the_books, so nothing ages, nothing lambs,
+  // nothing is culled or weaned, and the head count the grazing mob is given
+  // back never changes. The window then reported a farm with 417 ewes on the
+  // map and a closing flock of zero on the indicators page, which is what it
+  // did for as long as that page existed.
+  //
+  // Optional the same way the nitrogen rule is: a bundle with no economics
+  // beside it gets fewer panels rather than invented prices.
+  std::optional<config::FarmBusiness> business;
+  if (economics.has_value()) {
+    business = config::business_from(bundle, *economics);
+  }
 
   into.summary = config::run_managed_scenario(
       bundle, policy, diet, bundle.name,
@@ -1773,7 +1827,7 @@ void MapWindow::simulate_managed(RunProducts& into, const config::ScenarioBundle
           into.stock_summary = summary;
         }
       },
-      irrigation, system);
+      irrigation, system, business.has_value() ? &*business : nullptr);
 }
 
 void MapWindow::simulate_pasture_only(RunProducts& into, const config::ScenarioBundle& bundle,
