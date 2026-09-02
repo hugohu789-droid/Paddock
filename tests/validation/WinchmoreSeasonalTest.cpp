@@ -181,11 +181,17 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // aspirational version of this test is in the git history of this file, and
 // what it asserted is what a corrected model should pass.
 //
-// Where to look first: summer growth continuing when a dryland soil should be
-// dry. That is the water stress coefficient, the profile's available water, or
-// the rooting depth - and it is the same family as E40, in that a model with
-// too little water limitation and no phosphorus limitation grows too much for
-// two independent reasons.
+// **Where it comes from, since the answer is now known** (verify.md, E62): not
+// the water stress, which works. Ks averages 0.618 in spring against 0.366 in
+// summer, and 86 to 100% of November-to-February days sit below 0.5. The fault
+// is that `Pasture.cpp` feeds that same water factor into leaf death, in the
+// direction that protects the sward - a thirsty tiller pushes its next leaf
+// more slowly, so the leaf it carries lives longer. True, and only half of what
+// a drought does; the half where drought kills standing leaf is missing. The
+// two cancel almost exactly - spring 7.5 x 0.618 = 4.64 degree-days, summer
+// 12.5 x 0.366 = 4.59 - so this sward loses leaf at the same rate in a February
+// drought as in an October spring, holds its cover, keeps intercepting light,
+// and keeps growing. A real dryland sward browns off.
 //
 // Compared as shares of the year rather than kilograms, because a share does
 // not depend on either site's rainfall - Winchmore's 745 mm mean is not this
