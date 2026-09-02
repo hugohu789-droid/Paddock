@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include <paddock/config/EconomicsConfig.hpp>
 #include <paddock/config/FarmDashboard.hpp>
 #include <paddock/config/ScenarioComparison.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
@@ -351,10 +352,16 @@ class MapWindow : public QMainWindow {
 
   /// Steps the bundle with its stock on it, under `policy`, keeping every day's
   /// rasters as it goes.
+  ///
+  /// `economics` is passed in rather than looked up, because this runs on the
+  /// worker thread and must not reach into the window for anything. It is what
+  /// advances the flock: without the books, nothing ages, lambs, is culled or
+  /// weaned.
   static void simulate_managed(RunProducts& into, const config::ScenarioBundle& bundle,
                                const core::ManagementPolicy& policy,
                                const core::IrrigationPolicy& irrigation,
-                               const core::IrrigationSystem& system);
+                               const core::IrrigationSystem& system,
+                               const std::optional<config::FarmEconomics>& economics);
 
   /// Steps the pasture alone, for a bundle that carries no stock. Both paths
   /// exist because `canterbury-baseline` has no mobs and is still worth looking
