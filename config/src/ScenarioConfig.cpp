@@ -207,6 +207,12 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
   const BundleInput sward_input = read_input(root, "sward", directory, manifest_path, sward_text);
   bundle.sward = parse_sward(sward_text, join(directory, sward_input.relative_path));
 
+  // **The sward is told where it is**, because the reproductive season's timing
+  // and strength are functions of latitude and of nothing else. It is stated
+  // once, in [run], rather than repeated in the sward file where it would be a
+  // second place to get it wrong.
+  bundle.sward.latitude_degrees = bundle.latitude_degrees;
+
   const toml::table& weather = detail::require_table(root, "weather", manifest_path);
   detail::reject_unknown_keys(weather, {"kind", "path", "sha256", "dataset", "licence"},
                               manifest_path, "[weather]");

@@ -315,19 +315,22 @@ what may be quoted and what may not.
 
 Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept current with the code:
 
-- **The model splits spring and summer wrongly, and its annual total hides
-  it.** Against Winchmore's measured months the model puts 39% of its year in
-  spring where the trial puts 55%, and 33% in summer where the trial puts 18%.
-  Summer is when a Canterbury dryland farm stops growing, and it is nearly the
-  model's biggest season. Nothing that depends on *when* feed arrives should be
-  trusted. Winter and autumn, which were also wrong, now land within half a
-  point of the trial, and the decade mean is 6,572 kg DM/ha against a measured
-  6,442 — so what is left is a spring/summer partition and not a general
-  seasonal fault. Two sourced changes got there and neither was tuned: the half
-  of drought that kills standing leaf (ADR 0016), and a published temperature
-  response taken as a whole set rather than a single cardinal (ADR 0017). The
+- **The model splits spring and summer wrongly.** Against Winchmore's measured
+  months it puts 44% of its year in spring where the trial puts 55%, and 32% in
+  summer where the trial puts 18%. Summer is when a Canterbury dryland farm
+  stops growing, and it is nearly the model's biggest season, so nothing that
+  depends on *when* feed arrives should be trusted. The sharpest way to say it:
+  **in Winchmore's 25 measured years spring beats summer 25 times; this model
+  manages 8 in 10**, and loses in exactly the years summer stays wet. Spring
+  dominance is a property of the plant and the model has it as a property of the
+  weather. Winter and autumn are close, so what is left is a spring/summer
+  partition rather than a general seasonal fault. Three sourced changes got
+  there and none was tuned: the half of drought that kills standing leaf
+  (ADR 0016), a temperature response taken as a whole published set rather than
+  a single cardinal (ADR 0017), and AgPasture's latitude-driven stand-in for the
+  reproductive season this model has no phenology to produce (ADR 0018). The
   optimum temperature turned out to be the one figure that was never wrong
-  (verify.md, E61–E66)
+  (verify.md, E61–E70)
 - **The model grows about 20% more pasture than the trial it is measured
   against, while applying no fertiliser at all.** Winchmore's dryland treatment
   gets 250 kg of superphosphate a hectare a year and measured 6,442 kg DM/ha

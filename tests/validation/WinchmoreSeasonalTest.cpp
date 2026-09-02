@@ -166,10 +166,10 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // trial's proportions, within ten points a season. It does not:
 //
 //     season   at E61   now     trial   remaining
-//     winter     6.2%   10.5%   10.0%    closed
-//     spring    32.2%   38.7%   54.7%   -15.9 points
-//     summer    41.3%   33.5%   18.0%   +15.5 points
-//     autumn    20.3%   17.3%   17.3%    closed
+//     winter     6.2%    9.1%   10.0%   -0.9 points
+//     spring    32.2%   43.6%   54.7%  -11.1 points
+//     summer    41.3%   32.2%   18.0%  +14.2 points
+//     autumn    20.3%   15.1%   17.3%   -2.2 points
 //
 // **Winter and autumn are closed and spring and summer are not**, which is a
 // more useful thing to know than a single seasonal error. Two sourced changes
@@ -220,9 +220,14 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 //
 // The leading hypothesis is that there is no reproductive development here:
 // ryegrass turns reproductive in spring, and afterwards carries fewer tillers
-// through summer even with water in the soil. That is a mechanism to build, not
-// a parameter to move, and it is why the bounds below are held rather than
-// chased.
+// through summer even with water in the soil.
+//
+// **AgPasture's stand-in for that mechanism is now in** (E69, ADR 0018), and it
+// is worth about a third of what was left: spring 38.7 to 43.6. It does not
+// restore the signature. Spring still beats summer 8 years in 10 against the
+// record's 25 in 25, because a 28% spring boost cannot outweigh a summer that
+// grows 3,900 kg DM/ha when the rain comes. The remainder wants the mechanism
+// itself, not another multiplier.
 //
 // Compared as shares of the year rather than kilograms, because a share does
 // not depend on either site's rainfall - Winchmore's 745 mm mean is not this
@@ -261,8 +266,8 @@ TEST(WinchmoreSeasonalTest, TheModelsSeasonalShapeIsWrongAndThisHoldsTheGap) {
   // it got worse; over the upper means somebody improved the model and should
   // say so here rather than leave a test describing a version that no longer
   // exists.
-  EXPECT_GT(model_spring, 36.0) << "spring has fallen below where the gap was measured";
-  EXPECT_LT(model_spring, 45.0)
+  EXPECT_GT(model_spring, 41.0) << "spring has fallen below where the gap was measured";
+  EXPECT_LT(model_spring, 47.0)
       << "the model now puts " << model_spring
       << "% of its year in spring against the trial's 55%. If the water limitation was fixed, "
          "raise this bound and record what changed";
@@ -271,11 +276,14 @@ TEST(WinchmoreSeasonalTest, TheModelsSeasonalShapeIsWrongAndThisHoldsTheGap) {
       << "the model now puts " << model_summer
       << "% of its year in summer against the trial's 18%, which is better than the 41% this was "
          "written at. Say what closed it";
-  EXPECT_LT(model_summer, 36.0) << "summer has grown beyond where the gap was measured";
+  EXPECT_LT(model_summer, 35.0) << "summer has grown beyond where the gap was measured";
 
-  // **Winter and autumn are now held tightly, because they are right.** They
-  // were within twelve points of the trial when this was written and are within
-  // one of it now; a change that moved either back out would be undoing E64.
+  // **Winter and autumn are held tightly, and autumn is now the tight one.** Both
+  // were within twelve points of the trial when this was written and within one
+  // of it after E64. The reproductive season of E69 bought spring five points
+  // and took two of them off autumn, which now sits 2.2 points out against a
+  // 2.5 point bound. That is the cost of the trade, held where it can be seen
+  // rather than described in a comment nobody runs.
   EXPECT_NEAR(grown[0] / total * 100.0, theirs[0] * 100.0, 2.5) << "winter";
   EXPECT_NEAR(grown[3] / total * 100.0, theirs[3] * 100.0, 2.5) << "autumn";
 }
