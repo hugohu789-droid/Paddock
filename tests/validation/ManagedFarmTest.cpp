@@ -319,6 +319,44 @@ TEST(ManagedFarmTest, EveryPurchaseSaysWhenAndWhyItWasMade) {
 // ate to maintenance, and a year later every ewe stood on exactly her opening
 // weight with the target sitting in the panel doing nothing. The failure was
 // silent and looked like a model that simply held stock steady.
+// **The target is still an instruction and not an aspiration, and this holds
+// the gap** (verify.md, E77).
+//
+// A farmer can write any number in the panel, and what a mob actually puts on
+// should be bounded by what it can eat. Grazing is now bounded that way - E75
+// put GrazPlan's appetite and availability into the paddock. **Bought feed is
+// not.** Feed carried out to a trough is capped at what the mob is being fed
+// *for*, so a farmer who asks for half a kilogram a day simply buys his way
+// there: no ewe gains 182 kg in a year, and this one does, to the decimal.
+//
+// It is the same hole as E55, seen from the animal's end rather than the
+// accountant's: bought feed is the one intake in this model that nothing
+// bounds, which is why profit rises with every extra ewe.
+//
+// **Capping the trough at the animal's appetite was tried and is not here.**
+// It works - the year comes back at 163 kg rather than 182 - but a lactating
+// ewe's appetite runs only about 8% above her requirement, and the
+// availability term takes 10% at ordinary cover, so she runs a small permanent
+// deficit, loses 3.6 kg over a year where she used to hold, and the farmer
+// destocks into it. Closing this wants the lactation factor's LA and LB terms,
+// which need a body-condition history this model does not keep.
+TEST(ManagedFarmTest, AnImpossibleTargetIsBoughtRatherThanRefused) {
+  core::ManagementPolicy asking = default_policy();
+  asking.target_liveweight_gain_kg_per_day = 0.5;
+
+  const RunSummary got = run(kComfortableHead, asking, "asking");
+
+  GTEST_LOG_(INFO) << "asked for 0.5 kg a day over a year - 182 kg - and got "
+                   << got.liveweight_change_kg() << " kg";
+
+  // Held from both sides. Under the upper bound means somebody has bounded the
+  // target and should say so here; over it means something has come loose.
+  EXPECT_GT(got.liveweight_change_kg(), 150.0)
+      << "the flock returned " << got.liveweight_change_kg()
+      << " kg. If this has fallen, the trough has been capped - raise the bound and record it";
+  EXPECT_LT(got.liveweight_change_kg(), 200.0);
+}
+
 TEST(ManagedFarmTest, AskingForGainGetsGainWhenTheGrassAllowsIt) {
   core::ManagementPolicy holding = default_policy();
   holding.target_liveweight_gain_kg_per_day = 0.0;
