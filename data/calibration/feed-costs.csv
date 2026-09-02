@@ -1,0 +1,58 @@
+# What feed costs a New Zealand sheep farm, per kilogram of dry matter.
+#
+# **This exists because the model was buying feed at a price nobody had
+# sourced.** `kSupplementDollarsPerKgDm = 0.42` sat in core/src/FarmDecision.cpp
+# with a comment claiming "the feed price it is charged at is the one the
+# economics file carries". It was not; it was a constant, unmarked, and it was
+# the only thing standing between the farm and unlimited feed. See E55.
+#
+# THE SOURCE. Beef + Lamb New Zealand, Farm Fact Sheet 260, "Cost of Feed",
+# May 2020. It gives the arithmetic as well as the answer, which is why it is
+# quotable rather than merely citable:
+#
+#   Balage bales. Unit weight = 450 kg. Dry matter = 37%.
+#   kgDM/unit = 450 x 37% = 166.5 kg.  Cost = $90.
+#   Cost per kgDM = $90 / 166.5 = 54.1c.  ME = 10.
+#   Cost per MJME = 54.1c / 10 = 5.41c/MJME.
+#
+# **The line that matters most is the first one in their table, and it is not a
+# supplement at all.** Pasture costs 10 cents a kilogram of dry matter, range
+# 8.5 to 12.5. Every bought feed below is three to five times that. A farm that
+# buys its way through a deficit is paying five times what the same feed costs
+# it standing in the paddock, and that ratio - not the absolute price - is what
+# should make a stocking rate uneconomic before it makes it impossible.
+#
+# WHICH ONE THE MODEL BUYS. Baleage, because it is Beef + Lamb's own worked
+# example and because it is what a Canterbury sheep farmer feeds out in a
+# deficit. Hay is cheaper per kilogram and poorer; maize silage is a dairy feed.
+# A farm that fed something else would set its own figure in the economics file.
+#
+# **A note on quality, because the model disagrees with this table.** B+LNZ put
+# baleage at 10 MJ ME/kg DM. The NZGA's own measurements of New Zealand pasture
+# silage give 9.3 to 9.6, which is what core/FeedStore.hpp uses for silage the
+# farm cuts itself. The two are not the same feed - a bought bale is made by
+# somebody whose business is making them - so both stand, and this file is only
+# the price.
+#
+# WHAT IT DOES NOT SAY. Nothing here limits how much can be bought, or says that
+# in a regional drought there is none for sale at any price. Those are real and
+# they are not in this table; a price alone does not stop a solvent farm buying
+# its way to any stocking rate it likes. See E55 and E60.
+#
+# Sources:
+#   Beef + Lamb New Zealand, Farm Fact Sheet 260, "Cost of Feed", May 2020.
+#     https://beeflambnz.com/sites/default/files/factsheets/pdfs/fact-sheet-260-Cost%20of%20Feed.pdf
+#   Beef + Lamb New Zealand, Sheep and Beef Farm Survey, Class 6 South Island
+#     Finishing Breeding - feed and grazing expenditure per hectare, see
+#     data/economics/canterbury-sheep.toml
+#
+# status: direct = stated in the source; derived = arithmetic on stated values.
+
+feed,dry_matter_percent,energy_mj_me_per_kg_dm,dollars_per_kg_dm,low,high,status,note
+pasture,18,10.5,0.100,0.085,0.125,direct,"the farm's own grass - every line below is a multiple of this"
+baleage,37,10.0,0.541,0.481,0.631,direct,"$90 a 450 kg bale; range $80-105 gives the band"
+hay,85,8.0,0.314,0.275,0.353,direct,"$80 a 300 kg bale; range $70-90"
+hay_lucerne,85,9.0,0.510,0.471,0.549,direct,"$130 a 300 kg bale; range $120-140"
+silage_grass,35,10.5,0.331,,,direct,"$116 a wet tonne"
+silage_maize,35,10.8,0.340,0.314,0.371,direct,"$119 a wet tonne; range $110-130. A dairy feed, listed for completeness"
+bought_feed_over_pasture,,,5.41,,,derived,"baleage over pasture - what a deficit actually costs a farm"

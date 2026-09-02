@@ -110,6 +110,23 @@ wool_dollars_per_kg = { value = 3.80, status = "verify", source = "strong_wool_i
 # from lamb. A run that sells cull ewes has to say it is using a placeholder.
 cull_ewe_dollars_per_head = { value = 90.0, status = "placeholder", source = "none" }
 
+
+# **What a kilogram of bought feed costs**, dry matter.
+#
+# Beef + Lamb New Zealand, Farm Fact Sheet 260 "Cost of Feed" (May 2020), which
+# gives the arithmetic as well as the answer: a 450 kg baleage bale at 37% dry
+# matter is 166.5 kg DM, and at $90 a bale that is 54.1 cents a kilogram. The
+# range they quote is $80 to $105 a bale.
+#
+# **Read it against the line above it in their own table**, which is not a
+# supplement at all: pasture, 10 cents a kilogram of dry matter. Bought feed
+# costs this farm five and a half times what the same feed costs it standing in
+# the paddock, and that ratio is the reason a deficit is expensive.
+#
+# It is `direct` because the source states it, and it replaces a constant that
+# sat in core/src/FarmDecision.cpp claiming to have come from this file. It had
+# not; see docs/validation/verify.md, E55 and E60.
+supplement_dollars_per_kg_dm = { value = 0.541, status = "direct", source = "blnz_fact_sheet_260" }
 # ---------------------------------------------------------------- capital
 
 [capital]
@@ -127,3 +144,4 @@ opening_balance_per_hectare = { value = 400.0, status = "placeholder", source = 
 blnz_2025_csi = "Beef + Lamb New Zealand Economic Service, Sheep and Beef Farm Survey: Marlborough/Canterbury, quintile analysis of final 2024-25 survey data. Class 6 S.I. Finishing Breeding, mean of the 2024-25 column."
 farmers_weekly_schedule = "South Island lamb schedule for new-season lambs, 2024-25, as reported in the New Zealand farming trade press. Not a Beef + Lamb survey figure."
 strong_wool_indicator = "South Island strong wool indicator, end of 2024, as reported in the New Zealand farming trade press."
+blnz_fact_sheet_260 = "Beef + Lamb New Zealand, Farm Fact Sheet 260, 'Cost of Feed', May 2020. Baleage: 450 kg bale at 37% DM is 166.5 kg DM; at $90 a bale, 54.1 c/kg DM. Range $80-105 a bale. The same table puts pasture at 10 c/kg DM. See data/calibration/feed-costs.csv."

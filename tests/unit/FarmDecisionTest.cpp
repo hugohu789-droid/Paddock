@@ -34,6 +34,10 @@ Prices canterbury_prices() {
   prices.lamb_dollars_per_kg_carcass = 7.80;
   prices.wool_dollars_per_kg = 3.80;
   prices.cull_ewe_dollars_per_head = 90.0;
+  // Beef + Lamb's Fact Sheet 260 baleage figure. Without a price the farm
+  // refuses to buy at all - which is deliberate, and is what made this test
+  // fail the moment the hardcoded constant came out of FarmDecision.cpp.
+  prices.supplement_dollars_per_kg_dm = 0.541;
   return prices;
 }
 

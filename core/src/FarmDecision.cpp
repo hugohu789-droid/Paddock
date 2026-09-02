@@ -21,7 +21,6 @@ constexpr double kFleeceKgPerHead = 5.0;
 /// farmer is feeding out. **PLACEHOLDER**, and the feed price it is charged at
 /// is the one the economics file carries.
 constexpr double kSupplementKgPerHeadPerDay = 1.2;
-constexpr double kSupplementDollarsPerKgDm = 0.42;
 
 /// Whether the farm is close enough to the edge that selling beats spending.
 bool short_of_cash(const FarmOutlook& outlook, const DecisionPolicy& policy) {
@@ -120,8 +119,14 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
   // **Buying feed.** Only while the farm can afford to. A farmer a fortnight
   // from an empty account does not buy baleage, and this is where that shows.
   rules.emplace_back(
-      [policy](const FarmOutlook& outlook, const Prices& /*prices*/) -> std::optional<Proposal> {
+      [policy](const FarmOutlook& outlook, const Prices& prices) -> std::optional<Proposal> {
         if (outlook.head <= 0 || outlook.cover_kg_dm_per_ha > outlook.minimum_cover_kg_dm_per_ha) {
+          return std::nullopt;
+        }
+        // **No price, no purchase.** A farm that buys feed at a cost nobody
+        // stated produces a balance nobody can check, and this used to happen
+        // through a constant in this file.
+        if (prices.supplement_dollars_per_kg_dm <= 0.0) {
           return std::nullopt;
         }
         if (short_of_cash(outlook, policy)) {
@@ -140,7 +145,7 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
         Proposal feed;
         feed.kind = ActionKind::BuyFeed;
         feed.head = outlook.head;
-        feed.dollars_out = kg * kSupplementDollarsPerKgDm;
+        feed.dollars_out = kg * prices.supplement_dollars_per_kg_dm;
         feed.because = "fed out to " + std::to_string(outlook.head) + " head below minimum cover";
         return feed;
       });
