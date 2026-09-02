@@ -118,6 +118,11 @@ class MapWindow : public QMainWindow {
   /// the snapshot was never fetched.
   [[nodiscard]] const std::string& no_ground_reason() const noexcept { return no_ground_reason_; }
 
+  /// Switches the setup panel between the farmer, researcher and compliance
+  /// views. Public for the same reason select_irrigation() is: the window has
+  /// no test binary, so the headless path drives it the way a person would.
+  void choose_role(int role);
+
   /// Every whole farm year this run's weather can answer for, earliest first.
   /// Empty when the weather is generated rather than recorded, because then no
   /// year is any more real than another.

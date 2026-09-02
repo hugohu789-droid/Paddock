@@ -290,6 +290,77 @@ FieldStyle style_of(MapWindow::Field field) {
 
 }  // namespace
 
+namespace {
+
+/// The farm's costs and prices, as the bundle names them.
+///
+/// **Without these the flock does not advance at all**, which is not obvious
+/// and was wrong on this page for as long as it existed. The books are what
+/// step the year: ScenarioRun charges the day, ages the flock, records the
+/// lambing and the culls and the weaning draft, and hands the grazing mob its
+/// head count back. No business, no bookkeeping - and no flock. Every flock
+/// indicator then reports the truth about a farm with no stock on it, which is
+/// zero, next to 417 ewes standing on the map. That is E49.
+///
+/// **And the bundle names it, rather than the window reaching for Canterbury.**
+/// This used to load `economics/canterbury-sheep.toml` whatever farm was open.
+/// A Waikato block was priced from a South Island survey and, worse, measured
+/// against the Canterbury Land and Water Regional Plan - see the companion
+/// below and E57.
+std::optional<config::FarmEconomics> farm_economics(const config::ScenarioBundle& bundle) {
+  if (bundle.economics_path.empty()) {
+    return std::nullopt;
+  }
+  try {
+    return config::load_economics(bundle.economics_path);
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
+/// The regional rule this farm is measured against, as the bundle names it.
+///
+/// **New Zealand has no national nitrogen loss limit.** Regional councils set
+/// them catchment by catchment, so reaching for one asserts which zone a farm
+/// sits in. `paddock nitrogen` has always taken the rule as an argument and
+/// refused to default one; this is the window keeping the same promise.
+///
+/// Nothing named means the nitrogen panel still reports what leached and has
+/// nothing to say about compliance, which is the honest answer when nobody has
+/// said which rule applies.
+std::optional<config::NitrogenRegulation> farm_regulation(const config::ScenarioBundle& bundle) {
+  if (bundle.regulation_path.empty()) {
+    return std::nullopt;
+  }
+  try {
+    return config::load_nitrogen_regulation(bundle.regulation_path);
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
+/// What this farm is measured against, in words, for the compliance view.
+///
+/// **Saying "none" plainly is the point.** New Zealand sets nitrogen limits
+/// catchment by catchment, so a farm with no rule named is not a farm that
+/// passes - it is a farm nobody has told us the rules for, and a panel that
+/// left the field blank would read as the former.
+QString measured_against(const config::ScenarioBundle& bundle) {
+  const std::optional<config::NitrogenRegulation> rule = farm_regulation(bundle);
+  if (!rule.has_value()) {
+    return "<b>No zone rule is named for this farm.</b><br><br>New Zealand sets nitrogen loss "
+           "limits by region and catchment, so there is no national figure to fall back on. This "
+           "run will report what leached and will make no compliance claim.<br><br>To measure it "
+           "against a rule, add one under data/regulations/ and name it in the scenario's "
+           "[regulation] section.";
+  }
+  return QString("<b>%1</b><br>%2, %3<br><br>%4")
+      .arg(QString::fromStdString(rule->name), QString::fromStdString(rule->authority),
+           QString::fromStdString(rule->plan), QString::fromStdString(rule->zone));
+}
+
+}  // namespace
+
 MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bundle_directory,
                      std::string data_directory, QWidget* parent)
     : QMainWindow(parent), data_directory_(std::move(data_directory)) {
@@ -966,7 +1037,7 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   // explore from: the user can always get back to the published run.
   const int head = bundle.mobs.empty() ? 0 : bundle.mobs.front().head;
   const double liveweight = bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg;
-  setup_->adopt_bundle(bundle_directory, head, liveweight,
+  setup_->adopt_bundle(bundle_directory, head, liveweight, bundle.diet, measured_against(bundle),
                        bundle.management.has_value() ? &*bundle.management : nullptr,
                        bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
 
@@ -1001,57 +1072,6 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   scene_.reset_camera();
 }
 
-namespace {
-
-/// The farm's costs and prices, as the bundle names them.
-///
-/// **Without these the flock does not advance at all**, which is not obvious
-/// and was wrong on this page for as long as it existed. The books are what
-/// step the year: ScenarioRun charges the day, ages the flock, records the
-/// lambing and the culls and the weaning draft, and hands the grazing mob its
-/// head count back. No business, no bookkeeping - and no flock. Every flock
-/// indicator then reports the truth about a farm with no stock on it, which is
-/// zero, next to 417 ewes standing on the map. That is E49.
-///
-/// **And the bundle names it, rather than the window reaching for Canterbury.**
-/// This used to load `economics/canterbury-sheep.toml` whatever farm was open.
-/// A Waikato block was priced from a South Island survey and, worse, measured
-/// against the Canterbury Land and Water Regional Plan - see the companion
-/// below and E57.
-std::optional<config::FarmEconomics> farm_economics(const config::ScenarioBundle& bundle) {
-  if (bundle.economics_path.empty()) {
-    return std::nullopt;
-  }
-  try {
-    return config::load_economics(bundle.economics_path);
-  } catch (const std::exception&) {
-    return std::nullopt;
-  }
-}
-
-/// The regional rule this farm is measured against, as the bundle names it.
-///
-/// **New Zealand has no national nitrogen loss limit.** Regional councils set
-/// them catchment by catchment, so reaching for one asserts which zone a farm
-/// sits in. `paddock nitrogen` has always taken the rule as an argument and
-/// refused to default one; this is the window keeping the same promise.
-///
-/// Nothing named means the nitrogen panel still reports what leached and has
-/// nothing to say about compliance, which is the honest answer when nobody has
-/// said which rule applies.
-std::optional<config::NitrogenRegulation> farm_regulation(const config::ScenarioBundle& bundle) {
-  if (bundle.regulation_path.empty()) {
-    return std::nullopt;
-  }
-  try {
-    return config::load_nitrogen_regulation(bundle.regulation_path);
-  } catch (const std::exception&) {
-    return std::nullopt;
-  }
-}
-
-}  // namespace
-
 MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
   // **Nothing here touches the window.** This runs on a worker thread, so every
   // result goes into the products it returns and the interface adopts them when
@@ -1061,6 +1081,13 @@ MapWindow::RunProducts MapWindow::simulate(const SetupPanel::Choices& choices) {
   RunProducts products;
   try {
     config::ScenarioBundle bundle = config::load_scenario(choices.scenario_directory);
+
+    // **What the panel says the stock are eating, if anyone moved it.** The
+    // bundle's diet is the default and the researcher view is the only place it
+    // can be changed; putting it on the bundle here means every path below -
+    // the run, the indicators, the years page - sees the same figure without
+    // any of them having to know the panel exists.
+    bundle.diet = choices.diet;
     products.no_ground_reason = attach_elevation(bundle, choices.scenario_directory);
 
     // Missing, and the bundle says where it is published. attach_elevation has
@@ -1406,6 +1433,10 @@ void MapWindow::open_dashboard() {
   } catch (const std::exception& error) {
     QMessageBox::warning(this, "Indicators", QString::fromStdString(error.what()));
   }
+}
+
+void MapWindow::choose_role(int role) {
+  setup_->choose_role(role);
 }
 
 std::vector<int> MapWindow::years_available() const {
@@ -1891,7 +1922,8 @@ void MapWindow::open_scenario(const std::string& bundle_directory) {
       QDir(QString::fromStdString(bundle_directory)).absolutePath().toStdString();
   const config::ScenarioBundle bundle = config::load_scenario(resolved);
   setup_->adopt_bundle(resolved, bundle.mobs.empty() ? 0 : bundle.mobs.front().head,
-                       bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg,
+                       bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg, bundle.diet,
+                       measured_against(bundle),
                        bundle.management.has_value() ? &*bundle.management : nullptr,
                        bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
   if (setup_->choices().scenario_directory != resolved) {

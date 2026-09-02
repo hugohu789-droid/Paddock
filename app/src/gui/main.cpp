@@ -146,6 +146,7 @@ int main(int argc, char** argv) {
                        std::find(args.begin(), args.end(), "--inspect") != args.end() ||
                        std::find(args.begin(), args.end(), "--compare") != args.end() ||
                        std::find(args.begin(), args.end(), "--trends") != args.end() ||
+                       std::find(args.begin(), args.end(), "--role") != args.end() ||
                        std::find(args.begin(), args.end(), "--report-pdf") != args.end() ||
                        std::find(args.begin(), args.end(), "--window-shot") != args.end() ||
                        std::find(args.begin(), args.end(), "--smoke") != args.end();
@@ -339,6 +340,15 @@ int main(int argc, char** argv) {
       // headless run that exercises the same methods the menu item calls -
       // which is why open_trends() was split into the discovery and the runs
       // rather than doing both inside a slot.
+      // Which view of the setup panel to draw. The panel shows the farmer's
+      // controls by default; a researcher gets the model's assumptions as well,
+      // and a compliance reader neither, because none of it is theirs to set.
+      if (const auto role = std::find(args.begin(), args.end(), "--role");
+          role != args.end() && std::next(role) != args.end()) {
+        window.choose_role(std::stoi(std::string(*std::next(role))));
+        std::cout << "paddock-gui: setup panel showing role " << *std::next(role) << '\n';
+      }
+
       if (std::find(args.begin(), args.end(), "--trends") != args.end()) {
         const std::vector<int> years = window.years_available();
         std::cout << "paddock-gui: " << years.size() << " whole farm years";
