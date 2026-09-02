@@ -97,7 +97,7 @@ sha256 = "93eae9f37464dfb85d72436515e6ed9266080e0f4039172732924e228f4b9d5d"
 
 [sward]
 path = "sward.toml"
-sha256 = "3464a772f36be78241dd94fff20571521016b5e2c017339f7c47327ebea6b28c"
+sha256 = "fe33849b26960a8b2612451140decbf582e625336fce0a63ee99d72797893aa8"
 
 # **What this farm is priced by and measured against.**
 #

@@ -140,22 +140,37 @@ double senescence_share(const PastureSpeciesParameters& species, double mean_tem
   // either - which is why a winter sward holds its cover for weeks.
   const double degree_days = std::max(0.0, mean_temperature_c - species.base_temperature_c);
 
-  // **Temperature and moisture**, which is how DairyNZ state it. A thirsty
-  // tiller takes longer to push out its next leaf, so the one it is carrying
-  // lives longer - which is why a Canterbury summer rotation is longer than a
-  // spring one rather than shorter.
-  const double effective = degree_days * std::clamp(water_factor, 0.0, 1.0);
-  if (effective <= 0.0) {
+  // **Thermal time alone**, which is how AgPasture drives tissue turnover. The
+  // water factor used to multiply this line as well, on the argument that a
+  // thirsty tiller takes longer to push out its next leaf. That is true of leaf
+  // *appearance*; applied to leaf *death* it cancelled the drought term below
+  // almost exactly, and left a February drought turning leaf over at an October
+  // rate (verify.md, E62).
+  if (degree_days <= 0.0) {
     return 0.0;
   }
 
-  const double days_per_leaf = species.degree_days_per_leaf / effective;
+  const double days_per_leaf = species.degree_days_per_leaf / degree_days;
   const double leaf_lifespan_days = species.leaves_per_tiller * days_per_leaf;
+
+  // **And the half of drought the line above does not carry.** Slowing the
+  // tiller keeps leaf alive; drying the plant out kills the leaf it is already
+  // holding. AgPasture's form, and its ryegrass and clover figures: nothing
+  // below the threshold, rising as the square of how far past it the soil has
+  // gone, to double the turnover on a profile at wilting point.
+  double drought = 1.0;
+  const double stress = std::clamp(water_factor, 0.0, 1.0);
+  if (species.drought_turnover_threshold > 0.0 && stress < species.drought_turnover_threshold) {
+    const double past = (species.drought_turnover_threshold - stress) /
+                        species.drought_turnover_threshold;
+    drought = 1.0 + (species.drought_turnover_effect_max *
+                     std::pow(past, species.drought_turnover_exponent));
+  }
 
   // One over the lifespan: the share of standing leaf that reaches the end of
   // it today. Clamped, because a hot enough day would otherwise kill more leaf
   // than is standing.
-  return std::clamp(1.0 / leaf_lifespan_days, 0.0, 1.0);
+  return std::clamp(drought / leaf_lifespan_days, 0.0, 1.0);
 }
 
 Excreta excreta_from_intake(double nitrogen_eaten_kg, double intake_kg_dm,
