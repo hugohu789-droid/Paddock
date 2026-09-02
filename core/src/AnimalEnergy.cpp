@@ -526,7 +526,21 @@ LiveweightResponse liveweight_response(const AnimalClassParameters& animal,
 
   const double maintenance_efficiency = diet.maintenance_efficiency();
   response.maintenance_me_mj = net_maintenance / maintenance_efficiency;
-  response.surplus_me_mj = response.metabolisable_energy_mj - response.maintenance_me_mj;
+
+  // **What the animal spends before any of it can become weight.** A ewe in
+  // milk is paying for the milk, and a ewe in late pregnancy for the lamb;
+  // `daily_energy_requirement` charges her for both and this function used to
+  // charge her for neither, so every megajoule she ate in order to lactate came
+  // back out as body fat. That is how a 66 kg ewe reached 80.6 kg in a year on a
+  // farm asking her for no gain at all (verify.md, E72). The two functions are
+  // the same ledger read forwards and backwards, and they have to agree about
+  // what is spent.
+  response.lactation_me_mj =
+      lactation_net_energy_mj(animal, state, ground) / diet.lactation_efficiency();
+  response.pregnancy_me_mj = pregnancy_net_energy_mj(animal, state) / kPregnancyEfficiency;
+
+  response.surplus_me_mj = response.metabolisable_energy_mj - response.maintenance_me_mj -
+                           response.lactation_me_mj - response.pregnancy_me_mj;
   response.losing = response.surplus_me_mj < 0.0;
 
   // TMC Eq. 54 charges a tenth of the production cost to maintenance, so with

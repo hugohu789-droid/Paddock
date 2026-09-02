@@ -280,5 +280,67 @@ TEST(ReproductionEnergyTest, LactationIsProductionAndPregnancyIsNot) {
               1e-9);
 }
 
+// **A ewe who eats in order to milk has spent that energy, not stored it.**
+//
+// `daily_energy_requirement` charges her for the milk and the lamb;
+// `liveweight_response` deducted neither, so every megajoule she ate above
+// maintenance came back as body fat however hard she was milking. Fed exactly
+// what the requirement said she needed, she gained weight - which is the
+// arithmetic that took a 66 kg ewe to 80.6 kg in one year on a farm asking her
+// for no gain at all (verify.md, E72).
+//
+// The two functions are one ledger read forwards and backwards. Fed her
+// requirement to the gram, a ewe should hold her weight.
+//
+// **Measured with the deduction removed, this test reports 0.184 kg a day at 14
+// days lactating** - about 18 kg over a lactation, which is very nearly the
+// whole of the 23 kg a ewe was putting on.
+TEST(ReproductionEnergyTest, AEweFedExactlyHerRequirementHoldsHerWeight) {
+  const AnimalClassParameters ewe = a_ewe();
+  const DietQuality diet = pasture();
+  const GrazingConditions ground;
+
+  for (const int day : {0, 14, 40, 80}) {
+    AnimalState state = a_ewe_state();
+    state.days_lactating = day;
+    state.young = day > 0 ? 1.0 : 0.0;
+
+    // What the manual says she needs to hold weight, then exactly that much.
+    state.liveweight_change_kg_per_day = 0.0;
+    const EnergyRequirement need = daily_energy_requirement(ewe, state, diet, ground);
+    const LiveweightResponse got = liveweight_response(ewe, state, diet, ground, need.intake_kg_dm);
+
+    EXPECT_NEAR(got.liveweight_change_kg, 0.0, 0.02)
+        << "at " << day << " days lactating she was fed " << need.intake_kg_dm
+        << " kg DM to hold weight and changed by " << got.liveweight_change_kg << " kg";
+  }
+}
+
+// **And a ewe milking on less than she needs takes the difference out of
+// herself**, which is what a ewe in lactation on a short paddock does. Before
+// the ledger balanced she could not lose weight while lactating at all: the
+// milk energy was counted as a surplus.
+TEST(ReproductionEnergyTest, AEweMilkingOnShortRationsLosesCondition) {
+  const AnimalClassParameters ewe = a_ewe();
+  const DietQuality diet = pasture();
+  const GrazingConditions ground;
+
+  AnimalState state = a_ewe_state();
+  state.days_lactating = 20;
+  state.young = 1.0;
+
+  state.liveweight_change_kg_per_day = 0.0;
+  const EnergyRequirement need = daily_energy_requirement(ewe, state, diet, ground);
+  ASSERT_GT(need.lactation_me_mj, 0.0) << "she should be milking";
+
+  // Three quarters of what she needs.
+  const LiveweightResponse got =
+      liveweight_response(ewe, state, diet, ground, need.intake_kg_dm * 0.75);
+
+  EXPECT_TRUE(got.losing) << "underfed in lactation, she should be losing";
+  EXPECT_LT(got.liveweight_change_kg, 0.0);
+  EXPECT_GT(got.lactation_me_mj, 0.0) << "and the milk should be on her bill";
+}
+
 }  // namespace
 }  // namespace paddock::core
