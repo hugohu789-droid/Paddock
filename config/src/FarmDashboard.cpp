@@ -190,11 +190,11 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
            4'000.0, 9'800.0));
   year.indicators.push_back(make(
       "Utilisation", grown > 0.0 ? 100.0 * eaten_per_ha / grown : 0.0, "%", Provenance::Derived,
-      "What the stock took off as a share of what grew. The band is derived rather than "
-      "asserted: Beef + Lamb's Class 6 stocking rate at Parker's (1998) 550 kg DM a stock "
-      "unit, over Winchmore's measured dryland production. It used to read 65 to 80% and "
-      "cite nothing - see data/calibration/stock-unit-intake.csv.",
-      60.0, 90.0));
+      "What the stock took off as a share of what grew. Derived, not asserted: this farm's own "
+      "stocking rate at Parker's (1998) 550 kg DM a stock unit, over Winchmore's measured "
+      "dryland production. Most of the distance to a Class 6 farm is stock this one does not "
+      "carry, not feed its animals refuse - see data/calibration/stock-unit-intake.csv.",
+      45.0, 90.0));
 
   // **The numerator on its own, because utilisation is a ratio and a ratio
   // hides which half is wrong.** A farm can miss a utilisation band by eating

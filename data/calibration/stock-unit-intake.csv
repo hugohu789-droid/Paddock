@@ -24,14 +24,35 @@
 # used here; the lower figure would make the model's shortfall smaller, so 550
 # is the demanding reading and is stated as such.
 #
-# WHAT A FARM THEREFORE EATS. Beef + Lamb New Zealand's Class 6 (South Island
-# finishing-breeding) divides its accounts at 7.74 SU/ha. The example farm in
-# this repository runs 417 ewes on 80 ha at about 1.35 SU each, which is
-# 7.0 SU/ha - the same kind of farm, slightly lighter stocked. Intake follows by
-# multiplication, and is therefore `derived`, not measured on any farm:
+# HOW MANY STOCK UNITS A EWE IS, AND A CORRECTION.
 #
-#   7.00 SU/ha x 550 kg DM = 3,850 kg DM/ha
-#   7.74 SU/ha x 550 kg DM = 4,257 kg DM/ha
+# **This file first said 1.35 SU a ewe, and that was wrong.** The figure came
+# from data/economics/canterbury-sheep.toml, where it was asserted without a
+# source in order to reconcile 417 ewes on 80 ha with Beef + Lamb's Class 6
+# stocking rate. Parker's Table 1 collects the published conversions and they do
+# not support it:
+#
+#   Stock class   Hutton    Coop       NZMWBES   MAF     Lincoln
+#   Ewes          1.0       0.8-1.1    1.0       1.0     0.65-1.45
+#
+# NZMWBES is the New Zealand Meat and Wool Board's Economic Service - the body
+# whose survey became Beef + Lamb's, and therefore the same lineage as the Class
+# 6 figure the 1.35 was invented to match. It says 1.0.
+#
+# Parker's base ewe is 55 kg pre-mating weaning one lamb. The modelled flock is
+# 417 ewes at 55 kg rearing 439 lambs, which is 105% - the base ewe almost
+# exactly. So a ewe here is 1.0 SU.
+#
+# WHAT A FARM THEREFORE EATS. Intake follows by multiplication and is `derived`,
+# not measured on any farm:
+#
+#   417 ewes x 1.0 SU x 550 kg DM / 80 ha = 2,867 kg DM/ha
+#   7.74 SU/ha x 550 kg DM                = 4,257 kg DM/ha
+#
+# **The second line is not this farm's demand - it is Class 6's.** At 1.0 SU a
+# ewe this farm runs 5.2 SU/ha against the class average of 7.74, so it is
+# understocked by about a third. That is the larger part of why its utilisation
+# is low, and it is a stocking question rather than an intake one.
 #
 # UTILISATION. Parker's Table 4 reports a STOCKPOL whole-farm analysis of three
 # sheep systems: pasture production 6,233 to 6,683 kg DM/ha and utilisation
@@ -40,9 +61,10 @@
 # as the upper end rather than as the target.
 #
 # Taking the derived intake over Winchmore's measured dryland production of
-# 6,442 kg DM/ha gives 60% at 7.0 SU/ha and 66% at 7.74. Both sit under
-# Parker's modelled 85 to 90% and well above what this model currently does,
-# which is the point of writing it down.
+# 6,442 kg DM/ha gives 45% at this farm's own 5.2 SU/ha and 66% at Class 6's
+# 7.74. Both sit under Parker's modelled 85 to 90%, and the distance between
+# them is the point: most of this farm's low utilisation is that it carries a
+# third fewer stock units than its class, not that its animals eat too little.
 #
 # Sources:
 #   Parker, W.J. (1998). "Standardisation between livestock classes: the use
@@ -59,7 +81,9 @@ quantity,value,low,high,units,status,note
 stock_unit_intake,550,520,550,kg DM/SU/yr,direct,"Parker (1998); 520 also in common use for the same unit"
 stock_unit_diet_quality,10.5,,,MJ ME/kg DM,direct,"the energy density the standard unit is defined at"
 base_ewe_liveweight,55,,,kg,direct,"pre-mating, weaning one lamb at 25 kg"
-farm_intake_at_class_6,4257,,,kg DM/ha/yr,derived,"7.74 SU/ha x 550; Beef + Lamb Class 6 stocking rate"
-farm_intake_at_modelled_rate,3850,,,kg DM/ha/yr,derived,"7.00 SU/ha x 550; the example farm's own stocking rate"
+ewe_stock_units,1.0,0.8,1.1,SU/head,direct,"Parker (1998) Table 1: NZMWBES and MAF both 1.0; Coop 0.8-1.1. A 55 kg ewe rearing one lamb"
+farm_stocking_rate,5.2,,,SU/ha,derived,"417 ewes at 1.0 SU on 80 ha; Class 6 average is 7.74, so this farm is understocked by about a third"
+farm_intake_at_modelled_rate,2867,,,kg DM/ha/yr,derived,"417 SU x 550 / 80 ha; this farm's own flock"
+farm_intake_at_class_6,4257,,,kg DM/ha/yr,derived,"7.74 SU/ha x 550; what a Class 6 farm's stocking rate would demand, not this farm's"
 utilisation_modelled_stockpol,87,84.6,89.6,%,direct,"Parker (1998) Table 4, three STOCKPOL sheep systems - a modelled farm, definition of utilisation not stated"
-utilisation_derived_at_winchmore,60,60,66,%,derived,"derived intake over Winchmore's measured dryland production of 6442"
+utilisation_derived_at_winchmore,45,45,66,%,derived,"this farm's 5.2 SU/ha over Winchmore's 6442; the upper end is Class 6's 7.74 SU/ha"
