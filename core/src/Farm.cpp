@@ -361,16 +361,46 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     mob_day.supplement_kg_dm = std::min(supplement, appetite);
     mob_day.grazing.demand_kg_dm = appetite - mob_day.supplement_kg_dm;
 
-    // What each cell has to give, and what the paddock has in total.
+    // What each cell has to give, and what the paddock has in total. The mean
+    // standing cover comes with it, because how much of what it wants a mob can
+    // physically harvest depends on how tall the sward is and not only on
+    // whether there is any of it.
     const double cell_hectares = mask_.cell_area_hectares();
     double total_offer_kg = 0.0;
+    double standing_kg_dm_per_ha = 0.0;
     for (const std::size_t index : cells) {
-      total_offer_kg +=
-          offer_per_hectare(grid_.cell(index % grid_.cols(), index / grid_.cols())) * cell_hectares;
+      const Farmlet& cell = grid_.cell(index % grid_.cols(), index / grid_.cols());
+      total_offer_kg += offer_per_hectare(cell) * cell_hectares;
+      standing_kg_dm_per_ha += cell.sward().cover_kg_dm();
+    }
+    if (!cells.empty()) {
+      standing_kg_dm_per_ha /= static_cast<double>(cells.size());
     }
     mob_day.grazing.offered_kg_dm = total_offer_kg;
 
-    const double to_eat_kg = std::min(mob_day.grazing.demand_kg_dm, total_offer_kg);
+    // **Intake capacity** (E71): what the mob wants, cut by what a sward this
+    // short will actually yield to it. A ewe on a bare paddock takes smaller
+    // bites and grazes longer to make them up, and past a point cannot - so her
+    // intake falls away well before the grass runs out, which is a curve where
+    // this model used to have a cliff.
+    //
+    // The appetite carries GrazPlan's lactation and condition factors, and it
+    // has to: the availability term sits below one at any cover a real farm
+    // carries, so against a bare requirement it would put every mob permanently
+    // short. A milking ewe wants half again what a dry one does, which is the
+    // headroom this needs to work at all.
+    mob_day.grazing.relative_intake = relative_intake(farm_mob.mob.animal, standing_kg_dm_per_ha);
+    const double appetite_per_head =
+        potential_intake_kg_dm(farm_mob.mob.animal, farm_mob.mob.state);
+    mob_day.grazing.capacity_kg_dm =
+        appetite_per_head > 0.0
+            ? std::max(0.0, (appetite_per_head * mob_day.grazing.relative_intake *
+                             static_cast<double>(farm_mob.mob.head)) -
+                                mob_day.supplement_kg_dm)
+            : mob_day.grazing.demand_kg_dm;
+
+    const double to_eat_kg =
+        std::min({mob_day.grazing.demand_kg_dm, mob_day.grazing.capacity_kg_dm, total_offer_kg});
 
     // Spread over the cells in proportion to what each has above its residual:
     // stock take more from the parts of a paddock that carry more feed. See the

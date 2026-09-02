@@ -198,6 +198,8 @@ TEST(StockUnitIntakeTest, TheFlockEatsLessThanItsStockUnitRatingImplies) {
   // was comfortable. Intake capacity is the next thing to be built, and this is
   // one of the numbers it has to explain.
   const double share = eaten / target;
+  GTEST_LOG_(INFO) << "the flock ate " << eaten << " kg DM/ha against a stock-unit demand of "
+                   << target << ", a share of " << share;
   EXPECT_GT(share, 0.64) << "the flock eats " << eaten
                          << " kg DM/ha against a stock-unit demand of " << target
                          << ". Much under this would be a real intake fault rather than the "

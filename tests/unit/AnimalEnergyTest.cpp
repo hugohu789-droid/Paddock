@@ -86,7 +86,24 @@ AnimalClassParameters an_ewe_with_appetite() {
   ewe.standard_reference_weight_kg = 66.0;
   ewe.appetite_scalar_per_day = 0.04;
   ewe.appetite_size_coefficient = 1.7;
+  ewe.normal_weight_rate = 0.0157;
+  ewe.normal_weight_exponent = 0.27;
+  ewe.normal_weight_blend = 0.4;
+  ewe.condition_intake_limit = 1.5;
+  ewe.lactation_peak_days = 28.0;
+  ewe.lactation_curve_exponent = 1.4;
+  ewe.lactation_peak_no_young = 0.524;
+  ewe.lactation_peak_one_young = 0.524;
+  ewe.lactation_peak_two_young = 0.707;
+  ewe.lactation_peak_three_young = 0.891;
   return ewe;
+}
+
+AnimalState a_mature_ewe(double liveweight_kg) {
+  AnimalState state;
+  state.liveweight_kg = liveweight_kg;
+  state.age_days = 1500.0;
+  return state;
 }
 
 // **Validation.** The text says potential intake peaks at a relative size of
@@ -94,19 +111,35 @@ AnimalClassParameters an_ewe_with_appetite() {
 // 1.7 was confirmed against a table whose columns do not survive extraction.
 TEST(PotentialIntakeTest, PeaksAtEightyFivePercentOfMatureSize) {
   const AnimalClassParameters ewe = an_ewe_with_appetite();
-  const double srw = ewe.standard_reference_weight_kg;
 
+  // Relative size is a frame, not a weight, so it is swept by growing the
+  // animal up rather than by starving it down: a mature ewe reads Z near one
+  // however light she is, which is the whole point of Eq. 1a.
   double best = 0.0;
   double best_z = 0.0;
-  for (int step = 1; step <= 100; ++step) {
-    const double z = static_cast<double>(step) / 100.0;
-    const double intake = potential_intake_kg_dm(ewe, z * srw);
+  for (int age = 10; age <= 3000; age += 10) {
+    // An animal at or above its frame reports the frame itself, so this reads
+    // Brody's ceiling out of Eq. 1 and then stands the ewe exactly on it - a
+    // relative condition of one, where neither the condition factor nor Eq. 1a's
+    // blend is in play and the quadratic is all that is left.
+    AnimalState probe;
+    probe.age_days = age;
+    probe.liveweight_kg = ewe.standard_reference_weight_kg * 10.0;
+    const double frame = normal_weight_kg(ewe, probe);
+
+    AnimalState growing;
+    growing.age_days = age;
+    growing.liveweight_kg = frame;
+    ASSERT_NEAR(relative_condition(ewe, growing), 1.0, 1e-9) << "at age " << age;
+
+    const double z = relative_size(ewe, growing);
+    const double intake = potential_intake_kg_dm(ewe, growing);
     if (intake > best) {
       best = intake;
       best_z = z;
     }
   }
-  EXPECT_NEAR(best_z, 0.85, 0.011) << "the quadratic should peak at a relative size of 0.85";
+  EXPECT_NEAR(best_z, 0.85, 0.02) << "the quadratic should peak at a relative size of 0.85";
 }
 
 // **Validation.** Fig. 2 draws a sheep of 50 kg standard reference weight
@@ -115,14 +148,14 @@ TEST(PotentialIntakeTest, MatchesTheFiftyKilogramSheepOfFigureTwo) {
   AnimalClassParameters sheep = an_ewe_with_appetite();
   sheep.standard_reference_weight_kg = 50.0;
 
-  const double at_peak = potential_intake_kg_dm(sheep, 0.85 * 50.0);
+  const double at_peak = potential_intake_kg_dm(sheep, a_mature_ewe(0.85 * 50.0));
   EXPECT_NEAR(at_peak, 1.445, 0.01) << "0.04 * 50 * 0.85 * 0.85";
   EXPECT_LT(at_peak, 1.6) << "under the top of the figure's axis";
 
   // And a smaller sheep eats less, which is the figure's dashed line.
   AnimalClassParameters smaller = sheep;
   smaller.standard_reference_weight_kg = 40.0;
-  EXPECT_LT(potential_intake_kg_dm(smaller, 0.85 * 40.0), at_peak);
+  EXPECT_LT(potential_intake_kg_dm(smaller, a_mature_ewe(0.85 * 40.0)), at_peak);
 }
 
 // **The headroom is the point.** An appetite that did not exceed the animal's
@@ -131,7 +164,7 @@ TEST(PotentialIntakeTest, MatchesTheFiftyKilogramSheepOfFigureTwo) {
 // perfect. This is the number that makes the pairing work (E71).
 TEST(PotentialIntakeTest, AMatureEweWantsMoreThanSheNeedsAtMaintenance) {
   const AnimalClassParameters ewe = an_ewe_with_appetite();
-  const double appetite = potential_intake_kg_dm(ewe, 66.0);
+  const double appetite = potential_intake_kg_dm(ewe, a_mature_ewe(66.0));
   EXPECT_NEAR(appetite, 1.848, 0.01) << "0.04 * 66 * 1.0 * 0.7";
 
   // A dry ewe at maintenance eats nearer 1.2 kg DM a day on this diet, so the
@@ -144,7 +177,78 @@ TEST(PotentialIntakeTest, AMatureEweWantsMoreThanSheNeedsAtMaintenance) {
 TEST(PotentialIntakeTest, ASilentAnimalReportsNoAppetite) {
   AnimalClassParameters silent;
   silent.standard_reference_weight_kg = 66.0;
-  EXPECT_DOUBLE_EQ(potential_intake_kg_dm(silent, 66.0), 0.0);
+  EXPECT_DOUBLE_EQ(potential_intake_kg_dm(silent, a_mature_ewe(66.0)), 0.0);
+}
+
+// **A ewe in milk eats about half again what a dry ewe eats**, which is the
+// factor whose absence stopped intake capacity reaching the farm at all (E71).
+// At peak - 28 days, where M is one - GrazPlan Eq. 8 reduces to 1 + C_I19,Y.
+TEST(PotentialIntakeTest, ALactatingEweWantsHalfAgainWhatADryOneWants) {
+  const AnimalClassParameters ewe = an_ewe_with_appetite();
+
+  const double dry = potential_intake_kg_dm(ewe, a_mature_ewe(66.0));
+
+  AnimalState milking = a_mature_ewe(66.0);
+  milking.days_lactating = 28;
+  milking.young = 1.0;
+  const double at_peak = potential_intake_kg_dm(ewe, milking);
+
+  EXPECT_NEAR(at_peak / dry, 1.524, 0.001) << "1 + C_I19,1 at the peak of the curve";
+  EXPECT_GT(at_peak, 2.7) << "about 2.8 kg DM a day, against a requirement nearer 2.6";
+
+  // Twins are hungrier than a single, and triplets hungrier again.
+  AnimalState twins = milking;
+  twins.young = 2.0;
+  AnimalState triplets = milking;
+  triplets.young = 3.0;
+  EXPECT_GT(potential_intake_kg_dm(ewe, twins), at_peak);
+  EXPECT_GT(potential_intake_kg_dm(ewe, triplets), potential_intake_kg_dm(ewe, twins));
+
+  // And the curve comes back down: a ewe four months into lactation is not
+  // eating what she ate at a month.
+  AnimalState late = milking;
+  late.days_lactating = 120;
+  EXPECT_LT(potential_intake_kg_dm(ewe, late), at_peak);
+  EXPECT_GT(potential_intake_kg_dm(ewe, late), dry) << "but still more than dry";
+}
+
+// **A ewe carrying condition eats less, and does not stop.** The point of the
+// factor is that her intake falls until it meets what holds her, so she settles
+// at a weight rather than growing without limit.
+TEST(PotentialIntakeTest, AFatEweEatsLessButKeepsEating) {
+  const AnimalClassParameters ewe = an_ewe_with_appetite();
+
+  const double normal = potential_intake_kg_dm(ewe, a_mature_ewe(66.0));
+  const double carrying = potential_intake_kg_dm(ewe, a_mature_ewe(76.0));
+  const double fat = potential_intake_kg_dm(ewe, a_mature_ewe(85.0));
+
+  EXPECT_LT(carrying, normal) << "condition should take the edge off her appetite";
+  EXPECT_LT(fat, carrying) << "and more of it as she carries more";
+  EXPECT_GT(fat, 0.0) << "but she does not stop eating";
+
+  // A ewe in milk gets no such brake: she has somewhere to put the energy.
+  AnimalState milking = a_mature_ewe(76.0);
+  milking.days_lactating = 28;
+  milking.young = 1.0;
+  EXPECT_GT(potential_intake_kg_dm(ewe, milking), normal);
+}
+
+// **Normal weight is a frame, and a frame does not shrink in a drought.** This
+// is GrazPlan Eq. 1a, and it is what lets an animal come out of a hard season
+// light rather than permanently small.
+TEST(PotentialIntakeTest, ALightEweKeepsTheFrameSheGrew) {
+  const AnimalClassParameters ewe = an_ewe_with_appetite();
+
+  const AnimalState well_fed = a_mature_ewe(66.0);
+  const AnimalState pinched = a_mature_ewe(52.0);
+
+  EXPECT_GT(normal_weight_kg(ewe, pinched), pinched.liveweight_kg)
+      << "her frame should be bigger than she is";
+  EXPECT_LT(relative_condition(ewe, pinched), 1.0) << "so she reads as light for it";
+  EXPECT_NEAR(relative_condition(ewe, well_fed), 1.0, 0.05);
+
+  // And relative size never passes one, however heavy she gets.
+  EXPECT_LE(relative_size(ewe, a_mature_ewe(120.0)), 1.0);
 }
 
 // **What a short paddock does to intake**, checked against GrazPlan's own

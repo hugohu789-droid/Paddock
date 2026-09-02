@@ -44,6 +44,55 @@ grazing_coefficient = { value = 0.0025, status = "direct", source = "tmc_animal_
 gain_energy_ceiling_mj_per_kg = { value = 16.5, status = "direct", source = "tmc_animal_me" }
 
 [intake]
+# **How big she ought to be for her age**, which is what GrazPlan scales
+# appetite by rather than raw liveweight. Brody's curve for the ceiling, and a
+# blend below it so that a ewe who has had a hard season carries a frame that
+# went on growing while she did not - she comes out of it light rather than
+# small, and can catch up.
+#
+#     Nmax = SRW - (SRW - Wbirth) * exp(-rate * age / SRW^exponent)
+#     N    = blend * Nmax + (1 - blend) * W   when W is under the ceiling
+#
+# **DIRECT** - GrazPlan Eqs. 1 and 1a, `c-n-` at the file root in APSIM's
+# Models/Resources/ruminant.prm: 0.0115, 0.27, 0.4 for cattle. The same three appear in the
+# technical paper's Table 1 as CN1, CN2 and CN3.
+normal_weight_rate = { value = 0.0115, status = "direct", source = "grazplan_animal" }
+normal_weight_exponent = { value = 0.27, status = "direct", source = "grazplan_animal" }
+normal_weight_blend = { value = 0.4, status = "direct", source = "grazplan_animal" }
+
+# **What a ewe in good condition does, which is not stop eating.** Past a
+# relative condition of one her appetite falls away, and it keeps falling until
+# what she eats is what holds her - so a well-fed ewe settles at a weight
+# instead of growing without limit. Without it nothing in this model told a
+# mature animal it was big enough.
+#
+#     CF = BC * (limit - BC) / (limit - 1)     for BC > 1 and not lactating
+#
+# **DIRECT** - GrazPlan Eq. 3, C_I20 from `c-i-` position 20 in ruminant.prm.
+# The same 1.5 for sheep and for cattle.
+condition_intake_limit = { value = 1.5, status = "direct", source = "grazplan_animal" }
+
+# **And what a ewe in milk does, which is eat half again as much.** At peak she
+# wants about 1.5 times a dry ewe's intake, and without that she is capped under
+# her own requirement on every day she is milking - which is the whole reason
+# intake capacity could not be wired into the farm before (verify.md, E71).
+#
+#     LF = 1 + peak * M^exponent * exp(exponent * (1 - M)),  M = days / peak_days
+#
+# **DIRECT** - GrazPlan Eq. 8. the technical paper gives cattle C_I8 = 624 and C_I9 = 1.72,
+# with C_I19,n of 0.4162. A dry cow is not lactating and the figures are here
+# for completeness rather than because this farm milks anything.
+#
+# **Eq. 8's LA and LB are not here**: condition at parturition and weight lost
+# since it, both needing a history this model does not keep. Both are at most
+# one, so leaving them out makes her hungrier than GrazPlan would, never less.
+lactation_peak_days = { value = 624.0, status = "direct", source = "grazplan_animal" }
+lactation_curve_exponent = { value = 1.72, status = "direct", source = "grazplan_animal" }
+lactation_peak_no_young = { value = 0.4162, status = "direct", source = "grazplan_animal" }
+lactation_peak_one_young = { value = 0.4162, status = "direct", source = "grazplan_animal" }
+lactation_peak_two_young = { value = 0.4162, status = "direct", source = "grazplan_animal" }
+lactation_peak_three_young = { value = 0.4162, status = "direct", source = "grazplan_animal" }
+
 # **Appetite: what she would eat if nothing stopped her.** Everything in
 # [energy] says what a cow needs; this says what she wants, and the gap between
 # them is what lets a mob lose a quarter of its grazing efficiency on a short

@@ -99,20 +99,102 @@ double metabolic_weight(double liveweight_kg) noexcept {
 
 }  // namespace
 
+double normal_weight_kg(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
+  const double weight = std::max(0.0, state.liveweight_kg);
+  const double srw = animal.standard_reference_weight_kg;
+  if (animal.normal_weight_rate <= 0.0 || srw <= 0.0 || animal.normal_weight_exponent <= 0.0) {
+    return weight > 0.0 ? weight : srw;
+  }
+
+  // **Brody's curve for the upper limit** (Eq. 1): birth weight rising towards
+  // the standard reference weight, with the time constant scaled allometrically.
+  const double birth = birth_weight_kg(animal, std::max(1.0, state.young));
+  const double ceiling =
+      srw - ((srw - birth) * std::exp(-animal.normal_weight_rate * std::max(0.0, state.age_days) /
+                                      std::pow(srw, animal.normal_weight_exponent)));
+
+  // **And the part that lets a hard season be caught up** (Eq. 1a). An animal
+  // lighter than the curve carries a normal weight between the two, so its
+  // frame goes on growing while its condition does not - which is why it can
+  // come out of a drought light rather than permanently small.
+  if (weight < ceiling) {
+    return (animal.normal_weight_blend * ceiling) + ((1.0 - animal.normal_weight_blend) * weight);
+  }
+  return ceiling;
+}
+
+double relative_size(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
+  if (animal.standard_reference_weight_kg <= 0.0) {
+    return 0.0;
+  }
+  return std::clamp(normal_weight_kg(animal, state) / animal.standard_reference_weight_kg, 0.0,
+                    1.0);
+}
+
+double relative_condition(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
+  const double normal = normal_weight_kg(animal, state);
+  if (normal <= 0.0) {
+    return 1.0;
+  }
+  return std::max(0.0, state.liveweight_kg) / normal;
+}
+
+namespace {
+
+/// GrazPlan Eq. 3. One until the animal is carrying condition, then falling -
+/// not to stop it eating, but to bring its intake down to what holds it.
+double condition_factor(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
+  if (state.days_lactating > 0 || animal.condition_intake_limit <= 1.0) {
+    return 1.0;
+  }
+  const double condition = relative_condition(animal, state);
+  if (condition <= 1.0) {
+    return 1.0;
+  }
+  const double limit = animal.condition_intake_limit;
+  return std::clamp((condition * (limit - condition)) / (limit - 1.0), 0.0, 1.0);
+}
+
+/// GrazPlan Eq. 8, without its LA and LB terms - both are at most one, so this
+/// makes a milking female hungrier than GrazPlan would and never less.
+double lactation_factor(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
+  if (state.days_lactating <= 0 || animal.lactation_peak_days <= 0.0 ||
+      animal.lactation_curve_exponent <= 0.0) {
+    return 1.0;
+  }
+
+  const long young = std::lround(std::max(0.0, state.young));
+  double peak = animal.lactation_peak_no_young;
+  if (young == 1) {
+    peak = animal.lactation_peak_one_young;
+  } else if (young == 2) {
+    peak = animal.lactation_peak_two_young;
+  } else if (young >= 3) {
+    peak = animal.lactation_peak_three_young;
+  }
+  if (peak <= 0.0) {
+    return 1.0;
+  }
+
+  const double through =
+      static_cast<double>(state.days_lactating) / animal.lactation_peak_days;
+  const double exponent = animal.lactation_curve_exponent;
+  return 1.0 + (peak * std::pow(through, exponent) * std::exp(exponent * (1.0 - through)));
+}
+
+}  // namespace
+
 double potential_intake_kg_dm(const AnimalClassParameters& animal,
-                              double liveweight_kg) noexcept {
+                              const AnimalState& state) noexcept {
   if (animal.appetite_scalar_per_day <= 0.0 || animal.standard_reference_weight_kg <= 0.0) {
     return 0.0;
   }
 
-  // Relative size, capped at one: a mature animal is not more than full grown,
-  // and past the cap the quadratic would start taking appetite away again.
-  const double relative_size =
-      std::min(1.0, std::max(0.0, liveweight_kg) / animal.standard_reference_weight_kg);
-
+  const double size = relative_size(animal, state);
   const double appetite = animal.appetite_scalar_per_day * animal.standard_reference_weight_kg *
-                          relative_size * (animal.appetite_size_coefficient - relative_size);
-  return std::max(0.0, appetite);
+                          size * (animal.appetite_size_coefficient - size);
+
+  return std::max(0.0, appetite * condition_factor(animal, state) * lactation_factor(animal, state));
 }
 
 double relative_intake(const AnimalClassParameters& animal,
