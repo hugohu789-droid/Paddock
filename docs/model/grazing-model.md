@@ -97,12 +97,19 @@ From the [verification tracker](../validation/verify.md), and it matters:
 
 ## Assumptions and limitations
 
+- **Utilisation runs about 26 to 35% where a New Zealand sheep farm removes 65
+  to 80%.** The stock eat roughly a third of what grows and the rest dies
+  standing. The stocking rate is not the cause — 7.0 SU/ha against Beef +
+  Lamb's Class 6 average of 7.74 — so the gap is in intake, in what a mob will
+  take off a cell, or in how the rotation offers it. This is the largest open
+  question in the model and no result that depends on how much was eaten should
+  be quoted without it
 - One mob per paddock
-- No lactation: a "dairy cow" here is a dry cow
 - No selective grazing within a cell — a mob eats the offer in proportion
 - No treading damage, no pugging, no camping behaviour
-- Dung and urine are not returned to the soil, so nitrogen over more than a
-  season is wrong in a known direction
+- Dairy lactation is not modelled; **ewe** pregnancy and lactation are, on
+  OVERSEER's equation set, so a "dairy cow" here is still a dry cow while a ewe
+  in milk eats like one
 
 ## Tests
 

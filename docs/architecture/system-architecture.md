@@ -70,6 +70,7 @@ flowchart TB
         inspector["Paddock inspector"]
         controls["Timeline, layers, chart"]
         reports["Reports and comparison dialogues"]
+        boards["Indicators · every year<br/>tiles, bars, shares, seasons"]
     end
 
     subgraph viz["viz/ — VTK visualisation"]
@@ -79,8 +80,10 @@ flowchart TB
 
     subgraph config["config/ — scenarios, runs, presentation"]
         bundle["Scenario bundles<br/>TOML + hashes"]
-        runner["Run + observer"]
+        runner["Run + observer + the books"]
         present["Report · comparison · paddock inspection"]
+        dash["Dashboard · nitrogen report<br/>every indicator with its provenance"]
+        econ["Economics · prices and costs"]
     end
 
     subgraph core["core/ — simulation kernel, C++17 and the standard library only"]
@@ -89,13 +92,17 @@ flowchart TB
         pasture["Pasture"]
         irrigation["Irrigation"]
         grazing["Grazing and the farmer"]
-        stock["Livestock energy"]
+        stock["Livestock energy<br/>maintenance · pregnancy · lactation"]
+        flock["Flock<br/>age structure, lambing, culls"]
+        feed["Feed store<br/>cut in spring, fed in summer"]
+        money["Farm account"]
         ledger["Budget ledger"]
     end
 
     subgraph gis["gis/ — GDAL · PROJ · GEOS"]
         dem["LiDAR elevation"]
         cadastre["Paddock boundaries"]
+        fetch["Elevation download<br/>one pinned tile, hash-checked"]
     end
 
     app --> viz
