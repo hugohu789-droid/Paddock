@@ -184,6 +184,9 @@ TEST(CanterburyDrylandTest, WaterUseEfficiencyIsNearTheDrylandFigureItWasFittedT
   const double dry = pasture_year(2015).water_use_efficiency();
   const double wet = pasture_year(2024).water_use_efficiency();
 
+  GTEST_LOG_(INFO) << "water use efficiency: " << dry << " kg DM/ha/mm in the driest year, " << wet
+                   << " in the wettest; Martin et al. (2006) give 12.3 for Canterbury dryland";
+
   EXPECT_GT(dry, 8.0);
   EXPECT_LT(dry, 16.0);
   EXPECT_GT(wet, 10.0);

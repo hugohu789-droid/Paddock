@@ -166,12 +166,19 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // trial's proportions, within ten points a season. It does not:
 //
 //     season   at E61   now     trial   remaining
-//     spring    32.2%   35.6%   54.7%   -19.1 points
-//     summer    41.3%   39.9%   18.0%   +21.9 points
+//     winter     6.2%   10.5%   10.0%    closed
+//     spring    32.2%   38.7%   54.7%   -15.9 points
+//     summer    41.3%   33.5%   18.0%   +15.5 points
+//     autumn    20.3%   17.3%   17.3%    closed
 //
-// The movement between those two columns is the drought leaf-death term of
-// E62, which is sourced and is real and closes about a seventh of the gap. Six
-// sevenths of it are still here.
+// **Winter and autumn are closed and spring and summer are not**, which is a
+// more useful thing to know than a single seasonal error. Two sourced changes
+// got there - the drought leaf-death term of E62/E63, and the temperature
+// response of E64, which replaced a triangle and two placeholder cardinals with
+// AgPasture's C3 curve and its published parameter set. Neither was tuned, and
+// the second was checked against a friend's reading of the ryegrass literature:
+// 20 C is a well-supported optimum and was never the problem, the shape around
+// it was.
 //
 // The annual total is fine - 6,847 kg DM/ha against a measured mean of 6,442,
 // inside the band `CanterburyDrylandTest` checks. The shape is not. **The
@@ -198,12 +205,12 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // and keeps growing. A real dryland sward browns off. That half is now carried
 // by `drought_turnover_*`, and it was worth three points of the twenty-two.
 //
-// **Next suspect, on the evidence rather than on a hunch:** the model's spring
-// is 19 points light, and spring is where the trial puts more than half its
-// year. At a base of 4.4 C and an optimum of 20.0, Canterbury spring (11.9 C
-// mean) gets 48% of the temperature response while summer (16.9 C) gets 80%.
-// `optimum_temperature_c` is marked PLACEHOLDER in the sward file and is
-// carrying that ratio on its own.
+// **What is left is a spring/summer partition and nothing else** (verify.md,
+// E66). The temperature response has been taken as far as a published set of
+// cardinals and a published curve can take it, and the remaining sixteen points
+// did not move with it. What has not been examined: spring phenology and
+// reproductive growth, tillering, nitrogen supply through the season, and how
+// far the water balance really empties a Canterbury profile in February.
 //
 // Compared as shares of the year rather than kilograms, because a share does
 // not depend on either site's rainfall - Winchmore's 745 mm mean is not this
@@ -242,7 +249,7 @@ TEST(WinchmoreSeasonalTest, TheModelsSeasonalShapeIsWrongAndThisHoldsTheGap) {
   // it got worse; over the upper means somebody improved the model and should
   // say so here rather than leave a test describing a version that no longer
   // exists.
-  EXPECT_GT(model_spring, 33.0) << "spring has fallen below where the gap was measured";
+  EXPECT_GT(model_spring, 36.0) << "spring has fallen below where the gap was measured";
   EXPECT_LT(model_spring, 45.0)
       << "the model now puts " << model_spring
       << "% of its year in spring against the trial's 55%. If the water limitation was fixed, "
@@ -252,12 +259,13 @@ TEST(WinchmoreSeasonalTest, TheModelsSeasonalShapeIsWrongAndThisHoldsTheGap) {
       << "the model now puts " << model_summer
       << "% of its year in summer against the trial's 18%, which is better than the 41% this was "
          "written at. Say what closed it";
-  EXPECT_LT(model_summer, 42.0) << "summer has grown beyond where the gap was measured";
+  EXPECT_LT(model_summer, 36.0) << "summer has grown beyond where the gap was measured";
 
-  // Winter and autumn were never far out, and are held loosely so a change
-  // there still shows.
-  EXPECT_NEAR(grown[0] / total * 100.0, theirs[0] * 100.0, 12.0) << "winter";
-  EXPECT_NEAR(grown[3] / total * 100.0, theirs[3] * 100.0, 12.0) << "autumn";
+  // **Winter and autumn are now held tightly, because they are right.** They
+  // were within twelve points of the trial when this was written and are within
+  // one of it now; a change that moved either back out would be undoing E64.
+  EXPECT_NEAR(grown[0] / total * 100.0, theirs[0] * 100.0, 2.5) << "winter";
+  EXPECT_NEAR(grown[3] / total * 100.0, theirs[3] * 100.0, 2.5) << "autumn";
 }
 
 // **Spring is the biggest season on a Canterbury dryland farm**, and a model

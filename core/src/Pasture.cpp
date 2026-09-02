@@ -78,14 +78,49 @@ std::string SwardParameters::validation_error() const {
 }
 
 double temperature_response(double mean_air_temperature_c, double base_c, double optimum_c,
-                            double maximum_c) noexcept {
+                            double maximum_c, double exponent) noexcept {
   if (mean_air_temperature_c <= base_c || mean_air_temperature_c >= maximum_c) {
     return 0.0;
   }
+
+  // **AgPasture's C3 curve**, which banks most of the response early and so
+  // gives a cool spring far more than a straight line does. One at the optimum
+  // by construction, and zero at both ends.
+  if (exponent > 0.0) {
+    const double numerator =
+        std::pow(mean_air_temperature_c - base_c, exponent) * (maximum_c - mean_air_temperature_c);
+    const double denominator = std::pow(optimum_c - base_c, exponent) * (maximum_c - optimum_c);
+    if (denominator <= 0.0) {
+      return 0.0;
+    }
+    return std::clamp(numerator / denominator, 0.0, 1.0);
+  }
+
   if (mean_air_temperature_c <= optimum_c) {
     return (mean_air_temperature_c - base_c) / (optimum_c - base_c);
   }
   return (maximum_c - mean_air_temperature_c) / (maximum_c - optimum_c);
+}
+
+double daily_temperature_factor(const PastureSpeciesParameters& species,
+                                double min_air_temperature_c,
+                                double max_air_temperature_c) noexcept {
+  const double mean = (min_air_temperature_c + max_air_temperature_c) / 2.0;
+  if (species.temperature_response_exponent <= 0.0) {
+    return temperature_response(mean, species.base_temperature_c, species.optimum_temperature_c,
+                                species.maximum_temperature_c);
+  }
+
+  // AgPasture's own weighting: a quarter at the daily mean, three quarters at
+  // the temperature the leaf actually works at.
+  const double daylight = (0.75 * max_air_temperature_c) + (0.25 * min_air_temperature_c);
+  const double at_mean =
+      temperature_response(mean, species.base_temperature_c, species.optimum_temperature_c,
+                           species.maximum_temperature_c, species.temperature_response_exponent);
+  const double at_daylight =
+      temperature_response(daylight, species.base_temperature_c, species.optimum_temperature_c,
+                           species.maximum_temperature_c, species.temperature_response_exponent);
+  return (0.25 * at_mean) + (0.75 * at_daylight);
 }
 
 double light_interception(double leaf_area_index, double extinction_coefficient) noexcept {
@@ -383,12 +418,10 @@ PastureGrowth PastureSward::step(const DailyWeather& weather, double water_stres
                                      light_interception(total_leaf_area, extinction);
 
   const double mean_temperature = weather.mean_air_temperature_c();
-  const double grass_temperature = temperature_response(
-      mean_temperature, parameters_.grass.base_temperature_c,
-      parameters_.grass.optimum_temperature_c, parameters_.grass.maximum_temperature_c);
-  const double legume_temperature = temperature_response(
-      mean_temperature, parameters_.legume.base_temperature_c,
-      parameters_.legume.optimum_temperature_c, parameters_.legume.maximum_temperature_c);
+  const double grass_temperature = daily_temperature_factor(
+      parameters_.grass, weather.min_air_temperature_c, weather.max_air_temperature_c);
+  const double legume_temperature = daily_temperature_factor(
+      parameters_.legume, weather.min_air_temperature_c, weather.max_air_temperature_c);
   growth.temperature_factor =
       total_leaf_area > 0.0
           ? ((grass_temperature * grass_leaf_area) + (legume_temperature * legume_leaf_area)) /

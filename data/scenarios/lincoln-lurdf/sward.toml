@@ -69,10 +69,29 @@ specific_leaf_area_m2_per_kg = 20.0        # PLACEHOLDER
 extinction_coefficient = 0.5               # PLACEHOLDER - published range 0.3 to 1.3
 # FITTED to Winchmore's dryland water use efficiency - see the header. Was an
 # unsourced 1.5.
-radiation_use_efficiency_g_per_mj = 0.932
-base_temperature_c = 4.4                   # cool limit for temperate grasses
-optimum_temperature_c = 20.0               # PLACEHOLDER
-maximum_temperature_c = 35.0               # PLACEHOLDER
+radiation_use_efficiency_g_per_mj = 0.639
+# **The cardinal temperatures, and the exponent that goes with them.** These
+# used to be a sourced base and two PLACEHOLDERs, and the placeholders were
+# carrying the model's whole seasonal shape: a triangle from 4.4 C to an optimum
+# of 20 hands Canterbury's 16.9 C summer 80% of the response and its 11.9 C
+# spring only 48%, which is most of the reason the model grew its year in the
+# wrong order (E64).
+#
+# **DIRECT** - APSIM AgPasture's ryegrass, from Models/Resources/AGPRyegrass.json:
+# GrowthTminimum 2.0, GrowthToptimum 20.0, GrowthTEffectExponent 1.50. Its own
+# optimum is 20.0, so the placeholder happened to be right about that one and
+# wrong about everything around it.
+#
+# `maximum_temperature_c` is not stated by AgPasture; it derives it as
+# optimum + (optimum - base) / exponent = 20 + 18 / 1.5 = 32.0, and that is the
+# figure below rather than an independent guess. The three must move together.
+#
+# Model: Li FY, Snow VO & Holzworth DR (2011), NZ Journal of Agricultural
+# Research 54: 331-352.
+base_temperature_c = 2.0
+optimum_temperature_c = 20.0
+maximum_temperature_c = 32.0
+temperature_response_exponent = 1.5
 # A fallback now, and used only if the leaf lifespan below is removed.
 senescence_rate_per_day = 0.02             # PLACEHOLDER
 
@@ -138,10 +157,15 @@ specific_leaf_area_m2_per_kg = 25.0        # PLACEHOLDER
 extinction_coefficient = 0.6               # PLACEHOLDER
 # FITTED with the same scalar as the grass, so the two species keep the balance
 # they had. Was an unsourced 1.4.
-radiation_use_efficiency_g_per_mj = 0.870
-base_temperature_c = 5.0                   # PLACEHOLDER
-optimum_temperature_c = 22.0               # PLACEHOLDER
-maximum_temperature_c = 35.0               # PLACEHOLDER
+radiation_use_efficiency_g_per_mj = 0.596
+# **DIRECT** - AgPasture's white clover, from AGPWhiteClover.json:
+# GrowthTminimum 3.5, GrowthToptimum 23.0, GrowthTEffectExponent 1.65. The
+# maximum is AgPasture's derived one, 23 + 19.5 / 1.65 = 34.82. See the grass
+# block above for the model and the reason the shape matters.
+base_temperature_c = 3.5
+optimum_temperature_c = 23.0
+maximum_temperature_c = 34.82
+temperature_response_exponent = 1.65
 senescence_rate_per_day = 0.025            # PLACEHOLDER
 
 # **PLACEHOLDER, and taken from the grass.** White clover is a stolon rather

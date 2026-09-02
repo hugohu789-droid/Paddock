@@ -60,6 +60,17 @@ struct PastureSpeciesParameters {
   /// which is the whole of DairyNZ's leaf-stage grazing rule.
   double leaves_per_tiller = 3.0;
 
+  /// **Which shape the temperature response takes**, and the exponent it takes
+  /// it with. Zero gives the triangular response this model started with; a
+  /// positive value gives AgPasture's C3 curve, for which it is a fitted
+  /// parameter of the same set as the cardinal temperatures and should not be
+  /// separated from them.
+  ///
+  /// AgPasture derives its own upper limit rather than stating one -
+  /// `optimum + (optimum - base) / exponent` - so a sward adopting these
+  /// figures should set `maximum_temperature_c` to that value and say so.
+  double temperature_response_exponent = 0.0;
+
   /// **How much faster leaf dies when the plant runs out of water.** A drought
   /// does two things to a sward and this model long had only one of them: it
   /// slows the tiller down, and it kills the leaf the tiller is already
@@ -255,11 +266,49 @@ struct SwardParameters {
 
 /// Temperature response, dimensionless and between 0 and 1.
 ///
-/// Zero below the base temperature, rising linearly to one at the optimum and
-/// falling back to zero at the maximum. The shape matters more than its
-/// smoothness: it is what stops a Canterbury July growing grass.
+/// Zero below the base temperature and above the maximum, one at the optimum.
+/// It is what stops a Canterbury July growing grass.
+///
+/// **Two shapes, and which one you get depends on whether the sward states an
+/// exponent.** With `exponent` at zero the response is triangular: straight up
+/// to the optimum, straight back down. With a positive exponent it is the
+/// curve AgPasture uses for C3 pasture, after Thornley & Johnson:
+///
+///     ((T - base)^q * (max - T)) / ((optimum - base)^q * (max - optimum))
+///
+/// The difference is not cosmetic. A triangle understates a cool spring badly -
+/// at Canterbury's 11.9 C spring mean the triangle gives 0.48 where the curve
+/// gives 0.68, while at the 16.9 C summer mean the two are 0.80 and 0.95. Most
+/// of a grass's response is banked early, and a straight line says otherwise
+/// (verify.md, E64).
+///
+/// Zero is the default so that a sward file written before this existed keeps
+/// the response it was written against, the same way `degree_days_per_leaf`
+/// leaves a flat senescence rate in charge.
 [[nodiscard]] double temperature_response(double mean_air_temperature_c, double base_c,
-                                          double optimum_c, double maximum_c) noexcept;
+                                          double optimum_c, double maximum_c,
+                                          double exponent = 0.0) noexcept;
+
+/// A day's temperature factor for one species, from the day's minimum and
+/// maximum rather than from their average.
+///
+/// **A response fitted to photosynthesis has to be asked about the temperature
+/// the leaf photosynthesises at**, and that is not the 24-hour mean - half of
+/// which is spent in the dark, at the coldest part of the day. AgPasture
+/// evaluates its curve twice, once at the daily mean and once at a daylight
+/// temperature of `0.75 * max + 0.25 * min`, and weights them one to three.
+///
+/// Paddock fed it the plain mean, which understates the response in proportion
+/// to the diurnal range - by 30% in a Canterbury winter and 2% in its summer,
+/// because a curve this far from its optimum in July is steep there and nearly
+/// flat in January. Correcting it is not a new degree of freedom; it is the
+/// rest of a method already adopted (verify.md, E65).
+///
+/// Only for the curve. A sward that states no exponent keeps the triangular
+/// response on the daily mean, which is what it was written against.
+[[nodiscard]] double daily_temperature_factor(const PastureSpeciesParameters& species,
+                                              double min_air_temperature_c,
+                                              double max_air_temperature_c) noexcept;
 
 /// Fraction of light intercepted by a canopy of this leaf area index (Beer).
 [[nodiscard]] double light_interception(double leaf_area_index,

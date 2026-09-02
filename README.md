@@ -315,18 +315,19 @@ what may be quoted and what may not.
 
 Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept current with the code:
 
-- **The model's seasonal shape is wrong, and its annual total hides it.**
-  Against Winchmore's measured months, the model puts 36% of its year in spring
-  where the trial puts 55%, and 40% in summer where the trial puts 18% — while
-  its annual total sits comfortably inside the measured band. Summer is when a
-  Canterbury dryland farm stops growing, and it is the model's biggest season.
-  Nothing that depends on *when* feed arrives should be trusted. Three of those
-  points were bought by giving the sward the half of drought it was missing —
-  leaf that dies because the plant has run out of water, on APSIM AgPasture's
-  figures (ADR 0016) — which also made the farm go hungry in a dry year for the
-  first time. The other nineteen are still open, and the next suspect is an
-  optimum-temperature placeholder that has never been sourced (verify.md,
-  E61–E64)
+- **The model splits spring and summer wrongly, and its annual total hides
+  it.** Against Winchmore's measured months the model puts 39% of its year in
+  spring where the trial puts 55%, and 33% in summer where the trial puts 18%.
+  Summer is when a Canterbury dryland farm stops growing, and it is nearly the
+  model's biggest season. Nothing that depends on *when* feed arrives should be
+  trusted. Winter and autumn, which were also wrong, now land within half a
+  point of the trial, and the decade mean is 6,572 kg DM/ha against a measured
+  6,442 — so what is left is a spring/summer partition and not a general
+  seasonal fault. Two sourced changes got there and neither was tuned: the half
+  of drought that kills standing leaf (ADR 0016), and a published temperature
+  response taken as a whole set rather than a single cardinal (ADR 0017). The
+  optimum temperature turned out to be the one figure that was never wrong
+  (verify.md, E61–E66)
 - **The model grows about 20% more pasture than the trial it is measured
   against, while applying no fertiliser at all.** Winchmore's dryland treatment
   gets 250 kg of superphosphate a hectare a year and measured 6,442 kg DM/ha
