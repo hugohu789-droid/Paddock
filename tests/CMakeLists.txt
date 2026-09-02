@@ -143,6 +143,7 @@ if(PADDOCK_BUILD_CONFIG)
                                           validation/DroughtDestockingTest.cpp
                                           validation/LambsGrazeTest.cpp
                                           validation/StockUnitIntakeTest.cpp
+                                          validation/WinchmoreSeasonalTest.cpp
                                           validation/NitrogenLeachingTest.cpp
                                           validation/CanterburyDrylandTest.cpp
                                           validation/GrazedYearTest.cpp
