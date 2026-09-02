@@ -602,8 +602,18 @@ struct LiveweightResponse {
   /// production share.
   double maintenance_me_mj = 0.0;
 
+  /// **What she paid out before any of it could become weight**: the milk she
+  /// made and the lamb she is carrying, MJ ME. These are the same terms
+  /// `daily_energy_requirement` charges, and they belong here for the same
+  /// reason - a ewe who ate in order to lactate has spent that energy, not
+  /// stored it. Zero for a dry animal.
+  double lactation_me_mj = 0.0;
+  double pregnancy_me_mj = 0.0;
+
   /// Positive when there was energy left over, negative when the animal had to
-  /// find the difference in its own tissue.
+  /// find the difference in its own tissue. Net of maintenance *and* of the
+  /// production above, so a ewe milking harder than she is fed loses condition,
+  /// which is what a ewe milking harder than she is fed does.
   double surplus_me_mj = 0.0;
 
   /// The answer, kg per day. Negative when losing.
