@@ -491,6 +491,7 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.green_kg_dm_per_ha.push_back(farm.grid().mean_green_kg_dm());
+    summary.growth_kg_dm_per_ha.push_back(farm.grid().mean_growth_kg_dm());
     summary.nitrate_leached_kg_per_ha.push_back(farm.grid().mean_nitrate_leached_kg_per_ha());
     // **Only where there is stock to record it from.** A farm can be run
     // carrying none - a pasture-only scenario is a legitimate thing to ask the
@@ -583,6 +584,7 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
     summary.weather.push_back(day);
     summary.cover_kg_dm_per_ha.push_back(farm.grid().mean_cover_kg_dm());
     summary.green_kg_dm_per_ha.push_back(farm.grid().mean_green_kg_dm());
+    summary.growth_kg_dm_per_ha.push_back(farm.grid().mean_growth_kg_dm());
     summary.nitrate_leached_kg_per_ha.push_back(farm.grid().mean_nitrate_leached_kg_per_ha());
     // A farm with no stock on it, as above: nothing to read a liveweight from.
     if (!farm.mobs().empty()) {

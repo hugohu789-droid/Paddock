@@ -71,10 +71,25 @@ def read_sheet(archive, path):
     return rows
 
 
-def annual_totals(rows, start):
-    """A treatment's year and annual total, out of the block beginning at `start`."""
+# The sheet's own column headings, in its own order: a farm year that opens in
+# June, then the four seasons, then the total.
+COLUMNS = ["JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR", "APR", "MAY",
+           "WIN", "SPR", "SUM", "AUT", "TOT"]
+
+
+def treatment_block(rows, start):
+    """Every column the sheet gives, per year, for the block beginning at `start`.
+
+    **This used to take the TOT column and throw the rest away.** The sheet is
+    called "Monthly, seasonal, and yearly total production" and carries all
+    three; reading only the year meant a model could reproduce an annual total
+    while being wrong in every month of it - too much in spring and too little
+    in summer sums to about right. What that discarded is visible in one line of
+    it: dryland 1963-64 grew 236 kg DM/ha across the whole summer, against 2,956
+    in 1960-61. A twelve-fold range that an annual figure cannot show.
+    """
     header = next(i for i in range(start, start + 5) if rows[i] and "TOT" in rows[i])
-    total_column = rows[header].index("TOT")
+    index = {name: rows[header].index(name) for name in COLUMNS if name in rows[header]}
 
     out = {}
     for row in rows[header + 1:]:
@@ -83,13 +98,23 @@ def annual_totals(rows, start):
         # The sheet carries its own MEAN, MIN and MAX rows. They are recomputed
         # here rather than read, so a summary that disagrees with its own series
         # would show up instead of being copied.
-        if row[0] in ("MEAN", "MIN", "MAX") or len(row) <= total_column or not row[total_column]:
+        if row[0] in ("MEAN", "MIN", "MAX"):
             continue
-        try:
-            out[row[0]] = float(row[total_column])
-        except ValueError:
-            continue
+        year = {}
+        for name, column in index.items():
+            if column < len(row) and row[column]:
+                try:
+                    year[name] = float(row[column])
+                except ValueError:
+                    pass
+        if "TOT" in year:
+            out[row[0]] = year
     return out
+
+
+def annual_totals(rows, start):
+    """A treatment's year and annual total, for the annual production file."""
+    return {year: columns["TOT"] for year, columns in treatment_block(rows, start).items()}
 
 
 def main() -> int:
@@ -150,6 +175,32 @@ def main() -> int:
 
     args.out.write_text("\n".join(header_lines + body) + "\n", encoding="utf-8", newline="")
     print(f"\nwrote {args.out} ({len(body)} years)")
+
+    # **The seasonal file, which is the one an annual total cannot stand in
+    # for.** Same download, same hash, columns that were already being parsed
+    # and discarded.
+    monthly_path = args.out.with_name("winchmore-monthly-production.csv")
+    dryland_block = treatment_block(rows, TREATMENTS["dryland"])
+
+    existing_monthly = monthly_path.read_text(encoding="utf-8").splitlines() \
+        if monthly_path.exists() else []
+    monthly_header = []
+    for line in existing_monthly:
+        monthly_header.append(line)
+        if line.startswith("year,"):
+            break
+    if not monthly_header:
+        monthly_header = ["year," + ",".join(name.lower() for name in COLUMNS)]
+
+    monthly_body = []
+    for year in years:
+        columns = dryland_block.get(year, {})
+        monthly_body.append(",".join(
+            [year] + [f"{columns[name]:.0f}" if name in columns else "" for name in COLUMNS]))
+
+    monthly_path.write_text("\n".join(monthly_header + monthly_body) + "\n",
+                            encoding="utf-8", newline="")
+    print(f"wrote {monthly_path} ({len(monthly_body)} years, {len(COLUMNS)} columns each)")
     print(f"cite: Winchmore Database, AgResearch, doi:{DOI}, CC BY 4.0")
     return 0
 

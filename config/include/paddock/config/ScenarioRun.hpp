@@ -44,6 +44,14 @@ struct RunSummary {
   /// the two part company badly by late summer.
   std::vector<double> green_kg_dm_per_ha;
 
+  /// What grew each day, kg DM/ha.
+  ///
+  /// **Kept so the model can be checked against a season and not only a year.**
+  /// Winchmore records production month by month, and a model that grows too
+  /// much in spring and too little in summer sums to an annual figure that
+  /// looks right. Without this the comparison could not be made.
+  std::vector<double> growth_kg_dm_per_ha;
+
   /// Nitrate leached past the root zone each day, kg N/ha.
   ///
   /// **What a regional council asks a farm for.** Summed over a year it is the

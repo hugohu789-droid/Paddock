@@ -1,0 +1,68 @@
+# Winchmore dryland pasture production, month by month and season by season.
+#
+# **The half of the trial that was being downloaded and thrown away.** The sheet
+# is called "Monthly, seasonal, and yearly total production"; the fetch script
+# read the TOT column and discarded the other sixteen. An annual total is the
+# weakest thing this dataset can tell you, and it was the only thing being used.
+#
+# WHY IT MATTERS. A model can reproduce an annual figure while being wrong in
+# every month of it - too much in spring and too little in summer sums to about
+# right. That is not a hypothetical: it is the shape a model with no water
+# limitation would have, and it is exactly what an annual comparison cannot see.
+#
+# WHAT THE SPREAD LOOKS LIKE. One line of the trial makes the case. Dryland
+# summer production, kg DM/ha:
+#
+#   1960-61   2,956
+#   1963-64     236
+#
+# Twelve times, between two summers on the same paddocks. February 1963-64
+# grew 14 kg DM/ha for the month. An annual mean of 6,442 says none of this.
+#
+# COLUMNS. The trial's own, in its own order: a farm year opening in June, then
+# the four seasons it computes, then the total. Seasons are the trial's
+# definition, not this project's - WIN is Jun-Aug, SPR Sep-Nov, SUM Dec-Feb,
+# AUT Mar-May - and the model is compared on the trial's terms.
+#
+# **Note the year runs June to May, where this model's farm year runs July to
+# June.** The offset is one month and it is not corrected for here; a comparison
+# has to line up the months it is actually comparing rather than the labels.
+#
+# Rebuilt from the trial's own workbook by scripts/winchmore-fetch.py, which
+# checks the download's hash before parsing it. Dryland treatment only: it is
+# the one this model represents. The irrigated blocks are in the same sheet and
+# would give a seasonal irrigation response, which is a later piece of work.
+#
+# Source:
+#   Winchmore Database, AgResearch, doi:10.6084/m9.figshare.13530209, CC BY 4.0.
+#   Scientific Data 8:52 (2021), "Seventy years of data from the world's longest
+#   grazed and irrigated pasture trials".
+#
+# All figures kg DM/ha. Blank means the trial did not record that cell.
+
+year,jun,jul,aug,sep,oct,nov,dec,jan,feb,mar,apr,may,win,spr,sum,aut,tot
+1960-61,82,82,82,722,1490,1005,332,1180,1444,1248,715,217,246,3217,2956,2180,8599
+1961-62,206,146,146,1179,1306,0,274,91,516,1004,573,602,498,2485,881,2179,6043
+1962-63,235,243,243,726,1521,1044,402,330,426,461,441,160,721,3291,1158,1062,6232
+1963-64,87,89,314,835,1456,936,76,146,14,101,137,140,490,3227,236,378,4331
+1964-65,135,178,182,568,861,562,268,325,529,684,439,454,495,1991,1122,1577,5185
+1965-66,314,177,177,769,1548,1231,701,395,385,690,509,345,668,3548,1481,1544,7241
+1966-67,217,164,164,1016,2059,1101,550,402,254,364,318,260,545,4176,1206,942,6869
+1967-68,166,166,166,926,2078,1823,725,145,321,750,563,486,498,4827,1191,1799,8315
+1968-69,179,125,125,1229,1689,721,629,340,189,65,126,238,429,3639,1158,429,5655
+1969-70,179,185,185,518,951,719,674,932,402,444,702,404,549,2188,2008,1550,6295
+1970-71,499,590,590,997,1925,922,343,204,19,45,97,191,1679,3844,566,333,6422
+1971-72,203,231,231,1030,1602,816,115,59,81,121,178,244,665,3448,255,543,4911
+1972-73,375,332,332,549,944,688,358,210,0,87,238,77,1039,2181,568,402,4190
+1973-74,113,219,219,1068,1088,471,276,281,380,846,1236,319,551,2627,937,2401,6516
+1974-75,245,253,253,1085,2156,1113,20,267,765,1461,671,537,751,4354,1052,2669,8826
+1975-76,213,220,220,643,2255,1927,127,125,140,125,58,139,653,4825,392,322,6192
+1976-77,134,139,139,1055,1759,1476,1302,1045,432,76,103,125,412,4290,2779,304,7785
+1977-78,273,299,299,593,990,353,106,158,48,143,535,553,871,1936,312,1231,4350
+1978-79,280,289,289,598,1728,1493,914,554,16,592,851,42,858,3819,1484,1485,7646
+1979-80,136,198,198,1291,2198,2296,709,620,516,589,604,112,532,5785,1845,1305,9467
+1980-81,51,31,31,581,820,921,647,118,35,222,225,222,113,2322,800,669,3904
+1981-82,165,170,170,730,2261,1154,0,0,0,35,146,121,505,4145,0,302,4952
+1982-83,202,209,238,1092,1651,1309,446,67,0,47,83,132,649,4052,513,262,5476
+1983-84,176,182,182,748,2437,1250,1063,1358,787,990,398,274,540,4435,3208,1662,9845
+1984-85,390,403,403,1725,927,763,811,2,14,252,57,59,1196,3415,827,368,5806
