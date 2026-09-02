@@ -380,6 +380,10 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   farmer.set_policy(policy);
 
   RunSummary summary;
+
+  // Stock-unit-days, divided by the run length at the end. Declared here rather
+  // than inside the loop for the obvious reason.
+  double stock_unit_days = 0.0;
   summary.label = std::move(label);
   farm.set_opening_stocks(summary.ledger);
 
@@ -501,9 +505,21 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
           static_cast<int>(farm.mobs().front().paddocks.front()));
     }
 
+    // **Stock-unit-days, so the year's stocking rate is a mean and not a
+    // snapshot.** Taken from the farm rather than from the flock because the
+    // farm is what holds the mobs actually on the ground - a flock out of
+    // season has head on paper that are not grazing anything.
+    for (const core::FarmMob& carried : farm.mobs()) {
+      stock_unit_days += static_cast<double>(carried.mob.head) * carried.mob.animal.stock_units;
+    }
+
     if (each_day) {
       each_day(farm, farm_day, schedule);
     }
+  }
+
+  if (!summary.dates.empty()) {
+    summary.mean_stock_units = stock_unit_days / static_cast<double>(summary.dates.size());
   }
 
   if (business != nullptr) {

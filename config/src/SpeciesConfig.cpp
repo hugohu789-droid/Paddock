@@ -114,9 +114,16 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   }
 
   const toml::table& typical = detail::require_table(root, "typical", path);
-  detail::reject_unknown_keys(typical, {"liveweight_kg", "age_days"}, path, "[typical]");
+  detail::reject_unknown_keys(typical, {"liveweight_kg", "age_days", "stock_units"}, path,
+                              "[typical]");
   definition.typical_liveweight_kg = detail::require_double(typical, "liveweight_kg", path);
   definition.typical_age_days = detail::require_double(typical, "age_days", path);
+
+  // **Optional, and zero means "not rated" rather than "worth nothing".** A
+  // class with no published conversion should make a farm decline to report a
+  // stocking rate, not report one that is short by however many head of that
+  // class it carries.
+  definition.stock_units = detail::optional_double(typical, "stock_units", 0.0, path);
 
   detail::require_valid(definition.validation_error(), species, path);
   return definition;

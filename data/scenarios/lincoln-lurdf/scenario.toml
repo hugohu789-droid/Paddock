@@ -186,7 +186,7 @@ attribution = "Canterbury - Selwyn LiDAR 1m DEM (2023). Sourced from LINZ elevat
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "e64936b7a1195d911c1606d0448ae08f8068d338f342694291f73c1802361bed"
+sha256 = "6ecfae3a9e5854b27073338273670316ea7ec5fb5f1da42ebab18acbdd7b4468"
 head = 417
 paddock = 0
 # 417 ewes on 80 hectares is 5.2 a hectare, the same stocking rate
@@ -209,7 +209,7 @@ age_days = 1500.0
 [[mob]]
 name = "lambs"
 path = "../../species/sheep-lamb.toml"
-sha256 = "89ca2f9a416277c674356d63f9048ce94003b41962b1bf4f08fbe631f597e703"
+sha256 = "84e2c5c09286298e3cf082b2b53cd9b378ec5b73b81cae36f492ae69e8f82e05"
 head = 0
 paddock = 0
 liveweight_kg = 6.0

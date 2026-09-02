@@ -220,6 +220,25 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
   year.indicators.push_back(
       make("Days short of feed", static_cast<double>(run.days_short), "days", Provenance::Derived,
            "Days a mob was offered less than it asked for.", std::nullopt, 0.0));
+  // **The number this model could not state, and the one that turned out to be
+  // the answer.** Its utilisation looked bad and three explanations were tried
+  // before the obvious one: the farm carries a third fewer stock units than the
+  // class it is priced against. Nobody could see that, because a stocking rate
+  // was something you worked out by hand from head and hectares.
+  //
+  // Zero means no class in the flock has a published conversion, which is not
+  // the same as no stock, so the indicator is left out rather than reading nil.
+  if (run.mean_stock_units > 0.0 && hectares > 0.0) {
+    year.indicators.push_back(make(
+        "Stocking rate", run.mean_stock_units / hectares, "SU/ha", Provenance::Verify,
+        "Stock units carried, averaged over every day - lambing nearly doubles the head on the "
+        "place and weaning takes it back, so a snapshot would not do. A ewe is 1.0 SU (Parker "
+        "1998, Table 1). **Verify, because the comparison basis is not confirmed**: Beef + "
+        "Lamb's Class 6 figure of 7.74 SU/ha does not state whether it is opening, wintered or "
+        "mean stock, and this farm reads 5.2 on its opening count against 3.5 on the mean. Until "
+        "that is settled the band says which order of magnitude, not which side of a line.",
+        7.0, 8.5));
+  }
   year.indicators.push_back(make("Closing stock", static_cast<double>(run.closing_head), "head",
                                  Provenance::Derived,
                                  "The flock at the end of the farm year, after the culls and the "

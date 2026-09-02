@@ -35,6 +35,24 @@ struct SpeciesDefinition {
   double typical_liveweight_kg = 0.0;
   double typical_age_days = 0.0;
 
+  /// What one head of this class counts as in stock units.
+  ///
+  /// **The unit New Zealand farms are compared in, and the one this project
+  /// nearly got wrong.** A stock unit is Parker's (1998) base ewe: 55 kg,
+  /// weaning one lamb, eating 550 kg DM a year. Every published conversion in
+  /// his Table 1 puts a breeding ewe at 1.0 - the Meat and Wool Board's
+  /// Economic Service, whose survey became Beef + Lamb's, and MAF both do.
+  ///
+  /// It lives in the species file rather than in code because it is exactly the
+  /// kind of number that gets asserted to make a comparison come out: this
+  /// repository's economics file claimed 1.35 a ewe, with no source, so that a
+  /// 5.2 SU/ha farm would read as the 7.74 of the class it was being priced
+  /// against. See docs/validation/verify.md, E53.
+  ///
+  /// Zero means the class has no rating stated, and a farm carrying it reports
+  /// no stocking rate rather than a wrong one.
+  double stock_units = 0.0;
+
   /// Where each of those numbers came from.
   ///
   /// `energy` above holds the plain values because that is what the model

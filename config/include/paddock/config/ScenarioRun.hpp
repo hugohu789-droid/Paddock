@@ -132,6 +132,19 @@ struct RunSummary {
   /// Head at the close, when a flock was run.
   int closing_head = 0;
 
+  /// Stock units carried, averaged over every day of the run.
+  ///
+  /// **A mean rather than a count, because a flock is not one number.** Lambing
+  /// nearly doubles the head on the place and weaning takes it back, so "how
+  /// many did this farm carry" is stock-unit-days over days - which is also the
+  /// quantity that annual feed demand divides by, and therefore the one that
+  /// compares with Beef + Lamb's per-hectare rates.
+  ///
+  /// Zero when no class in the flock has a published stock-unit rating. That is
+  /// "not rated", not "no stock": a farm reporting a rate short by however many
+  /// unrated head it carries would be worse than one reporting none.
+  double mean_stock_units = 0.0;
+
   /// What a lamb weighed on the day the crop was drafted, kg.
   ///
   /// **The number the model was never able to state.** Lamb liveweight used to

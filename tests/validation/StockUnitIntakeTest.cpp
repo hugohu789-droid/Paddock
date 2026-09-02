@@ -152,13 +152,17 @@ TEST(StockUnitIntakeTest, TheYearGrowsWhatACanterburyDrylandYearGrows) {
   EXPECT_LT(grown, 9'845.0) << "grew " << grown << ", over anything the trial measured";
 }
 
-// **The animals eat about two thirds of their rating, and this holds it there.**
+// **The animals eat about 85% of their rating, which is ordinary.**
 //
-// Not asserted as a target - the model cannot reach it, because intake demand
-// is a liveweight-gain target rather than an appetite, so a mob offered more
-// does not take more. Asserted as a gap, so that it cannot quietly widen and so
-// that closing it shows up as a failure here rather than as a number nobody
-// looked at.
+// This comment said two thirds before the conversion factor was corrected, and
+// the difference between those two readings is the difference between a model
+// with an intake fault and a model that is fine. Held as a band rather than a
+// target: the remaining 15% could be the model, could be 550 against the 520
+// also in use for the same unit, or could be that a real ewe's year is not this
+// ewe's year.
+//
+// What is *not* ordinary is the stocking rate, and that is a separate test to
+// write - 5.2 SU/ha against a class average of 7.74.
 TEST(StockUnitIntakeTest, TheFlockEatsLessThanItsStockUnitRatingImplies) {
   const ScenarioBundle bundle = year_of(2023);
   const RunSummary run =
