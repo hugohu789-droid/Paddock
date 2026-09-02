@@ -43,6 +43,64 @@ grazing_coefficient = { value = 0.0025, status = "direct", source = "tmc_animal_
 # k1, TMC Eq. 44: 16.5 for large lean cattle breeds.
 gain_energy_ceiling_mj_per_kg = { value = 16.5, status = "direct", source = "tmc_animal_me" }
 
+[intake]
+# **Appetite: what she would eat if nothing stopped her.** Everything in
+# [energy] says what a cow needs; this says what she wants, and the gap between
+# them is what lets a mob lose a quarter of its grazing efficiency on a short
+# paddock and still walk away fed. GrazPlan Eq. 2, without the four factors this
+# model has no state for - condition, rumen development, heat and lactation.
+#
+#     Imax = scalar * SRW * Z * (size_coefficient - Z),  Z = liveweight / SRW
+#
+# The cattle column of the same table; a cow's scalar is lower and her
+# reference weight far higher, so her appetite is much the larger of the two.
+#
+# **The size coefficient is checked twice**, because the paper's table does not
+# survive text extraction with its columns aligned: the text says the quadratic
+# peaks at a relative size of 0.85, and 1.7 is the only value for which it does.
+# Fig. 2 then draws a 50 kg sheep peaking near 1.44 kg DM a day, which the same
+# two numbers reproduce.
+appetite_scalar_per_day = { value = 0.025, status = "direct", source = "grazplan_animal" }
+appetite_size_coefficient = { value = 1.7, status = "direct", source = "grazplan_animal" }
+
+# **How much of what it needs a cow can actually get off a short paddock.**
+#
+# Everything in [energy] answers "what does this ewe need". This answers the
+# other half, and until it existed the model had no answer: a mob ate its full
+# requirement unless the paddock physically ran out above the residual. That is
+# a cliff, and grazing is a curve. Two irrigation arms differing by 5,290 kg
+# DM/ha of growth ate five kilograms apart (verify.md, E52).
+#
+# A shorter sward means a smaller bite. The animal grazes longer to compensate -
+# up to 1.6 times as long on a bare paddock - and past a point cannot compensate
+# at all:
+#
+#     rate = 1 - exp(-availability_rate * B)
+#     time = 1 + increase * exp(-(grazing_time_rate * B)^2)
+#     relative intake = rate * time
+#
+# where B is standing herbage in kg DM/ha, green and dead together, cut close to
+# ground level - which is how these coefficients are defined and therefore not
+# the same as the green above the grazing residual.
+#
+# **DIRECT** - GrazPlan equations 16 and 17 with the sheep column of its Table
+# 2 - the cattle column here, which differs from the sheep one. Freer M, Moore A D & Donnelly J R, "The GRAZPLAN animal biology model for
+# sheep and cattle and the GrazFeed decision support tool", CSIRO Plant Industry
+# Technical Paper. The functional form is from Allden and Whittaker (1970).
+# CSIRO (2007) is already one of the two primaries behind the species factor
+# above, so this is the same lineage rather than a second opinion.
+#
+# **Not yet grazed through, and E71 says why.** These multiply the appetite
+# above, never a requirement - the term is below one at any cover a real farm
+# carries, so against a requirement it puts every mob permanently short. Against
+# the appetite it bites only below about 800 kg DM/ha, which is the right
+# answer for a dry animal and the wrong one for a milking one: GrazPlan lifts
+# potential intake during lactation through a factor this model cannot yet
+# compute, so a ewe with a lamb at foot would be capped under what she needs.
+availability_rate_per_kg_dm = { value = 0.00078, status = "direct", source = "grazplan_animal" }
+grazing_time_increase = { value = 0.6, status = "direct", source = "grazplan_animal" }
+grazing_time_rate_per_kg_dm = { value = 0.00074, status = "direct", source = "grazplan_animal" }
+
 [typical]
 liveweight_kg = 480.0
 age_days = 1500.0

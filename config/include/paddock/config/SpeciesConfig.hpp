@@ -63,6 +63,15 @@ struct SpeciesDefinition {
   SourcedValue sex_factor;
   SourcedValue standard_reference_weight;
   SourcedValue grazing_coefficient;
+
+  /// GrazPlan's three availability coefficients, from an optional [intake]
+  /// table. Absent means this class eats its requirement whatever is standing,
+  /// which is what every animal in this model did before they existed.
+  SourcedValue appetite_scalar;
+  SourcedValue appetite_size_coefficient;
+  SourcedValue intake_availability_rate;
+  SourcedValue intake_grazing_time_increase;
+  SourcedValue intake_grazing_time_rate;
   SourcedValue gain_energy_ceiling;
 
   /// Reproduction. Optional: a class that does not breed - a wether, a store
