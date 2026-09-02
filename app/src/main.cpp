@@ -52,9 +52,28 @@ void print_usage(std::ostream& out) {
       << "                                       .gpkg paddock boundaries\n"
 #ifdef PADDOCK_WITH_CONFIG
       << "  paddock scenario run <bundle> [--csv <file>]\n"
-      << "                                       Run a scenario bundle\n"
+      << "                                       Run a scenario bundle, and optionally\n"
+      << "                                       write the daily series to a CSV\n"
+      << "  paddock dashboard <bundle>... [--economics <file>] [--rule <file>]\n"
+      << "                                       A year read as indicators, each one\n"
+      << "                                       saying how far it can be trusted.\n"
+      << "                                       More than one bundle compares them.\n"
+      << "                                       Economics come from the bundle unless\n"
+      << "                                       given; without --rule the nitrogen\n"
+      << "                                       panel reports but claims no compliance\n"
+      << "  paddock nitrogen <bundle> <regulation.toml>\n"
+      << "                                       Nitrogen leached year by year against\n"
+      << "                                       a council's loss limit\n"
+      << "  paddock disease <disease.toml> <weather.csv>...\n"
+      << "                                       How many years in ten this weather\n"
+      << "                                       would have called for treatment\n"
 #endif
-      << "\nWeather snapshots are produced by scripts/cliflo-snapshot.py.\n";
+#ifdef PADDOCK_WITH_GIS
+      << "  paddock ground fetch <bundle>        Download the elevation this bundle\n"
+      << "                                       names, and check it against the hash\n"
+#endif
+      << "\nWeather snapshots are produced by scripts/cliflo-snapshot.py.\n"
+      << "Scenario bundles that ship live in data/scenarios/.\n";
 }
 
 /// Lower-cased extension of `path`, including the dot, or an empty string.
@@ -272,9 +291,23 @@ int run_dashboard(const std::vector<std::string>& arguments) {
     rule = paddock::config::load_nitrogen_regulation(rule_path);
   }
 
-  // **Without --economics the money and flock panels are simply absent**, which
-  // is better than showing a farm's finances against costs nobody stated. The
-  // pasture, water and nitrogen panels do not need them.
+  // **A bundle that names its economics is run with them.** `--economics` used
+  // to be the only way to supply any, and every shipped scenario names a file
+  // in its own manifest that was then ignored - so the command a first-time
+  // reader runs answered with a farm that had no books.
+  //
+  // That is not a missing panel, it is a wrong number. Without its business the
+  // flock never advances, and the same Lincoln bundle reports 940 kg DM/ha
+  // eaten at 13% utilisation where its own economics give 1,908 kg at 66%. The
+  // GUI had this exact fault and it was fixed there; the command line kept it.
+  //
+  // The flag still wins, so a reader can price the same farm differently. With
+  // neither the flag nor a manifest entry the money and flock panels are simply
+  // absent, which is better than showing finances against costs nobody stated.
+  if (economics_path.empty()) {
+    economics_path = bundle.economics_path;
+  }
+
   std::optional<paddock::config::FarmEconomics> economics;
   if (!economics_path.empty()) {
     economics = paddock::config::load_economics(economics_path);
@@ -487,6 +520,20 @@ int run_ground_fetch(const std::string& bundle_directory) {
 }
 #endif
 
+/// `paddock scenario run <bundle>`
+///
+/// **This runs one hectare of pasture and no animals**, and until it said so it
+/// was the most misleading thing on the command line. A bundle describes a farm
+/// - mobs, a grazing calendar, paddocks, a grid, rules and prices - and this
+/// command reaches for none of it. The numbers are real and they answer a
+/// different question from the one the bundle poses, which is worse than being
+/// wrong: the same Lincoln bundle grows 7,219 kg DM/ha here and 6,645 through
+/// `dashboard`, because a grazed sward carries less leaf and intercepts less
+/// light.
+///
+/// Left as it is rather than quietly made to mean something else - the
+/// regression baselines are pinned to this output. What has changed is that it
+/// now names what it ran and points at the command that runs the farm.
 int run_scenario(const std::string& bundle_directory, const std::string& csv_path) {
   const paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(bundle_directory);
   paddock::core::Farmlet farmlet = bundle.make_farmlet();
@@ -510,6 +557,17 @@ int run_scenario(const std::string& bundle_directory, const std::string& csv_pat
             << "  closing   " << summary.closing_cover_kg_dm << " kg DM/ha cover, "
             << summary.closing_soil_water_mm << " mm soil water, " << std::setprecision(0)
             << summary.closing_legume_fraction * 100.0 << "% legume\n";
+
+  // **What was actually run, and what was not.** A reader who takes these
+  // figures for the farm's is reading a one-hectare ungrazed plot as though it
+  // were a grazed property.
+  std::cout << "  scope     one hectare of pasture, ungrazed\n";
+  if (bundle.management.has_value() || !bundle.mobs.empty()) {
+    std::cout << "            this bundle also carries " << bundle.mobs.size()
+              << " mob(s) and a grazing calendar, which this command does not run.\n"
+              << "            `paddock dashboard " << bundle_directory
+              << "` runs the farm with its stock.\n";
+  }
 
   if (!result.budgets_close(farmlet)) {
     std::cerr << "\npaddock: the budgets did not close; these results are not usable\n"
