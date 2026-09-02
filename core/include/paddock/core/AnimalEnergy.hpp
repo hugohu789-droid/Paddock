@@ -139,6 +139,60 @@ struct AnimalClassParameters {
   /// Sheep, cattle or deer, for anything that has to show them to a person.
   AnimalKind kind = AnimalKind::Other;
 
+  /// **How big this animal ought to be for its age**, in Brody's three
+  /// coefficients. GrazPlan scales appetite by relative size and relative
+  /// condition rather than by raw liveweight, and both are measured against a
+  /// normal weight rather than against the standard reference weight:
+  ///
+  ///     Nmax = SRW - (SRW - Wbirth) * exp(-C_N1 * age / SRW^C_N2)      Eq. 1
+  ///     N    = C_N3 * Nmax + (1 - C_N3) * W   when W < Nmax            Eq. 1a
+  ///     Z    = N / SRW, capped at one         BC = W / N
+  ///
+  /// Equation 1a is what lets a stunted animal catch up: normal weight goes on
+  /// rising through a hard season even while the animal is not gaining, so the
+  /// animal comes out of it light for its frame rather than small. Sheep take
+  /// `0.0157, 0.27, 0.4`.
+  double normal_weight_rate = 0.0;
+  double normal_weight_exponent = 0.27;
+  double normal_weight_blend = 0.4;
+
+  /// **What a fat animal does**, GrazPlan Eq. 3: `BC * (C_I20 - BC) / (C_I20 -
+  /// 1)` once relative condition passes one, and one below that.
+  ///
+  /// It does not stop the animal eating. It reduces appetite until intake meets
+  /// maintenance and no further, so a well-conditioned animal settles at its
+  /// weight instead of growing without limit - which is what an animal on good
+  /// feed actually does, and what this model had nothing to produce. Only for
+  /// non-lactating animals: a ewe in milk has somewhere to put the energy.
+  ///
+  /// `C_I20 = 1.5` for sheep and cattle alike.
+  double condition_intake_limit = 1.5;
+
+  /// **What a milking female does**, GrazPlan Eq. 8, which is the other half of
+  /// why appetite is not a constant:
+  ///
+  ///     LF = 1 + C_I19,Y * M^C_I9 * exp(C_I9 * (1 - M)),  M = days / C_I8
+  ///
+  /// A ewe at peak lactation eats about half again what a dry ewe eats, and
+  /// without it she is capped below her own requirement on every day she is
+  /// milking - which is what stopped intake capacity being wired into the farm
+  /// at all (verify.md, E71).
+  ///
+  /// `C_I19` is indexed by the number of young: sheep of the wool breeds, which
+  /// is where GrazPlan files the Romney, take `0.524, 0.524, 0.707, 0.891` for
+  /// none, one, two and three. Sheep take `C_I8 = 28` days and `C_I9 = 1.4`.
+  ///
+  /// **Two of Eq. 8's terms are not here.** LA carries condition at
+  /// parturition and LB the weight lost since it, and both need a history this
+  /// model does not keep. Both are at most one, so leaving them out makes a ewe
+  /// hungrier than GrazPlan would and never less.
+  double lactation_peak_days = 28.0;
+  double lactation_curve_exponent = 1.4;
+  double lactation_peak_no_young = 0.0;
+  double lactation_peak_one_young = 0.0;
+  double lactation_peak_two_young = 0.0;
+  double lactation_peak_three_young = 0.0;
+
   /// **Appetite**, in GrazPlan's two coefficients: the amount of dry matter this
   /// class eats in a day with unrestricted access to good feed.
   ///
@@ -258,14 +312,6 @@ struct AnimalClassParameters {
   [[nodiscard]] std::string validation_error() const;
 };
 
-/// What this animal would eat in a day given unrestricted access to good feed,
-/// kg DM per head. GrazPlan Eq. 2; see `appetite_scalar_per_day`.
-///
-/// Returns zero for a class that states no scalar, which callers read as "this
-/// model has no appetite for this animal" and which is the default.
-[[nodiscard]] double potential_intake_kg_dm(const AnimalClassParameters& animal,
-                                            double liveweight_kg) noexcept;
-
 /// The share of its potential intake an animal can harvest from a sward
 /// carrying `herbage_kg_dm_per_ha`, between 0 and roughly 1.
 ///
@@ -336,6 +382,28 @@ struct AnimalState {
   /// E25.
   double milk_me_mj_per_day = 0.0;
 };
+
+/// How big this animal ought to be for its age, kg. GrazPlan Eqs. 1 and 1a.
+/// Falls back to the liveweight when no growth coefficients are stated.
+[[nodiscard]] double normal_weight_kg(const AnimalClassParameters& animal,
+                                      const AnimalState& state) noexcept;
+
+/// Normal weight over standard reference weight, capped at one. GrazPlan's Z.
+[[nodiscard]] double relative_size(const AnimalClassParameters& animal,
+                                   const AnimalState& state) noexcept;
+
+/// Liveweight over normal weight: above one this animal is carrying condition,
+/// below one it is light for its frame. GrazPlan's BC.
+[[nodiscard]] double relative_condition(const AnimalClassParameters& animal,
+                                        const AnimalState& state) noexcept;
+
+/// What this animal would eat in a day given unrestricted access to good feed,
+/// kg DM per head. GrazPlan Eq. 2; see `appetite_scalar_per_day`.
+///
+/// Returns zero for a class that states no scalar, which callers read as "this
+/// model has no appetite for this animal" and which is the default.
+[[nodiscard]] double potential_intake_kg_dm(const AnimalClassParameters& animal,
+                                            const AnimalState& state) noexcept;
 
 /// The ground the animal is grazing, and how far it walks over it.
 ///

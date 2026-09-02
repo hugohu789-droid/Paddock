@@ -169,6 +169,31 @@ One detail the implementation does not yet capture: the review states lwt in
 Equation 13 is "the live weight excluding conceptus and, for sheep, fleece".
 """
 
+[source.grazplan_ruminant_prm]
+organisation = "CSIRO / APSIM Initiative"
+title = "GrazPlan standard ruminant parameter set (ruminant.prm), APSIM Next Generation"
+url = "https://raw.githubusercontent.com/APSIMInitiative/ApsimX/master/Models/Resources/ruminant.prm"
+retrieved = "2026-09-02"
+source_type = "primary"
+verified = true
+notes = """
+GrazPlan's own parameter file, position-indexed by coefficient group. It settles
+what the technical paper's Table 2 could not: that table loses its column
+alignment in text extraction, and c-imx- for wool breeds - the group GrazPlan
+files the Romney under - gives the lactation peaks 0.524, 0.524, 0.707, 0.891
+for none, one, two and three young.
+
+Those agree with the paper to four figures once its own footnote is applied:
+it lists 0.6553, 0.8843 and 1.1143 for sheep and says this group takes 0.8 of
+them, which gives 0.5242, 0.7074 and 0.8914.
+
+The file also independently confirms every coefficient this project had already
+inferred from the paper's figures rather than its table - C_I1 0.04, C_I2 1.7,
+C_R4 and C_R6 0.00112, C_R5 0.6 - and supplies C_I20 = 1.5 and the C_N series
+for normal weight. Cited alongside grazplan_animal rather than instead of it:
+the paper carries the equations, this carries the numbers.
+"""
+
 [source.grazplan_animal]
 organisation = "CSIRO Plant Industry"
 title = "The GRAZPLAN animal biology model for sheep and cattle and the GrazFeed decision support tool"

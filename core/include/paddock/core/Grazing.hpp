@@ -57,6 +57,16 @@ struct GrazingDay {
   /// What stood above the residual and could therefore be eaten.
   double offered_kg_dm = 0.0;
 
+  /// The share of its appetite the mob could physically harvest from a sward
+  /// this short, from GrazPlan's availability equations. One when the paddock
+  /// does not restrict grazing.
+  double relative_intake = 1.0;
+
+  /// What the mob could get into itself today: its appetite, cut by that share,
+  /// less anything fed out. A mob short of feed is one whose capacity falls
+  /// under what it needs, which a bare paddock does long before it runs out.
+  double capacity_kg_dm = 0.0;
+
   double eaten_kg_dm = 0.0;
   double grass_eaten_kg_dm = 0.0;
   double legume_eaten_kg_dm = 0.0;
