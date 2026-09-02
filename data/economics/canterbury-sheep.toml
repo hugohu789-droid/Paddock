@@ -9,9 +9,20 @@
 # farm, and its shape fits the farm this project models: fertiliser $154/ha,
 # animal health $55/ha, shearing $46/ha, no meaningful cash crop.
 #
-# The stocking rate confirms it. Every Class 6 line divides from $/ha to $/SU at
-# 7.74 stock units per hectare, and the modelled farm - 417 ewes on 80 ha at
-# about 1.35 SU each - comes to roughly 7.0 SU/ha. The same kind of farm.
+# The stocking rate does NOT confirm it, and this comment used to say it did.
+#
+# Every Class 6 line divides from $/ha to $/SU at 7.74 stock units per hectare.
+# This file previously reconciled the modelled farm to that by asserting "about
+# 1.35 SU each" for 417 ewes on 80 ha, giving roughly 7.0 SU/ha and the
+# conclusion "the same kind of farm". **The 1.35 had no source.** Parker (1998)
+# Table 1 gives a ewe as 1.0 SU in the New Zealand Meat and Wool Board's
+# Economic Service figures - the survey that became this one - and in MAF's.
+#
+# At 1.0 SU a ewe the farm runs 5.2 SU/ha, about a third under the class it is
+# being priced against. The costs below are still the right ones to use, because
+# they are stated per hectare and this is the same class of farm on the same
+# kind of country; what is not true is that it carries the same stock. See
+# data/calibration/stock-unit-intake.csv.
 #
 # **Two different strengths of evidence in one file, and they are marked.** The
 # expenditure is `direct`: B+LNZ publish it, per hectare, from a random stratified

@@ -322,14 +322,18 @@ Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept
   unfertilised farm should produce *less*, so the real gap is larger than 20%.
   There is no phosphorus limitation in the model, and re-fitting radiation use
   efficiency to close the number would hide the reason (verify.md, E40)
-- **The flock eats about 63% of what its stock-unit rating implies, because
-  the model has no appetite.** Parker (1998) defines a New Zealand stock unit as
-  550 kg DM a year at 10.5 MJ ME/kg DM — the diet this model feeds — so at this
-  farm's 7.0 SU/ha demand is 3,850 kg DM/ha and the model eats 2,434. The cause
-  is named: intake is derived from a target liveweight gain, so a mob in a
-  surplus asks for what it asked for in a drought. **No result that depends on
-  how much was eaten should be read as a response to feed supply**, which
-  includes every irrigation comparison this model produces (verify.md, E51/E52)
+- **The example farm is understocked by about a third, which is most of why its
+  utilisation looks bad.** Parker (1998) gives a ewe as 1.0 stock unit eating
+  550 kg DM a year, so 417 ewes on 80 ha is 5.2 SU/ha against Beef + Lamb's
+  Class 6 average of 7.74. Its animals eat 85% of their stock-unit rating, which
+  is ordinary; there are simply fewer of them than the class it is priced
+  against (verify.md, E51 and E53)
+- **The flock does not respond to feed, because the model has no appetite.**
+  Intake is derived from a target liveweight gain, so a mob in a surplus asks
+  for what it asked for in a drought — two arms of an irrigation comparison
+  differing by 5,290 kg DM/ha of growth eat within 5 kg of each other. **No
+  result that depends on how much was eaten should be read as a response to feed
+  supply** (verify.md, E52)
 - **Absolute liveweight gain is not quotable**: standard reference weight is
   unverified and it drives the energy value of gain
 - Sheep maintenance is low by about 5% against CSIRO (2007), so carrying

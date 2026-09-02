@@ -16,16 +16,23 @@
 /// diet this model feeds, so the two figures are like for like without an
 /// adjustment.
 ///
-/// **What this test found.** Production is not the problem, at least not here:
-/// the year grows 6,847 kg DM/ha against Winchmore's measured dryland mean of
-/// 6,442, which is inside the band. The animals eat about 63% of what their
-/// stock-unit rating implies. The gap is almost entirely intake, which reverses
-/// the guess that it was half production and half intake.
+/// **This file was written with the wrong target and corrected within the
+/// hour, by reading one more table in the same paper.** It first took a ewe as
+/// 1.35 SU, a figure asserted without a source in the economics file to make
+/// 417 ewes on 80 ha look like Beef + Lamb's Class 6. Parker's Table 1 gives a
+/// ewe as 1.0 SU in the Meat and Wool Board's Economic Service figures - the
+/// survey that became Beef + Lamb's - and in MAF's. The modelled flock is 417
+/// ewes at 55 kg rearing 105%, which is Parker's base ewe almost exactly.
 ///
-/// The test holds the gap where it is rather than asserting the target. Closing
-/// it needs intake capacity - a mob on a big offer eating more than a mob on a
-/// small one - which this model does not have: demand is a target liveweight
-/// gain, so a feast changes nothing.
+/// So the demand is 2,867 kg DM/ha, not 3,850, and the animals eat 85% of it
+/// rather than 63%.
+///
+/// **Which moves the diagnosis again.** Production is inside Winchmore's
+/// measured band, intake per stock unit is not far off, and what is actually
+/// low is the stocking rate: 5.2 SU/ha against the class average of 7.74. The
+/// farm is understocked by about a third, and that is most of why utilisation
+/// reads 36%. Intake capacity would not fix it - a cap and an availability
+/// response both move intake down, not up.
 
 #include <gtest/gtest.h>
 
@@ -169,15 +176,18 @@ TEST(StockUnitIntakeTest, TheFlockEatsLessThanItsStockUnitRatingImplies) {
   }
   ASSERT_GT(target, 0.0);
 
+  // **A band, not a target.** 85% of a stock-unit rating is close enough that
+  // the remaining distance could be the model, could be 550 against the 520
+  // also in common use for the same unit, or could be that a real ewe's year is
+  // not this ewe's year. It is not where a third of a farm's feed went.
   const double share = eaten / target;
-  EXPECT_GT(share, 0.5) << "the flock eats " << eaten << " kg DM/ha against a stock-unit demand of "
+  EXPECT_GT(share, 0.7) << "the flock eats " << eaten << " kg DM/ha against a stock-unit demand of "
                         << target
-                        << ". Under half would be a different and larger fault than the "
-                           "one this test was written for";
-  EXPECT_LT(share, 0.8) << "the flock now eats " << eaten << " of " << target
-                        << " kg DM/ha, which is better than the 63% this was written at. If that "
-                           "is intake capacity landing, raise this bound and say so; if it is a "
-                           "run that changed for another reason, find out which";
+                        << ". Under 70% would be a real intake fault rather than the ordinary "
+                           "distance between a model and a rule of thumb";
+  EXPECT_LT(share, 1.0) << "the flock now eats " << eaten << " of " << target
+                        << " kg DM/ha, at or over its stock-unit rating. Not a failure, but this "
+                           "bound has stopped describing the model - work out what changed";
 }
 
 }  // namespace
