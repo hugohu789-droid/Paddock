@@ -149,10 +149,11 @@ core::Date date_of(const toml::table& table, std::string_view key, const std::st
 ScenarioBundle read(const std::string& directory, bool enforce) {
   const std::string manifest_path = join(directory, kManifestName);
   const toml::table root = detail::parse_file(manifest_path);
-  detail::reject_unknown_keys(root,
-                              {"scenario", "run", "weather", "soil", "sward", "initial_state",
-                               "grid", "terrain", "management", "mob", "grazing_period"},
-                              manifest_path, "the manifest");
+  detail::reject_unknown_keys(
+      root,
+      {"scenario", "run", "weather", "soil", "sward", "initial_state", "grid", "terrain",
+       "management", "mob", "grazing_period", "economics", "regulation"},
+      manifest_path, "the manifest");
 
   const toml::table& scenario = detail::require_table(root, "scenario", manifest_path);
   detail::reject_unknown_keys(scenario, {"name", "description", "engine_version", "master_seed"},
@@ -265,6 +266,51 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
     }
     spec.paddock_hectares = detail::optional_double(grid, "paddock_hectares", 0.0, manifest_path);
     bundle.grid = spec;
+  }
+
+  // **What the stock are getting out of the grass.** Defaults to the energy
+  // density Parker's stock unit is defined at, so that a run which says nothing
+  // is still comparable with every stocking figure in New Zealand.
+  bundle.diet.metabolisable_energy_mj_per_kg_dm = 10.5;
+  bundle.diet.digestibility_percent = 75.0;
+  if (const toml::table* diet = root["diet"].as_table(); diet != nullptr) {
+    detail::reject_unknown_keys(*diet,
+                                {"metabolisable_energy_mj_per_kg_dm", "digestibility_percent"},
+                                manifest_path, "[diet]");
+    bundle.diet.metabolisable_energy_mj_per_kg_dm =
+        detail::optional_double(*diet, "metabolisable_energy_mj_per_kg_dm",
+                                bundle.diet.metabolisable_energy_mj_per_kg_dm, manifest_path);
+    bundle.diet.digestibility_percent = detail::optional_double(
+        *diet, "digestibility_percent", bundle.diet.digestibility_percent, manifest_path);
+    // A zero-energy diet is an infinite intake, and a digestibility outside
+    // 0-100 is not a percentage.
+    if (bundle.diet.metabolisable_energy_mj_per_kg_dm <= 0.0) {
+      detail::throw_in(*diet, manifest_path,
+                       "'metabolisable_energy_mj_per_kg_dm' must be positive; a feed worth "
+                       "nothing to an animal makes the intake it needs infinite");
+    }
+    if (bundle.diet.digestibility_percent <= 0.0 || bundle.diet.digestibility_percent >= 100.0) {
+      detail::throw_in(*diet, manifest_path,
+                       "'digestibility_percent' is a percentage of the dry matter and has to sit "
+                       "between 0 and 100");
+    }
+  }
+
+  // **What this farm is priced by and measured against, when it says.** Read
+  // as ordinary bundle inputs so they are hashed with everything else: a run
+  // quoting a compliance figure should not be reproducible only by somebody who
+  // guessed the same rule file.
+  if (const toml::table* economics = root["economics"].as_table(); economics != nullptr) {
+    std::string contents;
+    const BundleInput input = read_input_table(*economics, directory, manifest_path, contents);
+    bundle.economics_path = join(directory, input.relative_path);
+    bundle.inputs.push_back(input);
+  }
+  if (const toml::table* regulation = root["regulation"].as_table(); regulation != nullptr) {
+    std::string contents;
+    const BundleInput input = read_input_table(*regulation, directory, manifest_path, contents);
+    bundle.regulation_path = join(directory, input.relative_path);
+    bundle.inputs.push_back(input);
   }
 
   // The ground. Absent means flat, which is what every bundle written before

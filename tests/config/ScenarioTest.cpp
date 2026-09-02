@@ -43,12 +43,36 @@ class BundleCopy {
   /// repository's copy, and which bundle it starts from depends on what is
   /// being broken - only the grazed ones carry stock or a policy.
   explicit BundleCopy(const std::string& source = shipped_bundle()) {
-    directory_ = std::filesystem::temp_directory_path() /
-                 ("paddock-bundle-" +
-                  std::to_string(std::filesystem::hash_value(std::filesystem::path(source))) + "-" +
-                  testing::UnitTest::GetInstance()->current_test_info()->name());
-    std::filesystem::remove_all(directory_);
+    // **The shape of data/, not just the bundle.** A manifest reaches out of its
+    // own directory - `../../species/sheep-ewe.toml`, and now `../../economics/`
+    // and `../../regulations/` - so copying the bundle alone gives a scenario
+    // whose inputs cannot be opened, and every test using it starts failing on
+    // "cannot open bundle input" instead of on whatever it was written for.
+    //
+    // That had already cost one test and, when [economics] was added to the
+    // shipped bundles, immediately cost another. So the copy is a small data
+    // tree: the bundle under scenarios/, and the sibling directories it can
+    // reach, at the same relative depth.
+    root_ = std::filesystem::temp_directory_path() /
+            ("paddock-bundle-" +
+             std::to_string(std::filesystem::hash_value(std::filesystem::path(source))) + "-" +
+             testing::UnitTest::GetInstance()->current_test_info()->name());
+    std::filesystem::remove_all(root_);
+
+    directory_ = root_ / "scenarios" / std::filesystem::path(source).filename();
+    std::filesystem::create_directories(directory_);
     std::filesystem::copy(source, directory_, std::filesystem::copy_options::recursive);
+
+    const std::filesystem::path data = std::filesystem::path(PADDOCK_DATA_DIR);
+    for (const char* sibling : {"species", "economics", "regulations", "pastures", "soils"}) {
+      const std::filesystem::path from = data / sibling;
+      if (!std::filesystem::exists(from)) {
+        continue;
+      }
+      std::error_code ignored;
+      std::filesystem::copy(from, root_ / sibling, std::filesystem::copy_options::recursive,
+                            ignored);
+    }
   }
 
   BundleCopy(const BundleCopy&) = delete;
@@ -58,7 +82,7 @@ class BundleCopy {
 
   ~BundleCopy() {
     std::error_code ignored;
-    std::filesystem::remove_all(directory_, ignored);
+    std::filesystem::remove_all(root_, ignored);
   }
 
   [[nodiscard]] std::string path() const { return directory_.string(); }
@@ -81,6 +105,7 @@ class BundleCopy {
   }
 
  private:
+  std::filesystem::path root_;
   std::filesystem::path directory_;
 };
 

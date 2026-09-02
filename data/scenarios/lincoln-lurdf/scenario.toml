@@ -99,6 +99,25 @@ sha256 = "93eae9f37464dfb85d72436515e6ed9266080e0f4039172732924e228f4b9d5d"
 path = "sward.toml"
 sha256 = "3464a772f36be78241dd94fff20571521016b5e2c017339f7c47327ebea6b28c"
 
+# **What this farm is priced by and measured against.**
+#
+# Named here rather than assumed, because there is no national answer to either.
+# New Zealand's nitrogen loss limits are set by regional councils catchment by
+# catchment, and Beef + Lamb's cost survey is published by farm class and island.
+# The window used to reach for these two files whatever bundle was open, which
+# put a Waikato block under the Canterbury Land and Water Regional Plan. See
+# docs/validation/verify.md, E57.
+#
+# A bundle that names neither still runs; it reports what leached and has
+# nothing to say about compliance, and it keeps no books.
+[economics]
+path = "../../economics/canterbury-sheep.toml"
+sha256 = "0d7898be49bde0ec804b4fb6be36098ee60d254ba790dc7c0f54305b7f3c3d37"
+
+[regulation]
+path = "../../regulations/canterbury-nitrogen.toml"
+sha256 = "31c097d904bf9d1fee40e75a83501d0608be58eea61a44e70fe41ce7f33fa3aa"
+
 [initial_state]
 soil_water_mm = 90.0
 grass_kg_dm_per_ha = 2200.0

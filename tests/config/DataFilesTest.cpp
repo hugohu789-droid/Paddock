@@ -19,6 +19,7 @@
 #include <paddock/config/DiseaseConfig.hpp>
 #include <paddock/config/FarmConfig.hpp>
 #include <paddock/config/PastureConfig.hpp>
+#include <paddock/config/ScenarioConfig.hpp>
 #include <paddock/config/SoilConfig.hpp>
 #include <paddock/config/SpeciesConfig.hpp>
 #include <paddock/config/WeatherConfig.hpp>
@@ -441,6 +442,45 @@ TEST(DataFilesTest, EveryDataDirectoryIsShippedOrExplicitlyExcluded) {
         << " is new. Add it to this test once you have decided whether a "
            "release should carry it, and to the script's exclusions if it should not";
   }
+}
+
+// **A farm is measured against the rule it names, and against nothing if it
+// names none.**
+//
+// New Zealand has no national nitrogen loss limit. Regional councils set them
+// catchment by catchment, and the Canterbury file this repository carries says
+// so itself: two farms a valley apart can sit under different ones. So reaching
+// for a rule asserts which zone a farm is in.
+//
+// The command line always refused to. `paddock nitrogen` takes the rule as an
+// argument and will not default one. The window did the opposite - it loaded
+// `regulations/canterbury-nitrogen.toml` for whatever bundle was open, so
+// ruakura-fe, a Waikato block, was reported against the Canterbury Land and
+// Water Regional Plan.
+//
+// This holds the fix from both sides: the Canterbury bundles name a Canterbury
+// rule, and the Waikato one names nothing at all.
+TEST(DataFilesTest, AFarmIsMeasuredAgainstTheRuleItNamesAndNoOther) {
+  for (const char* name : {"lincoln-lurdf", "canterbury-grazed"}) {
+    const ScenarioBundle bundle =
+        load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/" + name);
+    EXPECT_FALSE(bundle.regulation_path.empty())
+        << name << " is a Canterbury farm and should name the rule it is read against";
+    EXPECT_NE(bundle.regulation_path.find("canterbury"), std::string::npos) << name;
+    EXPECT_FALSE(bundle.economics_path.empty())
+        << name << " should name the price book its costs come from";
+  }
+
+  // **The one that matters.** Ruakura is in the Waikato; this repository has no
+  // Waikato rule and no Waikato cost survey, so the honest output is fewer
+  // panels rather than a confident number from the wrong island.
+  const ScenarioBundle waikato =
+      load_scenario(std::string(PADDOCK_DATA_DIR) + "/scenarios/ruakura-fe");
+  EXPECT_TRUE(waikato.regulation_path.empty())
+      << "a Waikato farm must not be measured against the only rule that happens to be on disk, "
+         "which is Canterbury's";
+  EXPECT_TRUE(waikato.economics_path.empty())
+      << "and must not be priced from a South Island survey for the same reason";
 }
 
 }  // namespace paddock::config
