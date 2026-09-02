@@ -68,3 +68,14 @@ breed_effect = { value = 0.01, status = "direct", source = "tmc_animal_me" }
 [typical]
 liveweight_kg = 60.0
 age_days = 1200.0
+
+# **What a head of this class counts as, in the unit New Zealand farms are
+# compared in.** Parker (1998) Table 1 collects the published conversions and a
+# breeding ewe is 1.0 in the New Zealand Meat and Wool Board's Economic Service
+# figures - the survey that became Beef + Lamb's - and 1.0 in MAF's. Coop gives
+# 0.8 to 1.1, Lincoln 0.65 to 1.45; the spread is ewe weight and prolificacy,
+# and this class is Parker's base ewe at 55 kg weaning one lamb.
+#
+# See data/calibration/stock-unit-intake.csv, and E53 for what happened when
+# this repository asserted 1.35 instead in order to make a farm match its class.
+stock_units = 1.0

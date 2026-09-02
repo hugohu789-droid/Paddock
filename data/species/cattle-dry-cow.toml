@@ -46,3 +46,10 @@ gain_energy_ceiling_mj_per_kg = { value = 16.5, status = "direct", source = "tmc
 [typical]
 liveweight_kg = 480.0
 age_days = 1500.0
+
+# **Not rated yet.** Parker's Table 1 gives beef cows 5.5 to 6.0 and dairy cows
+# 5.1 to 8.5 depending on the source, which is too wide a spread to pick from
+# without knowing which kind of cow this file is meant to be - and it is a "dry
+# cow", which is not a class any of those tables lists. Left at zero rather than
+# guessed; a farm carrying it will decline to report a stocking rate and say so.
+stock_units = 0.0

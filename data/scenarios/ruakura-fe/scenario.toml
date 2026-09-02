@@ -150,7 +150,7 @@ attribution = "Waikato - Hamilton LiDAR 1m DEM (2023). Sourced from LINZ elevati
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "e64936b7a1195d911c1606d0448ae08f8068d338f342694291f73c1802361bed"
+sha256 = "6ecfae3a9e5854b27073338273670316ea7ec5fb5f1da42ebab18acbdd7b4468"
 head = 417
 paddock = 0
 liveweight_kg = 55.0

@@ -123,6 +123,19 @@ enum class AnimalKind : std::uint8_t {
 struct AnimalClassParameters {
   std::string class_id;
 
+  /// What one head of this class counts as in stock units, or zero when no
+  /// published conversion has been recorded for it.
+  ///
+  /// **A reporting convention rather than a process**, and it lives here anyway
+  /// because it travels with the class and because a farmer deciding how many
+  /// to winter decides in these units. A New Zealand stock unit is Parker's
+  /// (1998) base ewe - 55 kg, one lamb, 550 kg DM a year - and every farm in
+  /// the country is benchmarked in them.
+  ///
+  /// Zero is "not rated", and a farm holding an unrated class declines to
+  /// report a stocking rate rather than reporting one that is short.
+  double stock_units = 0.0;
+
   /// Sheep, cattle or deer, for anything that has to show them to a person.
   AnimalKind kind = AnimalKind::Other;
 

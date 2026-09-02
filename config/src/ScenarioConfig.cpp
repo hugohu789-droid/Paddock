@@ -423,6 +423,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
       const SpeciesDefinition species =
           parse_species(species_text, join(directory, species_input.relative_path));
       mob.animal = species.energy;
+      mob.animal.stock_units = species.stock_units;
 
       // The species supplies a typical animal; the scenario may start with a
       // different one, and usually does.

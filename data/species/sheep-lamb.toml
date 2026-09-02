@@ -61,3 +61,12 @@ suckling_weeks = { value = 26.0, status = "direct", source = "tmc_animal_me" }
 # A lamb at about a month old: past its birth weight, well short of drafting.
 liveweight_kg = 15.0
 age_days = 30.0
+
+# **Not rated, deliberately.** Parker's Table 1 has no line for a lamb at foot,
+# because a stock unit is a ewe *and* the lamb she rears - counting the lamb
+# again would carry it twice. A weaned lamb being finished is a different class
+# and would want its own figure; this file is the lamb on the mother.
+#
+# Zero means "no published conversion", and a farm carrying this class reports
+# no stocking rate for it rather than a made-up one.
+stock_units = 0.0
