@@ -205,12 +205,24 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // and keeps growing. A real dryland sward browns off. That half is now carried
 // by `drought_turnover_*`, and it was worth three points of the twenty-two.
 //
-// **What is left is a spring/summer partition and nothing else** (verify.md,
-// E66). The temperature response has been taken as far as a published set of
-// cardinals and a published curve can take it, and the remaining sixteen points
-// did not move with it. What has not been examined: spring phenology and
-// reproductive growth, tillering, nitrogen supply through the season, and how
-// far the water balance really empties a Canterbury profile in February.
+// **What is left is a spring/summer partition, and it has been diagnosed**
+// (verify.md, E67). Not water: spring Ks is 0.930, six days in ninety-one below
+// half. Not nitrogen: the mineral pool sits at 95-102 kg/ha through spring and
+// accumulates all year. Not heat: 6.8% of summer days pass AgPasture's 28 C
+// onset by an average of 1.5 C.
+//
+// The measurement that settles it is in the trial's own columns. **Spring beats
+// summer in 25 of the 25 measured years**, median ratio 3.14 and never below
+// 1.09. This model manages 8 of 10 at a median of 1.16, and loses outright in
+// the years summer stays wet. Spring dominance is a property of the plant, and
+// the model has it as a property of the weather - it grows whenever there is
+// water, and in Canterbury the best light and warmth are in January.
+//
+// The leading hypothesis is that there is no reproductive development here:
+// ryegrass turns reproductive in spring, and afterwards carries fewer tillers
+// through summer even with water in the soil. That is a mechanism to build, not
+// a parameter to move, and it is why the bounds below are held rather than
+// chased.
 //
 // Compared as shares of the year rather than kilograms, because a share does
 // not depend on either site's rainfall - Winchmore's 745 mm mean is not this
