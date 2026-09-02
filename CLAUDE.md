@@ -7,18 +7,23 @@ NIWA, Manaaki Whenua). It is both a verifiable agricultural systems model and
 a playable farm-management simulation.
 
 Goals, in order:
-1. Flagship portfolio project for NZ agritech employers (AgResearch, Manaaki
-   Whenua, NIWA, DairyNZ, LIC, Lincoln Agritech, Rezare, Figured, Halter,
-   Trimble Christchurch, Eagle Technology).
-2. A potential low-cost product for small farms.
+1. **A model whose results can be defended.** Every parameter either cites a
+   published source or is marked as not doing so; every claim is checkable
+   against something; and the limitations are written where a reader meets them
+   rather than where they would have to go looking.
+2. **Software other engineers can read.** This repository is public. The code,
+   the commit messages and the ADRs are part of what it says, and a decision
+   worth making is worth writing down.
+3. A potential low-cost tool for small farms.
 
 Everything in this repository — code, comments, commits, docs, issues, ADRs,
 devlogs — is in English.
 
 Repo description (set on GitHub):
 ```
-A spatially explicit pastoral farm simulator — terrain, weather, pasture growth,
-livestock and pests coupled on real NZ geospatial data. C++17 core, Qt/VTK 2D+3D.
+Spatial NZ pastoral farm simulation in C++17 — pasture, soil water, grazing,
+livestock and irrigation on real geospatial data, with scenario comparison,
+explainable decisions and sourced validation. Qt/VTK 2D+3D.
 ```
 
 ---
@@ -263,8 +268,8 @@ CI build.
   history.** Branch protection requires both, along with all ten CI checks.
   Squash a branch that is one change written in several attempts; **rebase a
   branch whose commits each say something worth keeping** - a milestone's worth
-  of separate features is not one commit, and this repository is read by people
-  deciding whether to interview its author. Merge commits are allowed by the
+  of separate features is not one commit, and the history is part of what a
+  public repository says. Merge commits are allowed by the
   repository and cannot actually be used while linear history is required;
   rebase is the way to keep every message.
 - Every feature lands with tests. Conservation, determinism and validation
