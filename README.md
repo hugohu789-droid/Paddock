@@ -322,12 +322,15 @@ Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept
   unfertilised farm should produce *less*, so the real gap is larger than 20%.
   There is no phosphorus limitation in the model, and re-fitting radiation use
   efficiency to close the number would hide the reason (verify.md, E40)
-- **The example farm is understocked by about a third, which is most of why its
-  utilisation looks bad.** Parker (1998) gives a ewe as 1.0 stock unit eating
-  550 kg DM a year, so 417 ewes on 80 ha is 5.2 SU/ha against Beef + Lamb's
-  Class 6 average of 7.74. Its animals eat 85% of their stock-unit rating, which
-  is ordinary; there are simply fewer of them than the class it is priced
-  against (verify.md, E51 and E53)
+- **The example farm is understocked, and the model cannot say by how much
+  because it has no upper bound.** Parker (1998) gives a ewe as 1.0 stock unit
+  eating 550 kg DM a year, so 417 ewes on 80 ha is 5.2 SU/ha against Beef +
+  Lamb's Class 6 average of 7.74. Run at six stocking rates the farm behaves
+  correctly — production falls, utilisation climbs into the measured band, the
+  cover floor is breached, feed is bought — but **profit never turns down**,
+  because bought feed is unlimited, always available, and priced at a hardcoded
+  figure with no source. So "how many ewes will it carry" currently answers "as
+  many as you can pay for" (verify.md, E55)
 - **The flock does not respond to feed, because the model has no appetite.**
   Intake is derived from a target liveweight gain, so a mob in a surplus asks
   for what it asked for in a drought — two arms of an irrigation comparison
