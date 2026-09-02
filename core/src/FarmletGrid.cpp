@@ -208,6 +208,23 @@ double FarmletGrid::mean_green_kg_dm() const {
                           [](const Farmlet& farmlet) { return farmlet.sward().green_kg_dm(); });
 }
 
+double FarmletGrid::mean_growth_kg_dm() const {
+  // The same compensated sum every other farm mean uses, over the per-cell
+  // growth the pasture step already recorded.
+  if (last_growth_kg_dm_.empty()) {
+    return 0.0;
+  }
+  double total = 0.0;
+  double carried = 0.0;
+  for (const double cell : last_growth_kg_dm_) {
+    const double adjusted = cell - carried;
+    const double sum = total + adjusted;
+    carried = (sum - total) - adjusted;
+    total = sum;
+  }
+  return total / static_cast<double>(last_growth_kg_dm_.size());
+}
+
 double FarmletGrid::mean_soil_water_mm() const {
   return compensated_mean(cells_, [](const Farmlet& farmlet) { return farmlet.soil().water_mm(); });
 }

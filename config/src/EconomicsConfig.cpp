@@ -173,9 +173,10 @@ FarmEconomics load_economics(const std::string& path) {
   }
 
   const toml::table& prices = detail::require_table(root, "prices", path);
-  detail::reject_unknown_keys(
-      prices, {"lamb_dollars_per_kg_carcass", "wool_dollars_per_kg", "cull_ewe_dollars_per_head"},
-      path, "[prices]");
+  detail::reject_unknown_keys(prices,
+                              {"lamb_dollars_per_kg_carcass", "wool_dollars_per_kg",
+                               "cull_ewe_dollars_per_head", "supplement_dollars_per_kg_dm"},
+                              path, "[prices]");
 
   const auto price = [&](std::string_view key, double& into) {
     const SourcedValue value = read_sourced(prices, key, path);
@@ -185,6 +186,7 @@ FarmEconomics load_economics(const std::string& path) {
   price("lamb_dollars_per_kg_carcass", economics.prices.lamb_dollars_per_kg_carcass);
   price("wool_dollars_per_kg", economics.prices.wool_dollars_per_kg);
   price("cull_ewe_dollars_per_head", economics.prices.cull_ewe_dollars_per_head);
+  price("supplement_dollars_per_kg_dm", economics.prices.supplement_dollars_per_kg_dm);
 
   if (const toml::table* capital = root["capital"].as_table()) {
     detail::reject_unknown_keys(*capital, {"opening_balance_per_hectare"}, path, "[capital]");

@@ -112,7 +112,7 @@ sha256 = "3464a772f36be78241dd94fff20571521016b5e2c017339f7c47327ebea6b28c"
 # nothing to say about compliance, and it keeps no books.
 [economics]
 path = "../../economics/canterbury-sheep.toml"
-sha256 = "0d7898be49bde0ec804b4fb6be36098ee60d254ba790dc7c0f54305b7f3c3d37"
+sha256 = "8b6b680b8855894642fc75c493c761b694519c9959d124d303f827a2b1a726ae"
 
 [regulation]
 path = "../../regulations/canterbury-nitrogen.toml"

@@ -164,6 +164,15 @@ class FarmletGrid {
   /// manages to a cover figure padded with thatch is managing to a number no
   /// animal can eat.
   [[nodiscard]] double mean_green_kg_dm() const;
+
+  /// What grew across the farm on the last day stepped, kg DM/ha.
+  ///
+  /// **The quantity a seasonal validation needs and nobody could reach.** The
+  /// per-cell raster has been kept since the pasture model was written, and the
+  /// mean of it was not - so a run could report what it grew in a year and not
+  /// in a month of it, and a model that put too much in spring and too little
+  /// in summer would sum to about right and pass.
+  [[nodiscard]] double mean_growth_kg_dm() const;
   [[nodiscard]] double mean_soil_water_mm() const;
   [[nodiscard]] double mean_total_nitrogen_kg() const;
 

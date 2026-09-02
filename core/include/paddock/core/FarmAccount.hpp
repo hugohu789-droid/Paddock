@@ -74,6 +74,21 @@ struct Prices {
   double wool_dollars_per_kg = 0.0;
   double cull_ewe_dollars_per_head = 0.0;
 
+  /// What a kilogram of bought feed costs, dry matter.
+  ///
+  /// **The only thing standing between this farm and unlimited feed**, and it
+  /// used to be a constant in FarmDecision.cpp with a comment claiming it came
+  /// from the economics file. It did not.
+  ///
+  /// Beef + Lamb New Zealand's Fact Sheet 260 puts baleage at 54.1 cents a
+  /// kilogram of dry matter - and, on the line above it in the same table,
+  /// pasture at 10. A farm buying its way through a deficit pays five times
+  /// what the same feed costs it standing in the paddock.
+  ///
+  /// Zero means no price was given, and the farm cannot buy: a purchase at an
+  /// unstated price is a purchase whose cost nobody can check.
+  double supplement_dollars_per_kg_dm = 0.0;
+
   [[nodiscard]] std::string invalid_reason() const;
 };
 
