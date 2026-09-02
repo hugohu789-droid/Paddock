@@ -174,8 +174,20 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   problem_label_ = new QLabel(this);
   problem_label_->setWordWrap(true);
 
+  // **Who is looking.** Three people open a farm simulator wanting different
+  // controls, and one flat list served none of them - seventeen rows out of
+  // about two hundred configurable values, all of them the farmer's.
+  role_box_ = new QComboBox(this);
+  role_box_->addItem("Farmer - what to do with the stock");
+  role_box_->addItem("Researcher - what the model assumes");
+  role_box_->addItem("Compliance - what this farm is measured against");
+  role_box_->setToolTip(
+      "Changes which controls are shown, not what the model does. A run started under any role is "
+      "the same run.");
+
   auto* farm_group = new QGroupBox("Farm", this);
   auto* farm_form = new QFormLayout;
+  farm_form->addRow("Working as", role_box_);
   farm_form->addRow("Scenario", scenario_box_);
   farm_form->addRow("Ground", terrain_box_);
   // Ground is advanced because a farm that brings its own measured survey
@@ -192,6 +204,61 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
   // the opening weight is usually the bundle's own figure.
   fold_away(stock_group, stock_form, {liveweight_box_});
   stock_group->setLayout(stock_form);
+
+  // **The model's own assumptions, which had no home until now.**
+  //
+  // Diet quality is the input every animal calculation starts from, and until
+  // this week it was a constant in six places - so a scenario could choose its
+  // sward, its soil, its species and its management but not what its stock got
+  // out of the grass. It had no home because no role owned it. See E58.
+  //
+  // The default is Parker's (1998) stock unit: "550 kg DM of 10.5 MJ ME/kg DM
+  // per annum". That is the density New Zealand's stocking arithmetic is
+  // written in, which is why this model's intake can be compared with a
+  // stock-unit rating at all - so changing it is exactly the kind of thing a
+  // researcher should have to do deliberately.
+  diet_me_box_ = new QDoubleSpinBox(this);
+  diet_me_box_->setRange(4.0, 14.0);
+  diet_me_box_->setSingleStep(0.1);
+  diet_me_box_->setDecimals(1);
+  diet_me_box_->setSuffix(" MJ ME/kg DM");
+  diet_me_box_->setToolTip(
+      "What a kilogram of what the stock eat is worth to them.\n\nNew Zealand pasture runs "
+      "roughly 9.5 in a dry summer to 11.5 in spring. This model holds it constant all year and "
+      "does not lower it as dead material builds up, which is an open loop - see verify.md E58.");
+
+  diet_digestibility_box_ = new QDoubleSpinBox(this);
+  diet_digestibility_box_->setRange(30.0, 90.0);
+  diet_digestibility_box_->setSingleStep(1.0);
+  diet_digestibility_box_->setDecimals(0);
+  diet_digestibility_box_->setSuffix(" %");
+  diet_digestibility_box_->setToolTip(
+      "How much of that dry matter the animal can actually digest. Drives the efficiency with "
+      "which energy is used for maintenance and for gain.");
+
+  // **The compliance view's whole reason to exist.** Nothing on this panel is a
+  // compliance reader's to set - a rule is a quotation, not a setting - so what
+  // they need is to see which one applies, and to see plainly when none does.
+  //
+  // That distinction only became possible this week: the window used to load
+  // whatever regulation was on disk, so every farm appeared to be under the
+  // Canterbury Land and Water Regional Plan including the Waikato one. See E57.
+  measured_against_label_ = new QLabel(this);
+  measured_against_label_->setWordWrap(true);
+  measured_against_label_->setObjectName("caveat");
+
+  auto* compliance_group = new QGroupBox("Measured against", this);
+  auto* compliance_form = new QVBoxLayout;
+  compliance_form->addWidget(measured_against_label_);
+  compliance_group->setLayout(compliance_form);
+  compliance_rows_.push_back(compliance_group);
+
+  auto* model_group = new QGroupBox("What the model assumes", this);
+  auto* model_form = new QFormLayout;
+  model_form->addRow("Feed energy", diet_me_box_);
+  model_form->addRow("Digestibility", diet_digestibility_box_);
+  model_group->setLayout(model_form);
+  researcher_rows_.push_back(model_group);
 
   // ------------------------------------------------------------- irrigation
   //
@@ -273,8 +340,21 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
              supplement_me_box_});
   management_group->setLayout(management_form);
 
+  // Stock and management are the farmer's; a researcher sees them too, because
+  // a parameter study needs the management it was run under. A compliance
+  // reader sees neither - none of it is theirs to set.
+  farmer_rows_.push_back(stock_group);
+  farmer_rows_.push_back(management_group);
+
   auto* layout = new QVBoxLayout;
   layout->addWidget(farm_group);
+  // **Second, not fourth.** This group only exists for the researcher view, and
+  // in that view it is the point - putting it under stock and management left
+  // it below the fold of a scrolling panel, which is exactly how the indicators
+  // button went unfound for weeks (E47). It costs the farmer nothing: in that
+  // view it is not there at all.
+  layout->addWidget(compliance_group);
+  layout->addWidget(model_group);
   layout->addWidget(stock_group);
   layout->addWidget(management_group);
   // **Short, because the row is four buttons wide.** "Reset to published" and
@@ -310,6 +390,7 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
       "these settings in the list, and Compare runs the list.");
   connect(run_button_, &QPushButton::clicked, this, &SetupPanel::runRequested);
 
+  farmer_rows_.push_back(irrigation_group);
   layout->addWidget(irrigation_group);
   layout->addStretch(1);
 
@@ -400,6 +481,12 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
       liveweight_box_->setValue(species->typical_liveweight_kg);
     }
   });
+  connect(role_box_, &QComboBox::currentIndexChanged, this, [this](int index) {
+    role_ = index == 1 ? Role::Researcher : index == 2 ? Role::Compliance : Role::Farmer;
+    apply_role();
+  });
+  apply_role();
+
   connect(scenario_box_, &QComboBox::currentIndexChanged, this, &SetupPanel::refresh_readiness);
   connect(scenario_box_, &QComboBox::currentIndexChanged, this, [this](int index) {
     if (adopting_ || index < 0) {
@@ -517,6 +604,10 @@ int terrain_choice(const config::TerrainSpec& terrain) {
 }  // namespace
 
 void SetupPanel::adopt_choices(const Choices& chosen) {
+  // Diet first, because it is the one a researcher may have moved and the one
+  // whose absence from this function would silently reset a parameter study.
+  diet_me_box_->setValue(chosen.diet.metabolisable_energy_mj_per_kg_dm);
+  diet_digestibility_box_->setValue(chosen.diet.digestibility_percent);
   // **The exact inverse of choices(), field for field.** A scenario picked from
   // the list is loaded through here and run again, so a setting this failed to
   // restore would quietly produce a different run from the one the comparison
@@ -641,6 +732,8 @@ SetupPanel::Choices SetupPanel::choices() const {
   chosen.species = selected_species();
   chosen.head = head_box_->value();
   chosen.liveweight_kg = liveweight_box_->value();
+  chosen.diet.metabolisable_energy_mj_per_kg_dm = diet_me_box_->value();
+  chosen.diet.digestibility_percent = diet_digestibility_box_->value();
 
   chosen.policy.minimum_cover_kg_dm_per_ha = cover_floor_box_->value();
   chosen.policy.rotation_cover_threshold_kg_dm_per_ha = rotation_box_->value();
@@ -693,6 +786,7 @@ SetupPanel::Choices SetupPanel::choices() const {
 }
 
 void SetupPanel::adopt_bundle(const std::string& directory, int head, double liveweight_kg,
+                              const core::DietQuality& diet, const QString& measured_against,
                               const core::ManagementPolicy* policy,
                               const core::AnimalClassParameters* animal) {
   // Everything this sets is the bundle talking, not a person choosing. Cleared
@@ -707,6 +801,12 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
   }
   if (head > 0) {
     head_box_->setValue(head);
+    // The bundle's diet, so a researcher who opens the model group sees what
+    // this scenario actually assumes rather than a constant that happens to
+    // match every bundle shipped so far.
+    diet_me_box_->setValue(diet.metabolisable_energy_mj_per_kg_dm);
+    diet_digestibility_box_->setValue(diet.digestibility_percent);
+    measured_against_label_->setText(measured_against);
   }
   if (liveweight_kg > 0.0) {
     liveweight_box_->setValue(liveweight_kg);
@@ -798,6 +898,31 @@ QString SetupPanel::problem() const {
     return irrigation;
   }
   return {};
+}
+
+void SetupPanel::choose_role(int role) {
+  // Through the combo rather than straight to role_, so the selector a person
+  // reads and the rows they see cannot disagree.
+  if (role >= 0 && role < role_box_->count()) {
+    role_box_->setCurrentIndex(role);
+  }
+}
+
+void SetupPanel::apply_role() {
+  // **Shows and hides; it never changes what a run does.** A scenario run under
+  // any role is the same run - the model reads the bundle and the choices, and
+  // the role only decides which of those choices a person can reach. Anything
+  // hidden keeps the value it had, which is the bundle's.
+  const bool farming = role_ == Role::Farmer || role_ == Role::Researcher;
+  for (QWidget* row : farmer_rows_) {
+    row->setVisible(farming);
+  }
+  for (QWidget* row : researcher_rows_) {
+    row->setVisible(role_ == Role::Researcher);
+  }
+  for (QWidget* row : compliance_rows_) {
+    row->setVisible(role_ == Role::Compliance);
+  }
 }
 
 void SetupPanel::fold_away(QGroupBox* group, QFormLayout* form,

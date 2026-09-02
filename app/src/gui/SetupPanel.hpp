@@ -55,6 +55,10 @@ class SetupPanel : public QWidget {
     double liveweight_kg = 0.0;
     core::ManagementPolicy policy;
 
+    /// What the stock get out of the grass. Starts as the bundle's, and only a
+    /// researcher can move it.
+    core::DietQuality diet;
+
     /// The ground to run over. Flat is what every bundle ships as and what
     /// every baseline was recorded on; the others are invented surfaces, and
     /// the panel says so rather than offering them as places.
@@ -117,6 +121,7 @@ class SetupPanel : public QWidget {
   /// scenario that fails to load is a thing the window has to report anyway,
   /// and having two places that can fail at it would mean two ways of saying so.
   void adopt_bundle(const std::string& directory, int head, double liveweight_kg,
+                    const core::DietQuality& diet, const QString& measured_against,
                     const core::ManagementPolicy* policy = nullptr,
                     const core::AnimalClassParameters* animal = nullptr);
 
@@ -174,6 +179,35 @@ class SetupPanel : public QWidget {
 
   void show_failure(const QString& message);
 
+ public:
+  /// Who is looking at this panel.
+  ///
+  /// **Three people open a farm simulator and want different controls.** A
+  /// consultant wants stock, cover floors and irrigation - the things a farmer
+  /// decides. A researcher wants the model's own parameters, each with the
+  /// provenance the data files already carry. Somebody writing a consent report
+  /// wants to know which rule this farm is measured against and nothing else.
+  ///
+  /// Serving all three from one flat list served none of them: seventeen
+  /// controls out of about two hundred configurable values, all of them the
+  /// farmer's, and no way to reach the rest without editing TOML. Worse, the
+  /// two parameters the other two roles most needed - the regional rule and the
+  /// diet quality - were hardcoded, because with no role owning them nobody
+  /// noticed they had no home. See docs/validation/verify.md, E57 and E58.
+  enum class Role {
+    /// Did it feed the stock, and what did that cost.
+    Farmer,
+    /// Is this defensible, and how much of it rests on evidence.
+    Researcher,
+    /// Would this farm comply, and against whose rule.
+    Compliance,
+  };
+
+  [[nodiscard]] Role role() const noexcept { return role_; }
+
+  /// Moves the selector, which moves the rows with it.
+  void choose_role(int role);
+
  signals:
   void runRequested();
   void reportRequested();
@@ -224,7 +258,27 @@ class SetupPanel : public QWidget {
 
   [[nodiscard]] const config::SpeciesDefinition* selected_species() const;
 
+  /// Shows only the rows the current role has a use for.
+  void apply_role();
+
+  QComboBox* role_box_ = nullptr;
+  Role role_ = Role::Farmer;
+
+  /// Rows only a researcher edits: the model's own parameters.
+  std::vector<QWidget*> researcher_rows_;
+
+  /// Rows only a farmer edits: the day-to-day decisions. A researcher still
+  /// sees them, because a parameter study needs the management it was run
+  /// under; a compliance reader does not, because none of it is theirs to set.
+  std::vector<QWidget*> farmer_rows_;
+
   QComboBox* scenario_box_ = nullptr;
+  QDoubleSpinBox* diet_me_box_ = nullptr;
+  QLabel* measured_against_label_ = nullptr;
+
+  /// Rows only a compliance reader needs: which rule this farm is read against.
+  std::vector<QWidget*> compliance_rows_;
+  QDoubleSpinBox* diet_digestibility_box_ = nullptr;
   QComboBox* terrain_box_ = nullptr;
 
   /// The rows each group hides until somebody asks for them.
