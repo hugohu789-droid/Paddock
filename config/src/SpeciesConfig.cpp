@@ -48,7 +48,7 @@ SourcedValue read_sourced(const toml::table& parent, std::string_view key,
 }
 
 SpeciesDefinition read(const toml::table& root, const std::string& path) {
-  detail::reject_unknown_keys(root, {"species", "energy", "reproduction", "typical"}, path,
+  detail::reject_unknown_keys(root, {"species", "energy", "intake", "reproduction", "typical"}, path,
                               "the file");
 
   const toml::table& species = detail::require_table(root, "species", path);
@@ -85,6 +85,34 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   definition.energy.standard_reference_weight_kg = definition.standard_reference_weight.value;
   definition.energy.grazing_coefficient = definition.grazing_coefficient.value;
   definition.energy.gain_energy_ceiling_mj_per_kg = definition.gain_energy_ceiling.value;
+
+  // **[intake] is optional too, and its absence means "eats what it needs".**
+  // Every animal file written before this one lacks the table, and a model that
+  // demanded it would be asking somebody to invent three coefficients rather
+  // than leave the old behaviour alone.
+  if (const toml::table* intake = root["intake"].as_table()) {
+    detail::reject_unknown_keys(*intake,
+                                {"appetite_scalar_per_day", "appetite_size_coefficient",
+                                 "availability_rate_per_kg_dm", "grazing_time_increase",
+                                 "grazing_time_rate_per_kg_dm"},
+                                path, "[intake]");
+
+    definition.appetite_scalar = read_sourced(*intake, "appetite_scalar_per_day", path);
+    definition.appetite_size_coefficient =
+        read_sourced(*intake, "appetite_size_coefficient", path);
+    definition.energy.appetite_scalar_per_day = definition.appetite_scalar.value;
+    definition.energy.appetite_size_coefficient = definition.appetite_size_coefficient.value;
+
+    definition.intake_availability_rate = read_sourced(*intake, "availability_rate_per_kg_dm", path);
+    definition.intake_grazing_time_increase = read_sourced(*intake, "grazing_time_increase", path);
+    definition.intake_grazing_time_rate = read_sourced(*intake, "grazing_time_rate_per_kg_dm", path);
+
+    definition.energy.intake_availability_rate_per_kg_dm =
+        definition.intake_availability_rate.value;
+    definition.energy.intake_grazing_time_increase = definition.intake_grazing_time_increase.value;
+    definition.energy.intake_grazing_time_rate_per_kg_dm =
+        definition.intake_grazing_time_rate.value;
+  }
 
   // **[reproduction] is optional, and its absence means "does not breed".**
   // A wether has no gestation, and a file that had to state that would be

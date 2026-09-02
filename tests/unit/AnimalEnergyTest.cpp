@@ -78,6 +78,150 @@ double frater_total_me(double standard_reference_weight_kg) {
 // with it, so the honest test is that the published figure falls inside the
 // range a New Zealand ewe's mature weight plausibly spans rather than that the
 // model hits 9.72 on a number chosen to make it do so.
+// **Appetite**, checked against the two things the paper says about it that do
+// not depend on reading its parameter table: where the quadratic peaks, and
+// what Fig. 2 draws.
+AnimalClassParameters an_ewe_with_appetite() {
+  AnimalClassParameters ewe;
+  ewe.standard_reference_weight_kg = 66.0;
+  ewe.appetite_scalar_per_day = 0.04;
+  ewe.appetite_size_coefficient = 1.7;
+  return ewe;
+}
+
+// **Validation.** The text says potential intake peaks at a relative size of
+// 0.85. That is a property of the coefficient alone, and it is how the value
+// 1.7 was confirmed against a table whose columns do not survive extraction.
+TEST(PotentialIntakeTest, PeaksAtEightyFivePercentOfMatureSize) {
+  const AnimalClassParameters ewe = an_ewe_with_appetite();
+  const double srw = ewe.standard_reference_weight_kg;
+
+  double best = 0.0;
+  double best_z = 0.0;
+  for (int step = 1; step <= 100; ++step) {
+    const double z = static_cast<double>(step) / 100.0;
+    const double intake = potential_intake_kg_dm(ewe, z * srw);
+    if (intake > best) {
+      best = intake;
+      best_z = z;
+    }
+  }
+  EXPECT_NEAR(best_z, 0.85, 0.011) << "the quadratic should peak at a relative size of 0.85";
+}
+
+// **Validation.** Fig. 2 draws a sheep of 50 kg standard reference weight
+// peaking a little under 1.5 kg DM a day, on an axis that tops out at 1.6.
+TEST(PotentialIntakeTest, MatchesTheFiftyKilogramSheepOfFigureTwo) {
+  AnimalClassParameters sheep = an_ewe_with_appetite();
+  sheep.standard_reference_weight_kg = 50.0;
+
+  const double at_peak = potential_intake_kg_dm(sheep, 0.85 * 50.0);
+  EXPECT_NEAR(at_peak, 1.445, 0.01) << "0.04 * 50 * 0.85 * 0.85";
+  EXPECT_LT(at_peak, 1.6) << "under the top of the figure's axis";
+
+  // And a smaller sheep eats less, which is the figure's dashed line.
+  AnimalClassParameters smaller = sheep;
+  smaller.standard_reference_weight_kg = 40.0;
+  EXPECT_LT(potential_intake_kg_dm(smaller, 0.85 * 40.0), at_peak);
+}
+
+// **The headroom is the point.** An appetite that did not exceed the animal's
+// requirement would leave nothing for the availability term to eat into, and
+// every mob would be permanently short the moment a paddock was less than
+// perfect. This is the number that makes the pairing work (E71).
+TEST(PotentialIntakeTest, AMatureEweWantsMoreThanSheNeedsAtMaintenance) {
+  const AnimalClassParameters ewe = an_ewe_with_appetite();
+  const double appetite = potential_intake_kg_dm(ewe, 66.0);
+  EXPECT_NEAR(appetite, 1.848, 0.01) << "0.04 * 66 * 1.0 * 0.7";
+
+  // A dry ewe at maintenance eats nearer 1.2 kg DM a day on this diet, so the
+  // availability term has to fall below about two thirds before it binds.
+  EXPECT_GT(appetite / 1.2, 1.5) << "half again as much appetite as requirement";
+}
+
+// **A class that states no scalar has no appetite**, which is every animal file
+// written before this one and is how callers know not to apply a ceiling.
+TEST(PotentialIntakeTest, ASilentAnimalReportsNoAppetite) {
+  AnimalClassParameters silent;
+  silent.standard_reference_weight_kg = 66.0;
+  EXPECT_DOUBLE_EQ(potential_intake_kg_dm(silent, 66.0), 0.0);
+}
+
+// **What a short paddock does to intake**, checked against GrazPlan's own
+// Fig. 4 rather than against anything this farm produces.
+AnimalClassParameters a_grazing_sheep() {
+  AnimalClassParameters sheep;
+  sheep.intake_availability_rate_per_kg_dm = 0.00112;
+  sheep.intake_grazing_time_increase = 0.6;
+  sheep.intake_grazing_time_rate_per_kg_dm = 0.00112;
+  return sheep;
+}
+
+// **Validation.** The paper plots relative time spent grazing against herbage
+// weight and its upper line starts at 1.6 on a bare paddock. Equation 17 gives
+// 1 + C_R5 there, so the figure fixes C_R5 at 0.6 - which is how the sheep row
+// of Table 2 was read, since the table does not survive text extraction with
+// its columns intact. This asserts the reading.
+TEST(RelativeIntakeTest, AnimalGrazesHalfAsLongAgainWhenThereIsNothingToEat) {
+  const AnimalClassParameters sheep = a_grazing_sheep();
+
+  // Rate is zero on bare ground, so the product is zero however long it grazes.
+  EXPECT_DOUBLE_EQ(relative_intake(sheep, 0.0), 0.0);
+
+  // Approaching zero the time term is its full 1 + C_R5 and the rate term is
+  // C_R4 * B to first order, so the product tends to 1.6 * C_R4 * B. Taken at a
+  // herbage weight small enough that the second-order term of the exponential
+  // is out of sight: this is a check on the limit, not on a real paddock.
+  const double trace = 0.01;
+  EXPECT_NEAR(relative_intake(sheep, trace), 1.6 * 0.00112 * trace, 1e-9)
+      << "the upper line of Fig. 4 starts at 1.6";
+}
+
+// **Validation.** The middle line of Fig. 4 - the product - rises steeply and is
+// approaching but has not reached one by the right-hand edge of the plot at
+// 2,500 kg DM/ha.
+TEST(RelativeIntakeTest, RisesWithHerbageAndIsNearlyUnrestrictedByTwoAndAHalfTonnes) {
+  const AnimalClassParameters sheep = a_grazing_sheep();
+
+  double previous = 0.0;
+  for (double herbage = 100.0; herbage <= 3000.0; herbage += 100.0) {
+    const double now = relative_intake(sheep, herbage);
+    EXPECT_GT(now, previous) << "more grass should never mean less intake, at " << herbage;
+    EXPECT_LE(now, 1.05) << "and should not promise more than the animal wanted, at " << herbage;
+    previous = now;
+  }
+
+  EXPECT_GT(relative_intake(sheep, 2500.0), 0.90) << "nearly unrestricted at 2,500 kg DM/ha";
+  EXPECT_LT(relative_intake(sheep, 2500.0), 1.00) << "but not quite there, as the figure shows";
+
+  // A short paddock is a real restriction and not a rounding error: at 500 kg
+  // DM/ha a ewe gets about two thirds of what she came for.
+  EXPECT_NEAR(relative_intake(sheep, 500.0), 0.66, 0.05);
+}
+
+// **Verification.** A cow's mouth is bigger, so it clears a given sward faster
+// than a sheep does - GrazPlan gives cattle a lower rate coefficient, which
+// makes the same herbage weight less restrictive per unit of appetite.
+TEST(RelativeIntakeTest, CattleAndSheepDifferAsTheirCoefficientsDo) {
+  const AnimalClassParameters sheep = a_grazing_sheep();
+  AnimalClassParameters cow;
+  cow.intake_availability_rate_per_kg_dm = 0.00078;
+  cow.intake_grazing_time_increase = 0.6;
+  cow.intake_grazing_time_rate_per_kg_dm = 0.00074;
+
+  EXPECT_LT(relative_intake(cow, 1000.0), relative_intake(sheep, 1000.0))
+      << "a cow needs more standing grass than a sheep to graze unrestricted";
+}
+
+// **An animal that states no coefficients keeps the appetite it always had**,
+// which is what every species file written before this carries.
+TEST(RelativeIntakeTest, ASilentAnimalIsUnrestricted) {
+  const AnimalClassParameters silent;
+  for (double herbage = 0.0; herbage <= 3000.0; herbage += 250.0) {
+    EXPECT_DOUBLE_EQ(relative_intake(silent, herbage), 1.0) << "at " << herbage;
+  }
+}
+
 TEST(AnimalEnergyTest, ReproducesFraterWorkedLambWithinTheUnstatedReferenceWeight) {
   const double at_60 = frater_total_me(60.0);
   const double at_65 = frater_total_me(65.0);

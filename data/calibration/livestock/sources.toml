@@ -169,6 +169,32 @@ One detail the implementation does not yet capture: the review states lwt in
 Equation 13 is "the live weight excluding conceptus and, for sheep, fleece".
 """
 
+[source.grazplan_animal]
+organisation = "CSIRO Plant Industry"
+title = "The GRAZPLAN animal biology model for sheep and cattle and the GrazFeed decision support tool"
+authors = "Freer, M; Moore, A D; Donnelly, J R"
+url = "https://www.apsim.info/wp-content/uploads/2019/09/TechPaperJan10.pdf"
+retrieved = "2026-09-02"
+source_type = "primary"
+verified = true
+sha256 = "dad6c357b9f98533c738a999242947868bcc67ce51bc3593a1df6715972aa4a4"
+notes = """
+Equations 14, 16 and 17 with the sheep and cattle columns of Table 2, for the
+share of its intake an animal can harvest from a short sward. Read in full.
+
+The parameter table does not survive text extraction cleanly - descriptions and
+values sit a row apart - so the three coefficients were checked against the
+paper's own Fig. 4 before use. That figure plots relative time spent grazing
+starting at 1.6 on a bare paddock, and equation 17 gives 1 + C_R5 there, which
+fixes C_R5 at 0.6 and confirms the reading of the row. The curve it draws over
+0 to 2500 kg DM/ha matches the two rate coefficients at 1.12e-3.
+
+Same CSIRO lineage as tmc_animal_me, whose species factors follow CSIRO (2007);
+this is a companion rather than a competing source. The departure this project
+makes from it is recorded in verify.md: GrazPlan applies these to an appetite
+and Paddock has none, so they are applied to the requirement instead.
+"""
+
 [source.tmc_animal_me]
 organisation = "AgResearch, for OVERSEER Limited"
 title = "Animal metabolisable energy requirements (Technical Manual, engine v6.3.0)"

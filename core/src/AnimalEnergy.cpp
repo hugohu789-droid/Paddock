@@ -99,6 +99,43 @@ double metabolic_weight(double liveweight_kg) noexcept {
 
 }  // namespace
 
+double potential_intake_kg_dm(const AnimalClassParameters& animal,
+                              double liveweight_kg) noexcept {
+  if (animal.appetite_scalar_per_day <= 0.0 || animal.standard_reference_weight_kg <= 0.0) {
+    return 0.0;
+  }
+
+  // Relative size, capped at one: a mature animal is not more than full grown,
+  // and past the cap the quadratic would start taking appetite away again.
+  const double relative_size =
+      std::min(1.0, std::max(0.0, liveweight_kg) / animal.standard_reference_weight_kg);
+
+  const double appetite = animal.appetite_scalar_per_day * animal.standard_reference_weight_kg *
+                          relative_size * (animal.appetite_size_coefficient - relative_size);
+  return std::max(0.0, appetite);
+}
+
+double relative_intake(const AnimalClassParameters& animal,
+                       double herbage_kg_dm_per_ha) noexcept {
+  if (animal.intake_availability_rate_per_kg_dm <= 0.0) {
+    return 1.0;
+  }
+  const double herbage = std::max(0.0, herbage_kg_dm_per_ha);
+
+  // **The bite gets smaller as the sward gets shorter** (GrazPlan Eq. 16). One
+  // pool rather than GrazPlan's six: this model has no digestibility classes to
+  // graze selectively down, so every animal meets the whole sward at once.
+  const double rate = 1.0 - std::exp(-animal.intake_availability_rate_per_kg_dm * herbage);
+
+  // **And the animal grazes longer to make up for it** (Eq. 17), up to
+  // 1 + C_R5 times as long on a bare paddock, with the compensation gone by the
+  // time there is a reasonable cover.
+  const double squared = animal.intake_grazing_time_rate_per_kg_dm * herbage;
+  const double time = 1.0 + (animal.intake_grazing_time_increase * std::exp(-squared * squared));
+
+  return std::max(0.0, rate * time);
+}
+
 double DietQuality::energy_density() const noexcept {
   return metabolisable_energy_mj_per_kg_dm / kGrossEnergyMjPerKgDm;
 }

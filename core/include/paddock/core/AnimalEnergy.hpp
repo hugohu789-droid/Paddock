@@ -139,6 +139,71 @@ struct AnimalClassParameters {
   /// Sheep, cattle or deer, for anything that has to show them to a person.
   AnimalKind kind = AnimalKind::Other;
 
+  /// **Appetite**, in GrazPlan's two coefficients: the amount of dry matter this
+  /// class eats in a day with unrestricted access to good feed.
+  ///
+  /// Every other number in this header answers "what does this animal need".
+  /// This one answers "how much would it eat if nothing stopped it", and the
+  /// two are not the same - an appetite comfortably exceeds a maintenance
+  /// requirement, which is why a mob on a good paddock can afford to lose a
+  /// quarter of its grazing efficiency and still walk away full.
+  ///
+  /// GrazPlan Eq. 2, without the four factors this model has no state for:
+  ///
+  ///     Imax = C_I1 * SRW * Z * (C_I2 - Z)
+  ///
+  /// Z is relative size, liveweight over standard reference weight, capped at
+  /// one. Sheep take `0.04, 1.7` and cattle `0.025, 1.7`.
+  ///
+  /// **The reading of C_I2 is checked twice**, because the paper's parameter
+  /// table does not survive text extraction with its columns aligned. The text
+  /// says the quadratic peaks at a relative size of 0.85, and the derivative of
+  /// `1.7 Z - Z^2` is zero at exactly 0.85; and its Fig. 2 draws a 50 kg-SRW
+  /// sheep peaking near 1.44 kg DM a day, which the equation reproduces.
+  ///
+  /// **Four factors are missing and each would only reduce it**: condition
+  /// (CF), rumen development in unweaned young (YF), heat (TF) and lactation
+  /// (LF) - the last of which would raise it. Zero for `_scalar` turns appetite
+  /// off, which is the default.
+  double appetite_scalar_per_day = 0.0;
+  double appetite_size_coefficient = 1.7;
+
+  /// **What a short paddock does to intake**, in GrazPlan's three coefficients.
+  ///
+  /// Everything else in this header answers "what does this animal need". This
+  /// answers a different question - "how much of that can it actually get into
+  /// itself" - and until it existed the model had no answer at all: a mob ate
+  /// its full requirement unless the paddock physically ran out above the
+  /// residual. That is a cliff where grazing is a curve. Two irrigation arms
+  /// differing by 5,290 kg DM/ha of growth ate five kilograms apart (E52).
+  ///
+  /// A grazing animal's intake falls off well before the sward is bare, because
+  /// a shorter sward means a smaller bite. It grazes longer to compensate - up
+  /// to 1.6 times as long - and past a point cannot compensate at all.
+  ///
+  /// GrazPlan, equations 14, 16 and 17, reduced to one herbage pool:
+  ///
+  ///     rate = 1 - exp(-C_R4 * B)              relative rate of eating
+  ///     time = 1 + C_R5 * exp(-(C_R6 * B)^2)   relative time spent grazing
+  ///     relative intake = rate * time
+  ///
+  /// where B is standing herbage in kg DM/ha, cut close to ground level, which
+  /// is how the parameters are defined and therefore green and dead together.
+  ///
+  /// Sheep take `1.12e-3, 0.6, 1.12e-3` and cattle `0.78e-3, 0.6, 0.74e-3`.
+  /// Zero for `_rate` turns the whole thing off, which is the default, so an
+  /// animal file written before this keeps the appetite it was written with.
+  ///
+  /// Source: Freer M, Moore AD & Donnelly JR, "The GRAZPLAN animal biology
+  /// model for sheep and cattle and the GrazFeed decision support tool", CSIRO
+  /// Plant Industry Technical Paper, Table 2 - the same CSIRO lineage the
+  /// OVERSEER manual above cites for its own species factors. The form is from
+  /// Allden and Whittaker (1970). docs/validation/verify.md carries the URL and
+  /// the hash.
+  double intake_availability_rate_per_kg_dm = 0.0;
+  double intake_grazing_time_increase = 0.6;
+  double intake_grazing_time_rate_per_kg_dm = 0.0;
+
   /// K, the species factor of TMC Eq. 13.
   ///
   /// The two primaries disagree. CSIRO (2007), which the manual follows for
@@ -192,6 +257,39 @@ struct AnimalClassParameters {
 
   [[nodiscard]] std::string validation_error() const;
 };
+
+/// What this animal would eat in a day given unrestricted access to good feed,
+/// kg DM per head. GrazPlan Eq. 2; see `appetite_scalar_per_day`.
+///
+/// Returns zero for a class that states no scalar, which callers read as "this
+/// model has no appetite for this animal" and which is the default.
+[[nodiscard]] double potential_intake_kg_dm(const AnimalClassParameters& animal,
+                                            double liveweight_kg) noexcept;
+
+/// The share of its potential intake an animal can harvest from a sward
+/// carrying `herbage_kg_dm_per_ha`, between 0 and roughly 1.
+///
+/// One at a herbage mass that does not restrict grazing, falling towards zero
+/// as the paddock goes bare. Returns 1.0 for an animal that states no
+/// availability coefficient, which is the default and the behaviour this model
+/// had before: eat the requirement, whatever is standing.
+///
+/// **Nothing in this model grazes through this yet, and the reason is worth
+/// stating here rather than only in verify.md** (E71). This term multiplies an
+/// appetite, never a requirement: it is below one at any cover a real farm
+/// carries - 0.90 at 2,000 kg DM/ha - so against a requirement it would leave
+/// every mob permanently short. Against `potential_intake_kg_dm` it has the
+/// headroom it was designed for, and bites only below roughly 800 kg DM/ha.
+///
+/// That works for a dry animal and fails for a milking one, because the
+/// lactation factor LF that lifts GrazPlan's potential intake is not
+/// implemented - it needs body condition, which this model does not carry, and
+/// a peak-intake parameter this project has not been able to read reliably.
+/// Wired into the farm without it, a ewe with a lamb at foot was capped under
+/// her own requirement, went short every day of lactation, and was sold: the
+/// flock fell from 332 head and the farm ate a fifth of what it should.
+[[nodiscard]] double relative_intake(const AnimalClassParameters& animal,
+                                     double herbage_kg_dm_per_ha) noexcept;
 
 /// One animal on one day.
 struct AnimalState {
