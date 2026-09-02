@@ -60,6 +60,27 @@ struct PastureSpeciesParameters {
   /// which is the whole of DairyNZ's leaf-stage grazing rule.
   double leaves_per_tiller = 3.0;
 
+  /// **How much faster leaf dies when the plant runs out of water.** A drought
+  /// does two things to a sward and this model long had only one of them: it
+  /// slows the tiller down, and it kills the leaf the tiller is already
+  /// carrying. Without the second, a Canterbury February loses leaf at the same
+  /// rate as an October spring, holds its cover, keeps intercepting light and
+  /// keeps growing - which is the whole of the seasonal error in E62.
+  ///
+  /// The form and all three figures are APSIM AgPasture's, whose ryegrass and
+  /// white clover carry identical values. Below `threshold` the turnover rate
+  /// is multiplied by `1 + max * ((threshold - Ks) / threshold) ^ exponent`,
+  /// so it is unchanged in a wet spring and doubles on a soil at wilting point.
+  ///
+  /// Source: `MoistureEffectOnTissueTurnover` in AgPasture's `PastureSpecies`,
+  /// with defaults from `AGPRyegrass.json` and `AGPWhiteClover.json`; the model
+  /// is Li FY, Snow VO & Holzworth DR (2011), "Modelling the seasonal and
+  /// geographical pattern of pasture production in New Zealand", NZ Journal of
+  /// Agricultural Research 54: 331-352 - which is this exact problem.
+  double drought_turnover_threshold = 0.6;
+  double drought_turnover_effect_max = 1.0;
+  double drought_turnover_exponent = 2.0;
+
   /// Dry matter that does not senesce, kg/ha: crown, stubble and the reserves a
   /// plant regrows from. Without it a sward grazed or dried to nothing would
   /// have no leaf area, intercept no light, and never grow again - zero would
@@ -186,6 +207,14 @@ struct ExcretaParameters {
 /// alone, February senescence came to three times February growth and the green
 /// pool collapsed - a sward dying faster than any Canterbury pasture does,
 /// from reading half of a sentence.
+///
+/// **That was half of a sentence too.** Slowing the tiller is one of the two
+/// things a drought does, and on this farm's weather it cancels the extra heat
+/// of summer almost exactly - spring 7.5 degree-days times a water factor of
+/// 0.618 is 4.64, summer 12.5 times 0.366 is 4.59 - so leaf lives 78 days in a
+/// February drought and 78 days in an October spring. The other thing a drought
+/// does is kill the leaf that is already standing, and `drought_turnover_*`
+/// carries it (verify.md, E62).
 [[nodiscard]] double senescence_share(const PastureSpeciesParameters& species,
                                       double mean_temperature_c, double water_factor) noexcept;
 

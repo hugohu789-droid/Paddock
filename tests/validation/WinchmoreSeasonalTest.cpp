@@ -165,9 +165,13 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // This test was written to assert the model grew its year in roughly the
 // trial's proportions, within ten points a season. It does not:
 //
-//     season   model   trial   difference
-//     spring   32.2%   54.7%   -22.5 points
-//     summer   41.3%   18.0%   +23.3 points
+//     season   at E61   now     trial   remaining
+//     spring    32.2%   35.6%   54.7%   -19.1 points
+//     summer    41.3%   39.9%   18.0%   +21.9 points
+//
+// The movement between those two columns is the drought leaf-death term of
+// E62, which is sourced and is real and closes about a seventh of the gap. Six
+// sevenths of it are still here.
 //
 // The annual total is fine - 6,847 kg DM/ha against a measured mean of 6,442,
 // inside the band `CanterburyDrylandTest` checks. The shape is not. **The
@@ -181,8 +185,8 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // aspirational version of this test is in the git history of this file, and
 // what it asserted is what a corrected model should pass.
 //
-// **Where it comes from, since the answer is now known** (verify.md, E62): not
-// the water stress, which works. Ks averages 0.618 in spring against 0.366 in
+// **Where the rest of it comes from is not yet known.** What is known
+// (verify.md, E62) is that it is not the water stress, which works. Ks averages 0.618 in spring against 0.366 in
 // summer, and 86 to 100% of November-to-February days sit below 0.5. The fault
 // is that `Pasture.cpp` feeds that same water factor into leaf death, in the
 // direction that protects the sward - a thirsty tiller pushes its next leaf
@@ -191,7 +195,15 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // two cancel almost exactly - spring 7.5 x 0.618 = 4.64 degree-days, summer
 // 12.5 x 0.366 = 4.59 - so this sward loses leaf at the same rate in a February
 // drought as in an October spring, holds its cover, keeps intercepting light,
-// and keeps growing. A real dryland sward browns off.
+// and keeps growing. A real dryland sward browns off. That half is now carried
+// by `drought_turnover_*`, and it was worth three points of the twenty-two.
+//
+// **Next suspect, on the evidence rather than on a hunch:** the model's spring
+// is 19 points light, and spring is where the trial puts more than half its
+// year. At a base of 4.4 C and an optimum of 20.0, Canterbury spring (11.9 C
+// mean) gets 48% of the temperature response while summer (16.9 C) gets 80%.
+// `optimum_temperature_c` is marked PLACEHOLDER in the sward file and is
+// carrying that ratio on its own.
 //
 // Compared as shares of the year rather than kilograms, because a share does
 // not depend on either site's rainfall - Winchmore's 745 mm mean is not this
@@ -230,7 +242,7 @@ TEST(WinchmoreSeasonalTest, TheModelsSeasonalShapeIsWrongAndThisHoldsTheGap) {
   // it got worse; over the upper means somebody improved the model and should
   // say so here rather than leave a test describing a version that no longer
   // exists.
-  EXPECT_GT(model_spring, 25.0) << "spring has fallen below where the gap was measured";
+  EXPECT_GT(model_spring, 33.0) << "spring has fallen below where the gap was measured";
   EXPECT_LT(model_spring, 45.0)
       << "the model now puts " << model_spring
       << "% of its year in spring against the trial's 55%. If the water limitation was fixed, "
@@ -240,7 +252,7 @@ TEST(WinchmoreSeasonalTest, TheModelsSeasonalShapeIsWrongAndThisHoldsTheGap) {
       << "the model now puts " << model_summer
       << "% of its year in summer against the trial's 18%, which is better than the 41% this was "
          "written at. Say what closed it";
-  EXPECT_LT(model_summer, 50.0) << "summer has grown beyond where the gap was measured";
+  EXPECT_LT(model_summer, 42.0) << "summer has grown beyond where the gap was measured";
 
   // Winter and autumn were never far out, and are held loosely so a change
   // there still shows.

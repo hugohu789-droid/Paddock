@@ -182,21 +182,30 @@ TEST(DroughtDestockingTest, TheDroughtShowsInTheSummerAndNotInTheAnnualLow) {
       << "the driest year in ten should be markedly drier than the wettest";
   EXPECT_LT(summer_cover(drought), summer_cover(wet))
       << "and should leave several hundred kilograms less standing through January and February";
-  // **And the two years harvest almost exactly the same**, which is the
-  // signature of the understocking rather than a failure of the drought. Neither
-  // year is feed-limited, so intake is set by what the stock need and not by
-  // what the paddock offers - a farm that grew 5.7 tonnes and one that grew 9.8
-  // hand their animals the same dinner. On a farm stocked to its feed these
-  // would part company, and that is the test this becomes when E20 closes.
-  EXPECT_NEAR(drought.eaten_kg_dm, wet.eaten_kg_dm, wet.eaten_kg_dm * 0.05)
-      << "if these ever separate, the farm has become feed-limited - which is what E20 is "
-         "waiting for";
+  // **And the two years now part company, which is what this test was waiting
+  // for.** It used to assert the opposite - that a farm which grew 5.7 tonnes
+  // and one that grew 9.8 handed their animals the same dinner - and said in so
+  // many words that separation would mean the farm had become feed-limited.
+  // They separated, and not because the stocking rate moved. E62 gave the sward
+  // the half of drought it was missing: leaf that dies because the plant has run
+  // out of water, rather than only leaf that lives longer because the tiller has
+  // slowed down. A Canterbury summer now browns off, and a mob on a browned-off
+  // farm eats less than a mob on a green one.
+  //
+  // **This is the first time anything in this model has been short of feed for
+  // a reason the weather caused**, which is the thing an intake model has to be
+  // built on top of. 155 tonnes eaten against 195.
+  EXPECT_LT(drought.eaten_kg_dm, wet.eaten_kg_dm * 0.9)
+      << "the driest year in ten should feed fewer mouths than the wettest";
+  EXPECT_GT(drought.eaten_kg_dm, wet.eaten_kg_dm * 0.6)
+      << "and should not collapse - a dryland Canterbury drought is a bad year, not a failed one";
 
-  // **And the annual minimum is not where to look for it.** Both years bottom
-  // out in late winter, at much the same place, for reasons that have nothing
-  // to do with the summer.
-  EXPECT_NEAR(drought.lowest_cover_kg_dm_per_ha(), wet.lowest_cover_kg_dm_per_ha(), 250.0)
-      << "the winter floor is a floor, not a drought";
+  // **And the annual minimum has moved into the summer, where it belongs.** It
+  // used to sit in late winter in both years, within 250 kg DM/ha of each other,
+  // for reasons that had nothing to do with the drought. Now the dry year's
+  // floor is several hundred kilograms below the wet year's.
+  EXPECT_LT(drought.lowest_cover_kg_dm_per_ha(), wet.lowest_cover_kg_dm_per_ha() - 150.0)
+      << "the drought should set the year's floor, not the winter";
 
   // Nobody sells. Recorded rather than asserted away: this is the acceptance
   // M4 asks for and the model does not meet it at this stocking rate.

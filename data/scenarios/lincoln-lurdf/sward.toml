@@ -103,6 +103,29 @@ senescence_rate_per_day = 0.02             # PLACEHOLDER
 # perennial ryegrass figure has been read directly.
 degree_days_per_leaf = 120.0
 leaves_per_tiller = 3.0
+
+# **The other half of what a drought does.** The leaf lifespan above slows the
+# tiller down when the soil dries, which keeps leaf alive; a drought also kills
+# the leaf the plant is already carrying, and until E62 nothing here did that.
+# On this farm's weather the two effects had been cancelling almost exactly -
+# spring 7.5 degree-days times a water factor of 0.618 is 4.64, summer 12.5
+# times 0.366 is 4.59 - so leaf lived 78 days in a February drought and 78 days
+# in an October spring, cover never fell, and summer went on growing.
+#
+# Below the threshold, turnover is multiplied by
+#     1 + max * ((threshold - Ks) / threshold) ^ exponent
+# which is 1.0 in a wet spring and 2.0 on a profile at wilting point.
+#
+# **DIRECT** - APSIM AgPasture's `MoistureEffectOnTissueTurnover`, with the
+# values its own ryegrass and white clover carry (identical for both):
+# Models/Resources/AGPRyegrass.json and AGPWhiteClover.json. The model is
+# Li FY, Snow VO & Holzworth DR (2011), "Modelling the seasonal and geographical
+# pattern of pasture production in New Zealand", NZ Journal of Agricultural
+# Research 54: 331-352 - a model calibrated on this exact question.
+drought_turnover_threshold = 0.6
+drought_turnover_effect_max = 1.0
+drought_turnover_exponent = 2.0
+
 # Crown and stubble that do not senesce and that the plant regrows from.
 residual_kg_dm_per_ha = 400.0              # PLACEHOLDER
 nitrogen_content_fraction = 0.035          # PLACEHOLDER
@@ -128,6 +151,14 @@ senescence_rate_per_day = 0.025            # PLACEHOLDER
 # response matters more than its exact level. See docs/validation/verify.md.
 degree_days_per_leaf = 120.0
 leaves_per_tiller = 3.0
+
+# The same three figures: AgPasture gives its white clover exactly what it gives
+# its ryegrass. DIRECT, from AGPWhiteClover.json - see the grass block above for
+# the citation and the mechanism.
+drought_turnover_threshold = 0.6
+drought_turnover_effect_max = 1.0
+drought_turnover_exponent = 2.0
+
 residual_kg_dm_per_ha = 100.0              # PLACEHOLDER
 nitrogen_content_fraction = 0.045          # PLACEHOLDER
 # Published New Zealand range is 20 to 28 kg N fixed per tonne of clover dry

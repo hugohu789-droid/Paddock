@@ -19,7 +19,8 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
       {"species_id", "specific_leaf_area_m2_per_kg", "extinction_coefficient",
        "radiation_use_efficiency_g_per_mj", "base_temperature_c", "optimum_temperature_c",
        "maximum_temperature_c", "senescence_rate_per_day", "degree_days_per_leaf",
-       "leaves_per_tiller", "residual_kg_dm_per_ha", "nitrogen_content_fraction",
+       "leaves_per_tiller", "drought_turnover_threshold", "drought_turnover_effect_max",
+       "drought_turnover_exponent", "residual_kg_dm_per_ha", "nitrogen_content_fraction",
        "nitrogen_fixation_kg_per_t_dm"},
       path, context);
 
@@ -41,6 +42,17 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
   // a sward file written before this existed still loads and still runs.
   species.degree_days_per_leaf = detail::optional_double(table, "degree_days_per_leaf", 0.0, path);
   species.leaves_per_tiller = detail::optional_double(table, "leaves_per_tiller", 3.0, path);
+
+  // **How much faster leaf dies once the water runs out**, which is the half of
+  // drought the leaf lifespan above does not carry. AgPasture's figures, the
+  // same for its ryegrass and its white clover; a threshold of zero turns the
+  // effect off for a sward file that wants the old behaviour.
+  species.drought_turnover_threshold =
+      detail::optional_double(table, "drought_turnover_threshold", 0.6, path);
+  species.drought_turnover_effect_max =
+      detail::optional_double(table, "drought_turnover_effect_max", 1.0, path);
+  species.drought_turnover_exponent =
+      detail::optional_double(table, "drought_turnover_exponent", 2.0, path);
   species.residual_kg_dm_per_ha = detail::require_double(table, "residual_kg_dm_per_ha", path);
   species.nitrogen_content_fraction =
       detail::require_double(table, "nitrogen_content_fraction", path);
