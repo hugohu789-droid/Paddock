@@ -80,6 +80,43 @@ saying plainly which of its own numbers carry weight, which is what
 - Application efficiency, and what reaches the root zone
 - Daily and annual totals, events, and water pumped
 
+### The flock
+
+- An age structure in the classes a farmer uses, not a head count
+- Mating, gestation, lambing, weaning, the cull draft — each on its own date
+- Pregnancy and lactation on OVERSEER's equation set, so a ewe in milk eats
+  like one
+- Lambs graze beside their mothers, are weaned, and are sold store or finished
+
+### Feed conservation
+
+- Surplus shut up and cut in spring, fed back in a dry summer or a cold winter
+- Dry matter lost cutting it, in the stack, and feeding it out
+- Silage valued as silage — 9.45 MJ ME/kg DM, not the 10.5 of the pasture it
+  was cut from
+
+### Nitrogen
+
+- What comes back out of the animal: urine patches, dung, wool, body gain
+- Leaching in two pools — under the patch, and between patches
+- Reported against a regional rule **the user supplies**, because New Zealand
+  sets nitrogen limits catchment by catchment and there is no national figure
+
+### Money
+
+- Prices and costs from Beef + Lamb New Zealand's Class 6 survey
+- The farmer proposes an action before taking it, so money can refuse
+- An annual account: stock and wool sold, feed bought, the closing balance
+
+### Indicators and trends
+
+- Every indicator carries how far it can be trusted, in the page, in the CSV,
+  and counted in a panel of its own
+- Four pages for four readers: the farm, the model, the environment, and the
+  whole table
+- Every whole farm year the weather covers, side by side, with each year's
+  season drawn over the others
+
 ## Scenario Comparison
 
 Paddock runs several farm-management scenarios against the same farm and the
@@ -252,9 +289,23 @@ Checked on every commit, and none of it depends on reference data:
 ### Biological validation
 
 Biological components are validated progressively against published New Zealand
-and international reference data — DairyNZ, CSIRO, Nicol and Brookes, and
-Gillingham's slope and aspect trial — with tolerance-band tests in CI and
-comparison plots uploaded as artifacts.
+and international reference data — DairyNZ, CSIRO, Nicol and Brookes, Beef +
+Lamb New Zealand, and Gillingham's slope and aspect trial — with tolerance-band
+tests in CI and comparison plots uploaded as artifacts.
+
+**Annual pasture production is measured against the Winchmore irrigation
+trial**, which ran four dryland replicates of sheep-grazed ryegrass and white
+clover in mid-Canterbury from 1951 to 2018 — the longest grazed and irrigated
+pasture trial in the world. `scripts/winchmore-fetch.py` pulls the trial's own
+data from Figshare, checks its hash, and rebuilds
+`data/calibration/winchmore-annual-production.csv` from it.
+
+Fetching it corrected the target twice. Figures worked out of published *reviews*
+of the trial gave a dryland band of 5.5 to 6.5 t DM/ha; the trial's own 25 years
+have a mean of 6,442 and a range of 3,904 to 9,845. The derived band was one
+tonne wide where the truth is nearly six, and a validation built on it would have
+failed this model for having weather. A rain-fed Canterbury year is a
+distribution, not a number.
 
 This should be treated as a simulation and research platform, not as a certified
 farm advisory model. [docs/validation/verify.md](docs/validation/verify.md) records, output by output,
@@ -264,19 +315,35 @@ what may be quoted and what may not.
 
 Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept current with the code:
 
-- Sheep maintenance requirement is low by about 5% against CSIRO (2007), so
-  **carrying capacity for sheep is overstated by about 5%** (it was 15% and 17%
-  until the walking distance an animal covers in a day was supplied)
+- **The model grows about 20% more pasture than the trial it is measured
+  against, while applying no fertiliser at all.** Winchmore's dryland treatment
+  gets 250 kg of superphosphate a hectare a year and measured 6,442 kg DM/ha
+  over 25 years; this farm applies none and averages about 7,700 over ten. An
+  unfertilised farm should produce *less*, so the real gap is larger than 20%.
+  There is no phosphorus limitation in the model, and re-fitting radiation use
+  efficiency to close the number would hide the reason (verify.md, E40)
+- **Utilisation runs about 26 to 35% where New Zealand sheep farms run 65 to
+  80%.** The stock eat a third of what grows and the rest dies standing. The
+  stocking rate is not the cause — 7.0 SU/ha against Beef + Lamb's Class 6
+  average of 7.74 — so this is an intake or a grazing-behaviour gap, and it is
+  the largest open question in the model
 - **Absolute liveweight gain is not quotable**: standard reference weight is
   unverified and it drives the energy value of gain
-- Lactation is not modelled — a "dairy cow" here is a dry cow
-- Dung and urine are not returned to the soil, so nitrogen over more than a
-  season is wrong in a known direction
-- Nitrogen leaching is not modelled
-- Pasture growth parameters are not yet fully calibrated against measured New
-  Zealand yields; the seasonal shape correlates well with DairyNZ's measured
-  site, the magnitude does not
+- Sheep maintenance is low by about 5% against CSIRO (2007), so carrying
+  capacity is overstated by about the same (it was 15% and 17% until the walking
+  distance an animal covers in a day was supplied)
+- Nitrogen leaching **is** modelled, in two pools, but the patch uptake it rests
+  on is a placeholder and the inter-patch fraction is fitted to OVERSEER's
+  stated range rather than measured
+- Facial eczema fires a month or two early: there is no litter term, so the
+  model's season is December to February where DairyNZ gives January to May
 - Some example soil and sward inputs remain placeholders and are marked as such
+
+Closed since this list was first written, and left here because the list is only
+useful if it moves: lactation and pregnancy are modelled on OVERSEER's equation
+set; dung and urine are returned to the soil; nitrogen leaching is reported
+against a regional rule; and pasture growth is calibrated against the Winchmore
+trial's own 25 measured years rather than against reviews of them.
 
 Scenario comparisons are more robust than absolute predictions, because both
 arms share the same parameters and the same model structure. They are not
@@ -301,11 +368,26 @@ A run can be exported as:
 
 - **PDF** — the run report, laid out for a page
 - **Markdown** — the same report, and the comparison table
-- **CSV** — the daily series, and the comparison
+- **CSV** — the daily series, the indicators, and the year-by-year comparison
+- **Text** — the indicators page, and the multi-year comparison
 
 Reports carry the pasture, water, stock and budget results together with what
 differed between scenarios and a closing section on what the run may be relied
-on for.
+on for. Every indicator travels with its provenance: a spreadsheet that dropped
+that column would be the same number with its caveat removed.
+
+From the command line:
+
+```bash
+paddock scenario run <bundle> [--csv <file>]
+paddock dashboard <bundle> [<year>...] [--economics <f>] [--rule <f>] [--csv <stem>]
+paddock nitrogen <bundle> <regulation.toml> [<year>...]
+paddock disease <bundle> [<year>...]
+paddock ground fetch <bundle>
+```
+
+`dashboard` given several years compares them; `nitrogen` takes the rule as an
+argument and never defaults one.
 
 ## Example Output
 
@@ -431,11 +513,19 @@ Dependency direction is one way: `gis → core`, `viz → core`, `config → cor
 
 Near-term priorities:
 
-- close the sheep maintenance gap, which is what gates carrying-capacity work
-- calibrate pasture growth against measured New Zealand yields
-- return dung and urine nitrogen, so a multi-season run is sound
-- extend paddock-level explainability to grazing decisions the model records
+- **find the utilisation gap** — the stock eat about a third of what grows where
+  a New Zealand sheep farm removes two thirds to four fifths, and the stocking
+  rate is not the cause
+- **a phosphorus term**, without which no absolute production figure from this
+  model should be quoted for an unfertilised farm
+- a litter term for facial eczema, which currently fires a month or two early
+- save and load, a scenario editor, and GeoTIFF export wired to the map
 - widen real New Zealand farm-data integration beyond the Lincoln example
+
+Done since this list was written: the sheep maintenance gap (15% to 5%, by
+supplying the walking distance an animal covers in a day), pasture calibration
+against Winchmore's measured years, and returning dung and urine nitrogen to the
+soil.
 
 ## Screenshots
 
@@ -453,10 +543,11 @@ it.
 ## Project Status
 
 Paddock is an actively developed personal project. The current version runs a
-full farm year with weather, soil water, pasture, livestock, grazing management
-and irrigation; draws it in 2D and 3D over real LiDAR ground; compares
-management scenarios; inspects individual paddocks through time; and exports
-reports.
+full farm year with weather, soil water, pasture, a breeding flock, grazing
+management, feed conservation, irrigation and farm accounts; draws it in 2D and
+3D over real LiDAR ground it can fetch for itself; compares management scenarios
+and whole years against each other; inspects individual paddocks through time;
+reports nitrogen loss against a regional rule; and exports the lot.
 
 Biological calibration and validation are ongoing, and
 [docs/validation/verify.md](docs/validation/verify.md) is the honest account of where they stand.
