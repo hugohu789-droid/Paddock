@@ -201,7 +201,9 @@ TEST(StockUnitIntakeTest, TheFlockEatsLessThanItsStockUnitRatingImplies) {
   GTEST_LOG_(INFO) << "the flock ate " << eaten << " kg DM/ha against a stock-unit demand of "
                    << target << ", a share of " << share << "; bought " << run.bought_feed_kg_dm()
                    << " kg DM and closed on " << run.closing_head << " head";
-  EXPECT_GT(share, 0.64) << "the flock eats " << eaten
+  // Moved with E83: turnover now has its own temperature response, so the
+  // sward carries a little less leaf and the farm a little less feed.
+  EXPECT_GT(share, 0.62) << "the flock eats " << eaten
                          << " kg DM/ha against a stock-unit demand of " << target
                          << ". Much under this would be a real intake fault rather than the "
                             "ordinary distance between a model and a rule of thumb";

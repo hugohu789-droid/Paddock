@@ -181,6 +181,29 @@ repro_season_shoulders_length_factor = 1.0
 repro_season_onset_duration_factor = 0.60
 repro_season_allocation_coefficient = 0.10
 
+# **How fast leaf turns over, on a temperature response of its own.**
+#
+# Leaf death used to run on thermal time above `base_temperature_c`, which is a
+# photosynthesis cardinal. AgPasture states a separate minimum for tissue
+# turnover - 0.5 C for its ryegrass where the growth minimum is 2.0 - because
+# leaf death and photosynthesis are not the same process. One field doing two
+# jobs meant that sourcing the growth cardinals silently sped senescence up by
+# 32% in spring and 19% in summer, penalising the season that was already too
+# small (E68).
+#
+#     rate = reference * ((T - min) / (ref - min))^exponent, capped at 1 above ref
+#
+# The cap is the part that matters here: past 16 C a warmer day does not turn
+# leaf over any faster, so a Canterbury summer does not run away with itself.
+#
+# **DIRECT** - AgPasture's `TempFactorForTissueTurnover` with the values in
+# Models/Resources/AGPRyegrass.json: TissueTurnoverRefRateShoot 0.05,
+# TurnoverTemperatureMin 0.5, TurnoverTemperatureRef 16.0, exponent 1.5.
+turnover_reference_rate_per_day = 0.05
+turnover_temperature_min_c = 0.5
+turnover_temperature_reference_c = 16.0
+turnover_temperature_exponent = 1.5
+
 # **The other half of what a drought does.** The leaf lifespan above slows the
 # tiller down when the soil dries, which keeps leaf alive; a drought also kills
 # the leaf the plant is already carrying, and until E62 nothing here did that.
@@ -247,6 +270,29 @@ repro_season_duration_coefficient = 2.0
 repro_season_shoulders_length_factor = 1.0
 repro_season_onset_duration_factor = 0.60
 repro_season_allocation_coefficient = 0.10
+
+# **How fast leaf turns over, on a temperature response of its own.**
+#
+# Leaf death used to run on thermal time above `base_temperature_c`, which is a
+# photosynthesis cardinal. AgPasture states a separate minimum for tissue
+# turnover - 0.5 C for its ryegrass where the growth minimum is 2.0 - because
+# leaf death and photosynthesis are not the same process. One field doing two
+# jobs meant that sourcing the growth cardinals silently sped senescence up by
+# 32% in spring and 19% in summer, penalising the season that was already too
+# small (E68).
+#
+#     rate = reference * ((T - min) / (ref - min))^exponent, capped at 1 above ref
+#
+# The cap is the part that matters here: past 18 C a warmer day does not turn
+# leaf over any faster, so a Canterbury summer does not run away with itself.
+#
+# **DIRECT** - AgPasture's `TempFactorForTissueTurnover` with the values in
+# Models/Resources/AGPWhiteClover.json: TissueTurnoverRefRateShoot 0.05,
+# TurnoverTemperatureMin 1.0, TurnoverTemperatureRef 18.0, exponent 1.5.
+turnover_reference_rate_per_day = 0.05
+turnover_temperature_min_c = 1.0
+turnover_temperature_reference_c = 18.0
+turnover_temperature_exponent = 1.5
 
 # The same three figures: AgPasture gives its white clover exactly what it gives
 # its ryegrass. DIRECT, from AGPWhiteClover.json - see the grass block above for

@@ -227,10 +227,58 @@ std::string ExcretaParameters::invalid_reason() const {
   return {};
 }
 
+namespace {
+
+/// **The half of drought that kills standing leaf.** Slowing the tiller keeps
+/// leaf alive; drying the plant out kills the leaf it is already holding.
+/// AgPasture's form and its ryegrass and clover figures: nothing above the
+/// threshold, rising as the square of how far past it the soil has gone, to
+/// double the turnover on a profile at wilting point.
+double drought_turnover_factor(const PastureSpeciesParameters& species,
+                               double water_factor) noexcept {
+  const double stress = std::clamp(water_factor, 0.0, 1.0);
+  if (species.drought_turnover_threshold <= 0.0 || stress >= species.drought_turnover_threshold) {
+    return 1.0;
+  }
+  const double past =
+      (species.drought_turnover_threshold - stress) / species.drought_turnover_threshold;
+  return 1.0 +
+         (species.drought_turnover_effect_max * std::pow(past, species.drought_turnover_exponent));
+}
+
+}  // namespace
+
 double senescence_share(const PastureSpeciesParameters& species, double mean_temperature_c,
                         double water_factor) noexcept {
   if (species.degree_days_per_leaf <= 0.0 || species.leaves_per_tiller <= 0.0) {
     return std::clamp(species.senescence_rate_per_day, 0.0, 1.0);
+  }
+
+  // **Turnover on its own temperature response, when the sward states one.**
+  // AgPasture gives tissue turnover a minimum of its own - 0.5 C for ryegrass
+  // against a growth minimum of 2.0 - because leaf death and photosynthesis are
+  // not the same process and do not stop at the same temperature. Reading one
+  // field for both is what made sourcing the growth cardinals quietly speed up
+  // senescence (verify.md, E68).
+  if (species.turnover_reference_rate_per_day > 0.0 &&
+      species.turnover_temperature_reference_c > species.turnover_temperature_min_c) {
+    double warmth = 0.0;
+    if (mean_temperature_c > species.turnover_temperature_reference_c) {
+      warmth = 1.0;
+    } else if (mean_temperature_c > species.turnover_temperature_min_c) {
+      warmth = std::pow(
+          (mean_temperature_c - species.turnover_temperature_min_c) /
+              (species.turnover_temperature_reference_c - species.turnover_temperature_min_c),
+          species.turnover_temperature_exponent);
+    }
+
+    // Three over the leaves a tiller carries: AgPasture's way of putting the
+    // three-leaf rule into a rate rather than into a lifespan.
+    const double leaves = species.leaves_per_tiller > 0.0 ? 3.0 / species.leaves_per_tiller : 1.0;
+
+    return std::clamp(species.turnover_reference_rate_per_day * warmth * leaves *
+                          drought_turnover_factor(species, water_factor),
+                      0.0, 1.0);
   }
 
   // Thermal time this species banked today. Below its base temperature a grass
@@ -251,19 +299,7 @@ double senescence_share(const PastureSpeciesParameters& species, double mean_tem
   const double days_per_leaf = species.degree_days_per_leaf / degree_days;
   const double leaf_lifespan_days = species.leaves_per_tiller * days_per_leaf;
 
-  // **And the half of drought the line above does not carry.** Slowing the
-  // tiller keeps leaf alive; drying the plant out kills the leaf it is already
-  // holding. AgPasture's form, and its ryegrass and clover figures: nothing
-  // below the threshold, rising as the square of how far past it the soil has
-  // gone, to double the turnover on a profile at wilting point.
-  double drought = 1.0;
-  const double stress = std::clamp(water_factor, 0.0, 1.0);
-  if (species.drought_turnover_threshold > 0.0 && stress < species.drought_turnover_threshold) {
-    const double past =
-        (species.drought_turnover_threshold - stress) / species.drought_turnover_threshold;
-    drought = 1.0 + (species.drought_turnover_effect_max *
-                     std::pow(past, species.drought_turnover_exponent));
-  }
+  const double drought = drought_turnover_factor(species, water_factor);
 
   // One over the lifespan: the share of standing leaf that reaches the end of
   // it today. Clamped, because a hot enough day would otherwise kill more leaf

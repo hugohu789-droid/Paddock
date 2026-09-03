@@ -71,6 +71,33 @@ struct PastureSpeciesParameters {
   /// figures should set `maximum_temperature_c` to that value and say so.
   double temperature_response_exponent = 0.0;
 
+  /// **How fast leaf turns over, on its own temperature response.**
+  ///
+  /// Leaf death used to be driven by thermal time above `base_temperature_c`,
+  /// and that field is a *photosynthesis* cardinal - AgPasture states a separate
+  /// `TurnoverTemperatureMin` for tissue turnover, 0.5 C for its ryegrass where
+  /// the growth minimum is 2.0. One field was doing two jobs, and when the
+  /// growth minimum was sourced and moved from 4.4 to 2.0 it silently took
+  /// senescence with it: up 32% in spring and 19% in summer, penalising of the
+  /// two the season that was already too small (verify.md, E68).
+  ///
+  /// So turnover now has its own response, AgPasture's:
+  ///
+  ///     rate = reference * ((T - min) / (ref - min))^exponent * drought * leaves
+  ///
+  /// capped at the reference rate once the day is warmer than `reference_c`,
+  /// which is what makes a Canterbury summer turn leaf over no faster than a
+  /// warm one. `leaves` is 3 over `leaves_per_tiller`, AgPasture's way of
+  /// carrying the three-leaf rule into a rate rather than a lifespan.
+  ///
+  /// Ryegrass takes `0.05, 0.5, 16.0, 1.5` and white clover `0.05, 1.0, 18.0,
+  /// 1.5`. A reference rate of zero keeps the leaf-lifespan model this replaces,
+  /// which is what a sward file written before this gets.
+  double turnover_reference_rate_per_day = 0.0;
+  double turnover_temperature_min_c = 0.5;
+  double turnover_temperature_reference_c = 16.0;
+  double turnover_temperature_exponent = 1.5;
+
   /// **The spring flush, which this model has no phenology to produce.**
   ///
   /// Perennial ryegrass turns reproductive in spring: it elongates stem, runs

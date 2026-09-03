@@ -62,7 +62,7 @@ sha256 = "523e37beed50db5ecb6c367a5d53cf578823561dc940fbbc6aef31facdc4a36a"
 
 [sward]
 path = "../../pastures/ryegrass-clover-nz.toml"
-sha256 = "65537a82bdd7de1a84a3adcc3f8a173cef84c943a94f3cf0354746b943c57d5a"
+sha256 = "9a8837a47a7af60e6f6791d4dbf90a6ceb534f2e4ff738721630e126a8b73a93"
 
 # **This farm names neither a price book nor a rule, and that is the point.**
 #

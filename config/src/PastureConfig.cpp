@@ -27,6 +27,10 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
                                "temperature_response_exponent",
                                "leaves_per_tiller",
                                "drought_turnover_threshold",
+                               "turnover_reference_rate_per_day",
+                               "turnover_temperature_min_c",
+                               "turnover_temperature_reference_c",
+                               "turnover_temperature_exponent",
                                "repro_season_max_allocation_increase",
                                "repro_season_reference_latitude_degrees",
                                "repro_season_timing_coefficient",
@@ -70,6 +74,17 @@ core::PastureSpeciesParameters read_species(const toml::table& table, const std:
   // drought the leaf lifespan above does not carry. AgPasture's figures, the
   // same for its ryegrass and its white clover; a threshold of zero turns the
   // effect off for a sward file that wants the old behaviour.
+  // **Turnover's own temperature response.** A reference rate of zero keeps the
+  // leaf-lifespan model, so a sward written before this still runs as written.
+  species.turnover_reference_rate_per_day =
+      detail::optional_double(table, "turnover_reference_rate_per_day", 0.0, path);
+  species.turnover_temperature_min_c =
+      detail::optional_double(table, "turnover_temperature_min_c", 0.5, path);
+  species.turnover_temperature_reference_c =
+      detail::optional_double(table, "turnover_temperature_reference_c", 16.0, path);
+  species.turnover_temperature_exponent =
+      detail::optional_double(table, "turnover_temperature_exponent", 1.5, path);
+
   // **The spring flush.** Zero for the increase turns the season off entirely,
   // which is the default, so a sward written before this keeps its own seasons.
   // The rest are AgPasture's own defaults and are only read when it is on.
