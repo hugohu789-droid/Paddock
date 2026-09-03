@@ -4,9 +4,35 @@ One farm, one recorded year, run twice. The only difference between the two runs
 is whether the farm irrigates.
 
 ```bash
-paddock dashboard data/scenarios/demo-irrigation-off
-paddock dashboard data/scenarios/demo-irrigation-on
+paddock dashboard data/scenarios/demo-irrigation-off data/scenarios/demo-irrigation-on
 ```
+
+That prints what the two were set up to do differently before it prints a single
+result:
+
+```
+  What changed
+  ============
+    demo_irrigation_off  ->  demo_irrigation_on
+
+    Irrigation
+      irrigation           off  ->  on
+      trigger              -  ->  40% available water
+      refill target        -  ->  85% available water
+      most at once         -  ->  25 mm
+      reaches the ground   -  ->  100%
+
+    One category differs, so what the results do is attributable to it.
+    Unchanged: Run, Farm, Ground, Weather, Soil, Pasture, Stock, Grazing policy.
+```
+
+**The last two lines are the ones that matter.** A reader handed two columns of
+indicators will attribute the gap between them to whatever they were told the
+comparison was about; this is the model saying what actually differs, read off
+the resolved bundles and never off the results. Point it at two unrelated farms
+and it says "7 categories differ, not one" and names them.
+
+Either half on its own is `paddock dashboard data/scenarios/demo-irrigation-off`.
 
 **The farm is Lincoln**, the same 80 ha Canterbury sheep block this project
 validates against, on real Selwyn-plains weather for 2023-24 (Open-Meteo /
@@ -50,6 +76,13 @@ That the two halves are otherwise identical is asserted, not promised.
 - **as text** - the raw manifests are compared with comments, the two names and
   the irrigation section stripped, which catches a setting added to one file
   that the semantic comparison has never been taught about.
+
+**The view and the test are not the same comparison, deliberately.** The view is
+written to be read - it groups settings into ten categories and puts them in
+farm language - and the test is written to be exhaustive, down to fields no
+reader would want listed. So the test is the proof and the view is the summary,
+and `ScenarioInputsTest` checks that the summary reaches the same verdict on
+this pair: Irrigation changed, and nothing else did.
 
 The same suite checks that both runs are bit-identical when repeated, that all
 three budgets still close to 1e-9, that no day of either run carries a NaN or an

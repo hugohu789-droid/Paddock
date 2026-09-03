@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Gejile Hu. All rights reserved.
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -35,6 +36,7 @@
 #include <paddock/config/FarmDashboard.hpp>
 #include <paddock/config/NitrogenReport.hpp>
 #include <paddock/config/ScenarioConfig.hpp>
+#include <paddock/config/ScenarioInputs.hpp>
 #include <paddock/core/Simulation.hpp>
 
 #include "AttachElevation.hpp"
@@ -54,10 +56,12 @@ void print_usage(std::ostream& out) {
       << "  paddock scenario run <bundle> [--csv <file>]\n"
       << "                                       Run a scenario bundle, and optionally\n"
       << "                                       write the daily series to a CSV\n"
-      << "  paddock dashboard <bundle>... [--economics <file>] [--rule <file>]\n"
+      << "  paddock dashboard <bundle>... [<year> ...] [--economics <file>] [--rule <file>]\n"
       << "                                       A year read as indicators, each one\n"
       << "                                       saying how far it can be trusted.\n"
-      << "                                       More than one bundle compares them.\n"
+      << "                                       Two bundles compares them, and says\n"
+      << "                                       what was set up differently first.\n"
+      << "                                       Years compare one bundle's own years.\n"
       << "                                       Economics come from the bundle unless\n"
       << "                                       given; without --rule the nitrogen\n"
       << "                                       panel reports but claims no compliance\n"
@@ -230,6 +234,7 @@ int run_dashboard(const std::vector<std::string>& arguments) {
   std::string rule_path;
   std::string economics_path;
   std::vector<int> years;
+  std::vector<std::string> extra_bundles;
   for (std::size_t i = 1; i < arguments.size(); ++i) {
     if (arguments[i] == "--csv" && i + 1 < arguments.size()) {
       csv_stem = arguments[i + 1];
@@ -246,7 +251,29 @@ int run_dashboard(const std::vector<std::string>& arguments) {
       ++i;
       continue;
     }
-    years.push_back(std::stoi(arguments[i]));
+    // **A year is four digits and a bundle is a path**, which is enough to tell
+    // them apart and does not need a flag nobody would remember.
+    //
+    // The usage text has promised "more than one bundle compares them" since
+    // the command was fixed up, and the parser has never done it: every extra
+    // argument went to std::stoi, so `paddock dashboard a b` died with "invalid
+    // stoi argument" and named neither the argument nor the command.
+    if (std::all_of(arguments[i].begin(), arguments[i].end(),
+                    [](unsigned char character) { return std::isdigit(character) != 0; })) {
+      years.push_back(std::stoi(arguments[i]));
+      continue;
+    }
+    extra_bundles.push_back(arguments[i]);
+  }
+
+  // Refused rather than guessed at: which of two bundles a year belongs to has
+  // no obvious answer, and picking one silently would make the command answer a
+  // question nobody asked.
+  if (!years.empty() && !extra_bundles.empty()) {
+    std::cerr << "paddock: give either several bundles or several years, not both.\n"
+                 "         Several bundles compares the farms; several years compares one\n"
+                 "         farm's own years, and a year alongside two farms has no meaning.\n";
+    return 2;
   }
 
   paddock::config::ScenarioBundle bundle = paddock::config::load_scenario(arguments.front());
@@ -330,7 +357,35 @@ int run_dashboard(const std::vector<std::string>& arguments) {
   };
 
   std::vector<paddock::config::FarmDashboard> boards;
-  if (years.empty()) {
+  if (!extra_bundles.empty()) {
+    // **What was set up differently, before any output.** A reader handed two
+    // columns of indicators will attribute the gap between them to whatever
+    // they were told the comparison was about, and nothing on the page has so
+    // far said whether that is what actually differs. This says it first, off
+    // the resolved bundles rather than off the results.
+    std::vector<paddock::config::ScenarioBundle> all{bundle};
+    for (const std::string& directory : extra_bundles) {
+      paddock::config::ScenarioBundle other = paddock::config::load_scenario(directory);
+      if (const std::string trouble = paddock::app::attach_elevation(other, directory);
+          !trouble.empty()) {
+        std::cerr << "paddock: " << trouble << '\n';
+      }
+      if (!other.management.has_value()) {
+        std::cerr << "paddock: '" << other.name
+                  << "' has no [management] section, so it has no stock\n";
+        return 2;
+      }
+      all.push_back(std::move(other));
+    }
+    for (std::size_t i = 1; i < all.size(); ++i) {
+      std::cout << paddock::config::what_changed(
+                       paddock::config::compare_inputs(all[i - 1], all[i]))
+                << '\n';
+    }
+    for (const paddock::config::ScenarioBundle& one : all) {
+      boards.push_back(board_for(one, one.name));
+    }
+  } else if (years.empty()) {
     boards.push_back(board_for(bundle, bundle.range.first.to_iso_string().substr(0, 4)));
   } else {
     for (const int start : years) {

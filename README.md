@@ -368,8 +368,26 @@ asking a reader to take on trust.
 ### The flagship comparison: does this farm want irrigation?
 
 ```bash
-paddock dashboard data/scenarios/demo-irrigation-off
-paddock dashboard data/scenarios/demo-irrigation-on
+paddock dashboard data/scenarios/demo-irrigation-off data/scenarios/demo-irrigation-on
+```
+
+It opens by saying what the two scenarios were set up to do differently - read
+off the resolved configurations, not inferred from the results - so nobody has
+to take the claim on trust:
+
+```
+  What changed
+  ============
+    demo_irrigation_off  ->  demo_irrigation_on
+
+    Irrigation
+      irrigation           off  ->  on
+      trigger              -  ->  40% available water
+      refill target        -  ->  85% available water
+      most at once         -  ->  25 mm
+
+    One category differs, so what the results do is attributable to it.
+    Unchanged: Run, Farm, Ground, Weather, Soil, Pasture, Stock, Grazing policy.
 ```
 
 One 80 ha Lincoln sheep block, the recorded 2023-24 year, run twice. Same soil,

@@ -492,13 +492,24 @@ std::string compare_dashboards_as_text(const std::vector<FarmDashboard>& boards)
     return "no runs to compare\n";
   }
 
+  // **The column is as wide as the widest thing going in it.** `right` pads to
+  // a width and returns the text untouched when it is already that wide, so a
+  // fixed 14 put two nineteen-character scenario names hard against each other
+  // and the header read `demo_irrigation_offdemo_irrigation_on`. That only ever
+  // showed up once bundles could be compared by name rather than by year, and a
+  // year is four characters.
+  std::size_t column = 14;
+  for (const FarmDashboard& board : boards) {
+    column = std::max(column, board.label.size() + 2);
+  }
+
   std::ostringstream out;
   out << "Indicator, year by year\n\n";
   out << "  " << left("indicator", 24) << left("unit", 12);
   for (const FarmDashboard& board : boards) {
-    out << right(board.label, 14);
+    out << right(board.label, column);
   }
-  out << "\n  " << std::string(24 + 12 + (14 * boards.size()), '-') << "\n";
+  out << "\n  " << std::string(24 + 12 + (column * boards.size()), '-') << "\n";
 
   // Driven off the first board's shape, and any indicator the others do not
   // carry is left blank rather than dropped - a run without books has no money
@@ -520,7 +531,7 @@ std::string compare_dashboards_as_text(const std::vector<FarmDashboard>& boards)
             break;
           }
         }
-        out << right(cell, 14);
+        out << right(cell, column);
       }
       out << "\n";
     }
