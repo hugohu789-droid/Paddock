@@ -146,6 +146,7 @@ if(PADDOCK_BUILD_CONFIG)
                                           validation/WinchmoreSeasonalTest.cpp
                                           validation/NitrogenLeachingTest.cpp
                                           validation/CanterburyDrylandTest.cpp
+                                          validation/FlagshipDemoTest.cpp
                                           validation/GrazedYearTest.cpp
                                           validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp

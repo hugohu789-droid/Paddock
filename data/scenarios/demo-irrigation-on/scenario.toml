@@ -1,0 +1,171 @@
+# Lincoln, irrigated: the treatment half of the flagship demo
+#
+# **One half of the flagship comparison.** Its twin is `demo-irrigation-off`, and the two are
+# the same farm, the same ground, the same recorded weather, the same stock, the
+# same sward, the same grazing calendar and the same dates. The only thing that
+# differs is whether the farm irrigates - which is what makes the comparison
+# answer one question instead of several.
+#
+# That is asserted rather than promised: `FlagshipDemoTest` loads both bundles
+# and compares every field of each, so a settings edit that reaches only one of
+# them fails the build.
+#
+# **The farm is Lincoln, and it is the one this project validates against.**
+# Every input below is shared by reference with `lincoln-lurdf` rather than
+# copied, so there is one weather file, one soil and one sward on disk and no
+# way for these two to drift from the farm the Winchmore comparison is run on.
+#
+# **This half adds an [irrigation] section and changes nothing else.** Every other
+# line in this file is the same as its twin's, which a test checks.
+#
+# See docs/scenarios/flagship-demo.md for what this pair is for and what it may
+# and may not be used to claim.
+
+[scenario]
+name = "demo_irrigation_on"
+description = "Lincoln sheep farm, irrigated at FAO-56's depletion trigger, 2023-24"
+engine_version = "0.1.0"
+master_seed = 20230323
+
+[run]
+start_date = "2023-07-01"
+end_date = "2024-06-30"
+latitude_degrees = -43.641
+
+# Ten years of real Selwyn-plains weather, shared with lincoln-lurdf. The run
+# range above takes 2023-24 out of it; the rest is there so the same bundle can
+# be asked about another year without refetching anything.
+[weather]
+kind = "snapshot"
+path = "../lincoln-lurdf/weather-2015-2025.csv"
+sha256 = "a9a6dbd52e2e4f0d6d001a8e381477489aae0adb0576b154fad20f5d5e10a230"
+dataset = "Open-Meteo historical weather API (ERA5 reanalysis)"
+licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5)."
+
+[soil]
+path = "../lincoln-lurdf/soil.toml"
+sha256 = "93eae9f37464dfb85d72436515e6ed9266080e0f4039172732924e228f4b9d5d"
+
+[sward]
+path = "../../pastures/ryegrass-clover-nz.toml"
+sha256 = "9a8837a47a7af60e6f6791d4dbf90a6ceb534f2e4ff738721630e126a8b73a93"
+
+[economics]
+path = "../../economics/canterbury-sheep.toml"
+sha256 = "8b6b680b8855894642fc75c493c761b694519c9959d124d303f827a2b1a726ae"
+
+[regulation]
+path = "../../regulations/canterbury-nitrogen.toml"
+sha256 = "31c097d904bf9d1fee40e75a83501d0608be58eea61a44e70fe41ce7f33fa3aa"
+
+[initial_state]
+soil_water_mm = 90.0
+grass_kg_dm_per_ha = 2200.0
+legume_kg_dm_per_ha = 600.0
+soil_mineral_nitrogen_kg_per_ha = 60.0
+
+# **The water gradient across the farm is the reason a paddock can be pointed
+# at.** The west of this block holds 55 mm of available water and the east 85,
+# so the dry end reaches its trigger first and irrigation shows up there before
+# anywhere else. Shared with lincoln-lurdf, like everything else here.
+[grid]
+cols = 40
+rows = 32
+cell_size_m = 25.0
+available_water_west_mm = 55.0
+available_water_east_mm = 85.0
+origin_easting = 1556752.3158
+origin_northing = 5168262.7895
+paddock_hectares = 2.0
+
+# The LiDAR is fetched, never shipped: `paddock ground fetch` puts it here, and
+# a bundle whose ground is missing draws flat and says so.
+[terrain]
+kind = "snapshot"
+path = "../../snapshots/lincoln-dem-1m.tiff"
+sha256 = "2f635bb0cc1097d434ff496a71c3c3372d9e9edfce730ce4f2630ee6bde849c0"
+url = "https://nz-elevation.s3-ap-southeast-2.amazonaws.com/canterbury/selwyn_2023/dem_1m/2193/BX23_10000_0404.tiff"
+attribution = "Canterbury - Selwyn LiDAR 1m DEM (2023). Sourced from LINZ elevation open data (https://nz-elevation.s3-ap-southeast-2.amazonaws.com) and licensed for re-use under CC-BY-4.0."
+
+[management]
+minimum_cover_kg_dm_per_ha = 1200.0
+rotation_cover_threshold_kg_dm_per_ha = 2200.0
+target_liveweight_gain_kg_per_day = 0.0
+maximum_graze_days = 3
+minimum_spell_days = 35
+supplement_me_mj_per_kg_dm = 10.0
+may_buy_feed = true
+
+# **The one thing that differs from `demo-irrigation-off`.**
+#
+# FAO-56 Table 22 gives grazed pasture a depletion fraction p of 0.6: the share
+# of the profile's available water a pasture can lose before growth is held
+# back. Triggering there waters exactly when the sward would otherwise start to
+# suffer, which is the rule this demo compares against not watering at all - not
+# a rule tuned to make the difference look large.
+#
+# Refilling to 0.15 rather than to nothing leaves room for the next rain; a full
+# profile drains it away. Both figures are `core::IrrigationPolicy`'s own
+# documented defaults, and the maximum application is its default 25 mm.
+#
+# **No application efficiency is claimed.** A real spray loses water to drift
+# and evaporation, and this project has no New Zealand figure for it, so the
+# system models no loss and says so rather than inventing a number that would
+# put a 15% penalty into a comparison nobody could cite. See
+# `core::IrrigationSystem::application_efficiency`.
+[irrigation]
+enabled = true
+trigger_depletion_fraction = 0.6
+target_depletion_fraction = 0.15
+maximum_application_mm = 25.0
+
+[[mob]]
+name = "main mob"
+path = "../../species/sheep-ewe.toml"
+sha256 = "c79eb82cbf878ed2e147724a583c91ca59d692d23b6e2d796d6699b863a115f5"
+head = 417
+paddock = 0
+liveweight_kg = 55.0
+age_days = 1500.0
+
+[[mob]]
+name = "lambs"
+path = "../../species/sheep-lamb.toml"
+sha256 = "3bcc8722b6f735da9dd5955c75287fd7b9cebbeff107349e4bafbcd3e0b80c48"
+head = 0
+paddock = 0
+liveweight_kg = 6.0
+age_days = 0.0
+grazes_ahead = true
+
+# Smith and Dawson's (1976) shape: rotating in winter, set stocked over lambing,
+# back to a rotation at 21 days after weaning and 35 as the summer dries.
+[[grazing_period]]
+name = "winter rotation"
+from = "2023-07-01"
+to = "2023-08-19"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 35
+
+[[grazing_period]]
+name = "lambing"
+from = "2023-08-20"
+to = "2023-10-28"
+system = "set_stocking"
+
+[[grazing_period]]
+name = "post-weaning rotation"
+from = "2023-10-29"
+to = "2023-11-30"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 21
+
+[[grazing_period]]
+name = "dry season rotation"
+from = "2023-12-01"
+to = "2024-06-30"
+system = "rotational"
+maximum_graze_days = 3
+minimum_spell_days = 35
