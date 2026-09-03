@@ -88,3 +88,36 @@ matrix row and nothing else in the script changes.
 Doxygen publishes to GitHub Pages on a tag only. The documentation job itself
 runs on every dispatch so that a broken `Doxyfile` is found while rehearsing
 rather than while releasing.
+
+## What reversed the Windows decision (v0.1.0)
+
+The paragraph above named two things that would turn the manual Windows step
+into a matrix row. The second one - a vcpkg binary cache a tag build can read -
+is now in place, and it took a release to make the case.
+
+**v0.1.0 shipped no Windows archive.** The manual step is what makes a manual
+step survivable only until someone forgets it, and for a Qt desktop application
+Windows is the wrong platform to be missing. The same shape as the map view
+job, which was also documented, also manual, and also missed - and which let a
+release tag be the first thing to compile the GUI with gcc.
+
+The cost is real and is stated in the workflow rather than discovered: vcpkg
+builds `qtbase`, `vtk` and `gdal` from source on Windows, and GDAL alone is
+measured at 75 minutes cold in `ci.yml`'s gis-windows job. The first run of the
+new leg is hours; the cache makes every run after it ordinary. Its timeout is
+set per matrix row for that reason - 350 minutes for Windows against 45 for the
+platforms that install their dependencies in a couple of minutes.
+
+**Prime the cache with a manual dispatch before tagging.** A manual run stops
+after uploading artifacts, so it costs nothing but time and leaves the cache
+warm for the tag. That is now the one manual step, and it delays a release
+rather than silently dropping a platform from it.
+
+Two smaller things the same release turned up. The release job downloaded every
+artifact the run produced, so `artifact.tar` - the Doxygen output - was attached
+to v0.1.0 beside the archives with nothing to say what it was; it now takes only
+`paddock-*`. And `macdeployqt` reports "Could not find app bundle" because the
+build produces a plain executable rather than a `.app`, which the script
+tolerates: **the macOS archive ships the GUI with no Qt frameworks beside it and
+will not start where Qt is absent.** Its command line is unaffected. Making a
+real `.app` bundle is the next thing this ADR should record.

@@ -39,7 +39,10 @@ permissions:
 jobs:
   package:
     name: ${{ matrix.name }}
-    timeout-minutes: 45
+    # Windows builds Qt6, VTK and GDAL from source and needs hours on a cold
+    # cache; the other two install them in minutes and should not be allowed to
+    # hang for that long.
+    timeout-minutes: ${{ matrix.timeout }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -47,10 +50,52 @@ jobs:
         include:
           - name: Package Linux (apt Qt6 + VTK)
             os: ubuntu-26.04
+            timeout: 45
           - name: Package macOS (brew Qt6 + VTK)
             os: macos-14
+            timeout: 45
+          # **Windows builds its whole stack from source, and that is the cost.**
+          # Linux and macOS take Qt6, VTK and GDAL from a package manager in a
+          # couple of minutes. Windows has no such source, so vcpkg builds
+          # qtbase, vtk and gdal itself - and GDAL alone is measured at 75
+          # minutes on a cold cache in ci.yml's gis-windows job, with Qt and VTK
+          # larger again. The first run of this is hours; every run after it
+          # restores from the binary cache below.
+          #
+          # v0.1.0 shipped without a Windows archive because this leg did not
+          # exist, which for a Qt desktop application is the wrong platform to
+          # be missing. Prime the cache with a manual run from the Actions tab
+          # before tagging, or the tag pays for it.
+          - name: Package Windows (vcpkg Qt6 + VTK)
+            os: windows-2022
+            timeout: 350
     steps:
       - uses: actions/checkout@v4
+
+      # The runner ships a vcpkg at whatever commit the image was built from and
+      # vcpkg.json pins a different baseline. The same dance as gis-windows, for
+      # the same reason.
+      - name: Check the vcpkg tree out at the pinned baseline
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          baseline=$(python -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
+          echo "vcpkg baseline pinned in vcpkg.json: ${baseline}"
+          git -C "${VCPKG_INSTALLATION_ROOT}" fetch --depth=1 origin "${baseline}"
+          git -C "${VCPKG_INSTALLATION_ROOT}" checkout --force FETCH_HEAD
+          "${VCPKG_INSTALLATION_ROOT}/bootstrap-vcpkg.bat"
+
+      # Restore and save separately, so a run that fails its tests still keeps
+      # the packages it spent hours building. gis-windows learned that the
+      # expensive way and the comment there says so.
+      - name: Restore the vcpkg binary cache
+        if: runner.os == 'Windows'
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: vcpkg-desktop-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-desktop-${{ runner.os }}-
 
       - name: Install Qt6, VTK and the geospatial stack (Linux)
         if: runner.os == 'Linux'
@@ -69,23 +114,62 @@ jobs:
       # view and the geospatial stack that lets a scenario be drawn on the
       # ground it names.
       - name: Configure and build
+        if: runner.os != 'Windows'
         run: |
           cmake --preset desktop
           cmake --build --preset desktop
+
+      # **Windows names its toolchain, because the presets do not.** A vcpkg root
+      # is a machine-local path, so CMakePresets.json leaves it out and
+      # CMakeUserPresets.json supplies it on a developer's machine. CI has no
+      # user presets, so it passes the file the way gis-windows does.
+      - name: Configure and build (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set VSPATH=%%i
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          cmake --preset desktop -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake || exit /b 1
+          cmake --build --preset desktop || exit /b 1
 
       # The scientific suite, on the artefact that is about to be shipped rather
       # than on a build made for the purpose. A release that has not run its own
       # conservation assertions is a release nobody checked.
       - name: Test what is being shipped
+        if: runner.os != 'Windows'
         run: ctest --test-dir build/desktop --output-on-failure
 
+      # PROJ on Windows searches %LOCALAPPDATA%\proj and a vcpkg PROJ installs its
+      # database elsewhere, so without this every coordinate transform fails.
+      # The same note as gis-windows, and the same fix.
+      - name: Test what is being shipped (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          set PROJ_DATA=%CD%\build\desktop\vcpkg_installed\x64-windows\share\proj
+          ctest --test-dir build/desktop --output-on-failure || exit /b 1
+
+      - name: Save the vcpkg binary cache
+        if: always() && runner.os == 'Windows'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      # Bash on Windows is Git Bash, which the runner has. One script on all
+      # three platforms; it picks its own suffixes and archive format.
       - name: Package
+        shell: bash
         run: scripts/package-release.sh --build build/desktop --out dist
 
       - uses: actions/upload-artifact@v4
         with:
           name: paddock-${{ runner.os }}
-          path: dist/*.tar.gz
+          # Windows produces a zip and the other two a tarball, which is what a
+          # person on each platform expects to be handed.
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
           if-no-files-found: error
 
   docs:
@@ -136,9 +220,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # **The pattern is not optional.** Without it this downloads every artifact
+      # the run produced, and the docs job uploads one too - so v0.1.0's release
+      # carried `artifact.tar`, fourteen megabytes of Doxygen call graphs, sitting
+      # beside the archives with nothing to say what it was.
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: paddock-*
           merge-multiple: true
 
       - name: What is about to be released
