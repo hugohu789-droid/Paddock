@@ -231,15 +231,32 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
   // gradient is now centred on the soil at 100 to 140, and this farm holds a
   // fifth more water than the numbers below were pinned against. Cover rose by
   // 78 kg DM/ha on the mean and the mob was moved once more.
-  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 3134.8714162923825, 3.2e-3);
-  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 1831.2973628439277, 1.9e-3);
-  EXPECT_NEAR(run.closing_cover_kg_dm, 1831.2973628439277, 1.9e-3);
-  EXPECT_NEAR(run.eaten_kg_dm, 125219.06421844629, 1.3e-1);
+  //
+  // **Re-pinned when the scenario became a real farm** (verify.md, E80). This
+  // bundle ran a synthetic generator drawing 700-930 mm and a sward whose
+  // radiation use efficiency was a placeholder 1.5; it now reads twenty-five
+  // years of real Selwyn weather and shares the sourced sward with every other
+  // scenario. Nothing about the engine changed, and everything about the farm
+  // did:
+  //
+  //     mean cover    3135 -> 1620 kg DM/ha
+  //     lowest cover  1831 ->  769
+  //     eaten          125 ->   92 tonnes
+  //     mob moves       98 ->   30
+  //
+  // The old numbers described a farm wetter than Canterbury growing pasture at
+  // twice the efficiency anyone has measured. These describe a dryland Selwyn
+  // farm, and the mob is moved a third as often because there is a third as
+  // much regrowth to move it onto.
+  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 1620.0539713332221, 1.7e-3);
+  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 768.66047733424409, 7.7e-4);
+  EXPECT_NEAR(run.closing_cover_kg_dm, 771.39412261534346, 7.8e-4);
+  EXPECT_NEAR(run.eaten_kg_dm, 91588.704322681704, 9.2e-2);
   EXPECT_NEAR(run.closing_liveweight_kg(), 55.000014928809946, 5.5e-5);
 
   // Counts, so they are equalities. A management decision that moves a mob one
   // more time is a change worth stopping on, not one to absorb in a tolerance.
-  EXPECT_EQ(run.moves, 98);
+  EXPECT_EQ(run.moves, 30);
   EXPECT_EQ(run.days_short, 0);
 }
 

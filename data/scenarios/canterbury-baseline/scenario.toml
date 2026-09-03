@@ -25,17 +25,40 @@ end_date = "2024-06-30"
 latitude_degrees = -43.5
 
 [weather]
-kind = "synthetic"
-path = "weather.toml"
-sha256 = "6b1bfc03e57717c51f59b3814fab9f3f7aeb6bd9bd9e289d75c76b1d3cd2c56a"
+# **Real weather, on the ground this bundle already stood on.** These two
+# Canterbury bundles used to run a synthetic generator whose own file said its
+# parameters "have not been taken from NIWA's published normals for any" site -
+# and it drew 721 and 926 mm against a Lincoln normal near 630, so the farm they
+# described was wetter than Canterbury and grew accordingly (verify.md, E79).
+#
+# Fetched for the Selwyn plains, which is where this bundle's LiDAR tile is:
+#
+#   scripts/open-meteo-snapshot.py --lon 172.40 --lat -43.50 \
+#       --start 2000-07-01 --end 2025-06-30 --no-uv \
+#       --out data/scenarios/canterbury-baseline/weather-2000-2025.csv
+#
+# Twenty-five years, because the seasonal validation runs two decades against
+# DairyNZ's curves and a generator could produce any dates where a snapshot
+# cannot. The archive answered for -43.47979, 172.43242 at 85 m. No ultraviolet: the
+# CAMS archive does not reach back to 2015, and a gap is refused rather than
+# filled - see the provenance file beside this one.
+#
+# **Both Canterbury bundles read the same file on purpose.** They differ in
+# whether the farm is grazed, so sharing the weather makes them a comparison
+# rather than two unrelated runs.
+kind = "snapshot"
+path = "weather-2000-2025.csv"
+sha256 = "284f89f66b135c1adc8ccd445a02f14ef7c2d25656dcd8607cc93fb40110cb9c"
+dataset = "Open-Meteo historical weather API (ERA5 reanalysis)"
+licence = "CC-BY-4.0. Weather data by Open-Meteo.com, licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5)."
 
 [soil]
 path = "soil.toml"
 sha256 = "523e37beed50db5ecb6c367a5d53cf578823561dc940fbbc6aef31facdc4a36a"
 
 [sward]
-path = "sward.toml"
-sha256 = "d33109030d022d64db408c55e99751541224e5e0f42f195f56848432f9bd6ce3"
+path = "../../pastures/ryegrass-clover-nz.toml"
+sha256 = "65537a82bdd7de1a84a3adcc3f8a173cef84c943a94f3cf0354746b943c57d5a"
 
 [initial_state]
 soil_water_mm = 90.0

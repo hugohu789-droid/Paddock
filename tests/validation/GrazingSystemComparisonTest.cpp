@@ -24,6 +24,7 @@
 #include <cmath>
 #include <fstream>
 #include <set>
+#include <cstdlib>
 #include <string>
 
 #include <paddock/config/ScenarioRun.hpp>
@@ -83,7 +84,13 @@ constexpr int kLimitingHead = 1400;
 // comparison was on a working farm at a stocking rate where feed was limiting;
 // a comparison run where it is not would show nothing and would pass anyway.
 TEST(GrazingSystemComparisonTest, WithFeedToSpareTheSystemsAreIndistinguishable) {
-  const Comparison result = compare(500);
+  // **250, where this used to say 500** (verify.md, E80). The comment above was
+  // written when the bundle ran a synthetic generator drawing 700-930 mm and a
+  // sward whose radiation use efficiency was a placeholder 1.5. On real Selwyn
+  // weather and the sourced sward the same farm carries far fewer: at 500 head
+  // both arms now go short, and 250 is where "feed to spare" begins again.
+  // Found by running the model, as the original was.
+  const Comparison result = compare(250);
 
   EXPECT_EQ(result.set_stocked.days_short, 0);
   EXPECT_EQ(result.rotational.days_short, 0);
@@ -193,10 +200,17 @@ TEST(GrazingSystemComparisonTest, TheAnimalSideAdvantageIsNotReproducedAndTheRea
   // it is not. That is the model getting more expensive, not the comparison
   // breaking: a handful of days against the rotational arm's sixty-odd leaves
   // the contrast the test is about entirely intact.
-  EXPECT_LT(result.set_stocked.days_short, 10)
-      << "a mob with the run of the farm should find feed nearly always at this stocking rate";
+  // **The contrast rather than an absolute** (verify.md, E80). This asserted
+  // fewer than ten shortfall days for the set-stocked arm, which was a fact
+  // about the over-productive farm this bundle used to describe. On real
+  // weather both arms go short at 1400 head - 99 days against 151 - and the
+  // comparison is not weaker for it: the confined mob is short half as often
+  // again, and loses 19.4 kg against 13.9. What the test is about is the gap,
+  // and the gap is wider than it was.
+  EXPECT_LT(result.set_stocked.days_short, result.rotational.days_short * 3 / 4)
+      << "a mob with the run of the farm should find feed more often than a confined one";
   EXPECT_GT(result.rotational.days_short, 20)
-      << "and a confined one should not, which is what drives the difference";
+      << "and a confined one should go short, which is what drives the difference";
 }
 
 // Both arms still close their budgets. A comparison built on a run that lost

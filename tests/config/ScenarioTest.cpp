@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -53,10 +54,19 @@ class BundleCopy {
     // shipped bundles, immediately cost another. So the copy is a small data
     // tree: the bundle under scenarios/, and the sibling directories it can
     // reach, at the same relative depth.
+    // **One directory per copy, not per test.** The name used to be the source
+    // path and the test name, so a second copy inside one test resolved to the
+    // first one's directory, wiped it and re-copied the pristine bundle - and
+    // every edit made to the first copy quietly vanished. A test comparing two
+    // differently-edited copies then compared two identical ones and failed for
+    // a reason nowhere near where it looked. The counter makes each instance its
+    // own tree.
+    static std::atomic<int> instances{0};
     root_ = std::filesystem::temp_directory_path() /
             ("paddock-bundle-" +
              std::to_string(std::filesystem::hash_value(std::filesystem::path(source))) + "-" +
-             testing::UnitTest::GetInstance()->current_test_info()->name());
+             testing::UnitTest::GetInstance()->current_test_info()->name() + "-" +
+             std::to_string(instances.fetch_add(1)));
     std::filesystem::remove_all(root_);
 
     directory_ = root_ / "scenarios" / std::filesystem::path(source).filename();
@@ -64,7 +74,8 @@ class BundleCopy {
     std::filesystem::copy(source, directory_, std::filesystem::copy_options::recursive);
 
     const std::filesystem::path data = std::filesystem::path(PADDOCK_DATA_DIR);
-    for (const char* sibling : {"species", "economics", "regulations", "pastures", "soils"}) {
+    for (const char* sibling :
+         {"species", "economics", "regulations", "pastures", "soils", "weather"}) {
       const std::filesystem::path from = data / sibling;
       if (!std::filesystem::exists(from)) {
         continue;
@@ -299,7 +310,7 @@ TEST(ScenarioBundleTest, TheBundleRunsAndItsBudgetsClose) {
   EXPECT_TRUE(result.budgets_close(farmlet));
   EXPECT_GT(result.summary.total_growth_kg_dm, 0.0);
   EXPECT_GT(result.summary.total_rainfall_mm, 0.0);
-  EXPECT_EQ(result.weather_provenance.source_name, "synthetic");
+  EXPECT_EQ(result.weather_provenance.source_name, "weather_snapshot");
 }
 
 // The whole point of a bundle. Loading and running it twice gives the same
@@ -309,13 +320,41 @@ TEST(ScenarioBundleTest, RunningTheSameBundleTwiceIsBitIdentical) {
   EXPECT_EQ(bit_patterns(run_bundle(shipped_bundle())), bit_patterns(run_bundle(shipped_bundle())));
 }
 
+/// Swaps a copied bundle onto the synthetic weather generator.
+///
+/// **A seed only changes a run that generates its weather.** Every shipped
+/// scenario now reads a real snapshot, and a snapshot is the same bytes
+/// whatever the seed says - so a bundle that draws its weather is needed to
+/// show the seed reaching the run at all. The generator is a documented adapter
+/// of the DataSource port; this is the example of it.
+void use_synthetic_weather(const BundleCopy& copy) {
+  copy.edit("scenario.toml", "path = \"weather-2000-2025.csv\"",
+            "path = \"../../weather/canterbury-synthetic.toml\"");
+  copy.edit("scenario.toml", "kind = \"snapshot\"", "kind = \"synthetic\"");
+  copy.edit("scenario.toml", "sha256 = \"284f89f66b135c1adc8ccd445a02f14ef7c2d25656dcd8607cc93fb40110cb9c\"", "sha256 = \"eff7df475e6116bff57681091f3824e0a2adf9946b12a0b8e413b1079464c52a\"");
+}
+
 TEST(ScenarioBundleTest, AnotherSeedIsAnotherRun) {
   const BundleCopy copy;
   // The manifest is not itself hashed, so changing the seed leaves the input
   // hashes intact and only the run changes.
   copy.edit("scenario.toml", "master_seed = 20240701", "master_seed = 20240702");
+  use_synthetic_weather(copy);
 
-  EXPECT_NE(bit_patterns(run_bundle(shipped_bundle())), bit_patterns(run_bundle(copy.path())));
+  const BundleCopy same;
+  use_synthetic_weather(same);
+
+  // **Both halves of the premise, asserted rather than assumed.** A seed only
+  // reaches a run that generates its weather, and every shipped bundle now
+  // reads a snapshot - so this test swaps both copies onto the generator first.
+  // Checked here because a swap that quietly failed would leave two identical
+  // snapshot runs and a test that passed for no reason.
+  const ScenarioBundle a = load_scenario(same.path());
+  const ScenarioBundle b = load_scenario(copy.path());
+  ASSERT_EQ(a.weather->describe().name.rfind("synthetic", 0), 0U) << "not generated weather";
+  ASSERT_NE(a.master_seed, b.master_seed) << "both copies carry seed " << a.master_seed;
+
+  EXPECT_NE(bit_patterns(run_bundle(same.path())), bit_patterns(run_bundle(copy.path())));
 }
 
 // A bundle is only reproducible if its inputs are the ones it was built on.
@@ -375,7 +414,7 @@ TEST(ScenarioBundleTest, AMissingBundleIsReportedWithItsPath) {
 
 TEST(ScenarioBundleTest, AnUnknownWeatherKindIsRefused) {
   const BundleCopy copy;
-  copy.edit("scenario.toml", "kind = \"synthetic\"", "kind = \"cliflo_live\"");
+  copy.edit("scenario.toml", "kind = \"snapshot\"", "kind = \"cliflo_live\"");
 
   try {
     static_cast<void>(load_scenario_unchecked(copy.path()));
