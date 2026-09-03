@@ -115,7 +115,8 @@ if(PADDOCK_BUILD_CONFIG)
   add_executable(paddock_config_tests config/ConfigTest.cpp config/DashboardTest.cpp
  config/DataFilesTest.cpp
                                       config/FarmConfigTest.cpp config/PaddockInspectionTest.cpp
-                                      config/ScenarioComparisonTest.cpp config/ScenarioTest.cpp
+                                      config/ScenarioComparisonTest.cpp config/ScenarioInputsTest.cpp
+                                      config/ScenarioTest.cpp
                                       config/SpeciesConfigTest.cpp)
 
   target_link_libraries(paddock_config_tests PRIVATE Paddock::config GTest::gtest_main

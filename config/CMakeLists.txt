@@ -18,6 +18,7 @@ add_library(
   src/PaddockInspection.cpp
   src/PastureConfig.cpp
   src/ScenarioComparison.cpp
+  src/ScenarioInputs.cpp
   src/ScenarioConfig.cpp
   src/ScenarioReport.cpp
   src/ScenarioRun.cpp
