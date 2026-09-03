@@ -438,7 +438,7 @@ QWidget* TrendDialog::build_indicator_page() {
   for (const config::FarmDashboard& board : boards_) {
     headers << QString::fromStdString(board.label);
   }
-  table_->setColumnCount(headers.size());
+  table_->setColumnCount(static_cast<int>(headers.size()));
   table_->setHorizontalHeaderLabels(headers);
 
   int rows = 0;
@@ -456,7 +456,7 @@ QWidget* TrendDialog::build_indicator_page() {
     bold.setBold(true);
     heading->setFont(bold);
     table_->setItem(row, 0, heading);
-    table_->setSpan(row, 0, 1, headers.size());
+    table_->setSpan(row, 0, 1, static_cast<int>(headers.size()));
     ++row;
 
     for (std::size_t i = 0; i < panel.indicators.size(); ++i) {

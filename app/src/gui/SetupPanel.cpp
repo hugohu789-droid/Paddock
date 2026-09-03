@@ -482,7 +482,13 @@ SetupPanel::SetupPanel(const std::string& data_directory, QWidget* parent) : QWi
     }
   });
   connect(role_box_, &QComboBox::currentIndexChanged, this, [this](int index) {
-    role_ = index == 1 ? Role::Researcher : index == 2 ? Role::Compliance : Role::Farmer;
+    if (index == 1) {
+      role_ = Role::Researcher;
+    } else if (index == 2) {
+      role_ = Role::Compliance;
+    } else {
+      role_ = Role::Farmer;
+    }
     apply_role();
   });
   apply_role();

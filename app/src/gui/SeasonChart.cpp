@@ -159,9 +159,13 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
   // stops halfway through a word. The axis is drawn in its line's own colour
   // and the key beside it gives the unit, so nothing is lost by shortening it.
   const auto describe = [](const Line& line) { return line.name; };
-  left_axis_->setTitleText(lines.empty()            ? QString()
-                           : scale == Scale::Shared ? lines.front().unit
-                                                    : describe(lines.front()));
+  const auto left_title = [&]() -> QString {
+    if (lines.empty()) {
+      return {};
+    }
+    return scale == Scale::Shared ? lines.front().unit : describe(lines.front());
+  };
+  left_axis_->setTitleText(left_title());
   dress(left_axis_);
   chart_->addAxis(left_axis_, Qt::AlignLeft);
   right_axis_ = new QValueAxis(chart_);
@@ -218,7 +222,7 @@ void SeasonChart::show_run(const std::vector<QString>& dates, const std::vector<
     // the legend: it is the same quantity, not another one.
     if (line.reference.has_value() && !dates_.empty()) {
       auto* level = new QLineSeries(chart_);
-      QPen pen(line.colour, 1.0, Qt::DashLine);
+      const QPen pen(line.colour, 1.0, Qt::DashLine);
       level->setPen(pen);
       level->append(static_cast<double>(stamp(dates_.front())), *line.reference);
       level->append(static_cast<double>(stamp(dates_.back())), *line.reference);

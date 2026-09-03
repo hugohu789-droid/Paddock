@@ -11,8 +11,8 @@ name: T2 and T3
 #     model-versus-measurement plot kept as an artifact
 #   * the geospatial stack on three platforms: system GDAL and PROJ on Linux
 #     and macOS, vcpkg on Windows (docs/adr/0011-gdal-and-proj.md)
-#   * the Qt6 + VTK map view - **on request only**, see the gui job for what
-#     stands in for it and what that costs
+#   * the Qt6 + VTK map view, which is the only thing that compiles app/src/gui
+#     and viz/ with gcc or clang and the only clang-tidy cover they have
 #
 # The three-platform GUI *packaging* matrix joins this workflow in M3 with the
 # 3D view. See docs/adr/0006-ci-scope.md and docs/adr/0010-2d-map-view-with-vtk.md.
@@ -425,32 +425,39 @@ jobs:
           path: ~/AppData/Local/vcpkg/archives
           key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
-  # The map view runs on request, not on every pull request.
+  # The map view runs on every pull request, and it did not always.
   #
-  # It is the slowest job here - 8m11s against the three-platform build's 3m30s
-  # - and almost all of that is installing Qt6, VTK and clang-tidy before it can
-  # start. What stands in for it is a local desktop build, which a developer
-  # working on the GUI has open anyway:
+  # It is the slowest job here - about 8 minutes against the three-platform
+  # build's 3m30s - and almost all of that is installing Qt6, VTK and clang-tidy
+  # before it can start. That cost bought it a place on the Actions tab instead
+  # of the gate, with a local desktop build standing in:
   #
   #     cmake --preset desktop && cmake --build --preset desktop
   #     ctest --test-dir build/desktop
   #     ./build/desktop/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke
   #
-  # **Two things go with it, and they are written down rather than quietly
-  # dropped.** This job is the only clang-tidy coverage of `app/src/gui` and
-  # `viz/src`: the tidy job's compile database is built with the GUI off, so
-  # those files are outside the lint gate entirely while this job is not
-  # running. And the checks below caught real defects - a map drawn half a cell
+  # **The v0.1.0 tag is what settled the argument.** A field was added to
+  # `SeasonChart::Line` and one of its three callers built a Line with an
+  # aggregate initialiser that nobody updated. MSVC says nothing about a missing
+  # initialiser; gcc and clang stop the build. Nothing else compiles the GUI with
+  # gcc or clang, so the first thing to try it was the release - it failed to
+  # package on both Linux and macOS, and the tag pointed at a commit that could
+  # not be built. Running this job then found eleven clang-tidy findings that had
+  # accumulated behind the same gap.
+  #
+  # A step a person has to remember is not a gate, and this one was documented
+  # and still missed. Eight minutes a pull request is cheaper than finding it at
+  # a tag.
+  #
+  # **Two things it is the only cover for.** This job is the only clang-tidy
+  # coverage of `app/src/gui` and `viz/src` - the tidy job's compile database is
+  # built with the GUI off, so those files are outside the lint gate without it.
+  # And the checks below caught real defects - a map drawn half a cell
   # south-west of the ground it described, and irrigation reachable only by a
   # person clicking - which no headless suite would have found.
-  #
-  # Run it from the Actions tab whenever the GUI, `viz/`, or anything they read
-  # changes. The same precedent and the same reasoning as the gis-windows job
-  # above, including that this is weaker than a gate.
   gui:
-    name: Map view (Qt6 + VTK, on request)
+    name: Map view (Qt6 + VTK)
     timeout-minutes: 30
-    if: github.event_name == 'workflow_dispatch'
     # Ubuntu 26.04 is the first release whose VTK Qt packages are built against
     # Qt6 rather than Qt5; on 24.04 this job would have to build VTK from
     # source. The image is currently a preview one - if that becomes a problem,

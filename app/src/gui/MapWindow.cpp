@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -72,6 +73,11 @@
 namespace paddock::app {
 
 namespace {
+
+/// Bytes in a megabyte, as an int64 so a byte count is not divided by a
+/// multiplication performed in int. std::int64_t is long long on Windows and
+/// long on Linux, so which compiler notices depends on the platform.
+constexpr std::int64_t kBytesPerMegabyte = 1024LL * 1024;
 /// How wide the setup dock opens, in pixels. Comfortably past the panel's own
 /// minimum, so the form is not on the edge of scrolling the moment it opens.
 constexpr int kOpeningPanelWidth = 520;
@@ -1384,8 +1390,8 @@ void MapWindow::fetch_ground() {
         if (total > 0) {
           progress.setValue(static_cast<int>(so_far * 100 / total));
           progress.setLabelText(QString("Fetching the ground... %1 of %2 MB")
-                                    .arg(so_far / (1024 * 1024))
-                                    .arg(total / (1024 * 1024)));
+                                    .arg(so_far / kBytesPerMegabyte)
+                                    .arg(total / kBytesPerMegabyte));
         }
         QCoreApplication::processEvents();
         return !progress.wasCanceled();
@@ -1410,7 +1416,7 @@ void MapWindow::fetch_ground() {
                                    "The run on screen was made on flat ground. "
                                    "Run it again to see it on the measured surface.")
                                .arg(QString::fromStdString(offer.scenario))
-                               .arg(outcome.bytes / (1024 * 1024)));
+                               .arg(outcome.bytes / kBytesPerMegabyte));
 #endif
 }
 

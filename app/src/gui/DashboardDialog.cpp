@@ -16,6 +16,7 @@
 #include <QSplitter>
 #include <QTextStream>
 #include <QVBoxLayout>
+#include <array>
 #include <cmath>
 #include <utility>
 
@@ -31,12 +32,16 @@ namespace {
 /// time the page is opened: a reader who has learned that cover is the blue one
 /// should not have to relearn it because a series was added above it.
 QColor line_colour(int index) {
-  static const QColor kColours[] = {
+  // Lower case and not `kColours`: the k prefix belongs to constexpr and
+  // namespace-scope constants here, and a QColor is not a literal type so this
+  // cannot be either. Function-local keeps it out of static initialisation
+  // order, which is worth more than the prefix.
+  static const std::array<QColor, 6> colours{
       QColor(0x1F, 0x77, 0xB4), QColor(0x2C, 0xA0, 0x2C), QColor(0xD6, 0x27, 0x28),
       QColor(0xFF, 0x7F, 0x0E), QColor(0x94, 0x67, 0xBD), QColor(0x8C, 0x56, 0x4B),
   };
-  constexpr int kCount = static_cast<int>(sizeof(kColours) / sizeof(kColours[0]));
-  return kColours[((index % kCount) + kCount) % kCount];
+  constexpr int kCount = static_cast<int>(colours.size());
+  return colours.at(static_cast<std::size_t>(((index % kCount) + kCount) % kCount));
 }
 
 /// A number with as many places as it deserves. Counts get none: "23.00 head"
@@ -70,11 +75,11 @@ QString band_of(const config::Indicator& indicator) {
 QColor colour_for(config::Standing standing) {
   switch (standing) {
     case config::Standing::Over:
-      return QColor(0xC0, 0x39, 0x2B);
+      return {0xC0, 0x39, 0x2B};
     case config::Standing::Watch:
-      return QColor(0xB9, 0x77, 0x0F);
+      return {0xB9, 0x77, 0x0F};
     case config::Standing::Good:
-      return QColor(0x27, 0x7A, 0x3E);
+      return {0x27, 0x7A, 0x3E};
     case config::Standing::Unmeasured:
       break;
   }
