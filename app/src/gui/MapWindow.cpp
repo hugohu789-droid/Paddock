@@ -74,10 +74,16 @@ namespace paddock::app {
 
 namespace {
 
+#ifdef PADDOCK_WITH_GIS
 /// Bytes in a megabyte, as an int64 so a byte count is not divided by a
 /// multiplication performed in int. std::int64_t is long long on Windows and
 /// long on Linux, so which compiler notices depends on the platform.
+///
+/// Guarded because everything that reports a download size is, and a build with
+/// the geospatial stack off would otherwise carry an unused constant - which
+/// clang treats as an error and the desktop preset never sees.
 constexpr std::int64_t kBytesPerMegabyte = 1024LL * 1024;
+#endif
 /// How wide the setup dock opens, in pixels. Comfortably past the panel's own
 /// minimum, so the form is not on the edge of scrolling the moment it opens.
 constexpr int kOpeningPanelWidth = 520;
