@@ -288,7 +288,8 @@ TEST(RelativeIntakeTest, RisesWithHerbageAndIsNearlyUnrestrictedByTwoAndAHalfTon
   const AnimalClassParameters sheep = a_grazing_sheep();
 
   double previous = 0.0;
-  for (double herbage = 100.0; herbage <= 3000.0; herbage += 100.0) {
+  for (int step = 1; step <= 30; ++step) {
+    const double herbage = step * 100.0;
     const double now = relative_intake(sheep, herbage);
     EXPECT_GT(now, previous) << "more grass should never mean less intake, at " << herbage;
     EXPECT_LE(now, 1.05) << "and should not promise more than the animal wanted, at " << herbage;
@@ -321,7 +322,8 @@ TEST(RelativeIntakeTest, CattleAndSheepDifferAsTheirCoefficientsDo) {
 // which is what every species file written before this carries.
 TEST(RelativeIntakeTest, ASilentAnimalIsUnrestricted) {
   const AnimalClassParameters silent;
-  for (double herbage = 0.0; herbage <= 3000.0; herbage += 250.0) {
+  for (int step = 0; step <= 12; ++step) {
+    const double herbage = step * 250.0;
     EXPECT_DOUBLE_EQ(relative_intake(silent, herbage), 1.0) << "at " << herbage;
   }
 }
