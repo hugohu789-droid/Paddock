@@ -399,7 +399,7 @@ int main(int argc, char** argv) {
             QCoreApplication::processEvents();
             QString each = path;
             if (tabs != nullptr && pages > 1) {
-              const int dot = each.lastIndexOf('.');
+              const int dot = static_cast<int>(each.lastIndexOf('.'));
               const QString stem = dot > 0 ? each.left(dot) : each;
               const QString suffix = dot > 0 ? each.mid(dot) : QString(".png");
               each = stem + "-" + tabs->tabText(page).toLower().replace(' ', '-') + suffix;
