@@ -307,6 +307,58 @@ tonne wide where the truth is nearly six, and a validation built on it would hav
 failed this model for having weather. A rain-fed Canterbury year is a
 distribution, not a number.
 
+### Validation results
+
+Every figure below is produced by a test in CI, and every "measured" column
+names a published source rather than a target chosen to be hit.
+
+| What | Measured against | Measured | Paddock |
+|---|---|---:|---:|
+| Annual pasture, Canterbury dryland | Winchmore, 25 dryland years | 6,442 kg DM/ha<br><sub>range 3,904–9,845</sub> | 7,547 over ten years |
+| Water use efficiency | Martin et al. (2006), dryland | 12.3 kg DM/ha/mm | 11.0 driest year<br>13.9 wettest |
+| Share of the year — winter | Winchmore, monthly | 10.0% | 9.1% |
+| — spring | | 54.7% | **43.6%** |
+| — summer | | 18.0% | **32.2%** |
+| — autumn | | 17.3% | 15.1% |
+| Monthly curve, unfertilised site | DairyNZ Woodlands, 0 kg N/ha | — | r = 0.82 |
+| Monthly curve, fertilised site | DairyNZ Lincoln p21, 154 kg N/ha | — | r = 0.75 |
+| Flock intake against its stock-unit rating | Parker (1998), 550 kg DM a stock unit | 100% | 67% |
+| Lamb weaning weight | OVERSEER's default when none is supplied | 20 kg | 30.5 kg |
+| Waikato annual pasture | *no source recorded yet* | — | 13.0 t |
+
+Three of those want reading twice.
+
+**The spring and summer rows in bold are the model's largest known error** and
+are described under Known Limitations.
+
+**The Waikato row has no measured column, and is left in without one on
+purpose.** It is the only out-of-sample number here — radiation use efficiency
+was fitted at Lincoln against Canterbury dryland water use and has never seen a
+Waikato farm — so what it predicts is worth stating. But no New Zealand source
+for regional Waikato production has been read into this repository, and a range
+quoted from memory would be the one thing this table is built not to do.
+
+**The lamb row is a floor, not a match.** OVERSEER assumes 20 kg when nobody
+supplies a weaning weight, so it is something to be above rather than close to;
+the model's own dashboard still flags 30.5 kg as outside the band it draws.
+
+### The four scenarios
+
+All four run on real ERA5 weather through the same sourced sward — the growth
+parameters are properties of the plants and live in one file, while weather,
+soil, latitude and stock are what each scenario states for itself.
+
+| Scenario | Weather | Grown | WUE | What it is for |
+|---|---|---:|---:|---|
+| `canterbury-baseline` | Selwyn, 25 years | 8,284 | — | pasture and water with no stock |
+| `canterbury-grazed` | the same file | 7,889 | 13.5 | the grazed comparison, and the golden regression baseline |
+| `lincoln-lurdf` | Lincoln, 10 years | 6,645 | 12.6 | the farm the validation above is measured on |
+| `ruakura-fe` | Waikato | 12,629 | 14.1 | a facial eczema climate, not a stocking policy |
+
+`canterbury-baseline` and `canterbury-grazed` read the same weather file on
+purpose, so ungrazed against grazed is a comparison rather than two unrelated
+runs.
+
 This should be treated as a simulation and research platform, not as a certified
 farm advisory model. [docs/validation/verify.md](docs/validation/verify.md) records, output by output,
 what may be quoted and what may not.
@@ -315,9 +367,10 @@ what may be quoted and what may not.
 
 Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept current with the code:
 
-- **The model splits spring and summer wrongly.** Against Winchmore's measured
-  months it puts 44% of its year in spring where the trial puts 55%, and 32% in
-  summer where the trial puts 18%. Summer is when a Canterbury dryland farm
+- **The model splits spring and summer wrongly. This is its largest known
+  error.** Against Winchmore's measured months it puts 43.6% of its year in
+  spring where the trial puts 54.7%, and 32.2% in summer where the trial puts
+  18.0%. Summer is when a Canterbury dryland farm
   stops growing, and it is nearly the model's biggest season, so nothing that
   depends on *when* feed arrives should be trusted. The sharpest way to say it:
   **in Winchmore's 25 measured years spring beats summer 25 times; this model
@@ -331,13 +384,15 @@ Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept
   reproductive season this model has no phenology to produce (ADR 0018). The
   optimum temperature turned out to be the one figure that was never wrong
   (verify.md, E61–E70)
-- **The model grows about 20% more pasture than the trial it is measured
-  against, while applying no fertiliser at all.** Winchmore's dryland treatment
-  gets 250 kg of superphosphate a hectare a year and measured 6,442 kg DM/ha
-  over 25 years; this farm applies none and averages about 7,700 over ten. An
-  unfertilised farm should produce *less*, so the real gap is larger than 20%.
-  There is no phosphorus limitation in the model, and re-fitting radiation use
-  efficiency to close the number would hide the reason (verify.md, E40)
+- **There is no phosphorus limitation, and the number that used to be the
+  evidence for it is not evidence.** Winchmore's dryland treatment gets 250 kg
+  of superphosphate a hectare a year and measured 6,442 kg DM/ha; this farm
+  applies none and averages 7,547. An unfertilised farm should produce *less*,
+  so a real gap exists. But that excess has read 13–20%, then 2%, then 17% in
+  the course of correcting three unrelated things upstream of it — it moves
+  whenever anything above it moves, so it cannot carry the argument on its own.
+  The missing limitation is still missing; it needs a different case made for it
+  (verify.md, E40, E70)
 - **The example farm is understocked, and the model cannot say by how much
   because it has no upper bound.** Parker (1998) gives a ewe as 1.0 stock unit
   eating 550 kg DM a year, so 417 ewes on 80 ha is 5.2 SU/ha against Beef +
@@ -347,12 +402,24 @@ Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept
   because bought feed is unlimited, always available, and priced at a hardcoded
   figure with no source. So "how many ewes will it carry" currently answers "as
   many as you can pay for" (verify.md, E55)
-- **The flock does not respond to feed, because the model has no appetite.**
-  Intake is derived from a target liveweight gain, so a mob in a surplus asks
-  for what it asked for in a drought — two arms of an irrigation comparison
-  differing by 5,290 kg DM/ha of growth eat within 5 kg of each other. **No
-  result that depends on how much was eaten should be read as a response to feed
-  supply** (verify.md, E52)
+- **Grazing is bounded by what an animal can physically harvest; the trough is
+  not.** A mob's intake now falls away as the sward gets short, on GrazPlan's
+  availability equations against an appetite that carries its lactation and
+  condition terms — a ewe in milk wants half again what a dry one does, and
+  without that the flock sold itself down (verify.md, E71, E75). Bought feed
+  escapes all of it: it is capped at what the mob is being *fed for*, so a
+  farmer who asks for half a kilogram of gain a day buys his way there. Asked
+  for 0.5 kg/day the flock returns **182.49 kg over a year against a target of
+  182.5** — arithmetic rather than simulation. So `target_liveweight_gain` is
+  still an instruction where it should be an aspiration, and any result that
+  turns on how much *bought* feed was eaten should be read with that in mind
+  (verify.md, E77)
+- **`paddock scenario run` simulates one ungrazed hectare**, not the farm the
+  bundle describes. A bundle carries mobs, a grazing calendar, paddocks, a grid,
+  rules and prices, and that command reaches for none of them — the same Lincoln
+  bundle grows 7,219 kg DM/ha there and 6,645 through `paddock dashboard`. The
+  figures are right and they answer a different question, so the command now
+  says which one; `dashboard` is what runs the farm (verify.md, E78)
 - **Absolute liveweight gain is not quotable**: standard reference weight is
   unverified and it drives the energy value of gain
 - Sheep maintenance is low by about 5% against CSIRO (2007), so carrying
@@ -368,8 +435,13 @@ Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept
 Closed since this list was first written, and left here because the list is only
 useful if it moves: lactation and pregnancy are modelled on OVERSEER's equation
 set; dung and urine are returned to the soil; nitrogen leaching is reported
-against a regional rule; and pasture growth is calibrated against the Winchmore
-trial's own 25 measured years rather than against reviews of them.
+against a regional rule; pasture growth is calibrated against the Winchmore
+trial's own 25 measured years rather than against reviews of them; a ewe no
+longer banks the energy she spends on milk as body fat, which had been taking a
+66 kg animal to 80 kg on a farm asking her for no gain at all; and every
+scenario now runs on real weather through one sourced sward, where three of the
+four had been carrying placeholder growth parameters long after the model they
+belonged to was corrected.
 
 Scenario comparisons are more robust than absolute predictions, because both
 arms share the same parameters and the same model structure. They are not
@@ -420,14 +492,21 @@ argument and never defaults one.
 ```
 canterbury_grazed (engine 0.1.0, seed 20240702)
   2023-07-01 to 2024-06-30, 366 days
-  weather   synthetic:canterbury_plains_example (1b4174317ab0)
-  rainfall  925.5 mm
-  et        590.4 mm
-  drainage  262.0 mm
-  growth    10282.1 kg DM/ha
-  fixed N   38.2 kg N/ha
-  closing   2248.0 kg DM/ha cover, 116.8 mm soil water, 14% legume
+  weather   weather_snapshot:Open-Meteo historical weather API (ERA5 reanalysis) (284f89f66b13)
+  rainfall  700.4 mm
+  et        583.2 mm
+  drainage  105.7 mm
+  growth    8367.8 kg DM/ha
+  fixed N   46.9 kg N/ha
+  closing   802.1 kg DM/ha cover, 66.5 mm soil water, 21% legume
+  scope     one hectare of pasture, ungrazed
+            this bundle also carries 1 mob(s) and a grazing calendar, which this command does not run.
+            `paddock dashboard data/scenarios/canterbury-grazed` runs the farm with its stock.
 ```
+
+That last block is there because the command answers a narrower question than
+its name suggests, and used to do so silently. `paddock dashboard` runs the
+farm: its stock, its calendar, its rules and its books.
 
 A run whose budgets do not close is reported as a failure rather than printed:
 the numbers would be meaningless.
@@ -539,6 +618,12 @@ Dependency direction is one way: `gis → core`, `viz → core`, `config → cor
 
 Near-term priorities:
 
+- **the spring/summer split**, which is the largest known error in the model.
+  Spring dominance is a property of the plant and this model has it as a
+  property of the weather; the three sourced mechanisms added so far close about
+  half the gap and the rest wants phenology rather than another parameter
+- **bound the trough**, so a target liveweight gain becomes something the farm
+  aims at rather than something it buys
 - **find the utilisation gap** — the stock eat about a third of what grows where
   a New Zealand sheep farm removes two thirds to four fifths, and the stocking
   rate is not the cause
@@ -550,8 +635,9 @@ Near-term priorities:
 
 Done since this list was written: the sheep maintenance gap (15% to 5%, by
 supplying the walking distance an animal covers in a day), pasture calibration
-against Winchmore's measured years, and returning dung and urine nitrogen to the
-soil.
+against Winchmore's measured years, returning dung and urine nitrogen to the
+soil, an appetite that answers lactation and body condition, and moving every
+scenario onto real weather and one sourced sward.
 
 ## Screenshots
 
