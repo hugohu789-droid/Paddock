@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -44,7 +45,7 @@ namespace {
 /// Winchmore's own seasons, which are the ones the comparison is made on.
 /// Winter is June to August, spring September to November, summer December to
 /// February, autumn March to May.
-enum class Season { Winter, Spring, Summer, Autumn };
+enum class Season : std::uint8_t { Winter, Spring, Summer, Autumn };
 
 Season season_of(int month) {
   if (month >= 6 && month <= 8) {
@@ -113,7 +114,7 @@ Band measured(const std::string& column) {
   double total = 0.0;
   int count = 0;
   for (std::size_t row = 0; row < table.size(); ++row) {
-    const std::string text = table.text(row, column);
+    const std::string& text = table.text(row, column);
     if (text.empty()) {
       continue;
     }
@@ -252,7 +253,7 @@ TEST(WinchmoreSeasonalTest, TheModelsSeasonalShapeIsWrongAndThisHoldsTheGap) {
   const std::array<double, 4> theirs{winter.mean / measured_total, spring.mean / measured_total,
                                      summer.mean / measured_total, autumn.mean / measured_total};
 
-  const char* names[] = {"winter", "spring", "summer", "autumn"};
+  const std::array<const char*, 4> names{"winter", "spring", "summer", "autumn"};
   for (std::size_t i = 0; i < grown.size(); ++i) {
     GTEST_LOG_(INFO) << names[i] << ": model " << (grown[i] / total * 100.0) << "%, trial "
                      << (theirs[i] * 100.0) << "%";
