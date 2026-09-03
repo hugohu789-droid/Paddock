@@ -232,9 +232,9 @@ TEST(SeasonalGrowthValidation, TheSeasonalDistributionIsCanterburyRatherThanSout
 
   constexpr double kToleranceShare = 0.04;
   for (std::size_t month = 0; month < 12; ++month) {
-    const bool named = std::find(kDryMonths.begin(), kDryMonths.end(), month) != kDryMonths.end() ||
-                       std::find(kFlushMonths.begin(), kFlushMonths.end(), month) !=
-                           kFlushMonths.end();
+    const bool named =
+        std::find(kDryMonths.begin(), kDryMonths.end(), month) != kDryMonths.end() ||
+        std::find(kFlushMonths.begin(), kFlushMonths.end(), month) != kFlushMonths.end();
     if (named) {
       continue;
     }

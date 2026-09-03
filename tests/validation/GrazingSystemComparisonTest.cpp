@@ -22,9 +22,9 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <set>
-#include <cstdlib>
 #include <string>
 
 #include <paddock/config/ScenarioRun.hpp>

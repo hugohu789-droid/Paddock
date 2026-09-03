@@ -48,8 +48,8 @@ SourcedValue read_sourced(const toml::table& parent, std::string_view key,
 }
 
 SpeciesDefinition read(const toml::table& root, const std::string& path) {
-  detail::reject_unknown_keys(root, {"species", "energy", "intake", "reproduction", "typical"}, path,
-                              "the file");
+  detail::reject_unknown_keys(root, {"species", "energy", "intake", "reproduction", "typical"},
+                              path, "the file");
 
   const toml::table& species = detail::require_table(root, "species", path);
   detail::reject_unknown_keys(species, {"name", "display_name", "description", "kind"}, path,
@@ -91,24 +91,21 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   // demanded it would be asking somebody to invent three coefficients rather
   // than leave the old behaviour alone.
   if (const toml::table* intake = root["intake"].as_table()) {
-    detail::reject_unknown_keys(*intake,
-                                {"normal_weight_rate", "normal_weight_exponent",
-                                 "normal_weight_blend", "condition_intake_limit",
-                                 "lactation_peak_days", "lactation_curve_exponent",
-                                 "lactation_peak_no_young", "lactation_peak_one_young",
-                                 "lactation_peak_two_young", "lactation_peak_three_young",
-                                 "appetite_scalar_per_day", "appetite_size_coefficient",
-                                 "availability_rate_per_kg_dm", "grazing_time_increase",
-                                 "grazing_time_rate_per_kg_dm"},
-                                path, "[intake]");
+    detail::reject_unknown_keys(
+        *intake,
+        {"normal_weight_rate", "normal_weight_exponent", "normal_weight_blend",
+         "condition_intake_limit", "lactation_peak_days", "lactation_curve_exponent",
+         "lactation_peak_no_young", "lactation_peak_one_young", "lactation_peak_two_young",
+         "lactation_peak_three_young", "appetite_scalar_per_day", "appetite_size_coefficient",
+         "availability_rate_per_kg_dm", "grazing_time_increase", "grazing_time_rate_per_kg_dm"},
+        path, "[intake]");
 
     definition.normal_weight_rate = read_sourced(*intake, "normal_weight_rate", path);
     definition.normal_weight_exponent = read_sourced(*intake, "normal_weight_exponent", path);
     definition.normal_weight_blend = read_sourced(*intake, "normal_weight_blend", path);
     definition.condition_intake_limit = read_sourced(*intake, "condition_intake_limit", path);
     definition.lactation_peak_days = read_sourced(*intake, "lactation_peak_days", path);
-    definition.lactation_curve_exponent =
-        read_sourced(*intake, "lactation_curve_exponent", path);
+    definition.lactation_curve_exponent = read_sourced(*intake, "lactation_curve_exponent", path);
     definition.lactation_peak_no_young = read_sourced(*intake, "lactation_peak_no_young", path);
     definition.lactation_peak_one_young = read_sourced(*intake, "lactation_peak_one_young", path);
     definition.lactation_peak_two_young = read_sourced(*intake, "lactation_peak_two_young", path);
@@ -127,14 +124,15 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
     definition.energy.lactation_peak_three_young = definition.lactation_peak_three_young.value;
 
     definition.appetite_scalar = read_sourced(*intake, "appetite_scalar_per_day", path);
-    definition.appetite_size_coefficient =
-        read_sourced(*intake, "appetite_size_coefficient", path);
+    definition.appetite_size_coefficient = read_sourced(*intake, "appetite_size_coefficient", path);
     definition.energy.appetite_scalar_per_day = definition.appetite_scalar.value;
     definition.energy.appetite_size_coefficient = definition.appetite_size_coefficient.value;
 
-    definition.intake_availability_rate = read_sourced(*intake, "availability_rate_per_kg_dm", path);
+    definition.intake_availability_rate =
+        read_sourced(*intake, "availability_rate_per_kg_dm", path);
     definition.intake_grazing_time_increase = read_sourced(*intake, "grazing_time_increase", path);
-    definition.intake_grazing_time_rate = read_sourced(*intake, "grazing_time_rate_per_kg_dm", path);
+    definition.intake_grazing_time_rate =
+        read_sourced(*intake, "grazing_time_rate_per_kg_dm", path);
 
     definition.energy.intake_availability_rate_per_kg_dm =
         definition.intake_availability_rate.value;

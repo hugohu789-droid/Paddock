@@ -14,19 +14,32 @@ namespace {
 
 core::PastureSpeciesParameters read_species(const toml::table& table, const std::string& path,
                                             const std::string& context) {
-  detail::reject_unknown_keys(
-      table,
-      {"species_id", "specific_leaf_area_m2_per_kg", "extinction_coefficient",
-       "radiation_use_efficiency_g_per_mj", "base_temperature_c", "optimum_temperature_c",
-       "maximum_temperature_c", "senescence_rate_per_day", "degree_days_per_leaf",
-       "temperature_response_exponent", "leaves_per_tiller", "drought_turnover_threshold",
-       "repro_season_max_allocation_increase", "repro_season_reference_latitude_degrees",
-       "repro_season_timing_coefficient", "repro_season_duration_coefficient",
-       "repro_season_shoulders_length_factor", "repro_season_onset_duration_factor",
-       "repro_season_allocation_coefficient", "drought_turnover_effect_max",
-       "drought_turnover_exponent", "residual_kg_dm_per_ha", "nitrogen_content_fraction",
-       "nitrogen_fixation_kg_per_t_dm"},
-      path, context);
+  detail::reject_unknown_keys(table,
+                              {"species_id",
+                               "specific_leaf_area_m2_per_kg",
+                               "extinction_coefficient",
+                               "radiation_use_efficiency_g_per_mj",
+                               "base_temperature_c",
+                               "optimum_temperature_c",
+                               "maximum_temperature_c",
+                               "senescence_rate_per_day",
+                               "degree_days_per_leaf",
+                               "temperature_response_exponent",
+                               "leaves_per_tiller",
+                               "drought_turnover_threshold",
+                               "repro_season_max_allocation_increase",
+                               "repro_season_reference_latitude_degrees",
+                               "repro_season_timing_coefficient",
+                               "repro_season_duration_coefficient",
+                               "repro_season_shoulders_length_factor",
+                               "repro_season_onset_duration_factor",
+                               "repro_season_allocation_coefficient",
+                               "drought_turnover_effect_max",
+                               "drought_turnover_exponent",
+                               "residual_kg_dm_per_ha",
+                               "nitrogen_content_fraction",
+                               "nitrogen_fixation_kg_per_t_dm"},
+                              path, context);
 
   core::PastureSpeciesParameters species;
   species.species_id = detail::require_string(table, "species_id", path);

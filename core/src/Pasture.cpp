@@ -123,8 +123,8 @@ double daily_temperature_factor(const PastureSpeciesParameters& species,
   return (0.25 * at_mean) + (0.75 * at_daylight);
 }
 
-double reproductive_growth_factor(const PastureSpeciesParameters& species,
-                                  double latitude_degrees, int day_of_year) noexcept {
+double reproductive_growth_factor(const PastureSpeciesParameters& species, double latitude_degrees,
+                                  int day_of_year) noexcept {
   if (species.repro_season_max_allocation_increase <= 0.0 ||
       species.repro_season_timing_coefficient == 0.0 ||
       species.repro_season_onset_duration_factor <= 0.0 ||
@@ -259,8 +259,8 @@ double senescence_share(const PastureSpeciesParameters& species, double mean_tem
   double drought = 1.0;
   const double stress = std::clamp(water_factor, 0.0, 1.0);
   if (species.drought_turnover_threshold > 0.0 && stress < species.drought_turnover_threshold) {
-    const double past = (species.drought_turnover_threshold - stress) /
-                        species.drought_turnover_threshold;
+    const double past =
+        (species.drought_turnover_threshold - stress) / species.drought_turnover_threshold;
     drought = 1.0 + (species.drought_turnover_effect_max *
                      std::pow(past, species.drought_turnover_exponent));
   }
@@ -499,19 +499,17 @@ PastureGrowth PastureSward::step(const DailyWeather& weather, double water_stres
   // its say. One outside the reproductive season, and one for any sward that
   // does not ask for it.
   const int day_of_year = weather.date.day_of_year();
-  const double grass_repro = reproductive_growth_factor(
-      parameters_.grass, parameters_.latitude_degrees, day_of_year);
-  const double legume_repro = reproductive_growth_factor(
-      parameters_.legume, parameters_.latitude_degrees, day_of_year);
+  const double grass_repro =
+      reproductive_growth_factor(parameters_.grass, parameters_.latitude_degrees, day_of_year);
+  const double legume_repro =
+      reproductive_growth_factor(parameters_.legume, parameters_.latitude_degrees, day_of_year);
 
-  const double grass_potential = parameters_.grass.radiation_use_efficiency_g_per_mj *
-                                 growth.intercepted_par_mj_per_m2 * grass_share *
-                                 grass_temperature * growth.water_factor * grass_repro *
-                                 kGramsPerM2ToKgPerHa;
-  const double legume_potential = parameters_.legume.radiation_use_efficiency_g_per_mj *
-                                  growth.intercepted_par_mj_per_m2 * legume_share *
-                                  legume_temperature * growth.water_factor * legume_repro *
-                                  kGramsPerM2ToKgPerHa;
+  const double grass_potential =
+      parameters_.grass.radiation_use_efficiency_g_per_mj * growth.intercepted_par_mj_per_m2 *
+      grass_share * grass_temperature * growth.water_factor * grass_repro * kGramsPerM2ToKgPerHa;
+  const double legume_potential =
+      parameters_.legume.radiation_use_efficiency_g_per_mj * growth.intercepted_par_mj_per_m2 *
+      legume_share * legume_temperature * growth.water_factor * legume_repro * kGramsPerM2ToKgPerHa;
 
   // Fixation covers much of a legume's nitrogen but not all of it: the
   // published 20-25 kg N fixed per tonne of dry matter sits below the 40-45 kg

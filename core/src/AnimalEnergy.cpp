@@ -176,8 +176,7 @@ double lactation_factor(const AnimalClassParameters& animal, const AnimalState& 
     return 1.0;
   }
 
-  const double through =
-      static_cast<double>(state.days_lactating) / animal.lactation_peak_days;
+  const double through = static_cast<double>(state.days_lactating) / animal.lactation_peak_days;
   const double exponent = animal.lactation_curve_exponent;
   return 1.0 + (peak * std::pow(through, exponent) * std::exp(exponent * (1.0 - through)));
 }
@@ -194,11 +193,11 @@ double potential_intake_kg_dm(const AnimalClassParameters& animal,
   const double appetite = animal.appetite_scalar_per_day * animal.standard_reference_weight_kg *
                           size * (animal.appetite_size_coefficient - size);
 
-  return std::max(0.0, appetite * condition_factor(animal, state) * lactation_factor(animal, state));
+  return std::max(0.0,
+                  appetite * condition_factor(animal, state) * lactation_factor(animal, state));
 }
 
-double relative_intake(const AnimalClassParameters& animal,
-                       double herbage_kg_dm_per_ha) noexcept {
+double relative_intake(const AnimalClassParameters& animal, double herbage_kg_dm_per_ha) noexcept {
   if (animal.intake_availability_rate_per_kg_dm <= 0.0) {
     return 1.0;
   }

@@ -368,8 +368,7 @@ struct SwardParameters {
 ///
 /// Returns 1.0 when the species states no increase, which is the default.
 [[nodiscard]] double reproductive_growth_factor(const PastureSpeciesParameters& species,
-                                                double latitude_degrees,
-                                                int day_of_year) noexcept;
+                                                double latitude_degrees, int day_of_year) noexcept;
 
 /// Fraction of light intercepted by a canopy of this leaf area index (Beer).
 [[nodiscard]] double light_interception(double leaf_area_index,
