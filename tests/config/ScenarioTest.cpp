@@ -331,7 +331,9 @@ void use_synthetic_weather(const BundleCopy& copy) {
   copy.edit("scenario.toml", "path = \"weather-2000-2025.csv\"",
             "path = \"../../weather/canterbury-synthetic.toml\"");
   copy.edit("scenario.toml", "kind = \"snapshot\"", "kind = \"synthetic\"");
-  copy.edit("scenario.toml", "sha256 = \"284f89f66b135c1adc8ccd445a02f14ef7c2d25656dcd8607cc93fb40110cb9c\"", "sha256 = \"eff7df475e6116bff57681091f3824e0a2adf9946b12a0b8e413b1079464c52a\"");
+  copy.edit("scenario.toml",
+            "sha256 = \"284f89f66b135c1adc8ccd445a02f14ef7c2d25656dcd8607cc93fb40110cb9c\"",
+            "sha256 = \"eff7df475e6116bff57681091f3824e0a2adf9946b12a0b8e413b1079464c52a\"");
 }
 
 TEST(ScenarioBundleTest, AnotherSeedIsAnotherRun) {

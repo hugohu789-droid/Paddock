@@ -193,17 +193,16 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // what it asserted is what a corrected model should pass.
 //
 // **Where the rest of it comes from is not yet known.** What is known
-// (verify.md, E62) is that it is not the water stress, which works. Ks averages 0.618 in spring against 0.366 in
-// summer, and 86 to 100% of November-to-February days sit below 0.5. The fault
-// is that `Pasture.cpp` feeds that same water factor into leaf death, in the
-// direction that protects the sward - a thirsty tiller pushes its next leaf
-// more slowly, so the leaf it carries lives longer. True, and only half of what
-// a drought does; the half where drought kills standing leaf is missing. The
-// two cancel almost exactly - spring 7.5 x 0.618 = 4.64 degree-days, summer
-// 12.5 x 0.366 = 4.59 - so this sward loses leaf at the same rate in a February
-// drought as in an October spring, holds its cover, keeps intercepting light,
-// and keeps growing. A real dryland sward browns off. That half is now carried
-// by `drought_turnover_*`, and it was worth three points of the twenty-two.
+// (verify.md, E62) is that it is not the water stress, which works. Ks averages 0.618 in spring
+// against 0.366 in summer, and 86 to 100% of November-to-February days sit below 0.5. The fault is
+// that `Pasture.cpp` feeds that same water factor into leaf death, in the direction that protects
+// the sward - a thirsty tiller pushes its next leaf more slowly, so the leaf it carries lives
+// longer. True, and only half of what a drought does; the half where drought kills standing leaf is
+// missing. The two cancel almost exactly - spring 7.5 x 0.618 = 4.64 degree-days, summer 12.5 x
+// 0.366 = 4.59 - so this sward loses leaf at the same rate in a February drought as in an October
+// spring, holds its cover, keeps intercepting light, and keeps growing. A real dryland sward browns
+// off. That half is now carried by `drought_turnover_*`, and it was worth three points of the
+// twenty-two.
 //
 // **What is left is a spring/summer partition, and it has been diagnosed**
 // (verify.md, E67). Not water: spring Ks is 0.930, six days in ninety-one below
