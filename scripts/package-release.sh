@@ -165,7 +165,13 @@ for path in data/*/; do
     # assumed.
     *" ${dir} "*) continue ;;
   esac
-  cp -r "${path}" "${stage}/data/"
+  # **The trailing slash is not cosmetic.** `data/*/` yields `data/scenarios/`,
+  # and GNU cp copies the directory while BSD cp copies its *contents* - so on
+  # macOS every scenario landed in `data/` directly and `data/scenarios/` never
+  # existed. Linux and Windows packaged correctly and macOS shipped an archive
+  # whose own smoke test could not find a manifest. Stripping the slash makes
+  # the two agree.
+  cp -r "${path%/}" "${stage}/data/"
 done
 
 # **The fetch scripts, because the NOTICE sends people to them.** Everything
