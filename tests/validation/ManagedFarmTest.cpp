@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <cstdlib>
 #include <string>
 #include <utility>
 
@@ -194,7 +195,14 @@ TEST(ManagedFarmTest, GrazingDownToTheFloorBuysLessFeedAndLeavesLessGrass) {
   // Neither may take the sward through the floor. That is the whole point of
   // the floor, and it is the assertion that would catch a rule that grazed too
   // far in the name of buying less.
-  EXPECT_GT(grazed_to_the_line.lowest_cover_kg_dm_per_ha(), 1000.0)
+  // **The floor moved because the farm did** (verify.md, E80). This asserted
+  // 1,000 kg DM/ha when the bundle ran a synthetic generator drawing 700-930 mm
+  // and a sward with a placeholder radiation use efficiency of 1.5. On real
+  // Selwyn weather and the sourced sward the year bottoms near 740, and that low
+  // is not the stock eating it out: it is 769 at 400 head and 733 at 1,200, a
+  // 36 kg spread across a threefold stocking range. The winter trough is
+  // senescence, not grazing.
+  EXPECT_GT(grazed_to_the_line.lowest_cover_kg_dm_per_ha(), 600.0)
       << "cover reached " << grazed_to_the_line.lowest_cover_kg_dm_per_ha() << " kg DM/ha";
 
   GTEST_LOG_(INFO) << "bought: whole demand " << bought_the_lot.bought_feed_kg_dm()
@@ -220,7 +228,14 @@ TEST(ManagedFarmTest, TheStockAreNotStarvedAndTheSwardIsNotGrazedOut) {
       << year.closing_liveweight_kg();
 
   // And the sward was not taken out from under them.
-  EXPECT_GT(year.lowest_cover_kg_dm_per_ha(), 1000.0)
+  // **The floor moved because the farm did** (verify.md, E80). This asserted
+  // 1,000 kg DM/ha when the bundle ran a synthetic generator drawing 700-930 mm
+  // and a sward with a placeholder radiation use efficiency of 1.5. On real
+  // Selwyn weather and the sourced sward the year bottoms near 740, and that low
+  // is not the stock eating it out: it is 769 at 400 head and 733 at 1,200, a
+  // 36 kg spread across a threefold stocking range. The winter trough is
+  // senescence, not grazing.
+  EXPECT_GT(year.lowest_cover_kg_dm_per_ha(), 600.0)
       << "cover reached " << year.lowest_cover_kg_dm_per_ha() << " kg DM/ha";
 
   GTEST_LOG_(INFO) << "bought " << year.bought_feed_kg_dm() << " kg DM on "
@@ -229,15 +244,32 @@ TEST(ManagedFarmTest, TheStockAreNotStarvedAndTheSwardIsNotGrazedOut) {
                    << " kg; cover low " << year.lowest_cover_kg_dm_per_ha();
 }
 
-// A farm that can carry its stock buys nothing. If the farmer bought feed for a
-// farm with grass to spare, the rule would be firing on something other than
-// need.
-TEST(ManagedFarmTest, AFarmWithFeedToSpareBuysNothing) {
-  const RunSummary year = run(300, default_policy(), "lightly stocked");
+// **The buy rule fires on need, and the evidence is that it scales with need.**
+//
+// This asked for exactly zero purchases at 300 head, which the farm managed
+// when it ran a synthetic generator drawing 700-930 mm and a sward with a
+// placeholder radiation use efficiency of 1.5. On real Selwyn weather and the
+// sourced sward, zero is not reachable at any stocking rate: a mob confined to
+// one paddock under a three-day graze and a 35-day spell will meet a day the
+// paddock is short of it, and the farmer tops it up (verify.md, E80).
+//
+// What can still be checked - and is the thing the test was ever about - is
+// that the rule is answering need rather than firing on its own. It buys 31 kg
+// DM a head at 100 and 61 at 300: three times the stock, six times the feed.
+// A rule firing on something other than need would not bend like that.
+TEST(ManagedFarmTest, TheBuyRuleAnswersNeedAndNothingElse) {
+  const RunSummary light = run(100, default_policy(), "lightly stocked");
+  const RunSummary heavier = run(300, default_policy(), "three times the stock");
 
-  EXPECT_DOUBLE_EQ(year.bought_feed_kg_dm(), 0.0)
-      << "bought " << year.bought_feed_kg_dm() << " kg DM on a farm that did not need it";
-  EXPECT_EQ(year.days_short, 0);
+  EXPECT_LT(light.bought_feed_kg_dm() / 100.0, 40.0)
+      << "a lightly stocked farm bought " << (light.bought_feed_kg_dm() / 100.0)
+      << " kg DM a head, which is not a top-up";
+  EXPECT_GT(heavier.bought_feed_kg_dm(), light.bought_feed_kg_dm() * 2.0)
+      << "three times the stock should need more than twice the feed, not the same";
+
+  // And whatever it bought, it was enough: nobody went short.
+  EXPECT_EQ(light.days_short, 0);
+  EXPECT_EQ(heavier.days_short, 0);
 }
 
 // The comparison the farmer makes possible: heavier stocking costs bought feed

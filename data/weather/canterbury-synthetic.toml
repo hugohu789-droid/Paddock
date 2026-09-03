@@ -1,3 +1,16 @@
+# A synthetic Canterbury-plains weather generator.
+#
+# **This is an example of the synthetic DataSource adapter, and no shipped
+# scenario runs on it.** It used to be the weather for both canterbury-* bundles,
+# and the note below - that its parameters were never taken from anyone's
+# published normals - turned out to matter: it drew 700 to 930 mm against a
+# Lincoln normal near 630, so those farms were wetter than Canterbury and grew
+# accordingly (verify.md, E79). They now read a real Selwyn snapshot.
+#
+# It stays because the generator is a real part of the DataSource port and needs
+# testing, and because a seed only changes a run that generates its weather -
+# with a snapshot, the master seed changes nothing a pasture run can see.
+
 # An example synthetic weather site, shaped like the Canterbury Plains.
 #
 # Every climate normal here is PLACEHOLDER. They give a Southern Hemisphere year

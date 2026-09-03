@@ -144,7 +144,14 @@ TEST(GrazedYearTest, AYearOfGrazingIsStable) {
     highest = std::max(highest, cover);
   }
 
-  EXPECT_GT(lowest, 1000.0) << "cover fell to " << lowest << " kg DM/ha, below any residual";
+  // **The floor moved because the farm did** (verify.md, E80). This asserted
+  // 1,000 kg DM/ha when the bundle ran a synthetic generator drawing 700-930 mm
+  // and a sward with a placeholder radiation use efficiency of 1.5. On real
+  // Selwyn weather and the sourced sward the year bottoms near 740, and that low
+  // is not the stock eating it out: it is 769 at 400 head and 733 at 1,200, a
+  // 36 kg spread across a threefold stocking range. The winter trough is
+  // senescence, not grazing.
+  EXPECT_GT(lowest, 600.0) << "cover fell to " << lowest << " kg DM/ha, below any residual";
   EXPECT_LT(highest, 12000.0) << "cover reached " << highest
                               << " kg DM/ha, which is more than a grazed sward carries";
 

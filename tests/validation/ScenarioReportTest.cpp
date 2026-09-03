@@ -70,7 +70,16 @@ TEST(ScenarioReportTest, ItReportsEveryPurchaseWithItsDate) {
 TEST(ScenarioReportTest, AFarmThatBoughtNothingSaysSo) {
   ScenarioBundle bundle = tests::load_on_flat_ground(bundle_path());
   bundle.mobs.front().head = 300;
-  const RunSummary run = run_managed_scenario(bundle, policy(), pasture_diet(), "lightly stocked");
+
+  // **A farmer who is not buying, rather than a farm that needs nothing.** On
+  // real Selwyn weather this farm tops its mobs up at every stocking rate, so
+  // there is no head count that buys nothing (verify.md, E80). What this test
+  // is about is the report's wording when the purchase table is empty, and a
+  // farmer told not to buy empties it just as well.
+  core::ManagementPolicy buys_nothing = policy();
+  buys_nothing.may_buy_feed = false;
+  const RunSummary run =
+      run_managed_scenario(bundle, buys_nothing, pasture_diet(), "buying nothing");
   ASSERT_TRUE(run.purchases.empty());
 
   const std::string report = render_report(bundle, run);

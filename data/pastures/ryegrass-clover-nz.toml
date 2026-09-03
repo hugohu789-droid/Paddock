@@ -1,3 +1,21 @@
+# Perennial ryegrass and white clover, as this model has them.
+#
+# **One file, because these are properties of the plants rather than of a farm.**
+# Four scenarios used to carry four sward files: the Lincoln one had every
+# parameter this project has sourced, and the other three were byte-identical
+# copies of the placeholder set it started from - a radiation use efficiency of
+# 1.5 against the 0.639 fitted here, a triangular temperature response, no
+# drought term and no reproductive season. So the work of E62 to E69 reached one
+# scenario out of four, and Ruakura grew nineteen tonnes of dry matter a hectare
+# (verify.md, E80).
+#
+# What legitimately differs between those farms is weather, soil, latitude and
+# stock, and every one of those is stated by the scenario rather than here.
+#
+# **The radiation use efficiency is the one fitted number**, and it was fitted at
+# Lincoln to Canterbury dryland water use efficiency. Applied at Ruakura it is a
+# prediction rather than a fit, and should be read as one.
+
 # A perennial ryegrass and white clover sward, with its radiation use
 # efficiency calibrated against Canterbury dryland production.
 #
@@ -139,11 +157,14 @@ leaves_per_tiller = 3.0
 #
 # **Every number in the curve comes from latitude**, which is what separates
 # adopting this from fitting a seasonal multiplier to the trial it is checked
-# against. Nothing here was chosen by looking at Winchmore. At this farm's
-# -43.641 it works out as a season opening on 1 September, a 35.8-day ramp to a
-# plateau on 7 October, 59.6 days at full effect, and a 23.9-day taper ending 29
-# December, with shoot allocation up 28.3% at the peak. Winchmore's biggest
-# months, in order, are October, November, September, December.
+# against, and what lets one sward file serve farms at different latitudes.
+# Nothing here was chosen by looking at Winchmore. At Lincoln's -43.641 it works
+# out as a season opening on 1 September, a 35.8-day ramp to a plateau on 7
+# October, 59.6 days at full effect, and a 23.9-day taper ending 29 December,
+# with shoot allocation up 28.3% at the peak - Winchmore's biggest months, in
+# order, are October, November, September, December. At Ruakura's -37.8 the
+# season opens earlier and runs longer, which is what a Waikato spring does.
+# The scenario states its latitude in [run]; this file states none.
 #
 # **What it is worth, honestly**: about a quarter of the remaining seasonal gap.
 # It does not restore the 25-in-25 signature - a 28% spring boost cannot

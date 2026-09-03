@@ -1,0 +1,30 @@
+{
+  "source": "Open-Meteo historical weather API (ERA5 reanalysis)",
+  "url": "https://archive-api.open-meteo.com/v1/archive",
+  "requested": {
+    "longitude": 172.4,
+    "latitude": -43.5,
+    "start": "2000-07-01",
+    "end": "2025-06-30",
+    "timezone": "Pacific/Auckland"
+  },
+  "answered_for": {
+    "longitude": 172.43242,
+    "latitude": -43.47979,
+    "elevation_m": 85.0,
+    "timezone": "Pacific/Auckland",
+    "utc_offset_seconds": 43200
+  },
+  "measurement": "reanalysis, not observation",
+  "sources_by_column": {
+    "rainfall_mm, min_air_temperature_c, max_air_temperature_c, solar_radiation_mj_per_m2, wind_speed_m_per_s": "Open-Meteo historical archive (ERA5)",
+    "uv_index": "not fetched - the CAMS archive does not reach this far back"
+  },
+  "wind_height_m": 10,
+  "wind_statistic": "daily maximum, not daily mean",
+  "days": 9131,
+  "licence": "CC-BY-4.0",
+  "attribution": "Weather data by Open-Meteo.com (https://open-meteo.com), licensed under CC BY 4.0. Generated using Copernicus Climate Change Service information (ERA5).",
+  "fetched_utc": "2026-09-02T22:55:17.214472+00:00",
+  "sha256": "284f89f66b135c1adc8ccd445a02f14ef7c2d25656dcd8607cc93fb40110cb9c"
+}
