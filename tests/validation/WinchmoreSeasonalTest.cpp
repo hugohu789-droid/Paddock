@@ -167,10 +167,10 @@ TEST(WinchmoreSeasonalTest, TheMeasuredSummerRunsFromNothingToThreeTonnes) {
 // trial's proportions, within ten points a season. It does not:
 //
 //     season   at E61   now     trial   remaining
-//     winter     6.2%    9.1%   10.0%   -0.9 points
-//     spring    32.2%   43.6%   54.7%  -11.1 points
-//     summer    41.3%   32.2%   18.0%  +14.2 points
-//     autumn    20.3%   15.1%   17.3%   -2.2 points
+//     winter     6.2%    9.4%   10.0%   -0.6 points
+//     spring    32.2%   43.9%   54.7%  -10.8 points
+//     summer    41.3%   31.7%   18.0%  +13.8 points
+//     autumn    20.3%   15.0%   17.3%   -2.3 points
 //
 // **Winter and autumn are closed and spring and summer are not**, which is a
 // more useful thing to know than a single seasonal error. Two sourced changes

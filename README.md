@@ -314,17 +314,17 @@ names a published source rather than a target chosen to be hit.
 
 | What | Measured against | Measured | Paddock |
 |---|---|---:|---:|
-| Annual pasture, Canterbury dryland | Winchmore, 25 dryland years | 6,442 kg DM/ha<br><sub>range 3,904–9,845</sub> | 7,547 over ten years |
-| Water use efficiency | Martin et al. (2006), dryland | 12.3 kg DM/ha/mm | 11.0 driest year<br>13.9 wettest |
-| Share of the year — winter | Winchmore, monthly | 10.0% | 9.1% |
-| — spring | | 54.7% | **43.6%** |
-| — summer | | 18.0% | **32.2%** |
-| — autumn | | 17.3% | 15.1% |
+| Annual pasture, Canterbury dryland | Winchmore, 25 dryland years | 6,442 kg DM/ha<br><sub>range 3,904–9,845</sub> | 7,286 over ten years |
+| Water use efficiency | Martin et al. (2006), dryland | 12.3 kg DM/ha/mm | 10.7 driest year<br>13.3 wettest |
+| Share of the year — winter | Winchmore, monthly | 10.0% | 9.4% |
+| — spring | | 54.7% | **43.9%** |
+| — summer | | 18.0% | **31.7%** |
+| — autumn | | 17.3% | 15.0% |
 | Monthly curve, unfertilised site | DairyNZ Woodlands, 0 kg N/ha | — | r = 0.82 |
 | Monthly curve, fertilised site | DairyNZ Lincoln p21, 154 kg N/ha | — | r = 0.75 |
 | Flock intake against its stock-unit rating | Parker (1998), 550 kg DM a stock unit | 100% | 67% |
 | Lamb weaning weight | OVERSEER's default when none is supplied | 20 kg | 30.5 kg |
-| Waikato annual pasture | *no source recorded yet* | — | 13.0 t |
+| Waikato annual pasture | *no source recorded yet* | — | 12.1 t |
 
 Three of those want reading twice.
 
@@ -350,10 +350,10 @@ soil, latitude and stock are what each scenario states for itself.
 
 | Scenario | Weather | Grown | WUE | What it is for |
 |---|---|---:|---:|---|
-| `canterbury-baseline` | Selwyn, 25 years | 8,284 | — | pasture and water with no stock |
-| `canterbury-grazed` | the same file | 7,889 | 13.5 | the grazed comparison, and the golden regression baseline |
-| `lincoln-lurdf` | Lincoln, 10 years | 6,645 | 12.6 | the farm the validation above is measured on |
-| `ruakura-fe` | Waikato | 12,629 | 14.1 | a facial eczema climate, not a stocking policy |
+| `canterbury-baseline` | Selwyn, 25 years | 8,042 | — | pasture and water with no stock |
+| `canterbury-grazed` | the same file | 7,679 | 13.2 | the grazed comparison, and the golden regression baseline |
+| `lincoln-lurdf` | Lincoln, 10 years | 6,407 | 12.1 | the farm the validation above is measured on |
+| `ruakura-fe` | Waikato | 12,120 | 13.5 | a facial eczema climate, not a stocking policy |
 
 `canterbury-baseline` and `canterbury-grazed` read the same weather file on
 purpose, so ungrazed against grazed is a comparison rather than two unrelated
@@ -368,8 +368,8 @@ what may be quoted and what may not.
 Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept current with the code:
 
 - **The model splits spring and summer wrongly. This is its largest known
-  error.** Against Winchmore's measured months it puts 43.6% of its year in
-  spring where the trial puts 54.7%, and 32.2% in summer where the trial puts
+  error.** Against Winchmore's measured months it puts 43.9% of its year in
+  spring where the trial puts 54.7%, and 31.7% in summer where the trial puts
   18.0%. Summer is when a Canterbury dryland farm
   stops growing, and it is nearly the model's biggest season, so nothing that
   depends on *when* feed arrives should be trusted. The sharpest way to say it:
@@ -387,7 +387,7 @@ Taken from [docs/validation/verify.md](docs/validation/verify.md), which is kept
 - **There is no phosphorus limitation, and the number that used to be the
   evidence for it is not evidence.** Winchmore's dryland treatment gets 250 kg
   of superphosphate a hectare a year and measured 6,442 kg DM/ha; this farm
-  applies none and averages 7,547. An unfertilised farm should produce *less*,
+  applies none and averages 7,286. An unfertilised farm should produce *less*,
   so a real gap exists. But that excess has read 13–20%, then 2%, then 17% in
   the course of correcting three unrelated things upstream of it — it moves
   whenever anything above it moves, so it cannot carry the argument on its own.

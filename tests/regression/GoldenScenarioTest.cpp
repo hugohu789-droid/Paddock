@@ -248,15 +248,21 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
   // twice the efficiency anyone has measured. These describe a dryland Selwyn
   // farm, and the mob is moved a third as often because there is a third as
   // much regrowth to move it onto.
-  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 1620.0539713332221, 1.7e-3);
-  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 768.66047733424409, 7.7e-4);
-  EXPECT_NEAR(run.closing_cover_kg_dm, 771.39412261534346, 7.8e-4);
-  EXPECT_NEAR(run.eaten_kg_dm, 91588.704322681704, 9.2e-2);
+  //
+  // **Re-pinned again for E83**, which gave tissue turnover its own temperature
+  // response instead of running it off a photosynthesis cardinal. Leaf turns
+  // over faster in a Canterbury summer than the fitted leaf lifespan it
+  // replaced, so the sward carries less and the mob is moved less often:
+  // mean cover 1,620 to 1,528, eaten 91.6 to 85.5 tonnes, moves 30 to 24.
+  EXPECT_NEAR(run.mean_cover_kg_dm_per_ha(), 1528.441212096667, 1.6e-3);
+  EXPECT_NEAR(run.lowest_cover_kg_dm_per_ha(), 728.71497299754617, 7.3e-4);
+  EXPECT_NEAR(run.closing_cover_kg_dm, 758.03559544857126, 7.6e-4);
+  EXPECT_NEAR(run.eaten_kg_dm, 85495.868074425103, 8.5e-2);
   EXPECT_NEAR(run.closing_liveweight_kg(), 55.000014928809946, 5.5e-5);
 
   // Counts, so they are equalities. A management decision that moves a mob one
   // more time is a change worth stopping on, not one to absorb in a tolerance.
-  EXPECT_EQ(run.moves, 30);
+  EXPECT_EQ(run.moves, 24);
   EXPECT_EQ(run.days_short, 0);
 }
 

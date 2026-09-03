@@ -90,7 +90,11 @@ TEST(GrazingSystemComparisonTest, WithFeedToSpareTheSystemsAreIndistinguishable)
   // weather and the sourced sward the same farm carries far fewer: at 500 head
   // both arms now go short, and 250 is where "feed to spare" begins again.
   // Found by running the model, as the original was.
-  const Comparison result = compare(250);
+  // 200 with E83, where this said 250 and originally 500. Each drop is the farm
+  // getting more honest rather than the test getting easier: a sourced turnover
+  // response carries a little less leaf than the fitted leaf lifespan it
+  // replaced, so "feed to spare" begins at a lighter rate again.
+  const Comparison result = compare(200);
 
   EXPECT_EQ(result.set_stocked.days_short, 0);
   EXPECT_EQ(result.rotational.days_short, 0);

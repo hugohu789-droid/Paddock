@@ -261,7 +261,10 @@ TEST(ManagedFarmTest, TheBuyRuleAnswersNeedAndNothingElse) {
   const RunSummary light = run(100, default_policy(), "lightly stocked");
   const RunSummary heavier = run(300, default_policy(), "three times the stock");
 
-  EXPECT_LT(light.bought_feed_kg_dm() / 100.0, 40.0)
+  // 90 kg a head with E83, where this said 40. Turnover on its own temperature
+  // response turns leaf over faster in a Canterbury summer than the leaf
+  // lifespan it replaced, so there is less standing and the farmer tops up more.
+  EXPECT_LT(light.bought_feed_kg_dm() / 100.0, 90.0)
       << "a lightly stocked farm bought " << (light.bought_feed_kg_dm() / 100.0)
       << " kg DM a head, which is not a top-up";
   EXPECT_GT(heavier.bought_feed_kg_dm(), light.bought_feed_kg_dm() * 2.0)
