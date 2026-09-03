@@ -65,8 +65,10 @@ core::Date read_date(const toml::table& table, std::string_view key,
 
 /// Reads a `[section]` that names a file and the hash it was built against.
 BundleInput read_input_table(const toml::table& table, const std::string& directory,
-                             const std::string& manifest_path, std::string& contents) {
+                             const std::string& manifest_path, std::string& contents,
+                             std::string_view section) {
   BundleInput input;
+  input.section = std::string(section);
   input.relative_path = detail::require_string(table, "path", manifest_path);
   input.recorded_sha256 = detail::optional_string(table, "sha256", "");
   contents = read_file(join(directory, input.relative_path), table, manifest_path);
@@ -78,7 +80,7 @@ BundleInput read_input(const toml::table& root, std::string_view section,
                        const std::string& directory, const std::string& manifest_path,
                        std::string& contents) {
   return read_input_table(detail::require_table(root, section, manifest_path), directory,
-                          manifest_path, contents);
+                          manifest_path, contents, section);
 }
 
 core::GrazingPreference grazing_preference_of(const std::string& text, const toml::table& where,
@@ -308,13 +310,15 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
   // guessed the same rule file.
   if (const toml::table* economics = root["economics"].as_table(); economics != nullptr) {
     std::string contents;
-    const BundleInput input = read_input_table(*economics, directory, manifest_path, contents);
+    const BundleInput input =
+        read_input_table(*economics, directory, manifest_path, contents, "economics");
     bundle.economics_path = join(directory, input.relative_path);
     bundle.inputs.push_back(input);
   }
   if (const toml::table* regulation = root["regulation"].as_table(); regulation != nullptr) {
     std::string contents;
-    const BundleInput input = read_input_table(*regulation, directory, manifest_path, contents);
+    const BundleInput input =
+        read_input_table(*regulation, directory, manifest_path, contents, "regulation");
     bundle.regulation_path = join(directory, input.relative_path);
     bundle.inputs.push_back(input);
   }
@@ -550,7 +554,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
 
       std::string species_text;
       const BundleInput species_input =
-          read_input_table(*entry, directory, manifest_path, species_text);
+          read_input_table(*entry, directory, manifest_path, species_text, "mob");
       const SpeciesDefinition species =
           parse_species(species_text, join(directory, species_input.relative_path));
       mob.animal = species.energy;

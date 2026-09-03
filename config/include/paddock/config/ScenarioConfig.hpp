@@ -25,6 +25,18 @@ namespace paddock::config {
 
 /// One file a bundle depends on, and the hash it was built against.
 struct BundleInput {
+  /// Which manifest section named it: "weather", "soil", "sward", "economics",
+  /// "regulation", or "mob".
+  ///
+  /// **Recorded because the list is otherwise unreadable to anything but a hash
+  /// check.** A caller that wants to say "the weather is the same and the sward
+  /// is not" has only the path to go on, and a path is where a file sits rather
+  /// than what it is for - `../lincoln-lurdf/soil.toml` and `soil.toml` are the
+  /// same soil, and two bundles can reach one file by different routes. The
+  /// loader knows the section it is reading; this is it writing that down
+  /// instead of leaving the next reader to guess from a filename.
+  std::string section;
+
   std::string relative_path;
   std::string recorded_sha256;
   std::string actual_sha256;
