@@ -2409,8 +2409,17 @@ void MapWindow::refresh_chart() {
     if (source.empty()) {
       continue;
     }
-    lines.push_back({wanted.name, wanted.unit, QColor(wanted.red, wanted.green, wanted.blue),
-                     mean_each_day(source)});
+    // Built field by field rather than as an aggregate, which is how the other
+    // two callers do it and why they did not break when `reference` was added
+    // to Line. MSVC says nothing about a missing initialiser; gcc with
+    // -Werror=missing-field-initializers stops the release build, and the GUI
+    // is compiled by gcc nowhere else.
+    SeasonChart::Line line;
+    line.name = wanted.name;
+    line.unit = wanted.unit;
+    line.colour = QColor(wanted.red, wanted.green, wanted.blue);
+    line.values = mean_each_day(source);
+    lines.push_back(std::move(line));
   }
 
   // **Events, not lines.** A day was irrigated or it was not, and a line
