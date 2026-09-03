@@ -569,6 +569,18 @@ int run_scenario(const std::string& bundle_directory, const std::string& csv_pat
               << "` runs the farm with its stock.\n";
   }
 
+  // **A bundle that irrigates and a command that does not.** This path runs one
+  // ungrazed farmlet through `core::run`, which takes no irrigation schedule -
+  // so the figures above are this farm rain-fed whatever the manifest says. On
+  // the demo pair that is the whole of what is being compared, and a reader who
+  // was not told would take the rain-fed answer for the irrigated one.
+  if (bundle.irrigation.has_value() && bundle.irrigation->enabled) {
+    std::cout << "            it also names an irrigation rule, which this command does not "
+                 "apply:\n"
+              << "            the figures above are this farm rain-fed. `paddock dashboard "
+              << bundle_directory << "` waters it.\n";
+  }
+
   if (!result.budgets_close(farmlet)) {
     std::cerr << "\npaddock: the budgets did not close; these results are not usable\n"
               << result.ledger.report(paddock::core::Budget::Water, farmlet.soil().water_mm())

@@ -377,6 +377,99 @@ TEST(ScenarioBundleTest, AChangedInputIsRefusedAndNamed) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// [irrigation]
+//
+// **Empty means rain-fed, and that is the default.** Until this section existed
+// the only place a run could be told to irrigate was the desktop panel, so an
+// irrigated result could be reproduced only by somebody who also had the window
+// open. These check the section parses, that leaving it out still means what it
+// always meant, and that a rule the model cannot act on is refused with a line
+// number rather than run.
+
+/// The grazed bundle with an [irrigation] section appended.
+void give_it_irrigation(const BundleCopy& copy, const std::string& section) {
+  const std::filesystem::path manifest = std::filesystem::path(copy.path()) / "scenario.toml";
+  std::ofstream append(manifest, std::ios::binary | std::ios::app);
+  append << "\n[irrigation]\n" << section;
+}
+
+TEST(ScenarioBundleTest, ABundleWithNoIrrigationSectionIsRainFed) {
+  const ScenarioBundle bundle = load_scenario(grazed_bundle());
+  EXPECT_FALSE(bundle.irrigation.has_value());
+}
+
+TEST(ScenarioBundleTest, AnIrrigationSectionIsReadWholeAndItsDefaultsAreTheCoreDefaults) {
+  const BundleCopy copy(grazed_bundle());
+  give_it_irrigation(copy, "enabled = true\ntrigger_depletion_fraction = 0.6\n");
+
+  const ScenarioBundle bundle = load_scenario_unchecked(copy.path());
+  ASSERT_TRUE(bundle.irrigation.has_value());
+  const core::IrrigationPolicy rule = bundle.irrigation.value_or(core::IrrigationPolicy{});
+  EXPECT_TRUE(rule.enabled);
+  EXPECT_DOUBLE_EQ(rule.trigger_depletion_fraction, 0.6);
+
+  // Unstated fields keep core's own documented defaults rather than zero, so a
+  // manifest naming a trigger and nothing else still describes a working rule.
+  const core::IrrigationPolicy untouched;
+  EXPECT_DOUBLE_EQ(rule.target_depletion_fraction, untouched.target_depletion_fraction);
+  EXPECT_DOUBLE_EQ(rule.maximum_application_mm, untouched.maximum_application_mm);
+  EXPECT_DOUBLE_EQ(bundle.irrigation_system.application_efficiency, 1.0);
+}
+
+TEST(ScenarioBundleTest, ADepletionFractionOutsideZeroToOneIsRefused) {
+  const BundleCopy copy(grazed_bundle());
+  give_it_irrigation(copy, "trigger_depletion_fraction = 1.4\n");
+
+  try {
+    static_cast<void>(load_scenario_unchecked(copy.path()));
+    FAIL() << "expected a depletion fraction above one to be refused";
+  } catch (const ConfigError& error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("trigger_depletion_fraction"), std::string::npos) << message;
+    EXPECT_NE(message.find("between"), std::string::npos) << message;
+  }
+}
+
+// A rule that refills to a drier soil than it triggers at never stops watering.
+TEST(ScenarioBundleTest, ARefillTargetDrierThanTheTriggerIsRefused) {
+  const BundleCopy copy(grazed_bundle());
+  give_it_irrigation(copy, "trigger_depletion_fraction = 0.4\ntarget_depletion_fraction = 0.8\n");
+
+  try {
+    static_cast<void>(load_scenario_unchecked(copy.path()));
+    FAIL() << "expected a target drier than the trigger to be refused";
+  } catch (const ConfigError& error) {
+    EXPECT_NE(std::string(error.what()).find("for ever"), std::string::npos) << error.what();
+  }
+}
+
+TEST(ScenarioBundleTest, AnIrrigationRuleThatMayApplyNoWaterIsRefused) {
+  const BundleCopy copy(grazed_bundle());
+  give_it_irrigation(copy, "maximum_application_mm = 0.0\n");
+
+  try {
+    static_cast<void>(load_scenario_unchecked(copy.path()));
+    FAIL() << "expected a zero maximum application to be refused";
+  } catch (const ConfigError& error) {
+    EXPECT_NE(std::string(error.what()).find("maximum_application_mm"), std::string::npos)
+        << error.what();
+  }
+}
+
+TEST(ScenarioBundleTest, AnUnknownKeyInTheIrrigationSectionIsRefused) {
+  const BundleCopy copy(grazed_bundle());
+  give_it_irrigation(copy, "trigger_dpletion_fraction = 0.6\n");
+
+  try {
+    static_cast<void>(load_scenario_unchecked(copy.path()));
+    FAIL() << "expected a misspelt key to be refused rather than ignored";
+  } catch (const ConfigError& error) {
+    EXPECT_NE(std::string(error.what()).find("trigger_dpletion_fraction"), std::string::npos)
+        << error.what();
+  }
+}
+
 TEST(ScenarioBundleTest, AnEngineVersionMismatchIsRefused) {
   const BundleCopy copy;
   copy.edit("scenario.toml", "engine_version = \"0.1.0\"", "engine_version = \"0.0.9\"");

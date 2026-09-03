@@ -152,7 +152,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
   detail::reject_unknown_keys(
       root,
       {"scenario", "run", "weather", "soil", "sward", "initial_state", "grid", "terrain",
-       "management", "mob", "grazing_period", "economics", "regulation"},
+       "management", "irrigation", "mob", "grazing_period", "economics", "regulation"},
       manifest_path, "the manifest");
 
   const toml::table& scenario = detail::require_table(root, "scenario", manifest_path);
@@ -387,6 +387,85 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                        "unknown terrain kind '" + terrain_kind +
                            "'. Known kinds are: flat, synthetic, snapshot");
     }
+  }
+
+  // **Whether this farm irrigates, and on what rule.** Optional, and absent
+  // means rain-fed - which is what a New Zealand farm is unless somebody says
+  // otherwise, and what every bundle written before this section existed is.
+  //
+  // The same argument as [management] below: until this existed the only place
+  // a run could be told to irrigate was the desktop panel, so an irrigated
+  // result could be reproduced only by somebody who also had the window open
+  // and remembered which boxes were ticked. Two bundles identical but for this
+  // section are a controlled comparison of irrigation, and a test can prove
+  // they differ in nothing else.
+  if (const toml::table* watering = root["irrigation"].as_table(); watering != nullptr) {
+    detail::reject_unknown_keys(
+        *watering,
+        {"enabled", "trigger_depletion_fraction", "target_depletion_fraction",
+         "maximum_application_mm", "minimum_return_days", "application_efficiency",
+         "system_maximum_application_mm"},
+        manifest_path, "[irrigation]");
+
+    core::IrrigationPolicy policy;
+    policy.enabled = detail::optional_bool(*watering, "enabled", true, manifest_path);
+    policy.trigger_depletion_fraction = detail::optional_double(
+        *watering, "trigger_depletion_fraction", policy.trigger_depletion_fraction, manifest_path);
+    policy.target_depletion_fraction = detail::optional_double(
+        *watering, "target_depletion_fraction", policy.target_depletion_fraction, manifest_path);
+    policy.maximum_application_mm = detail::optional_double(
+        *watering, "maximum_application_mm", policy.maximum_application_mm, manifest_path);
+    policy.minimum_return_days = static_cast<int>(detail::optional_double(
+        *watering, "minimum_return_days", policy.minimum_return_days, manifest_path));
+
+    core::IrrigationSystem system;
+    system.application_efficiency = detail::optional_double(
+        *watering, "application_efficiency", system.application_efficiency, manifest_path);
+    system.maximum_application_mm = detail::optional_double(
+        *watering, "system_maximum_application_mm", system.maximum_application_mm, manifest_path);
+
+    // Refusing here rather than at the first day of the run, so a manifest that
+    // cannot be irrigated says so with a line number.
+    //
+    // **The bounds are checked here because nothing else checks them.**
+    // `IrrigationSystem` carries its own `validation_error`; `IrrigationPolicy`
+    // does not, and a depletion fraction outside nought to one is not a rule the
+    // model can act on - it is a soil that holds a negative amount of water or
+    // more than it can hold. Left unchecked it would run and produce numbers.
+    if (const std::string trouble = system.validation_error(); !trouble.empty()) {
+      detail::throw_in(*watering, manifest_path, trouble);
+    }
+    for (const auto& [name, fraction] :
+         {std::pair{"trigger_depletion_fraction", policy.trigger_depletion_fraction},
+          std::pair{"target_depletion_fraction", policy.target_depletion_fraction}}) {
+      // `isfinite` first and spelt out: TOML has a literal `nan`, and every
+      // comparison against one is false - so a range check written as a pair of
+      // comparisons lets `nan` through as though it were in range.
+      if (!std::isfinite(fraction) || fraction < 0.0 || fraction > 1.0) {
+        detail::throw_in(*watering, manifest_path,
+                         std::string("'") + name +
+                             "' is a share of the water the soil can hold, so it must be between "
+                             "0 and 1");
+      }
+    }
+    if (!std::isfinite(policy.maximum_application_mm) || policy.maximum_application_mm <= 0.0) {
+      detail::throw_in(*watering, manifest_path,
+                       "'maximum_application_mm' must be above zero: a rule that may apply no "
+                       "water is irrigation switched off, which is what leaving this section out "
+                       "says");
+    }
+    if (policy.minimum_return_days < 0) {
+      detail::throw_in(*watering, manifest_path, "'minimum_return_days' cannot be negative");
+    }
+    if (policy.target_depletion_fraction > policy.trigger_depletion_fraction) {
+      detail::throw_in(*watering, manifest_path,
+                       "'target_depletion_fraction' refills to a drier soil than "
+                       "'trigger_depletion_fraction' starts at, so this rule would irrigate "
+                       "for ever");
+    }
+
+    bundle.irrigation = policy;
+    bundle.irrigation_system = system;
   }
 
   // What the farmer will not allow, when the bundle says. Optional: a run given

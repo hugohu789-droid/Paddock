@@ -12,6 +12,7 @@
 #include <paddock/core/Farmer.hpp>
 #include <paddock/core/FarmletGrid.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
+#include <paddock/core/Irrigation.hpp>
 #include <paddock/core/Pasture.hpp>
 #include <paddock/core/Raster.hpp>
 #include <paddock/core/Simulation.hpp>
@@ -237,6 +238,24 @@ struct ScenarioBundle {
   /// running it - the cover the sward is not taken below, and whether feed may
   /// be bought to hold both that and the stock.
   std::optional<core::ManagementPolicy> management;
+
+  /// The irrigation rule this farm is run under, when the bundle names one.
+  ///
+  /// **Empty means rain-fed, and that is the default.** The same argument as
+  /// `management` above, for the same reason: until this existed the only place
+  /// a run could be told to irrigate was the desktop panel, so an irrigated
+  /// result could be reproduced only by somebody who also had the window open
+  /// and remembered which boxes were ticked. A bundle is supposed to be the
+  /// whole of a run.
+  ///
+  /// It is what makes a controlled comparison of irrigation possible at all:
+  /// two bundles identical but for this section differ in the one thing being
+  /// compared, and a test can prove it rather than a reader having to trust it.
+  std::optional<core::IrrigationPolicy> irrigation;
+
+  /// What the plant can deliver. Only meaningful with `irrigation` set; its own
+  /// defaults model no losses, which `core::IrrigationSystem` explains.
+  core::IrrigationSystem irrigation_system;
 
   /// Which grazing system runs when. Empty when the bundle has no stock; a
   /// bundle with stock must say how they are managed, because leaving it to a

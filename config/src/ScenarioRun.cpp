@@ -101,12 +101,20 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::DietQu
         "' names no [management], so there is nothing to say what its farmer would not allow. "
         "Add the section, or run it with a policy of your own.");
   }
-  return run_managed_scenario(bundle, *bundle.management, diet, std::move(label));
+  // **A bundle that names an irrigation rule is run under it.** This overload is
+  // the one that means "run this scenario as it describes itself", so leaving
+  // the rule behind here would make an irrigated bundle quietly rain-fed - the
+  // exact failure [management] was added to stop.
+  return run_managed_scenario(bundle, *bundle.management, diet, std::move(label), DayObserver{},
+                              bundle.irrigation.value_or(core::IrrigationPolicy{}),
+                              bundle.irrigation_system);
 }
 
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label) {
-  return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{});
+  return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{},
+                              bundle.irrigation.value_or(core::IrrigationPolicy{}),
+                              bundle.irrigation_system);
 }
 
 namespace {
@@ -343,9 +351,12 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label,
                                 FarmBusiness business) {
-  RunSummary summary = run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{},
-                                            {}, {}, &business);
-  return summary;
+  // The bundle's own irrigation rule, for the reason the overload above gives:
+  // a priced run of an irrigated bundle that came back rain-fed would be the
+  // same silent failure, and this is the path the dashboard takes.
+  return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{},
+                              bundle.irrigation.value_or(core::IrrigationPolicy{}),
+                              bundle.irrigation_system, &business);
 }
 
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
