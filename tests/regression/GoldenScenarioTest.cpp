@@ -263,7 +263,7 @@ TEST(GoldenScenarioTest, TheYearStillComesToWhatItCameTo) {
   // Counts, so they are equalities. A management decision that moves a mob one
   // more time is a change worth stopping on, not one to absorb in a tolerance.
   EXPECT_EQ(run.moves, 24);
-  EXPECT_EQ(run.days_short, 0);
+  EXPECT_EQ(run.feed_supply_short_days, 0);
 }
 
 }  // namespace

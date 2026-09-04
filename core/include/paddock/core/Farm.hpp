@@ -142,7 +142,12 @@ struct FarmDay {
   double total_supplement_kg_dm = 0.0;
 
   /// True when any mob went short. The signal a feed budget is not working.
-  bool any_mob_short = false;
+  /// Whether any mob ran out of feed today, and whether any mob could not eat
+  /// what it needed although the feed was there. **Separate, because a farm
+  /// decision may read the first and must not read the second** - see
+  /// `FeedingConstraint`.
+  bool any_mob_feed_supply_limited = false;
+  bool any_mob_intake_capacity_limited = false;
 };
 
 class Farm {

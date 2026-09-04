@@ -55,7 +55,7 @@ FarmOutlook comfortable_farm() {
   outlook.liveweight_kg = 55.0;
   outlook.cover_kg_dm_per_ha = 2400.0;
   outlook.minimum_cover_kg_dm_per_ha = 1600.0;
-  outlook.consecutive_days_short = 0;
+  outlook.consecutive_feed_supply_short_days = 0;
   outlook.hectares = 80.0;
   outlook.balance_dollars = 40'000.0;
   outlook.daily_operating_cost_dollars = 203.0;
@@ -88,7 +88,7 @@ TEST(FarmDecisionTest, ThreeWeeksShortOfFeedSellsStock) {
   FarmManager manager = a_manager();
 
   FarmOutlook drought = comfortable_farm();
-  drought.consecutive_days_short = 21;
+  drought.consecutive_feed_supply_short_days = 21;
   drought.cover_kg_dm_per_ha = 1200.0;
 
   const std::vector<Proposal> done = manager.decide(drought, account);
@@ -171,7 +171,7 @@ TEST(FarmDecisionTest, DestockingStopsAtTheFloor) {
   policy.minimum_head = 50;
 
   FarmOutlook drought = comfortable_farm();
-  drought.consecutive_days_short = 60;
+  drought.consecutive_feed_supply_short_days = 60;
   drought.head = 55;
   drought.breeding_head = 55;
 
@@ -251,8 +251,8 @@ std::vector<int> destocking_days(const std::string& pattern, const DecisionPolic
     }
 
     FarmOutlook outlook = comfortable_farm();
-    outlook.consecutive_days_short = consecutive;
-    outlook.total_days_short = total;
+    outlook.consecutive_feed_supply_short_days = consecutive;
+    outlook.total_feed_supply_short_days = total;
     outlook.breeding_head = outlook.head;
 
     for (const Proposal& done : manager.decide(outlook, account)) {
@@ -330,8 +330,8 @@ TEST(FarmDecisionTest, TheCumulativeTotalDoesNotDecideAnything) {
   FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
 
   FarmOutlook outlook = comfortable_farm();
-  outlook.consecutive_days_short = 0;
-  outlook.total_days_short = 300;
+  outlook.consecutive_feed_supply_short_days = 0;
+  outlook.total_feed_supply_short_days = 300;
 
   for (const Proposal& done : manager.decide(outlook, account)) {
     EXPECT_NE(done.kind, ActionKind::Destock)
@@ -353,7 +353,7 @@ namespace {
 /// A farm three weeks short of feed, with the two populations set apart.
 FarmOutlook drought_with(int breeding, int lambs) {
   FarmOutlook outlook = comfortable_farm();
-  outlook.consecutive_days_short = 60;
+  outlook.consecutive_feed_supply_short_days = 60;
   outlook.breeding_head = breeding;
   outlook.head = breeding + lambs;
   return outlook;
@@ -473,6 +473,36 @@ TEST(FarmDecisionTest, TheTotalHeadIsUnchangedAndStillDrivesTheFeedRules) {
   }
   EXPECT_TRUE(fed) << "below the cover floor and nothing was bought";
   EXPECT_EQ(lambing.head, 839);
+}
+
+// **Appetite alone must never sell stock.** A farm whose ewes cannot eat their
+// requirement off a full paddock has an animal problem; selling a fifth of them
+// does not put feed into the rest. The rule reads feed supply and nothing else,
+// and the counter it reads is fed only by feed-supply days.
+TEST(FarmDecisionTest, AppetiteLimitationAloneNeverSellsStock) {
+  FarmManager manager = a_manager();
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+
+  // Sixty days on the trot where the ewes could not eat enough, and not one of
+  // them a day the farm was short of feed - so the counter the rule reads stays
+  // at zero however long it goes on.
+  FarmOutlook outlook = comfortable_farm();
+  outlook.consecutive_feed_supply_short_days = 0;
+  outlook.total_feed_supply_short_days = 0;
+
+  for (int day = 0; day < 60; ++day) {
+    for (const Proposal& done : manager.decide(outlook, account)) {
+      EXPECT_NE(done.kind, ActionKind::Destock)
+          << "sold stock on day " << day << " because the ewes were in milk";
+    }
+  }
+}
+
+// And a real three-week feed shortage still sells, so the fix has not simply
+// switched destocking off.
+TEST(FarmDecisionTest, ARealFeedShortageStillSells) {
+  const std::vector<int> sold = destocking_days(std::string(21, 's'));
+  EXPECT_FALSE(sold.empty()) << "three weeks with no feed and nothing was sold";
 }
 
 }  // namespace paddock::core

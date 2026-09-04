@@ -96,20 +96,32 @@ struct RunSummary {
 
   double eaten_kg_dm = 0.0;
 
-  /// Days on which any mob could not get what it needed, over the whole run.
+  /// Days on which the farm could not put enough feed in front of the stock,
+  /// over the whole run.
   ///
   /// **Cumulative, and for reporting.** The farmer's destocking rule reads a
   /// consecutive count instead - see `FarmOutlook::consecutive_days_short` -
   /// and the two are deliberately separate fields now that feeding one to the
   /// other has been found to fire the rule permanently (E98).
-  int days_short = 0;
+  int feed_supply_short_days = 0;
 
   /// The longest run of short days in a row.
   ///
   /// Kept because it is the figure that says whether a year's short days were
   /// a drought or a scatter, which the total cannot: twenty-one in a row and
   /// twenty-one spread over a season are the same total and different farms.
-  int longest_short_run_days = 0;
+  int longest_feed_supply_short_run_days = 0;
+
+  /// Days on which a mob could not eat what it needed although the feed was
+  /// there, and the longest such run.
+  ///
+  /// **Counted separately and read by nothing that decides.** This is the
+  /// animal's state, not the farm's: it is what a ewe at peak lactation does,
+  /// and a farm cannot buy or sell its way out of it. Kept because it is worth
+  /// reporting and because the day it is folded back into the feed count is the
+  /// day E103 comes back.
+  int intake_capacity_limited_days = 0;
+  int longest_intake_capacity_limited_run_days = 0;
 
   int moves = 0;
   int short_spells = 0;

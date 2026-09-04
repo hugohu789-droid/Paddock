@@ -212,7 +212,7 @@ TEST(IntakeCausalityTest, AbundantPastureAndNoSupplement) {
   EXPECT_GT(day.grazing.eaten_kg_dm, 0.0);
   EXPECT_DOUBLE_EQ(day.supplement_kg_dm, 0.0);
   EXPECT_DOUBLE_EQ(day.supplement_offered_kg_dm, 0.0);
-  EXPECT_FALSE(day.grazing.feed_limited) << "short on three tonnes of cover";
+  EXPECT_TRUE(day.grazing.constraint.requirement_met()) << "short on three tonnes of cover";
   EXPECT_LE(day.total_intake_kg_dm(), day.intake_capacity_kg_dm + 1e-9);
 }
 
@@ -221,7 +221,8 @@ TEST(IntakeCausalityTest, AbundantPastureAndNoSupplement) {
 TEST(IntakeCausalityTest, PastureLimitedWithSupplementAvailable) {
   Farm bare = build_farm(1'250.0, 200);
   const MobDay without = one_day(bare, 0.0);
-  ASSERT_TRUE(without.grazing.feed_limited) << "the setup is not actually pasture-limited";
+  ASSERT_TRUE(without.grazing.constraint.feed_supply_limited)
+      << "the setup is not actually pasture-limited";
 
   Farm fed = build_farm(1'250.0, 200);
   const MobDay with = one_day(fed, 100.0);
@@ -239,7 +240,8 @@ TEST(IntakeCausalityTest, PastureLimitedWithNoSupplementAvailable) {
   const MobDay day = one_day(farm, 0.0);
 
   EXPECT_DOUBLE_EQ(day.supplement_kg_dm, 0.0);
-  EXPECT_TRUE(day.grazing.feed_limited);
+  EXPECT_TRUE(day.grazing.constraint.feed_supply_limited)
+      << "an empty trough on a bare paddock is the farm being short, not the ewe being full";
   EXPECT_LT(day.total_intake_kg_dm(), day.grazing.demand_kg_dm + day.supplement_kg_dm);
 }
 
@@ -346,4 +348,103 @@ TEST(IntakeCausalityTest, AMatureEweDoesNotGrowWithoutLimitOnAbundantFeed) {
 }
 
 }  // namespace
+
+// ---------------------------------------------------------------------------
+// Which constraint bound the day.
+//
+// **A farm out of grass and a ewe out of room are different facts**, and the
+// field that used to carry both sold four fifths of a flock off an irrigated
+// farm growing twelve tonnes (E103). These check that each situation produces
+// the name that describes it.
+
+// Feed everywhere, appetite the only limit: the animal's state, not the farm's.
+TEST(IntakeCausalityTest, AbundantFeedWithAppetiteTheLimitIsIntakeCapacityLimited) {
+  // A target gain nothing could eat its way to, on three tonnes of cover with
+  // an open trough - so the only thing that can stop her is her own ceiling.
+  Farm farm = build_farm(3'000.0, 100);
+  farm.set_target_gain(0, 2.0);
+  const MobDay day = one_day(farm, 5'000.0);
+
+  EXPECT_TRUE(day.grazing.constraint.intake_capacity_limited)
+      << "she was full and still short, and the model did not say so";
+  EXPECT_FALSE(day.grazing.constraint.feed_supply_limited)
+      << "three tonnes of cover and an open trough is not a farm short of feed";
+
+  // And she really was at her ceiling.
+  EXPECT_NEAR(day.total_intake_kg_dm(), day.intake_capacity_kg_dm, 1e-6);
+}
+
+// Not enough grass, room left in the animal: the farm's problem.
+TEST(IntakeCausalityTest, ShortPastureWithRoomLeftIsFeedSupplyLimited) {
+  Farm farm = build_farm(1'250.0, 200);
+  const MobDay day = one_day(farm, 0.0);
+
+  EXPECT_TRUE(day.grazing.constraint.feed_supply_limited);
+  EXPECT_FALSE(day.grazing.constraint.intake_capacity_limited)
+      << "there was room left in her, so the ceiling was not what stopped her";
+  EXPECT_LT(day.total_intake_kg_dm(), day.intake_capacity_kg_dm);
+}
+
+// Short pasture, and the trough makes it up: no shortage at all.
+TEST(IntakeCausalityTest, SupplementThatFillsTheGapClearsTheFeedSupplySignal) {
+  Farm bare = build_farm(1'250.0, 200);
+  ASSERT_TRUE(one_day(bare, 0.0).grazing.constraint.feed_supply_limited)
+      << "the setup is not actually short";
+
+  Farm fed = build_farm(1'250.0, 200);
+  const MobDay day = one_day(fed, 400.0);
+
+  EXPECT_TRUE(day.grazing.constraint.requirement_met())
+      << "the trough covered the deficit and the farm still reported a shortage";
+  EXPECT_GT(day.supplement_kg_dm, 0.0);
+}
+
+// Short pasture and not enough in the trough either: still the farm's problem.
+TEST(IntakeCausalityTest, SupplementThatDoesNotFillTheGapLeavesItFeedSupplyLimited) {
+  Farm farm = build_farm(1'250.0, 200);
+  const MobDay day = one_day(farm, 5.0);
+
+  EXPECT_TRUE(day.grazing.constraint.feed_supply_limited);
+  EXPECT_FALSE(day.grazing.constraint.intake_capacity_limited);
+}
+
+// **Both on the same farm-day, which the farm record has to keep.** Within one
+// mob the two are exclusive - intake either reached the ceiling or it did not -
+// so the case that matters is two mobs in different situations.
+TEST(IntakeCausalityTest, AFarmCanBeShortOfFeedAndFullOfAppetiteOnTheSameDay) {
+  // A short farm, so grass alone cannot feed either mob. The first is fed out
+  // to past its appetite and asked for a gain nothing could eat its way to, so
+  // its ceiling is what stops it. The second is left on the bare paddock.
+  Farm farm = build_farm(1'250.0, 100);
+  farm.add_mob(ewes(200), {1});
+  farm.set_target_gain(0, 2.0);
+  farm.set_target_gain(1, 2.0);
+
+  const std::vector<double> supplement{5'000.0, 0.0};
+  const FarmDay day = farm.step(a_growing_day(), pasture_diet(), supplement);
+
+  ASSERT_EQ(day.mobs.size(), 2U);
+  EXPECT_TRUE(day.mobs[0].grazing.constraint.intake_capacity_limited);
+  EXPECT_TRUE(day.mobs[1].grazing.constraint.feed_supply_limited);
+
+  EXPECT_TRUE(day.any_mob_feed_supply_limited);
+  EXPECT_TRUE(day.any_mob_intake_capacity_limited) << "the farm record lost one of the two facts";
+}
+
+// **Both at once is the ordinary case on a short sward through lambing**, and
+// the two bools have to be able to say so: a ewe whose milk has outrun her
+// appetite, on a paddock too short to harvest fast enough, is limited by her
+// own ceiling and by the farm at the same time. An enum could not express it.
+TEST(IntakeCausalityTest, AShortSwardAndAnUnreachableRequirementAreBothTrue) {
+  Farm farm = build_farm(1'250.0, 100);
+  farm.set_target_gain(0, 2.0);
+  const MobDay day = one_day(farm, 0.0);
+
+  EXPECT_TRUE(day.grazing.constraint.intake_capacity_limited)
+      << "the requirement was above her ceiling and the model did not say so";
+  EXPECT_TRUE(day.grazing.constraint.feed_supply_limited)
+      << "she did not even get what the sward could have given her";
+  EXPECT_FALSE(day.grazing.constraint.requirement_met());
+}
+
 }  // namespace paddock::core

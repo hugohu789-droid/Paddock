@@ -230,7 +230,7 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
                : std::nullopt,
            std::nullopt));
   year.indicators.push_back(
-      make("Days short of feed", static_cast<double>(run.days_short), "days", Provenance::Derived,
+      make("Days short of feed", static_cast<double>(run.feed_supply_short_days), "days", Provenance::Derived,
            "Days a mob was offered less than it asked for.", std::nullopt, 0.0));
   // **The number this model could not state, and the one that turned out to be
   // the answer.** Its utilisation looked bad and three explanations were tried

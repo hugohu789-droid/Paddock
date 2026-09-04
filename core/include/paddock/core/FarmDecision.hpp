@@ -126,8 +126,13 @@ struct FarmOutlook {
   /// direction: a rule that cannot see what it would be selling should not sell.
   int breeding_head = 0;
 
-  /// **Consecutive** days the mob has not been able to eat what it needed, up
-  /// to and including today. The signal a drought shows up in before anything
+  /// **Consecutive** days the farm has not been able to put enough feed in
+  /// front of the stock, up to and including today.
+  ///
+  /// **Feed supply, not appetite.** A ewe at peak lactation who cannot eat her
+  /// requirement off a full paddock is not a farm short of feed, and counting
+  /// her here sold four fifths of a flock off an irrigated farm (E103). The
+  /// distinction is `FeedingConstraint`'s. The signal a drought shows up in before anything
   /// else does, and the one the destocking rule reads.
   ///
   /// **Zero on the first day the stock get what they asked for.** A run of
@@ -137,14 +142,14 @@ struct FarmOutlook {
   /// the twenty-first short day of the year fired the rule whenever it fell -
   /// and, because that total cannot fall, kept it fired for the rest of the
   /// run. See E98 and E99.
-  int consecutive_days_short = 0;
+  int consecutive_feed_supply_short_days = 0;
 
   /// Short days so far this run, whether or not they were in a row.
   ///
   /// **Reporting only.** Nothing decides on this. It is here so that a rule
   /// which wanted the seasonal total could have it without reaching for the
   /// field above, which is how the two came to be confused in the first place.
-  int total_days_short = 0;
+  int total_feed_supply_short_days = 0;
 
   double hectares = 0.0;
 

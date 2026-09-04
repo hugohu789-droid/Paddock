@@ -74,7 +74,7 @@ YearOfGrazing run_the_year(const ScenarioBundle& bundle) {
     year.grazings_extended += decisions.grazings_extended;
 
     const core::FarmDay farm_day = farm.step(day, diet, &year.ledger);
-    if (farm_day.any_mob_short) {
+    if (farm_day.any_mob_feed_supply_limited) {
       ++year.days_short;
     }
     year.eaten_kg_dm += farm_day.total_eaten_kg_dm;

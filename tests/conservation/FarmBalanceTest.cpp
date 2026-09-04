@@ -148,7 +148,7 @@ YearResult run_year(Farm& farm, int days) {
   for (int day = 0; day < days; ++day) {
     const WeatherSeries series = weather.fetch(DateRange{date, date});
     const FarmDay farm_day = farm.step(series.records.front(), pasture_diet(), &result.ledger);
-    if (farm_day.any_mob_short) {
+    if (farm_day.any_mob_feed_supply_limited) {
       ++result.days_short;
     }
     result.eaten_kg_dm += farm_day.total_eaten_kg_dm;

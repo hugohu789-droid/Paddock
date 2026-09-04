@@ -476,9 +476,39 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     mob_day.grazing.intake_per_head_kg_dm =
         mob_day.grazing.eaten_kg_dm / static_cast<double>(farm_mob.mob.head);
 
-    // Short when what it ate - grass and trough together - did not reach what it
-    // was being fed for.
-    mob_day.grazing.feed_limited = mob_day.total_intake_kg_dm() < (demand_kg_dm - 1e-9);
+    // **Which of the two constraints bound the day, if either did.**
+    //
+    // The mob fell short when grass and trough together did not reach what it
+    // was being fed for. Why it fell short is the question a management rule
+    // needs answered, and there are two answers: either there was room left in
+    // the animal and nothing to put in it, or the animal was full and it was
+    // not enough.
+    //
+    // Room left is the test. Intake stopping below the physiological ceiling
+    // means something outside the animal ran out - the paddock above its
+    // residual, or the sward being short enough that a mob cannot harvest fast
+    // enough, or an empty trough - and all three are the farm's problem.
+    // Intake reaching the ceiling with the requirement still unmet is the
+    // animal's state, and no amount of feed or selling changes it.
+    // **Two independent questions, and they can both answer yes.**
+    //
+    // Could the animal have met its requirement at all, eating to its ceiling?
+    // If the requirement is above the ceiling the answer is no whatever the
+    // farm does, and that is the animal's state: a ewe at peak lactation whose
+    // appetite has not caught up with her milk. Selling her neighbours does not
+    // change it.
+    //
+    // Did it get what was actually within reach - the lesser of what it needed
+    // and what it could hold? Falling under that is the farm's problem: the
+    // paddock ran out above its residual, or the sward was short enough that a
+    // mob cannot harvest fast enough, or the trough was empty.
+    //
+    // On a short sward through lambing both are true at once, which is why they
+    // are two bools and not an enum.
+    const double total_intake = mob_day.total_intake_kg_dm();
+    const double within_reach = std::min(demand_kg_dm, capacity_kg_dm);
+    mob_day.grazing.constraint.intake_capacity_limited = demand_kg_dm > (capacity_kg_dm + 1e-9);
+    mob_day.grazing.constraint.feed_supply_limited = total_intake < (within_reach - 1e-9);
 
     // Every paddock the mob had the run of has been grazed, which is why set
     // stocking gives no rest: under it this resets all of them, every day.
@@ -555,7 +585,10 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     day.total_eaten_kg_dm += mob_day.grazing.eaten_kg_dm;
     day.total_supplement_kg_dm += mob_day.supplement_kg_dm;
     day.total_nitrogen_removed_kg += mob_day.grazing.nitrogen_removed_kg;
-    day.any_mob_short = day.any_mob_short || mob_day.grazing.feed_limited;
+    day.any_mob_feed_supply_limited =
+        day.any_mob_feed_supply_limited || mob_day.grazing.constraint.feed_supply_limited;
+    day.any_mob_intake_capacity_limited =
+        day.any_mob_intake_capacity_limited || mob_day.grazing.constraint.intake_capacity_limited;
 
     day.mobs.push_back(std::move(mob_day));
   }

@@ -50,6 +50,52 @@ struct Mob {
 };
 
 /// What one day's grazing did to one paddock.
+/// Why a mob fell short of what it was being fed for.
+///
+/// **Two names because they are two different facts, and a management rule
+/// reads exactly one of them.** The field these replace was called
+/// `feed_limited` and meant either - which is how an irrigated farm growing
+/// twelve tonnes of dry matter came to sell four fifths of its ewes: the ewes
+/// were in early lactation and could not eat their requirement, the farm had
+/// grass to spare, and the destocking rule could not tell the difference
+/// (E103). A caller now has to say which one it means.
+struct FeedingConstraint {
+  /// **There was not enough feed to fill the appetite that was left.** The
+  /// paddock ran out above its residual, or the sward was short enough that the
+  /// mob could not harvest fast enough, or the trough was empty. This is the
+  /// farm's problem, and it is the one a destocking decision is entitled to
+  /// read.
+  bool feed_supply_limited = false;
+
+  /// **The feed was there and the animal could not hold it.** Intake reached
+  /// the physiological ceiling and the requirement was still not met - a ewe at
+  /// peak lactation on a full paddock. This is the animal's state, not the
+  /// farm's, and selling stock will not change it. She loses condition, which
+  /// is what a ewe milking harder than she is fed does.
+  bool intake_capacity_limited = false;
+
+  /// True when the mob ate what it was fed for.
+  ///
+  /// **Both can be true on the same day, and on a short sward through lambing
+  /// both are.** They answer different questions: whether the requirement was
+  /// reachable at all, and whether what was reachable was actually got. A ewe
+  /// whose milk has outrun her appetite on a sward too short to harvest fast
+  /// enough is limited by her own ceiling *and* by the paddock, and a farm
+  /// decision is entitled to act on the second while doing nothing about the
+  /// first.
+  [[nodiscard]] bool requirement_met() const noexcept {
+    return !feed_supply_limited && !intake_capacity_limited;
+  }
+
+  /// True when the mob fell short for either reason. **Reporting only**: a rule
+  /// that wants "did this farm run out of feed" must read
+  /// `feed_supply_limited`, and this is here so a report can say "went short"
+  /// without a caller reconstructing it from two bools and getting it wrong.
+  [[nodiscard]] bool fell_short() const noexcept {
+    return feed_supply_limited || intake_capacity_limited;
+  }
+};
+
 struct GrazingDay {
   /// What the mob needed, from its energy requirement (TMC Eq. 19).
   double demand_kg_dm = 0.0;
@@ -75,11 +121,8 @@ struct GrazingDay {
   /// Per head, which is what a stockman would look at.
   double intake_per_head_kg_dm = 0.0;
 
-  /// True when the paddock could not meet the demand. This is not an error: it
-  /// is the signal a farm is short of feed, and it is what a grazing system is
-  /// judged by. A caller that ignores it is modelling animals that eat what
-  /// they like regardless of what is there.
-  bool feed_limited = false;
+  /// Why the mob did not get what it was fed for, when it did not.
+  FeedingConstraint constraint;
 
   /// Eaten over demanded, 1.0 when the mob was satisfied and 0 when there was
   /// nothing to eat.

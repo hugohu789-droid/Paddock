@@ -127,7 +127,8 @@ namespace {
 /// argument safe, and is asserted by a test rather than assumed.
 void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::FarmManager& manager,
                     core::Farm& farm, double hectares, const core::ManagementPolicy& policy,
-                    const core::Date& today, RunSummary& summary, int consecutive_days_short) {
+                    const core::Date& today, RunSummary& summary,
+                    int consecutive_feed_supply_short_days) {
   account.charge_day(today);
 
   // **What the lambs did on the paddock yesterday comes back first.** The farm
@@ -227,8 +228,8 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // used to hand the year-to-date total to a field documented as consecutive,
   // which fired the destocking rule on the twenty-first short day of the year
   // and - since a total cannot fall - kept it fired every day afterwards.
-  outlook.consecutive_days_short = consecutive_days_short;
-  outlook.total_days_short = summary.days_short;
+  outlook.consecutive_feed_supply_short_days = consecutive_feed_supply_short_days;
+  outlook.total_feed_supply_short_days = summary.feed_supply_short_days;
   outlook.hectares = hectares;
   outlook.balance_dollars = account.balance();
   outlook.daily_operating_cost_dollars = business.costs.annual_per_hectare() * hectares / 365.0;
@@ -444,10 +445,12 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.flock_days.reserve(weather.records.size());
   }
 
-  // Days short in a row, reset by the first day the stock get what they
-  // asked for. Run state rather than summary state: the report wants the
-  // total and the longest run, and the farmer wants today's.
-  int consecutive_days_short = 0;
+  // Days of feed shortage in a row, reset by the first day the farm feeds its
+  // stock. Run state rather than summary state: the report wants the total and
+  // the longest run, and the farmer wants today's. A hungry ewe on a full
+  // paddock is counted in the capacity run beside it and never here.
+  int consecutive_feed_supply_short_days = 0;
+  int consecutive_capacity_limited_days = 0;
 
   for (const core::DailyWeather& day : weather.records) {
     const core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
@@ -511,24 +514,34 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     }
 
     const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger, water);
-    // **Cumulative for the report, consecutive for the decision.** Kept apart
-    // on purpose: one field carrying both meanings is what E98 found.
-    if (farm_day.any_mob_short) {
-      ++summary.days_short;
-      ++consecutive_days_short;
-      summary.longest_short_run_days =
-          std::max(summary.longest_short_run_days, consecutive_days_short);
+    // **Four counters, two facts.** Cumulative for the report and consecutive
+    // for the decision - one field carrying both is what E98 found - and a feed
+    // shortage kept apart from an animal that could not eat, which is what E103
+    // found. Nothing that decides reads the capacity pair.
+    if (farm_day.any_mob_feed_supply_limited) {
+      ++summary.feed_supply_short_days;
+      ++consecutive_feed_supply_short_days;
+      summary.longest_feed_supply_short_run_days =
+          std::max(summary.longest_feed_supply_short_run_days, consecutive_feed_supply_short_days);
     } else {
-      consecutive_days_short = 0;
+      consecutive_feed_supply_short_days = 0;
+    }
+    if (farm_day.any_mob_intake_capacity_limited) {
+      ++summary.intake_capacity_limited_days;
+      ++consecutive_capacity_limited_days;
+      summary.longest_intake_capacity_limited_run_days = std::max(
+          summary.longest_intake_capacity_limited_run_days, consecutive_capacity_limited_days);
+    } else {
+      consecutive_capacity_limited_days = 0;
     }
     for (std::size_t i = 0; i < farm_day.mobs.size() && i < went_short.size(); ++i) {
-      went_short[i] = farm_day.mobs[i].grazing.feed_limited;
+      went_short[i] = farm_day.mobs[i].grazing.constraint.feed_supply_limited;
     }
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
     if (business != nullptr && manager.has_value() && summary.account.has_value()) {
       keep_the_books(*business, *summary.account, *manager, farm, farm_hectares, policy, day.date,
-                     summary, consecutive_days_short);
+                     summary, consecutive_feed_supply_short_days);
     }
 
     summary.dates.push_back(day.date);
@@ -609,10 +622,12 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
   summary.paddock_of_first_mob.reserve(weather.records.size());
 
   std::vector<bool> went_short(farm.mobs().size(), false);
-  // Days short in a row, reset by the first day the stock get what they
-  // asked for. Run state rather than summary state: the report wants the
-  // total and the longest run, and the farmer wants today's.
-  int consecutive_days_short = 0;
+  // Days of feed shortage in a row, reset by the first day the farm feeds its
+  // stock. Run state rather than summary state: the report wants the total and
+  // the longest run, and the farmer wants today's. A hungry ewe on a full
+  // paddock is counted in the capacity run beside it and never here.
+  int consecutive_feed_supply_short_days = 0;
+  int consecutive_capacity_limited_days = 0;
 
   for (const core::DailyWeather& day : weather.records) {
     const core::Farmer::Day decisions = farmer.decide(farm, day.date, went_short);
@@ -621,18 +636,28 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
     summary.grazings_extended += decisions.grazings_extended;
 
     const core::FarmDay farm_day = farm.step(day, diet, &summary.ledger);
-    // **Cumulative for the report, consecutive for the decision.** Kept apart
-    // on purpose: one field carrying both meanings is what E98 found.
-    if (farm_day.any_mob_short) {
-      ++summary.days_short;
-      ++consecutive_days_short;
-      summary.longest_short_run_days =
-          std::max(summary.longest_short_run_days, consecutive_days_short);
+    // **Four counters, two facts.** Cumulative for the report and consecutive
+    // for the decision - one field carrying both is what E98 found - and a feed
+    // shortage kept apart from an animal that could not eat, which is what E103
+    // found. Nothing that decides reads the capacity pair.
+    if (farm_day.any_mob_feed_supply_limited) {
+      ++summary.feed_supply_short_days;
+      ++consecutive_feed_supply_short_days;
+      summary.longest_feed_supply_short_run_days =
+          std::max(summary.longest_feed_supply_short_run_days, consecutive_feed_supply_short_days);
     } else {
-      consecutive_days_short = 0;
+      consecutive_feed_supply_short_days = 0;
+    }
+    if (farm_day.any_mob_intake_capacity_limited) {
+      ++summary.intake_capacity_limited_days;
+      ++consecutive_capacity_limited_days;
+      summary.longest_intake_capacity_limited_run_days = std::max(
+          summary.longest_intake_capacity_limited_run_days, consecutive_capacity_limited_days);
+    } else {
+      consecutive_capacity_limited_days = 0;
     }
     for (std::size_t i = 0; i < farm_day.mobs.size() && i < went_short.size(); ++i) {
-      went_short[i] = farm_day.mobs[i].grazing.feed_limited;
+      went_short[i] = farm_day.mobs[i].grazing.constraint.feed_supply_limited;
     }
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 

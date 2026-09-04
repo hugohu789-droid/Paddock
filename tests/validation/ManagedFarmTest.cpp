@@ -89,7 +89,7 @@ TEST(ManagedFarmTest, ABundlesOwnRulesGiveTheSameRunAsThoseRulesPassedIn) {
   EXPECT_EQ(from_bundle.cover_kg_dm_per_ha, passed_in.cover_kg_dm_per_ha);
   EXPECT_EQ(from_bundle.liveweight_kg, passed_in.liveweight_kg);
   EXPECT_DOUBLE_EQ(from_bundle.bought_feed_kg_dm(), passed_in.bought_feed_kg_dm());
-  EXPECT_EQ(from_bundle.days_short, passed_in.days_short);
+  EXPECT_EQ(from_bundle.feed_supply_short_days, passed_in.feed_supply_short_days);
   EXPECT_EQ(from_bundle.moves, passed_in.moves);
 }
 
@@ -271,8 +271,8 @@ TEST(ManagedFarmTest, TheBuyRuleAnswersNeedAndNothingElse) {
       << "three times the stock should need more than twice the feed, not the same";
 
   // And whatever it bought, it was enough: nobody went short.
-  EXPECT_EQ(light.days_short, 0);
-  EXPECT_EQ(heavier.days_short, 0);
+  EXPECT_EQ(light.feed_supply_short_days, 0);
+  EXPECT_EQ(heavier.feed_supply_short_days, 0);
 }
 
 // The comparison the farmer makes possible: heavier stocking costs bought feed

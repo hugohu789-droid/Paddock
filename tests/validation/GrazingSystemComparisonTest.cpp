@@ -96,8 +96,8 @@ TEST(GrazingSystemComparisonTest, WithFeedToSpareTheSystemsAreIndistinguishable)
   // replaced, so "feed to spare" begins at a lighter rate again.
   const Comparison result = compare(200);
 
-  EXPECT_EQ(result.set_stocked.days_short, 0);
-  EXPECT_EQ(result.rotational.days_short, 0);
+  EXPECT_EQ(result.set_stocked.feed_supply_short_days, 0);
+  EXPECT_EQ(result.rotational.feed_supply_short_days, 0);
   EXPECT_NEAR(result.set_stocked.liveweight_change_kg(), result.rotational.liveweight_change_kg(),
               0.01)
       << "with feed to spare a mob eats its fill either way";
@@ -184,7 +184,7 @@ TEST(GrazingSystemComparisonTest, TheAnimalSideAdvantageIsNotReproducedAndTheRea
   GTEST_LOG_(INFO) << "at " << kLimitingHead << " head: set stocked "
                    << result.set_stocked.liveweight_change_kg() << " kg, rotational "
                    << result.rotational.liveweight_change_kg() << " kg; days short "
-                   << result.set_stocked.days_short << " against " << result.rotational.days_short;
+                   << result.set_stocked.feed_supply_short_days << " against " << result.rotational.feed_supply_short_days;
 
   // Rotation is behind, and this records by how much so that a change which
   // fixes it - selectivity, species dynamics, a cleverer farmer - shows up here
@@ -211,9 +211,9 @@ TEST(GrazingSystemComparisonTest, TheAnimalSideAdvantageIsNotReproducedAndTheRea
   // comparison is not weaker for it: the confined mob is short half as often
   // again, and loses 19.4 kg against 13.9. What the test is about is the gap,
   // and the gap is wider than it was.
-  EXPECT_LT(result.set_stocked.days_short, result.rotational.days_short * 3 / 4)
+  EXPECT_LT(result.set_stocked.feed_supply_short_days, result.rotational.feed_supply_short_days * 3 / 4)
       << "a mob with the run of the farm should find feed more often than a confined one";
-  EXPECT_GT(result.rotational.days_short, 20)
+  EXPECT_GT(result.rotational.feed_supply_short_days, 20)
       << "and a confined one should go short, which is what drives the difference";
 }
 
