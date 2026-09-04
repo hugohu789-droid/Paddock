@@ -99,7 +99,7 @@ may_buy_feed = true
 [[mob]]
 name = "main mob"
 path = "../../species/sheep-ewe.toml"
-sha256 = "de87347f5e8a76d6035433d852a8782ed873fd6e311e5f59a954a9b7a043b84d"
+sha256 = "f35ea2bbebec419392454ceee5dca48ab9f03407937b0fb7fdf20fa3e3130caf"
 head = 417
 paddock = 0
 liveweight_kg = 55.0
@@ -108,7 +108,7 @@ age_days = 1500.0
 [[mob]]
 name = "lambs"
 path = "../../species/sheep-lamb.toml"
-sha256 = "621f695e8397389ec0da8d5955c8ff9c04fef6dc67b502fc56adbea0889e2302"
+sha256 = "9c518f8b75bcfedd0bb0b893e4416551eb41f74b916629f0f0f8b4e98c83881d"
 head = 0
 paddock = 0
 liveweight_kg = 6.0

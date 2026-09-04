@@ -159,5 +159,36 @@ age_days = 1200.0
                ConfigError);
 }
 
+// **A file written before E110 must fail, and say where** (verify.md, E110).
+//
+// The six `[intake]` lactation parameters gained an `appetite_` prefix because
+// the old names read as claims about milk. No alias was kept: the repository is
+// pre-1.0 and every species file is in-tree, so a stale name is a mistake to be
+// shown rather than absorbed. The failure has to be loud in both directions -
+// `reject_unknown_keys` refuses the old key, and `require_table` refuses a file
+// that has dropped it - because the one thing this must never do is default
+// quietly to zero. That is E93, where an appetite scalar of 0.0 marked `direct`
+// switched the whole intake ceiling off and nothing said a word for months.
+TEST(SpeciesConfigTest, AStaleKeyNameIsRejectedWithItsLine) {
+  const std::string stale = std::string(kEwe) + R"(
+[intake]
+normal_weight_rate = { value = 0.0157, status = "direct", source = "grazplan_animal" }
+normal_weight_exponent = { value = 0.27, status = "direct", source = "grazplan_animal" }
+normal_weight_blend = { value = 0.4, status = "direct", source = "grazplan_animal" }
+condition_intake_limit = { value = 1.5, status = "direct", source = "grazplan_animal" }
+lactation_peak_days = { value = 28.0, status = "direct", source = "grazplan_animal" }
+)";
+
+  try {
+    parse(stale);
+    FAIL() << "a file using the pre-E110 key name has to be refused, not read";
+  } catch (const ConfigError& error) {
+    EXPECT_EQ(error.path(), "test.toml");
+    EXPECT_GT(error.line(), 0U) << "the message has to be able to point at the key";
+    EXPECT_NE(error.detail().find("lactation_peak_days"), std::string::npos)
+        << "and has to name the key it is refusing: " << error.detail();
+  }
+}
+
 }  // namespace
 }  // namespace paddock::config

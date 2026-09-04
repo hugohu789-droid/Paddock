@@ -158,26 +158,26 @@ double condition_factor(const AnimalClassParameters& animal, const AnimalState& 
 /// GrazPlan Eq. 8, without its LA and LB terms - both are at most one, so this
 /// makes a milking female hungrier than GrazPlan would and never less.
 double lactation_factor(const AnimalClassParameters& animal, const AnimalState& state) noexcept {
-  if (state.days_lactating <= 0 || animal.lactation_peak_days <= 0.0 ||
-      animal.lactation_curve_exponent <= 0.0) {
+  if (state.days_lactating <= 0 || animal.appetite_lactation_peak_days <= 0.0 ||
+      animal.appetite_lactation_curve_exponent <= 0.0) {
     return 1.0;
   }
 
   const long young = std::lround(std::max(0.0, state.young));
-  double peak = animal.lactation_peak_no_young;
+  double peak = animal.appetite_lactation_peak_no_young;
   if (young == 1) {
-    peak = animal.lactation_peak_one_young;
+    peak = animal.appetite_lactation_peak_one_young;
   } else if (young == 2) {
-    peak = animal.lactation_peak_two_young;
+    peak = animal.appetite_lactation_peak_two_young;
   } else if (young >= 3) {
-    peak = animal.lactation_peak_three_young;
+    peak = animal.appetite_lactation_peak_three_young;
   }
   if (peak <= 0.0) {
     return 1.0;
   }
 
-  const double through = static_cast<double>(state.days_lactating) / animal.lactation_peak_days;
-  const double exponent = animal.lactation_curve_exponent;
+  const double through = static_cast<double>(state.days_lactating) / animal.appetite_lactation_peak_days;
+  const double exponent = animal.appetite_lactation_curve_exponent;
   return 1.0 + (peak * std::pow(through, exponent) * std::exp(exponent * (1.0 - through)));
 }
 

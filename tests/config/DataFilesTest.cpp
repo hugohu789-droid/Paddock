@@ -16,6 +16,8 @@
 #include <string>
 #include <vector>
 
+#include <paddock/core/AnimalEnergy.hpp>
+
 #include <paddock/config/DiseaseConfig.hpp>
 #include <paddock/config/FarmConfig.hpp>
 #include <paddock/config/PastureConfig.hpp>
@@ -481,6 +483,60 @@ TEST(DataFilesTest, AFarmIsMeasuredAgainstTheRuleItNamesAndNoOther) {
          "which is Canterbury's";
   EXPECT_TRUE(waikato.economics_path.empty())
       << "and must not be priced from a South Island survey for the same reason";
+}
+
+// **Characterisation, not validation** (verify.md, E109 and E110).
+//
+// This records what the shipped ewe currently does, so that a change to either
+// curve is deliberate. It is deliberately not a tolerance band against measured
+// data, because the measurement disagrees with the model and saying so is the
+// point: Beef + Lamb New Zealand Fact Sheet 94 dates ewe milk at two to four
+// weeks and ewe appetite at eight, a gap of four to six weeks. This model's gap
+// is two. The number below is the model's, and it is wrong against the best New
+// Zealand evidence available - it is pinned rather than fixed because fixing it
+// means moving a `direct` GrazPlan constant on the strength of a farm fact
+// sheet, which is open item 17 and not a licence this test grants.
+TEST(DataFilesTest, TheShippedEwesTwoPeaksAreFourteenDaysApart) {
+  const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
+  const auto ewe = std::find_if(
+      species.begin(), species.end(),
+      [](const SpeciesDefinition& definition) { return definition.name == "sheep_ewe"; });
+  ASSERT_NE(ewe, species.end()) << "data/species/ no longer has the ewe this test is about";
+
+  core::GrazingConditions ground;
+  ground.pasture_mass_t_dm_per_ha = 2.5;
+
+  const auto state_on = [](int day) {
+    core::AnimalState state;
+    state.liveweight_kg = 55.0;
+    state.age_days = 1500.0;
+    state.days_lactating = day;
+    state.young = 1.0;
+    return state;
+  };
+
+  int milk_peak = 1;
+  int appetite_peak = 1;
+  double best_milk = 0.0;
+  double best_appetite = 0.0;
+  for (int day = 1; day <= 200; ++day) {
+    const double milk = core::daily_milk_yield_kg(ewe->energy, state_on(day), ground);
+    if (milk > best_milk) {
+      best_milk = milk;
+      milk_peak = day;
+    }
+    const double appetite = core::potential_intake_kg_dm(ewe->energy, state_on(day));
+    if (appetite > best_appetite) {
+      best_appetite = appetite;
+      appetite_peak = day;
+    }
+  }
+
+  EXPECT_EQ(milk_peak, 14) << "TMC Eq. 35, which no file configures";
+  EXPECT_EQ(appetite_peak, 28) << "GrazPlan C_I8, which appetite_lactation_peak_days sets";
+  EXPECT_EQ(appetite_peak - milk_peak, 14)
+      << "the model's lag between milk and appetite. Beef + Lamb New Zealand puts it at four to "
+         "six weeks; this is two, and open item 17 is where that is tracked";
 }
 
 }  // namespace paddock::config

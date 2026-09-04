@@ -108,15 +108,24 @@ condition_intake_limit = { value = 1.5, status = "direct", source = "grazplan_an
 # 0.8 its footnote applies to this group - 0.6553, 0.8843 and 1.1143 scale to
 # 0.5242, 0.7074 and 0.8914, which is how the table was checked.
 #
+# **These name appetite, and only appetite** (verify.md, E110).
+# `appetite_lactation_peak_days` is C_I8: the day the *appetite* increment
+# peaks, because `M^exponent * exp(exponent * (1 - M))` is at its maximum where
+# `M = 1`. **Milk timing is independent of every parameter in this file.** The
+# yield curve is OVERSEER TMC Eq. 35, whose own fitted constants put its peak at
+# `kMilkYieldPeakDays` - 0.41/0.0287, about 14.29 days - and nothing here can
+# move it. These carried the prefix-free name until E110; it had misread as a
+# statement about milk twice without ever producing a wrong number.
+#
 # **Eq. 8's LA and LB are not here**: condition at parturition and weight lost
 # since it, both needing a history this model does not keep. Both are at most
 # one, so leaving them out makes her hungrier than GrazPlan would, never less.
-lactation_peak_days = { value = 28.0, status = "direct", source = "grazplan_animal" }
-lactation_curve_exponent = { value = 1.4, status = "direct", source = "grazplan_animal" }
-lactation_peak_no_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
-lactation_peak_one_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
-lactation_peak_two_young = { value = 0.707, status = "direct", source = "grazplan_animal" }
-lactation_peak_three_young = { value = 0.891, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_days = { value = 28.0, status = "direct", source = "grazplan_animal" }
+appetite_lactation_curve_exponent = { value = 1.4, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_no_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_one_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_two_young = { value = 0.707, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_three_young = { value = 0.891, status = "direct", source = "grazplan_animal" }
 
 # **Appetite: what she would eat if nothing stopped her.** Everything in
 # [energy] says what a ewe needs; this says what she wants, and the gap between

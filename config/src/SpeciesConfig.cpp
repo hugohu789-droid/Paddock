@@ -94,9 +94,9 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
     detail::reject_unknown_keys(
         *intake,
         {"normal_weight_rate", "normal_weight_exponent", "normal_weight_blend",
-         "condition_intake_limit", "lactation_peak_days", "lactation_curve_exponent",
-         "lactation_peak_no_young", "lactation_peak_one_young", "lactation_peak_two_young",
-         "lactation_peak_three_young", "appetite_scalar_per_day", "appetite_size_coefficient",
+         "condition_intake_limit", "appetite_lactation_peak_days", "appetite_lactation_curve_exponent",
+         "appetite_lactation_peak_no_young", "appetite_lactation_peak_one_young", "appetite_lactation_peak_two_young",
+         "appetite_lactation_peak_three_young", "appetite_scalar_per_day", "appetite_size_coefficient",
          "availability_rate_per_kg_dm", "grazing_time_increase", "grazing_time_rate_per_kg_dm"},
         path, "[intake]");
 
@@ -104,24 +104,24 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
     definition.normal_weight_exponent = read_sourced(*intake, "normal_weight_exponent", path);
     definition.normal_weight_blend = read_sourced(*intake, "normal_weight_blend", path);
     definition.condition_intake_limit = read_sourced(*intake, "condition_intake_limit", path);
-    definition.lactation_peak_days = read_sourced(*intake, "lactation_peak_days", path);
-    definition.lactation_curve_exponent = read_sourced(*intake, "lactation_curve_exponent", path);
-    definition.lactation_peak_no_young = read_sourced(*intake, "lactation_peak_no_young", path);
-    definition.lactation_peak_one_young = read_sourced(*intake, "lactation_peak_one_young", path);
-    definition.lactation_peak_two_young = read_sourced(*intake, "lactation_peak_two_young", path);
-    definition.lactation_peak_three_young =
-        read_sourced(*intake, "lactation_peak_three_young", path);
+    definition.appetite_lactation_peak_days = read_sourced(*intake, "appetite_lactation_peak_days", path);
+    definition.appetite_lactation_curve_exponent = read_sourced(*intake, "appetite_lactation_curve_exponent", path);
+    definition.appetite_lactation_peak_no_young = read_sourced(*intake, "appetite_lactation_peak_no_young", path);
+    definition.appetite_lactation_peak_one_young = read_sourced(*intake, "appetite_lactation_peak_one_young", path);
+    definition.appetite_lactation_peak_two_young = read_sourced(*intake, "appetite_lactation_peak_two_young", path);
+    definition.appetite_lactation_peak_three_young =
+        read_sourced(*intake, "appetite_lactation_peak_three_young", path);
 
     definition.energy.normal_weight_rate = definition.normal_weight_rate.value;
     definition.energy.normal_weight_exponent = definition.normal_weight_exponent.value;
     definition.energy.normal_weight_blend = definition.normal_weight_blend.value;
     definition.energy.condition_intake_limit = definition.condition_intake_limit.value;
-    definition.energy.lactation_peak_days = definition.lactation_peak_days.value;
-    definition.energy.lactation_curve_exponent = definition.lactation_curve_exponent.value;
-    definition.energy.lactation_peak_no_young = definition.lactation_peak_no_young.value;
-    definition.energy.lactation_peak_one_young = definition.lactation_peak_one_young.value;
-    definition.energy.lactation_peak_two_young = definition.lactation_peak_two_young.value;
-    definition.energy.lactation_peak_three_young = definition.lactation_peak_three_young.value;
+    definition.energy.appetite_lactation_peak_days = definition.appetite_lactation_peak_days.value;
+    definition.energy.appetite_lactation_curve_exponent = definition.appetite_lactation_curve_exponent.value;
+    definition.energy.appetite_lactation_peak_no_young = definition.appetite_lactation_peak_no_young.value;
+    definition.energy.appetite_lactation_peak_one_young = definition.appetite_lactation_peak_one_young.value;
+    definition.energy.appetite_lactation_peak_two_young = definition.appetite_lactation_peak_two_young.value;
+    definition.energy.appetite_lactation_peak_three_young = definition.appetite_lactation_peak_three_young.value;
 
     definition.appetite_scalar = read_sourced(*intake, "appetite_scalar_per_day", path);
     definition.appetite_size_coefficient = read_sourced(*intake, "appetite_size_coefficient", path);

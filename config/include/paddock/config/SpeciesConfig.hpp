@@ -71,12 +71,12 @@ struct SpeciesDefinition {
   SourcedValue normal_weight_exponent;
   SourcedValue normal_weight_blend;
   SourcedValue condition_intake_limit;
-  SourcedValue lactation_peak_days;
-  SourcedValue lactation_curve_exponent;
-  SourcedValue lactation_peak_no_young;
-  SourcedValue lactation_peak_one_young;
-  SourcedValue lactation_peak_two_young;
-  SourcedValue lactation_peak_three_young;
+  SourcedValue appetite_lactation_peak_days;
+  SourcedValue appetite_lactation_curve_exponent;
+  SourcedValue appetite_lactation_peak_no_young;
+  SourcedValue appetite_lactation_peak_one_young;
+  SourcedValue appetite_lactation_peak_two_young;
+  SourcedValue appetite_lactation_peak_three_young;
   SourcedValue appetite_scalar;
   SourcedValue appetite_size_coefficient;
   SourcedValue intake_availability_rate;
