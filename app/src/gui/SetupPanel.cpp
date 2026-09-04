@@ -794,7 +794,9 @@ SetupPanel::Choices SetupPanel::choices() const {
 void SetupPanel::adopt_bundle(const std::string& directory, int head, double liveweight_kg,
                               const core::DietQuality& diet, const QString& measured_against,
                               const core::ManagementPolicy* policy,
-                              const core::AnimalClassParameters* animal) {
+                              const core::AnimalClassParameters* animal,
+                              const core::IrrigationPolicy* irrigation,
+                              const core::IrrigationSystem* irrigation_system) {
   // Everything this sets is the bundle talking, not a person choosing. Cleared
   // on the way out however that happens, so a throw part way through filling
   // the form cannot leave the panel permanently deaf to the person using it.
@@ -842,6 +844,29 @@ void SetupPanel::adopt_bundle(const std::string& directory, int head, double liv
     if (floor >= 0) {
       floor_purchase_box_->setCurrentIndex(floor);
     }
+  }
+
+  // **The bundle's irrigation, which this used to ignore entirely.**
+  //
+  // `[irrigation]` reached the manifest and reached `run_managed_scenario`, and
+  // the window kept building its rule from these boxes - so opening
+  // `demo-irrigation-on` gave a rain-fed farm, the inspector correctly reported
+  // "irrigation off", and the one bundle whose whole purpose is to irrigate did
+  // not. The panel is the person's control and the bundle is what it opens on;
+  // this is the second setting the first.
+  //
+  // Off when the bundle names none, rather than whatever was last shown: a
+  // rain-fed scenario opened after an irrigated one must be rain-fed.
+  irrigate_box_->setChecked(irrigation != nullptr && irrigation->enabled);
+  if (irrigation != nullptr) {
+    // Depletion into water remaining, the same subtraction choices() does in
+    // the other direction and in the same file, so the two cannot drift.
+    irrigation_trigger_box_->setValue((1.0 - irrigation->trigger_depletion_fraction) * 100.0);
+    irrigation_target_box_->setValue((1.0 - irrigation->target_depletion_fraction) * 100.0);
+    irrigation_maximum_box_->setValue(irrigation->maximum_application_mm);
+  }
+  if (irrigation_system != nullptr) {
+    irrigation_efficiency_box_->setValue(irrigation_system->application_efficiency * 100.0);
   }
 
   // Taken here, at the one moment the panel is certainly showing the bundle and
