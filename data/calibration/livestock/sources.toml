@@ -192,6 +192,32 @@ inferred from the paper's figures rather than its table - C_I1 0.04, C_I2 1.7,
 C_R4 and C_R6 0.00112, C_R5 0.6 - and supplies C_I20 = 1.5 and the C_N series
 for normal weight. Cited alongside grazplan_animal rather than instead of it:
 the paper carries the equations, this carries the numbers.
+
+**Read again in full for E113, and the breed hierarchy is worth stating
+exactly**, because three groups carry three different `c-imx-` sets:
+
+    sheep
+      wool breeds    c-imx- 0.524, 0.524, 0.707, 0.891
+        merinos      Small/Medium/Large Merino, Polwarth, Delaine-Merino
+        corriedales  Corriedale, **Romney**, Targhee
+      crossbreds     c-imx- 0.59, 0.59, 0.725, 1.0
+                     Border Leicester x Merino, Dorset x Merino, Mongolian x Merino
+      meat breeds    c-imx- 0.655, 0.655, 0.884, 1.114
+                     Dorset, Suffolk, Border Leicester, Texel, Southdown, Cheviot
+
+So **Romney is filed under wool breeds explicitly**, and the shipped 0.524 is
+the number this file gives a Romney rather than a Merino value borrowed for one.
+The paper's footnote says Merinos; its own parameter file, edited by one of the
+paper's authors, extends that set to the Corriedale-type wool breeds.
+
+Two limits on how far that carries. **There is no `nz` locale anywhere in this
+file** - every breed is tagged au, cn, ca or us - and its Romney is
+`locales="au"` with **srw 55.0**, against the 66 kg OVERSEER gives a New Zealand
+ewe. And the wool-breeds group reduces milk as well as appetite: `c-l0-` is
+0.389, 0.622, 0.746 against the paper's 0.4861, 0.7781, 0.7781, which is the
+same 0.8 applied to peak yield. **This project takes the reduced appetite and
+not the reduced milk**, because milk comes from OVERSEER TMC Eq. 35 instead -
+see E113, which records that as a coherence risk rather than a defect.
 """
 
 [source.grazplan_animal]
