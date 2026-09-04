@@ -485,17 +485,25 @@ TEST(DataFilesTest, AFarmIsMeasuredAgainstTheRuleItNamesAndNoOther) {
       << "and must not be priced from a South Island survey for the same reason";
 }
 
-// **Characterisation, not validation** (verify.md, E109 and E110).
+// **Characterisation, and now also supported** (verify.md, E109, E110, E112).
 //
-// This records what the shipped ewe currently does, so that a change to either
-// curve is deliberate. It is deliberately not a tolerance band against measured
-// data, because the measurement disagrees with the model and saying so is the
-// point: Beef + Lamb New Zealand Fact Sheet 94 dates ewe milk at two to four
-// weeks and ewe appetite at eight, a gap of four to six weeks. This model's gap
-// is two. The number below is the model's, and it is wrong against the best New
-// Zealand evidence available - it is pinned rather than fixed because fixing it
-// means moving a `direct` GrazPlan constant on the strength of a farm fact
-// sheet, which is open item 17 and not a licence this test grants.
+// This records what the shipped ewe does, so that a change to either curve is
+// deliberate. Both numbers below are sourced, and they come from different
+// places: day 14 falls out of OVERSEER TMC Eq. 35's own fitted constants, and
+// day 28 is GrazPlan's CI8, which that model's parameter table names
+// "Lactation: peak intake time" for sheep.
+//
+// **E112 corrected an earlier reading of this gap.** E109 took Beef + Lamb Fact
+// Sheet 94's "peak at eight weeks" for ewe intake and called the model's
+// appetite peak four weeks early. It is not: Morris et al. (1994) measured
+// herbage intake in Border Leicester x Romney ewes at Massey in weeks 3, 4, 7
+// and 8 of lactation and found the maximum in **week 4** - day 28 - having
+// sampled week 8 and found it lower. The fact sheet's sentence carries no
+// method and does not stand against that.
+//
+// What stays open is magnitude, not timing: the lactation peaks this ewe uses
+// are GrazPlan's Merino-adjusted column (E95), which is why animal production
+// is still reported as exploratory.
 TEST(DataFilesTest, TheShippedEwesTwoPeaksAreFourteenDaysApart) {
   const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
   const auto ewe = std::find_if(
@@ -535,8 +543,10 @@ TEST(DataFilesTest, TheShippedEwesTwoPeaksAreFourteenDaysApart) {
   EXPECT_EQ(milk_peak, 14) << "TMC Eq. 35, which no file configures";
   EXPECT_EQ(appetite_peak, 28) << "GrazPlan C_I8, which appetite_lactation_peak_days sets";
   EXPECT_EQ(appetite_peak - milk_peak, 14)
-      << "the model's lag between milk and appetite. Beef + Lamb New Zealand puts it at four to "
-         "six weeks; this is two, and open item 17 is where that is tracked";
+      << "the model's lag between milk and appetite: OVERSEER's milk curve against "
+         "GrazPlan's peak intake time. GrazPlan's own internal lag is six days - CL2 is "
+         "22 and CI8 is 28 - so pairing the two source families widens it rather than "
+         "flattening it, which E112 measured and left alone";
 }
 
 // **What each shipped profile actually rests on, now that the whole file
