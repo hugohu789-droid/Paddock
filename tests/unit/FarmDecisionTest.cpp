@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -48,6 +49,9 @@ FarmOutlook comfortable_farm() {
   FarmOutlook outlook;
   outlook.today = Date{2024, 1, 15};
   outlook.head = 417;
+  // No lambs on the place in the helper, so the two agree. The tests that care
+  // about the difference set them apart deliberately.
+  outlook.breeding_head = 417;
   outlook.liveweight_kg = 55.0;
   outlook.cover_kg_dm_per_ha = 2400.0;
   outlook.minimum_cover_kg_dm_per_ha = 1600.0;
@@ -149,7 +153,10 @@ TEST(FarmDecisionTest, NoDecisionCanTakeTheFarmBelowZero) {
   FarmOutlook nearly_broke = comfortable_farm();
   nearly_broke.cover_kg_dm_per_ha = 1000.0;
   nearly_broke.balance_dollars = 5.0;
-  nearly_broke.head = 40;  // below minimum_head, so it cannot destock its way out
+  // Below minimum_head, so it cannot destock its way out. Both counts, because
+  // it is the breeding one the floor is written against.
+  nearly_broke.head = 40;
+  nearly_broke.breeding_head = 40;
 
   const std::vector<Proposal> refused = manager.decide(nearly_broke, account);
   EXPECT_TRUE(refused.empty()) << "nothing it could afford, so nothing it did";
@@ -166,6 +173,7 @@ TEST(FarmDecisionTest, DestockingStopsAtTheFloor) {
   FarmOutlook drought = comfortable_farm();
   drought.consecutive_days_short = 60;
   drought.head = 55;
+  drought.breeding_head = 55;
 
   FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
   FarmManager manager = a_manager(policy);
@@ -177,6 +185,7 @@ TEST(FarmDecisionTest, DestockingStopsAtTheFloor) {
   EXPECT_LE(sold->head, 5) << "it may sell down to the floor and no further";
 
   drought.head = 50;
+  drought.breeding_head = 50;
   const std::vector<Proposal> at_floor = manager.decide(drought, account);
   EXPECT_FALSE(std::any_of(at_floor.begin(), at_floor.end(), [](const Proposal& p) {
     return p.kind == ActionKind::Destock;
@@ -244,6 +253,7 @@ std::vector<int> destocking_days(const std::string& pattern, const DecisionPolic
     FarmOutlook outlook = comfortable_farm();
     outlook.consecutive_days_short = consecutive;
     outlook.total_days_short = total;
+    outlook.breeding_head = outlook.head;
 
     for (const Proposal& done : manager.decide(outlook, account)) {
       if (done.kind == ActionKind::Destock) {
@@ -327,6 +337,142 @@ TEST(FarmDecisionTest, TheCumulativeTotalDoesNotDecideAnything) {
     EXPECT_NE(done.kind, ActionKind::Destock)
         << "a season's worth of short days sold stock on a day the farm was fed";
   }
+}
+
+// ---------------------------------------------------------------------------
+// The floor protects breeding ewes, and counts them.
+//
+// **A destocking sale takes breeding stock; the lamb crop leaves at weaning
+// whatever happens.** So the floor that stops the sale has to be measured
+// against breeding head, and until E101 it was measured against the total -
+// which through lambing is roughly twice as large, so a flock of 417 ewes and
+// 439 lambs read 856 against a floor of 50 and the ewes went to nothing. E100.
+
+namespace {
+
+/// A farm three weeks short of feed, with the two populations set apart.
+FarmOutlook drought_with(int breeding, int lambs) {
+  FarmOutlook outlook = comfortable_farm();
+  outlook.consecutive_days_short = 60;
+  outlook.breeding_head = breeding;
+  outlook.head = breeding + lambs;
+  return outlook;
+}
+
+/// The destocking proposal, or nothing.
+std::optional<Proposal> destocking_for(const FarmOutlook& outlook,
+                                       const DecisionPolicy& policy = {}) {
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+  FarmManager manager = a_manager(policy);
+  for (const Proposal& done : manager.decide(outlook, account)) {
+    if (done.kind == ActionKind::Destock) {
+      return done;
+    }
+  }
+  return std::nullopt;
+}
+
+}  // namespace
+
+// **The case the defect was made of.** A big lamb crop keeps total head high
+// while the ewes sit on the floor; nothing may be sold.
+TEST(FarmDecisionTest, ALargeLambCropDoesNotOpenTheFloor) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const FarmOutlook lambing = drought_with(50, 439);
+  ASSERT_GT(lambing.head, 400) << "the point of this case is a high total head";
+
+  EXPECT_FALSE(destocking_for(lambing, policy).has_value())
+      << "the lamb crop was counted towards a floor written for breeding ewes";
+}
+
+// The same thing said the other way: a total far above the floor is not a
+// licence to sell when the ewes are at it.
+TEST(FarmDecisionTest, ATotalWellAboveTheFloorDoesNotAllowASaleAtIt) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+  EXPECT_FALSE(destocking_for(drought_with(50, 1'000), policy).has_value());
+}
+
+// Ewes above the floor: the sale goes ahead.
+TEST(FarmDecisionTest, BreedingEwesAboveTheFloorAllowASale) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const std::optional<Proposal> sold = destocking_for(drought_with(400, 0), policy);
+  ASSERT_TRUE(sold.has_value());
+  // A fifth of the breeding flock, which is what the policy says - and a fifth
+  // of the ewes rather than a fifth of the ewes and their lambs together.
+  EXPECT_EQ(sold.value_or(Proposal{}).head, 80);
+}
+
+// **Clamped to the floor, not over it and not refused.** A farm two ewes above
+// the line sells the two.
+TEST(FarmDecisionTest, ASaleThatWouldCrossTheFloorIsClampedToIt) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const std::optional<Proposal> sold = destocking_for(drought_with(52, 300), policy);
+  ASSERT_TRUE(sold.has_value()) << "two ewes above the floor and it refused to sell either";
+  EXPECT_EQ(sold.value_or(Proposal{}).head, 2)
+      << "a fifth of 52 is 10, and only 2 of them are above the floor";
+}
+
+// **A shortage that goes on cannot grind the ewes below the floor.** Day after
+// day of selling a fifth, and it stops on the line rather than through it.
+TEST(FarmDecisionTest, RepeatedShortageCannotTakeTheEwesBelowTheFloor) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  int breeding = 417;
+  const int lambs = 439;
+  for (int day = 0; day < 60; ++day) {
+    const std::optional<Proposal> sold = destocking_for(drought_with(breeding, lambs), policy);
+    if (!sold.has_value()) {
+      break;
+    }
+    breeding -= sold.value_or(Proposal{}).head;
+    ASSERT_GE(breeding, policy.minimum_head)
+        << "sold through the floor on day " << day << ", leaving " << breeding;
+  }
+  EXPECT_EQ(breeding, policy.minimum_head) << "it should come to rest exactly on the line";
+}
+
+// A farm with no lambs on it behaves as it always did, which is the case the
+// old code happened to get right.
+TEST(FarmDecisionTest, AFlockWithNoLambsStillDestocksNormally) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const std::optional<Proposal> sold = destocking_for(drought_with(100, 0), policy);
+  ASSERT_TRUE(sold.has_value());
+  EXPECT_EQ(sold.value_or(Proposal{}).head, 20);
+
+  EXPECT_FALSE(destocking_for(drought_with(50, 0), policy).has_value());
+  EXPECT_FALSE(destocking_for(drought_with(20, 0), policy).has_value());
+}
+
+// **Total head is still total head.** The feed rules read it and it is what a
+// report says the farm carries; only the sale reads the breeding count.
+TEST(FarmDecisionTest, TheTotalHeadIsUnchangedAndStillDrivesTheFeedRules) {
+  FarmOutlook lambing = drought_with(400, 439);
+  lambing.cover_kg_dm_per_ha = 900.0;
+  lambing.minimum_cover_kg_dm_per_ha = 1'600.0;
+
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+  FarmManager manager = a_manager();
+
+  bool fed = false;
+  for (const Proposal& done : manager.decide(lambing, account)) {
+    if (done.kind == ActionKind::BuyFeed) {
+      fed = true;
+      EXPECT_EQ(done.head, lambing.head)
+          << "feed was bought for the breeding flock rather than for the stock on the place";
+    }
+  }
+  EXPECT_TRUE(fed) << "below the cover floor and nothing was bought";
+  EXPECT_EQ(lambing.head, 839);
 }
 
 }  // namespace paddock::core

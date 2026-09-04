@@ -165,14 +165,26 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
     if (!feed_has_run_out && !money_has_run_out) {
       return std::nullopt;
     }
-    if (outlook.head <= policy.minimum_head) {
+    // **Everything below counts breeding stock, because that is what the sale
+    // takes.** `outlook.head` includes the lamb crop, which leaves at weaning
+    // and is not what a destocking decision is about; measuring either the
+    // floor or the fifth against it made the floor unreachable through lambing
+    // and made "a fifth" a fifth of the wrong flock.
+    const int sellable = std::max(0, outlook.breeding_head - policy.minimum_head);
+    if (sellable <= 0) {
       return std::nullopt;
     }
 
-    const int sellable = outlook.head - policy.minimum_head;
-    const int sold = std::max(
-        1, std::min(sellable, static_cast<int>(std::floor(static_cast<double>(outlook.head) *
-                                                          policy.destock_fraction))));
+    // A fifth of the breeding flock, clamped to what the floor leaves. Clamped
+    // rather than refused: a farm two ewes above the line and three weeks short
+    // of feed sells the two, which is what the policy says and is better than
+    // either selling ten or standing still.
+    const int wanted = static_cast<int>(
+        std::floor(static_cast<double>(outlook.breeding_head) * policy.destock_fraction));
+    const int sold = std::min(wanted, sellable);
+    if (sold <= 0) {
+      return std::nullopt;
+    }
 
     Proposal destock;
     destock.kind = ActionKind::Destock;

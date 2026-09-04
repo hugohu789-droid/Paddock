@@ -405,6 +405,11 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
   // is asked whether it is carrying anything.
   set_reproductive_state(today, calendar, rates);
 
+  // What the day left on the place. Taken here rather than by the caller so a
+  // record and the flock it describes cannot disagree.
+  day.head = head();
+  day.breeding_head = breeding_head();
+
   return day;
 }
 

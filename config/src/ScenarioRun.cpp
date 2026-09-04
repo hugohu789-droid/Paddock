@@ -190,6 +190,9 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   core::FarmOutlook outlook;
   outlook.today = today;
   outlook.head = business.flock.head();
+  // What the destocking sale would actually take. Total head is still reported
+  // and still drives the feed rules; only the sale reads this one.
+  outlook.breeding_head = business.flock.breeding_head();
   // **Whether there is a finishing class, and if so what it weighs.**
   //
   // This read a flat `false` because nothing drove a lamb's liveweight: a lamb
@@ -243,6 +246,7 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // account and not to the flock is how the same lambs came to be sold three
   // hundred times: the money arrived and the stock never left. Anything that
   // sells head, sells them.
+  int destocked_today = 0;
   for (const core::Proposal& done : manager.decide(outlook, account)) {
     if (done.head <= 0) {
       continue;
@@ -258,12 +262,24 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
         break;
       case core::ActionKind::Destock:
       case core::ActionKind::SellCullStock:
-        business.flock.sell_oldest(done.head);
+        // Written back onto today's record below, so a report can say when the
+        // farm sold and how much - which a running total cannot.
+        destocked_today += business.flock.sell_oldest(done.head);
         break;
       case core::ActionKind::SellWool:
       case core::ActionKind::BuyFeed:
         break;
     }
+  }
+
+  // **The record is taken before the decisions and the decisions change the
+  // flock**, so today's counts are corrected here rather than being read a
+  // second time somewhere that could disagree with them.
+  if (!summary.flock_days.empty()) {
+    core::FlockDay& today_record = summary.flock_days.back();
+    today_record.destocked = destocked_today;
+    today_record.head = business.flock.head();
+    today_record.breeding_head = business.flock.breeding_head();
   }
 
   // **What the farmer sells stops eating.** The flock and the mob on the

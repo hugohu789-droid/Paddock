@@ -352,9 +352,9 @@ soil, latitude and stock are what each scenario states for itself.
 |---|---|---:|---:|---|
 | `canterbury-baseline` | Selwyn, 25 years | 8,042 | — | pasture and water with no stock |
 | `canterbury-grazed` | the same file | 7,679 | 13.2 | the grazed comparison, and the golden regression baseline |
-| `lincoln-lurdf` | Lincoln, 10 years | 6,407 | 12.1 | the farm the validation above is measured on |
+| `lincoln-lurdf` | Lincoln, 10 years | 6,405 | 12.1 | the farm the validation above is measured on |
 | `ruakura-fe` | Waikato | 12,120 | 13.5 | a facial eczema climate, not a stocking policy |
-| `demo-irrigation-off` | Lincoln, 2023-24 | 6,407 | 12.1 | the rain-fed half of the flagship comparison |
+| `demo-irrigation-off` | Lincoln, 2023-24 | 6,405 | 12.1 | the rain-fed half of the flagship comparison |
 | `demo-irrigation-on` | the same file | 11,747 | 13.9 | the same farm, watered at FAO-56's trigger |
 
 `canterbury-baseline` and `canterbury-grazed` read the same weather file on
@@ -397,7 +397,7 @@ grazed pasture.
 
 | | Rain-fed | Irrigated |
 |---|---|---|
-| Pasture grown | 6,407 kg DM/ha | 11,747 kg DM/ha |
+| Pasture grown | 6,405 kg DM/ha | 11,747 kg DM/ha |
 | Days growth was held back by dry soil | 233 | 15 |
 | Water applied | none | 375 mm in 18 events |
 | Bought feed | 36,121 kg DM | 870 kg DM |
