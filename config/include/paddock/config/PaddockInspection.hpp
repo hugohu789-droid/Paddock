@@ -12,6 +12,7 @@
 #include <paddock/core/Irrigation.hpp>
 #include <paddock/core/PaddockMask.hpp>
 #include <paddock/core/Raster.hpp>
+#include <paddock/core/Terrain.hpp>
 
 namespace paddock::config {
 
@@ -60,6 +61,37 @@ struct PaddockInspection {
   /// Why the schedule held water back, in its own words, or empty when it held
   /// none back. Recorded by the run rather than worked out afterwards.
   std::string irrigation_held_back;
+
+  /// What the schedule decided this morning, as one of four things.
+  ///
+  /// **Required because "0.0 mm applied" is three different days.** Irrigation
+  /// switched off for the whole scenario, a profile that was wetter than the
+  /// trigger, and ground that was watered two days ago and may not be watered
+  /// again yet all read as a zero, and a person watching a demonstration cannot
+  /// tell them apart from one. The status names which it was.
+  ///
+  /// **Read off what the run recorded, never worked out here.** `Watered` is
+  /// water the run applied; `HeldBack` carries the schedule's own sentence from
+  /// `IrrigationSchedule::last_held_back`. Nothing in this file re-tests a
+  /// trigger against a soil reading - the schedule already did that, in the
+  /// morning, on numbers this struct no longer has.
+  enum class IrrigationStatus {
+    /// The scenario names no irrigation, or names one that is switched off.
+    Off,
+    /// Water went on this paddock today.
+    Watered,
+    /// The rule wanted water somewhere and something stopped it.
+    HeldBack,
+    /// Irrigation is on, nothing was applied, and the run recorded no reason -
+    /// which a run that kept no irrigation series looks like.
+    NotRecorded,
+  };
+
+  [[nodiscard]] IrrigationStatus irrigation_status() const;
+
+  /// The status as a person reads it: "watered", "held back", "off in this
+  /// scenario". Never a sentence about why - that is the reason phrase.
+  [[nodiscard]] std::string irrigation_status_text() const;
 
   bool stock_today = false;
 
@@ -132,6 +164,76 @@ struct PaddockDayRecord {
 /// render the same struct, so they cannot describe the same paddock
 /// differently.
 [[nodiscard]] std::string inspection_line(const PaddockInspection& inspection);
+
+/// One line of the panel: what it is, what it reads, and any note under it.
+struct PanelRow {
+  std::string label;
+  std::string value;
+
+  /// What the figure means, where a figure alone would be read wrongly - "1.00
+  /// is unrestricted", "the reading the trigger was tested against". Empty for
+  /// the rows that speak for themselves.
+  std::string note;
+};
+
+/// A titled group of rows.
+struct PanelSection {
+  std::string title;
+
+  /// What the whole section is about, where the title cannot carry it. This is
+  /// where "after today's rain, growth and any irrigation" lives, and it is the
+  /// difference between a reader understanding the panel and a reader asking
+  /// why a farm watered ground that was already at 84%.
+  std::string subtitle;
+
+  std::vector<PanelRow> rows;
+};
+
+/// The whole panel, as content rather than as markup.
+///
+/// **Built here so that it can be tested without a window.** The panel used to
+/// be assembled inside the Qt widget, which meant the one thing worth checking
+/// about it - that it never shows a decision-time figure and an end-of-day
+/// figure as though they were the same reading - could only be checked by
+/// looking at it. The widget now lays this out and decides nothing.
+///
+/// **The order is the order the day happened in**: what the paddock is, what
+/// grew, where the soil finished, then what was decided this morning and what
+/// followed from it, then the stock. A panel that put the decision before the
+/// morning reading would be telling the story backwards.
+struct InspectorPanel {
+  std::string heading;
+
+  /// Area and cell count, beside the name rather than in a row of their own:
+  /// they say which piece of ground this is, and they do not change from day to
+  /// day like everything below.
+  std::string subheading;
+
+  std::vector<PanelSection> sections;
+
+  /// The grazing rule in a sentence, for wherever a window can afford it.
+  std::string grazing_rule;
+};
+
+[[nodiscard]] InspectorPanel inspector_panel(const PaddockInspection& inspection,
+                                             const std::string& grazing_rule);
+
+/// Whether a selection made against one set of paddocks still means the same
+/// ground against another.
+///
+/// **A re-run must not silently move the selection to a different paddock.**
+/// Scrubbing the timeline keeps the selection, which is the whole point of
+/// holding one; re-running the scenario rebuilds the paddocks, and an index
+/// that is still in range on a different farm points at ground the person never
+/// clicked on. The window used to drop the selection on every run, which is
+/// safe and is the wrong behaviour for the flagship demonstration - select a
+/// paddock, run it rain-fed, run it irrigated, compare the same ground.
+///
+/// True only when the paddock at `selected` is recognisably the same: same
+/// count of paddocks, same name, and the same area to within a square metre.
+[[nodiscard]] bool selection_survives(const std::vector<core::Paddock>& before,
+                                      const std::vector<core::Paddock>& after,
+                                      std::size_t selected);
 
 /// The step between what the soil was this morning and what was done about it:
 /// why the schedule acted, or why it did not.
