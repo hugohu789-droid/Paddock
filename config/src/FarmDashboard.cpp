@@ -189,8 +189,12 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
            "mean, so a drier year should sit under it.",
            4'000.0, 9'800.0));
   year.indicators.push_back(make(
-      "Utilisation", grown > 0.0 ? 100.0 * eaten_per_ha / grown : 0.0, "%", Provenance::Derived,
-      "What the stock took off as a share of what grew. Derived, not asserted: this farm's own "
+      "Utilisation", grown > 0.0 ? 100.0 * eaten_per_ha / grown : 0.0, "%", Provenance::Verify,
+      "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, and "
+      "the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+      "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+      "ordinary physiology; its depth for this animal is not settled, and this figure moves with "
+      "it. What the stock took off as a share of what grew. Derived, not asserted: this farm's own "
       "stocking rate at Parker's (1998) 550 kg DM a stock unit, over Winchmore's measured "
       "dryland production. Most of the distance to a Class 6 farm is stock this one does not "
       "carry, not feed its animals refuse - see data/calibration/stock-unit-intake.csv.",
@@ -203,12 +207,16 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
   // Parker (1998) defines the stock unit as 550 kg DM of 10.5 MJ ME/kg DM a
   // year, which is the diet quality this model already assumes, so the two are
   // comparable without an adjustment.
-  year.indicators.push_back(
-      make("Eaten", eaten_per_ha, "kg DM/ha", Provenance::Derived,
-           "What the stock actually removed. The band is this farm's own stocking rate and Beef + "
-           "Lamb's Class 6 rate, each at 550 kg DM a stock unit - so a figure under it is animals "
-           "eating less than their stock-unit rating implies, whatever the pasture did.",
-           3850.0, 4257.0));
+  year.indicators.push_back(make(
+      "Eaten", eaten_per_ha, "kg DM/ha", Provenance::Verify,
+      "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, and "
+      "the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+      "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+      "ordinary physiology; its depth for this animal is not settled, and this figure moves with "
+      "it. What the stock actually removed. The band is this farm's own stocking rate and Beef + "
+      "Lamb's Class 6 rate, each at 550 kg DM a stock unit - so a figure under it is animals "
+      "eating less than their stock-unit rating implies, whatever the pasture did.",
+      3850.0, 4257.0));
   year.indicators.push_back(
       // **Verify, not Fitted, and the difference is not pedantry.** Fitted means
       // calibrated so that published observations reproduce, and this is fitted
@@ -230,8 +238,14 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
                : std::nullopt,
            std::nullopt));
   year.indicators.push_back(
-      make("Days short of feed", static_cast<double>(run.feed_supply_short_days), "days", Provenance::Derived,
-           "Days a mob was offered less than it asked for.", std::nullopt, 0.0));
+      make("Days short of feed", static_cast<double>(run.feed_supply_short_days), "days",
+           Provenance::Verify,
+           "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, "
+           "and the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+           "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+           "ordinary physiology; its depth for this animal is not settled, and this figure moves "
+           "with it. Days a mob was offered less than it asked for.",
+           std::nullopt, 0.0));
   // **The number this model could not state, and the one that turned out to be
   // the answer.** Its utilisation looked bad and three explanations were tried
   // before the obvious one: the farm carries a third fewer stock units than the
@@ -251,16 +265,24 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
         "that is settled the band says which order of magnitude, not which side of a line.",
         7.0, 8.5));
   }
-  year.indicators.push_back(make("Closing stock", static_cast<double>(run.closing_head), "head",
-                                 Provenance::Derived,
-                                 "The flock at the end of the farm year, after the culls and the "
-                                 "weaning draft have gone."));
+  year.indicators.push_back(
+      make("Closing stock", static_cast<double>(run.closing_head), "head", Provenance::Verify,
+           "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, "
+           "and the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+           "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+           "ordinary physiology; its depth for this animal is not settled, and this figure moves "
+           "with it. The flock at the end of the farm year, after the culls and the "
+           "weaning draft have gone."));
   if (run.lamb_weaning_weight_kg > 0.0) {
-    year.indicators.push_back(
-        make("Lamb at weaning", run.lamb_weaning_weight_kg, "kg", Provenance::Derived,
-             "An outcome of the grass, not a target. OVERSEER assumes 20 kg for a sheep when "
-             "none is supplied, which is what this can be checked against.",
-             13.0, 27.0));
+    year.indicators.push_back(make(
+        "Lamb at weaning", run.lamb_weaning_weight_kg, "kg", Provenance::Verify,
+        "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, and "
+        "the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+        "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+        "ordinary physiology; its depth for this animal is not settled, and this figure moves with "
+        "it. An outcome of the grass, not a target. OVERSEER assumes 20 kg for a sheep when "
+        "none is supplied, which is what this can be checked against.",
+        13.0, 27.0));
   }
   board.panels.push_back(std::move(year));
 

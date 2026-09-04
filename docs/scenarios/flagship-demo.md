@@ -34,10 +34,11 @@ answer every question:
   ===========================
     demo_irrigation_off  ->  demo_irrigation_on
 
-    Pasture grown         6405 -> 11747 kg DM/ha      +5342    +83%  calibrated
-    Lowest pasture cover   706 ->   847 kg DM/ha       +140    +20%  exploratory
+    Irrigation response   1.00 ->  1.79 x rain-fed    +0.79    +79%  benchmarked
+    Pasture grown         6613 -> 11846 kg DM/ha      +5233    +79%  calibrated
+    Lowest pasture cover   713 ->   976 kg DM/ha       +263    +37%  exploratory
     Growth-limited days    233 ->    15 days           -218    -94%  conserved
-    Dry matter per mm     12.1 ->  13.9 kg DM/ha/mm    +1.8    +15%  calibrated
+    Dry matter per mm     12.5 ->  14.0 kg DM/ha/mm    +1.5    +12%  calibrated
     Drainage below roots   109 ->   152 mm              +43    +39%  conserved
     Irrigation applied       0 ->   375 mm             +375  from 0  conserved
 
@@ -130,13 +131,13 @@ hashes intact.
 
 | | Rain-fed | Irrigated |
 |---|---|---|
-| Pasture grown | 6,405 kg DM/ha | 11,747 kg DM/ha |
+| Pasture grown | 6,613 kg DM/ha | 11,846 kg DM/ha |
 | Days growth was held back by dry soil | 233 | 15 |
 | Water applied | none | 375 mm in 18 events (300 ML over 80 ha) |
 | Evapotranspiration | 529 mm | 844 mm |
 | Drainage past the root zone | 109 mm | 152 mm |
-| Lowest cover of the year | 706 kg DM/ha | 847 kg DM/ha |
-| Bought feed | 36,121 kg DM | 870 kg DM |
+| Lowest cover of the year | 713 kg DM/ha | 976 kg DM/ha |
+| Bought feed | 4,798 kg DM | 0 kg DM |
 | Nitrate leached | 2.1 kg N/ha | 14.7 kg N/ha |
 
 Rainfall was 652 mm in both.
@@ -150,7 +151,7 @@ and they are not what this demonstration is for.
 Three things are worth saying about the table:
 
 1. **The response is not flattering to the model.** The extra 375 mm bought
-   5,342 kg DM/ha, a marginal 14.2 kg DM/ha per mm applied. Martin et al. (2006)
+   5,233 kg DM/ha, a marginal 14.0 kg DM/ha per mm applied. Martin et al. (2006)
    put irrigated Canterbury ryegrass and clover near 20 kg DM/ha/mm on total
    water use. The model's response to irrigation is at the modest end of the
    published range, not the generous one.
@@ -235,7 +236,7 @@ back - which is a wet regime, so the 15% and 20% soil-moisture treatments are
 its company: 50 treatment-years, median response ratio 1.90, mean 1.83, p10 to
 p90 of 1.23 to 2.46.
 
-**The model's ratio is 11,747 / 6,405 = 1.83 - the 48th percentile of those
+**The model's ratio is 11,846 / 6,613 = 1.79 - the 48th percentile of those
 fifty.** The demo year's 652 mm of rain is 13% below the trial's 745 mm mean, so
 a ratio at about the median is what a drier-than-average year should give.
 

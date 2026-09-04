@@ -375,7 +375,7 @@ TEST(ManagedFarmTest, EveryPurchaseSaysWhenAndWhyItWasMade) {
 // deficit, loses 3.6 kg over a year where she used to hold, and the farmer
 // destocks into it. Closing this wants the lactation factor's LA and LB terms,
 // which need a body-condition history this model does not keep.
-TEST(ManagedFarmTest, AnImpossibleTargetIsBoughtRatherThanRefused) {
+TEST(ManagedFarmTest, AnImpossibleTargetIsNoLongerBoughtItsWayTo) {
   core::ManagementPolicy asking = default_policy();
   asking.target_liveweight_gain_kg_per_day = 0.5;
 
@@ -384,12 +384,21 @@ TEST(ManagedFarmTest, AnImpossibleTargetIsBoughtRatherThanRefused) {
   GTEST_LOG_(INFO) << "asked for 0.5 kg a day over a year - 182 kg - and got "
                    << got.liveweight_change_kg() << " kg";
 
-  // Held from both sides. Under the upper bound means somebody has bounded the
-  // target and should say so here; over it means something has come loose.
-  EXPECT_GT(got.liveweight_change_kg(), 150.0)
+  // **Somebody bounded the target, and this is that somebody saying so.** The
+  // flock used to return 182.49 kg against a target of 182.5 - to the decimal,
+  // which is arithmetic rather than an animal - because bought feed was the one
+  // intake nothing limited. E92 gave the trough the same physiological ceiling
+  // as the grass, and E107 switched that ceiling on, so a ewe asked for half a
+  // kilogram a day now returns what she could actually eat her way to.
+  //
+  // The bound is one-sided on purpose. Well under the target is the point; the
+  // upper bound is what would catch the cap coming loose again.
+  EXPECT_LT(got.liveweight_change_kg(), 60.0)
       << "the flock returned " << got.liveweight_change_kg()
-      << " kg. If this has fallen, the trough has been capped - raise the bound and record it";
-  EXPECT_LT(got.liveweight_change_kg(), 200.0);
+      << " kg against a target of 182.5. If this has risen back towards the target, the trough "
+         "has stopped being bounded by appetite - see E92";
+  EXPECT_GT(got.liveweight_change_kg(), 0.0)
+      << "asked for gain on a farm that could carry some, the flock lost weight";
 }
 
 TEST(ManagedFarmTest, AskingForGainGetsGainWhenTheGrassAllowsIt) {

@@ -172,7 +172,11 @@ TEST(LambsGrazeTest, MilkIsChargedOnceAndTheFarmIsNotFedTwice) {
   // The band moved up when the farm started finishing its lambs rather than
   // selling them at weaning: a crop carried to autumn eats five more months of
   // grass, which is most of why utilisation went from 21% to 46%.
-  EXPECT_GT(eaten_per_ha, 1'500.0);
+  // Moved with E107: the flock is smaller and each ewe is bounded by her own
+  // appetite, so the farm takes less off. E95 has not settled how deep the early-lactation intake
+  // deficit should be for this ewe, so this bound records what the model does and is not a
+  // validation of it.
+  EXPECT_GT(eaten_per_ha, 1'100.0);
   EXPECT_LT(eaten_per_ha, 3'200.0)
       << "an intake this high would mean the lambs are grazing for milk they already drank";
 }
