@@ -112,9 +112,25 @@ struct FarmOutlook {
   double cover_kg_dm_per_ha = 0.0;
   double minimum_cover_kg_dm_per_ha = 0.0;
 
-  /// Consecutive days the mob has not been able to eat what it needed. The
-  /// signal a drought shows up in before anything else does.
-  int days_short = 0;
+  /// **Consecutive** days the mob has not been able to eat what it needed, up
+  /// to and including today. The signal a drought shows up in before anything
+  /// else does, and the one the destocking rule reads.
+  ///
+  /// **Zero on the first day the stock get what they asked for.** A run of
+  /// short days is a drought; the same number of short days scattered over a
+  /// year is a farm that had some hard weeks, and the two ask for different
+  /// decisions. This field used to be fed the year-to-date total, which meant
+  /// the twenty-first short day of the year fired the rule whenever it fell -
+  /// and, because that total cannot fall, kept it fired for the rest of the
+  /// run. See E98 and E99.
+  int consecutive_days_short = 0;
+
+  /// Short days so far this run, whether or not they were in a row.
+  ///
+  /// **Reporting only.** Nothing decides on this. It is here so that a rule
+  /// which wanted the seasonal total could have it without reaching for the
+  /// field above, which is how the two came to be confused in the first place.
+  int total_days_short = 0;
 
   double hectares = 0.0;
 

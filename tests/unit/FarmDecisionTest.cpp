@@ -11,6 +11,9 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <string>
+#include <vector>
 
 #include <paddock/core/FarmAccount.hpp>
 #include <paddock/core/FarmDecision.hpp>
@@ -48,7 +51,7 @@ FarmOutlook comfortable_farm() {
   outlook.liveweight_kg = 55.0;
   outlook.cover_kg_dm_per_ha = 2400.0;
   outlook.minimum_cover_kg_dm_per_ha = 1600.0;
-  outlook.days_short = 0;
+  outlook.consecutive_days_short = 0;
   outlook.hectares = 80.0;
   outlook.balance_dollars = 40'000.0;
   outlook.daily_operating_cost_dollars = 203.0;
@@ -81,7 +84,7 @@ TEST(FarmDecisionTest, ThreeWeeksShortOfFeedSellsStock) {
   FarmManager manager = a_manager();
 
   FarmOutlook drought = comfortable_farm();
-  drought.days_short = 21;
+  drought.consecutive_days_short = 21;
   drought.cover_kg_dm_per_ha = 1200.0;
 
   const std::vector<Proposal> done = manager.decide(drought, account);
@@ -161,7 +164,7 @@ TEST(FarmDecisionTest, DestockingStopsAtTheFloor) {
   policy.minimum_head = 50;
 
   FarmOutlook drought = comfortable_farm();
-  drought.days_short = 60;
+  drought.consecutive_days_short = 60;
   drought.head = 55;
 
   FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
@@ -204,4 +207,126 @@ TEST(FarmDecisionTest, ARuleCanBeAskedInIsolation) {
 }
 
 }  // namespace
+
+// ---------------------------------------------------------------------------
+// Consecutive, not cumulative.
+//
+// **A farm that goes short for three weeks running is in a drought; one that
+// went short twenty-one times since July has had a hard year and may be
+// standing in grass today.** The rule has always said it meant the first of
+// those and was being handed the second, which fired it on the twenty-first
+// short day of the run and - because a year-to-date total cannot fall - kept
+// it fired every day afterwards. E98.
+
+namespace {
+
+/// Runs a sequence of short and good days past the rule and reports when it
+/// asked to sell.
+///
+/// `pattern` is one character a day: 's' short, '.' fed. The counter is kept
+/// the way the run loop keeps it, so this exercises the rule against the state
+/// machine rather than against a number somebody set.
+std::vector<int> destocking_days(const std::string& pattern, const DecisionPolicy& policy = {}) {
+  FarmManager manager = a_manager(policy);
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+
+  std::vector<int> sold_on;
+  int consecutive = 0;
+  int total = 0;
+  for (std::size_t day = 0; day < pattern.size(); ++day) {
+    if (pattern[day] == 's') {
+      ++total;
+      ++consecutive;
+    } else {
+      consecutive = 0;
+    }
+
+    FarmOutlook outlook = comfortable_farm();
+    outlook.consecutive_days_short = consecutive;
+    outlook.total_days_short = total;
+
+    for (const Proposal& done : manager.decide(outlook, account)) {
+      if (done.kind == ActionKind::Destock) {
+        sold_on.push_back(static_cast<int>(day));
+      }
+    }
+  }
+  return sold_on;
+}
+
+}  // namespace
+
+// Twenty short days in a row is not yet the farmer's threshold.
+TEST(FarmDecisionTest, TwentyConsecutiveShortDaysDoNotSell) {
+  EXPECT_TRUE(destocking_days(std::string(20, 's')).empty());
+}
+
+// Twenty-one is.
+TEST(FarmDecisionTest, TwentyOneConsecutiveShortDaysDoSell) {
+  const std::vector<int> sold = destocking_days(std::string(21, 's'));
+  ASSERT_FALSE(sold.empty()) << "three weeks with the stock short and nothing was sold";
+  EXPECT_EQ(sold.front(), 20) << "sold on a different day than the twenty-first";
+}
+
+// **One good day resets it**, which is the whole of the fix: ten short, a day
+// of feed, eleven short is twenty-one short days and no drought.
+TEST(FarmDecisionTest, AGoodDayInTheMiddleResetsTheCount) {
+  const std::string pattern = std::string(10, 's') + "." + std::string(11, 's');
+  EXPECT_TRUE(destocking_days(pattern).empty())
+      << "twenty-one short days with a fed day among them was read as three weeks running";
+}
+
+// Scattered short days totalling well past the threshold never fire it.
+TEST(FarmDecisionTest, ScatteredShortDaysNeverSellHoweverManyThereAre) {
+  // Two short, one fed, over a hundred days: about seventy short days and never
+  // more than two in a row.
+  std::string pattern;
+  for (int week = 0; week < 35; ++week) {
+    pattern += "ss.";
+  }
+  const int short_days = static_cast<int>(std::count(pattern.begin(), pattern.end(), 's'));
+  ASSERT_GT(short_days, 21) << "the pattern does not exceed the threshold in total";
+
+  EXPECT_TRUE(destocking_days(pattern).empty())
+      << short_days << " short days scattered over a season sold stock";
+}
+
+// **And the sale does not repeat every day afterwards.** Once the run is
+// broken the count is zero, so a farm that got rain the day after selling is
+// not asked to sell again on the strength of a total it can never work off.
+TEST(FarmDecisionTest, TheSaleDoesNotRepeatOnceTheRunIsBroken) {
+  const std::string pattern = std::string(21, 's') + std::string(30, '.');
+  const std::vector<int> sold = destocking_days(pattern);
+
+  ASSERT_EQ(sold.size(), 1U) << "sold " << sold.size()
+                             << " times: the trigger stayed on after the drought broke";
+  EXPECT_EQ(sold.front(), 20);
+}
+
+// A drought that goes on does keep selling, which is right - that is a farm
+// still carrying more stock than it can feed - and it is a different statement
+// from selling because of a total that cannot fall.
+TEST(FarmDecisionTest, ADroughtThatContinuesKeepsSelling) {
+  const std::vector<int> sold = destocking_days(std::string(25, 's'));
+  EXPECT_GT(sold.size(), 1U);
+  EXPECT_EQ(sold.front(), 20);
+}
+
+// The two counts are separate fields and the rule reads only one of them. A
+// year-to-date total past the threshold, with nobody short today, sells
+// nothing.
+TEST(FarmDecisionTest, TheCumulativeTotalDoesNotDecideAnything) {
+  FarmManager manager = a_manager();
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+
+  FarmOutlook outlook = comfortable_farm();
+  outlook.consecutive_days_short = 0;
+  outlook.total_days_short = 300;
+
+  for (const Proposal& done : manager.decide(outlook, account)) {
+    EXPECT_NE(done.kind, ActionKind::Destock)
+        << "a season's worth of short days sold stock on a day the farm was fed";
+  }
+}
+
 }  // namespace paddock::core

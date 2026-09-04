@@ -155,7 +155,11 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
   // long enough that rain will not fix it, or the money running out.
   rules.emplace_back([policy](const FarmOutlook& outlook,
                               const Prices& prices) -> std::optional<Proposal> {
-    const bool feed_has_run_out = outlook.days_short >= policy.destock_after_days_short;
+    // **Consecutive, which is what the policy has always said it meant.** A
+    // farm that goes short for three weeks running is a farm whose feed has
+    // run out; one that went short twenty-one times since July has had a hard
+    // year and may be standing in grass today.
+    const bool feed_has_run_out = outlook.consecutive_days_short >= policy.destock_after_days_short;
     const bool money_has_run_out = short_of_cash(outlook, policy) &&
                                    outlook.cover_kg_dm_per_ha <= outlook.minimum_cover_kg_dm_per_ha;
     if (!feed_has_run_out && !money_has_run_out) {
@@ -174,10 +178,10 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
     destock.kind = ActionKind::Destock;
     destock.head = sold;
     destock.dollars_in = static_cast<double>(sold) * prices.cull_ewe_dollars_per_head;
-    destock.because = feed_has_run_out
-                          ? "sold " + std::to_string(sold) + " head after " +
-                                std::to_string(outlook.days_short) + " days short of feed"
-                          : "sold " + std::to_string(sold) + " head to stay solvent";
+    destock.because = feed_has_run_out ? "sold " + std::to_string(sold) + " head after " +
+                                             std::to_string(outlook.consecutive_days_short) +
+                                             " days short of feed in a row"
+                                       : "sold " + std::to_string(sold) + " head to stay solvent";
     return destock;
   });
 
