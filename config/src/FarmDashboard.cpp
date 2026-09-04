@@ -210,9 +210,21 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
            "eating less than their stock-unit rating implies, whatever the pasture did.",
            3850.0, 4257.0));
   year.indicators.push_back(
-      make("Lowest cover", run.lowest_cover_kg_dm_per_ha(), "kg DM/ha", Provenance::Fitted,
-           "The bottom of the year. Cover includes dead standing material, "
-           "which on this farm is a third to a half of it - see E26.",
+      // **Verify, not Fitted, and the difference is not pedantry.** Fitted means
+      // calibrated so that published observations reproduce, and this is fitted
+      // to nothing: no measured minimum-cover series has been found, and the
+      // band below is the farm's own management floor rather than an
+      // observation - so "outside" here means the farmer's floor was breached,
+      // which is a statement about the run and not about the world. A third to
+      // a half of what it counts is dead material whose disappearance rate has
+      // no New Zealand measurement behind it either (E26). Reported as Fitted,
+      // a customer-facing summary renders it "reproduces published
+      // observations", which is false.
+      make("Lowest cover", run.lowest_cover_kg_dm_per_ha(), "kg DM/ha", Provenance::Verify,
+           "The bottom of the year, against the cover this farm holds itself to - so outside "
+           "means the floor was breached, not that the model disagrees with a measurement. "
+           "Cover includes dead standing material, which on this farm is a third to a half of "
+           "it - see E26.",
            bundle.management.has_value()
                ? std::optional<double>(bundle.management->minimum_cover_kg_dm_per_ha)
                : std::nullopt,

@@ -206,10 +206,9 @@ its number is not a real farmer's name for it.
   itself is free in the model: there is no consent, no pumping cost and no
   capital. A closing balance twice the rain-fed one is not a return on
   investment.
-- **Whether the annual total is right.** 11,747 kg DM/ha under irrigation is in
-  the range Winchmore's irrigated treatments reach, but this project has only
-  calibrated and validated against the *dryland* series. The irrigated arm is a
-  model prediction, not a checked one.
+- **When the feed arrives.** This is the one thing on this page that is not
+  defensible, and it is worth being exact about. See "What may and may not be
+  claimed" below.
 - **Anything about the season's shape.** The largest known error in this model
   is that it grows too little in spring and too much in summer against measured
   Winchmore months (E84 in `docs/validation/verify.md`). A summer-time
@@ -218,6 +217,86 @@ its number is not a real farmer's name for it.
 - **The real ground.** These runs are flat unless you fetch the LiDAR with
   `paddock ground fetch`. Slope and aspect change both the radiation a paddock
   receives and the energy the stock spend walking it.
+
+---
+
+## What may and may not be claimed
+
+The residual seasonal error recorded in E84 was reviewed against this demo
+(E88). The short answer is that it does not block the demonstration, because
+what the demonstration claims is an annual ratio, and that ratio is measurable.
+
+### Defensible
+
+**The annual response, and the ratio behind it.** `data/calibration/winchmore-annual-production.csv`
+carries three measured irrigated treatments beside the dryland column, 25 years
+each. The demo waters at FAO-56's p = 0.6 - as soon as the sward would be held
+back - which is a wet regime, so the 15% and 20% soil-moisture treatments are
+its company: 50 treatment-years, median response ratio 1.90, mean 1.83, p10 to
+p90 of 1.23 to 2.46.
+
+**The model's ratio is 11,747 / 6,407 = 1.83 - the 48th percentile of those
+fifty.** The demo year's 652 mm of rain is 13% below the trial's 745 mm mean, so
+a ratio at about the median is what a drier-than-average year should give.
+
+Also defensible, on the same footing as the rest of the model: water applied
+(375 mm is an ordinary Canterbury season), drainage, days growth was held back,
+and dry matter per mm - the last at 14.2 kg DM/ha per mm applied, below Martin
+et al. (2006)'s ~20 for irrigated Canterbury pasture, which is the conservative
+direction.
+
+### Exploratory - shown, not quotable
+
+**Lowest pasture cover.** Downgraded in E89. It is fitted to nothing: no
+measured minimum-cover series has been found, its band is the farm's own
+management floor rather than an observation, and a third to a half of what it
+counts is dead material whose turnover rate has no New Zealand measurement
+behind it (E26).
+
+**Anything about when the feed arrives**, including the 22 January illustration
+and Paddock 29. Those are shown because a person needs somewhere to look on a
+map, and they are illustrations of a mechanism rather than claims about a date.
+
+### Why timing is the weak half
+
+The rain-fed arm grows `10.4 / 53.2 / 26.7 / 9.6` across winter, spring, summer
+and autumn against Winchmore's measured `10.0 / 54.7 / 18.0 / 17.3`. In this
+particular year spring is nearly right and the error is **summer over by 1.49x,
+autumn under by 7.7 points** - a different shape from E84's decade mean, and one
+year rather than a trend.
+
+**68% of the irrigation response falls in summer** - 3,679 of 5,383 kg DM/ha -
+which is exactly the season the model overstates. Summer's water-stress factor
+goes from 0.381 rain-fed to 0.999 irrigated, and E67's finding is that this
+model answers summer water in a way a real post-reproductive sward cannot,
+because it has no tillers and no phenology. So the seasonal bias does not cancel
+in the difference between the two runs; it is concentrated in it, and the annual
+total is right partly through compensating errors.
+
+That is why the annual ratio may be quoted and the monthly shape may not.
+
+### Phenology is deferred, not skipped
+
+Building phenology would change the seasonal path. There is no evidence it would
+move the annual ratio off the measured median it currently sits on, and the
+demonstration's claim is the annual ratio. It stays on the roadmap as the
+largest known modelling gap (E84) and it does not gate this demo.
+
+### What should gate the pasture half of the demo
+
+Proposed bounds, derived from the measured series rather than chosen:
+
+| Gate | Bound | From |
+|---|---|---|
+| Rain-fed annual production | 3,900 to 9,850 kg DM/ha | Winchmore's measured dryland range over 25 years |
+| Irrigation response ratio | 1.25 to 2.40 | p10 to p90 of the 15% and 20% treatments, 50 treatment-years |
+| Response per mm applied | at most 20 kg DM/ha/mm | Martin et al. (2006) for irrigated Canterbury pasture - a ceiling, since exceeding the published figure means over-responding |
+| Budgets and determinism | already gated | `FlagshipDemoTest` |
+
+The seasonal split is deliberately **not** gated on accuracy - it is a known
+open error and a gate would either fail on day one or be set so wide it asserted
+nothing. What is worth adding instead is a regression guard: the rain-fed
+summer share must not get *worse* than it is today.
 
 ---
 
