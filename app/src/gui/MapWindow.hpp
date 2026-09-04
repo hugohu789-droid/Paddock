@@ -483,6 +483,31 @@ class MapWindow : public QMainWindow {
 
   [[nodiscard]] std::string inspect_pixel(int x, int y);
 
+  /// Which paddock is selected, for the headless path.
+  ///
+  /// **Exposed because the two things a selection has to do cannot be seen in a
+  /// screenshot.** It has to survive the timeline being dragged - that is the
+  /// whole reason for holding one, since walking a paddock through a season is
+  /// what the panel is for - and it has to be let go when the farm underneath
+  /// it changes, rather than silently coming to mean a different field. Both
+  /// are checked by `--inspect`, and neither could be before this.
+  [[nodiscard]] std::optional<std::size_t> selected_paddock() const noexcept {
+    return selected_paddock_;
+  }
+
+  /// Whether the selection points at a paddock that exists on the farm now
+  /// drawn. False when there is no selection.
+  [[nodiscard]] bool selected_paddock_still_valid() const noexcept {
+    return selected_paddock_.has_value() && *selected_paddock_ < paddocks_.size();
+  }
+
+  /// The selected paddock's day as one line, for the headless path. Empty when
+  /// nothing is selected.
+  [[nodiscard]] std::string inspect_selected_line() const {
+    const std::optional<config::PaddockInspection> inspection = inspect_selected();
+    return inspection.has_value() ? config::inspection_line(*inspection) : std::string{};
+  }
+
   /// The render window's size in device pixels, which is the frame
   /// inspect_pixel counts in.
   /// The ground under a point in the render window, or nothing when the point

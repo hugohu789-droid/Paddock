@@ -577,6 +577,44 @@ jobs:
           output=$(xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/lincoln-lurdf --smoke             --irrigate --inspect)
           echo "${output}"
           echo "${output}" | grep -q "paddock-gui: centre -> "
+          # A selection is only worth holding because it survives the timeline
+          # being dragged - walking one paddock through a season is the whole
+          # point - and a panel that quietly let go would look exactly like one
+          # that worked, because the readings would still change with the day.
+          echo "${output}" | grep -q "paddock-gui: selection held across the year"
+
+      # **The panel must never show a decision-time reading and an end-of-day
+      # reading as the same fact.** The flagship demonstration turns on this: on
+      # 2024-01-22 the irrigated farm reads over 80% full and it watered that
+      # morning, and a viewer who is not told the soil was under the trigger
+      # when the schedule looked will conclude the model waters wet ground.
+      - name: Explain a watered day from the morning it was decided on
+        run: |
+          output=$(xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/demo-irrigation-on --smoke             --inspect --day 214)
+          echo "${output}"
+          echo "${output}" | grep -q "irrigation watered (decided at "
+
+      # **And that opening a bundle which names [irrigation] irrigates.** The
+      # section reached the manifest and the runner while the window went on
+      # building its rule from its own boxes, so the one bundle whose whole
+      # purpose is to irrigate opened rain-fed and the inspector correctly
+      # reported "irrigation off". Nothing failed; the demonstration was simply
+      # wrong.
+      - name: Open an irrigated bundle and check it irrigates
+        run: |
+          output=$(xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/demo-irrigation-on --smoke             --inspect --day 214)
+          echo "${output}" | grep -q "paddock-gui: irrigated "
+
+      # A selection either survives onto the same ground or is let go. What it
+      # must never do is stay as a number and come to mean a different field.
+      - name: Keep a selection across the same farm and drop it across another
+        run: |
+          same=$(xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/demo-irrigation-off --smoke             --then data/scenarios/demo-irrigation-on)
+          echo "${same}"
+          echo "${same}" | grep -q "selection after switching scenarios is the same ground"
+          other=$(xvfb-run -a ./build/ci-gui/bin/paddock-gui data/scenarios/demo-irrigation-off --smoke             --then data/scenarios/canterbury-grazed)
+          echo "${other}"
+          echo "${other}" | grep -q "selection after switching scenarios is cleared"
 
       # The pivots turn, which is the one part of the irrigation picture a
       # screenshot cannot show - and it is the part that broke. Ticking the
