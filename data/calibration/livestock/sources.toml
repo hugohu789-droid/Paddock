@@ -345,3 +345,93 @@ Nothing in this project should take 12 MJ as a requirement. It is recorded so
 the next person to reach open item 13 knows the gap is reproducible and knows
 what to test for.
 """
+
+[source.blnz_lactation_weaning]
+organisation = "Beef + Lamb New Zealand"
+title = "Fact Sheet 94: Lactation, lamb growth and the lamb weaning decision"
+authors = "Beef + Lamb New Zealand, from an AgResearch report (2007)"
+url = "https://beeflambnz.com/sites/default/files/factsheets/pdfs/fact-sheet-94-lactation-lamb-growth-and-the-weaning-decision.pdf"
+retrieved = "2026-09-05"
+sha256 = "90f71a042f8f2e2cde7f2dd7682917f0a65a75df58f52fe389a18d0d941ff674"
+source_type = "practitioner"
+verified = true
+notes = """
+**The New Zealand evidence E95 asked for, in extension form.** Dated August
+2009 and stated on its own first page to rest on the Beef + Lamb New Zealand
+"Weaning Decision" report prepared by AgResearch scientists in 2007. New
+Zealand, pasture-grazed, dual-purpose ewes - it names Romney and crossbred
+animals and gives 65 kg as a target mating weight, which is the animal the
+shipped ewe is meant to be.
+
+Two statements are why this file exists.
+
+**Timing.** "Ewe intake increases two to three weeks into lactation and builds
+to a peak at eight weeks. However milk production peaks at between two and four
+weeks. The ewe simply can't eat enough to meet her lactation and energy
+requirements." That is the phenomenon `FeedingConstraint::intake_capacity_limited`
+represents, asserted for New Zealand ewes by a New Zealand source, and it also
+dates both curves: milk at weeks 2-4, appetite at week 8.
+
+**Magnitude.** "At peak lactation, single ewes consume around 2.5 kg DM/day and
+twinning ewes 3 kg DM/day." Also, pre-weaning intake 2.07 kg DM/ewe falling to
+0.92 kg at maintenance after weaning, and a 20% drop in intake at weaning.
+
+**Recorded as practitioner, not primary, and the distinction is load-bearing.**
+The 2007 AgResearch report behind it has not been read; these are round numbers
+in a farmer fact sheet, not a measurement with a variance. They are strong
+enough to bound a parameter and to say the model is high, and not strong enough
+to set one. Same class as `geenty_countrywide_feeding`.
+
+Verified: read from the PDF above, whose hash is recorded, not from a summary
+of it.
+"""
+
+[source.vulich_litter_size_intake]
+organisation = "Teagasc (Agriculture and Food Development Authority), Ireland"
+title = "Effect of litter size on herbage intake at pasture by ewes and their progeny"
+authors = "Vulich, S.A.; O'Riordan, E.G.; Hanrahan, J.P."
+url = "https://www.cambridge.org/core/journals/animal-science/article/abs/effect-of-litter-size-on-herbage-intake-at-pasture-by-ewes-and-their-progeny/8B622CE10F1B5F30FE77FFE3B94A24F7"
+retrieved = "2026-09-05"
+source_type = "primary"
+verified = false
+notes = """
+**Not New Zealand, and kept separate from the New Zealand figures for that
+reason.** Animal Science 53(2):191. Ireland, perennial ryegrass pasture, 34
+mature ewes - 17 rearing twins, 17 rearing singles.
+
+It is here for one thing only: an independent, measured, temperate-pasture
+confirmation that ewe intake peaks **late** in lactation. Intake reached its
+maximum in weeks 6 to 7, with organic matter intake 2.50 kg/day for
+twin-rearing ewes against 2.26 for single-rearing.
+
+**Its numbers are not merged with the Beef + Lamb figures and must not be.**
+Different country, different breed, different sward management, and organic
+matter intake is not dry matter intake. It corroborates the *shape* of the
+curve - a peak at weeks 6-7 rather than week 4 - and nothing else.
+
+Not verified: only the abstract and indexing record were reachable; the full
+paper is paywalled. Breed and ewe liveweight are therefore unrecorded, which is
+a further reason not to use its magnitudes.
+"""
+
+[source.nzjar_1968_ewe_lactation]
+organisation = "New Zealand Journal of Agricultural Research"
+title = "Lactation performances of Romney, Corriedale and Merino ewes"
+url = "https://www.tandfonline.com/doi/pdf/10.1080/00288233.1968.10431643"
+retrieved = "2026-09-05"
+source_type = "primary"
+verified = false
+notes = """
+**New Zealand, the right breeds, and unreadable.** Indexed as reporting that
+the lactation curves rise to a peak in the **second week** and then fall at a
+constant rate to the twelfth, for ewes rearing single lambs.
+
+Week 2 is inside the Beef + Lamb fact sheet's "two to four weeks" and at its
+early edge, so the two New Zealand sources agree on the milk peak from
+different decades.
+
+Not verified: the publisher returned HTTP 403 to every route tried, and no open
+mirror was found. **This entry records a lead, not a reading**, and nothing in
+the model may be justified by it until somebody opens the paper. It is listed
+against open item 13, which has the same problem for Geenty and Rattray (1987).
+"""
