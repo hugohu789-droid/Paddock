@@ -94,11 +94,40 @@ struct MobDay {
   GrazingDay grazing;
   LiveweightResponse response;
 
-  /// Bought feed fed out to this mob today, kg of dry matter. It comes from
-  /// off the farm, so it enters the dry matter budget as an inflow rather than
+  /// Bought feed this mob **ate** today, kg of dry matter. It comes from off
+  /// the farm, so it enters the dry matter budget as an inflow rather than
   /// appearing from nowhere - and a run that needed a lot of it is a run whose
   /// pasture did not carry the stock, which is the thing worth reporting.
+  ///
+  /// **Eaten, not offered.** The two used to be the same number, which is the
+  /// same as saying an animal eats whatever is put in front of it.
   double supplement_kg_dm = 0.0;
+
+  /// What the farmer put out, kg of dry matter, whether or not it was eaten.
+  ///
+  /// **A farm has to be able to say "we fed out and they could not eat it".**
+  /// A mob already full of grass, or one whose appetite is smaller than the
+  /// deficit the farmer is trying to fill, leaves feed in the trough - and a
+  /// model in which offering and eating are one number cannot represent that,
+  /// which is how a target liveweight gain came to be reachable by buying.
+  /// Only `supplement_kg_dm` reaches the budgets; the difference is refused.
+  double supplement_offered_kg_dm = 0.0;
+
+  /// What this mob could physiologically eat today, kg of dry matter, before
+  /// anything about what was available to it.
+  ///
+  /// GrazPlan's potential intake (Eq. 2) times head, carrying the size,
+  /// condition and lactation terms. **It does not depend on the target gain**,
+  /// which is the whole point: it is what the animal is, not what the farmer
+  /// wants. Falls back to the mob's energy requirement for a species with no
+  /// appetite parameters, so an unparameterised animal still eats.
+  double intake_capacity_kg_dm = 0.0;
+
+  /// Pasture plus bought feed, kg of dry matter. Never above
+  /// `intake_capacity_kg_dm`.
+  [[nodiscard]] double total_intake_kg_dm() const noexcept {
+    return grazing.eaten_kg_dm + supplement_kg_dm;
+  }
 };
 
 /// What one day did to the farm.
