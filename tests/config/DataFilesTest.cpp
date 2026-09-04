@@ -11,12 +11,11 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
-
-#include <paddock/core/AnimalEnergy.hpp>
 
 #include <paddock/config/DiseaseConfig.hpp>
 #include <paddock/config/FarmConfig.hpp>
@@ -25,6 +24,7 @@
 #include <paddock/config/SoilConfig.hpp>
 #include <paddock/config/SpeciesConfig.hpp>
 #include <paddock/config/WeatherConfig.hpp>
+#include <paddock/core/AnimalEnergy.hpp>
 
 namespace paddock::config {
 namespace {
@@ -537,6 +537,60 @@ TEST(DataFilesTest, TheShippedEwesTwoPeaksAreFourteenDaysApart) {
   EXPECT_EQ(appetite_peak - milk_peak, 14)
       << "the model's lag between milk and appetite. Beef + Lamb New Zealand puts it at four to "
          "six weeks; this is two, and open item 17 is where that is tracked";
+}
+
+// **What each shipped profile actually rests on, now that the whole file
+// counts** (verify.md, E111).
+//
+// Before this, `sourced_values()` reported five values per species and these
+// three answered against their `[energy]` table alone. The measured effect of
+// widening it to every declared value is that **no shipped status moved**: the
+// intake tables are direct throughout, and the one table that would have moved
+// a status - the dry cow's absent `[reproduction]` - is excluded because she
+// never claimed it. So the defect was real and its exposure was not. Recorded
+// here rather than asserted in prose, because "no shipped claim was overstated"
+// is the kind of statement that should have a test under it.
+TEST(DataFilesTest, EachShippedSpeciesReportsTheEvidenceItActuallyDeclares) {
+  const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
+  ASSERT_EQ(species.size(), 3U) << "a species was added or removed; say what it rests on here";
+
+  struct Expected {
+    const char* name;
+    std::size_t values;
+    bool intake;
+    bool reproduction;
+    Provenance weakest;
+    const char* why;
+  };
+
+  // Five from [energy], fifteen from [intake], five from [reproduction] when
+  // the file states them all.
+  const std::vector<Expected> expected{
+      {"cattle_dairy_dry", 20, true, false, Provenance::Verify,
+       "no [reproduction] table at all, so nothing there counts either way; the reference weight "
+       "of 500 kg is the verify"},
+      {"sheep_ewe", 24, true, true, Provenance::Placeholder,
+       "[reproduction] without suckling_weeks, and the grazing coefficient is the placeholder"},
+      {"sheep_lamb", 25, true, true, Provenance::Placeholder,
+       "everything declared, and the grazing coefficient is the placeholder"},
+  };
+
+  for (const Expected& want : expected) {
+    const auto found = std::find_if(
+        species.begin(), species.end(),
+        [&](const SpeciesDefinition& definition) { return definition.name == want.name; });
+    ASSERT_NE(found, species.end()) << want.name << " is no longer shipped";
+
+    EXPECT_EQ(found->declares_intake, want.intake) << want.name;
+    EXPECT_EQ(found->declares_reproduction, want.reproduction) << want.name;
+    EXPECT_EQ(found->sourced_values().size(), want.values) << want.name << ": " << want.why;
+    EXPECT_EQ(found->weakest_status(), want.weakest) << want.name << ": " << want.why;
+
+    // And none of the three is fully evidenced, which was already true when the
+    // aggregate saw only [energy] - so no page ever showed one of these as
+    // resting on published numbers throughout.
+    EXPECT_FALSE(found->fully_evidenced()) << want.name;
+  }
 }
 
 }  // namespace paddock::config

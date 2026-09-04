@@ -176,7 +176,8 @@ double lactation_factor(const AnimalClassParameters& animal, const AnimalState& 
     return 1.0;
   }
 
-  const double through = static_cast<double>(state.days_lactating) / animal.appetite_lactation_peak_days;
+  const double through =
+      static_cast<double>(state.days_lactating) / animal.appetite_lactation_peak_days;
   const double exponent = animal.appetite_lactation_curve_exponent;
   return 1.0 + (peak * std::pow(through, exponent) * std::exp(exponent * (1.0 - through)));
 }
