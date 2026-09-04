@@ -27,6 +27,29 @@
 /// deliberately not a place where a number can be promoted.
 namespace paddock::config {
 
+/// What irrigation is allowed to do to annual production before the model has
+/// stopped behaving like a Canterbury pasture.
+///
+/// **Measured, not chosen.** Winchmore ran three irrigated treatments beside a
+/// dryland control for twenty-five farm years. The demonstration waters at
+/// FAO-56's p = 0.6 - as soon as the sward would be held back - which is a wet
+/// regime, so the 15% and 20% soil-moisture treatments are its company: fifty
+/// treatment-years whose per-year response ratios run 1.14 to 2.68, median 1.90,
+/// with a 10th to 90th percentile of 1.23 to 2.46. These are that band, rounded
+/// **inward** to 1.25 and 2.40.
+///
+/// **Inward, which is the strict direction and is deliberate.** A gate a
+/// fraction tighter than its sample can raise a false alarm and can never wave
+/// a bad model through, and a false alarm on a validation gate is a
+/// conversation rather than a defect. `IrrigationResponseTest` re-reads the
+/// file and fails if these stop sitting inside the percentiles they came from,
+/// so the rounding cannot quietly become a widening.
+///
+/// The source is `data/calibration/winchmore-annual-production.csv`; the
+/// derivation is E88 and the gate is E90.
+constexpr double kIrrigationResponseLow = 1.25;
+constexpr double kIrrigationResponseHigh = 2.40;
+
 /// How much weight one outcome will bear, in descending order.
 ///
 /// **Each of these is a statement about evidence, and the order is the order

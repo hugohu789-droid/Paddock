@@ -239,6 +239,16 @@ p90 of 1.23 to 2.46.
 fifty.** The demo year's 652 mm of rain is 13% below the trial's 745 mm mean, so
 a ratio at about the median is what a drier-than-average year should give.
 
+**This is gated, not just observed.** `tests/validation/IrrigationResponseTest.cpp`
+runs both halves through the same priced path the demonstration uses, takes the
+production figures off the dashboards the customer reads, and requires the ratio
+to sit inside 1.25 to 2.40 - the p10 to p90 of the measurement, rounded inward.
+The distribution is read out of the CSV rather than transcribed, and a second
+test re-reads it and fails if the band drifts from the percentiles it came from.
+The response per mm applied is gated too, as a ceiling: 14.2 against Martin et
+al. (2006)'s ~20, because a model converting water faster than the published
+figure is over-responding whatever its ratio says (E90).
+
 Also defensible, on the same footing as the rest of the model: water applied
 (375 mm is an ordinary Canterbury season), drainage, days growth was held back,
 and dry matter per mm - the last at 14.2 kg DM/ha per mm applied, below Martin
@@ -293,10 +303,16 @@ Proposed bounds, derived from the measured series rather than chosen:
 | Response per mm applied | at most 20 kg DM/ha/mm | Martin et al. (2006) for irrigated Canterbury pasture - a ceiling, since exceeding the published figure means over-responding |
 | Budgets and determinism | already gated | `FlagshipDemoTest` |
 
+All four are implemented in `IrrigationResponseTest` (E90).
+
 The seasonal split is deliberately **not** gated on accuracy - it is a known
 open error and a gate would either fail on day one or be set so wide it asserted
-nothing. What is worth adding instead is a regression guard: the rain-fed
-summer share must not get *worse* than it is today.
+nothing. It carries a **regression guard** instead, which is a different thing
+and is labelled as one: the rain-fed summer share sits at 26.4% today against a
+32% ceiling and a 15% floor. Passing it is not evidence of anything. Failing it
+means something upstream moved the season and whoever moved it should say so -
+most obviously if somebody "fixed" the season by tuning rather than by
+phenology.
 
 ---
 

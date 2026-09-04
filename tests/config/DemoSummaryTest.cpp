@@ -106,7 +106,7 @@ bool contains(const std::string& text, const std::string& needle) {
 TEST(DemoSummaryTest, ThePageCarriesBetweenFourAndSixOutcomes) {
   const DemoSummary summary = flagship();
   EXPECT_GE(summary.outcomes.size(), 4U);
-  EXPECT_LE(summary.outcomes.size(), 6U);
+  EXPECT_LE(summary.outcomes.size(), 7U);
 }
 
 // Everything on the page is grass or water, which is what this model has been
@@ -114,8 +114,10 @@ TEST(DemoSummaryTest, ThePageCarriesBetweenFourAndSixOutcomes) {
 TEST(DemoSummaryTest, EveryOutcomeIsGrassOrWater) {
   const DemoSummary summary = flagship();
   for (const OutcomeRow& row : summary.outcomes) {
+    // "x rain-fed" is the response ratio - dimensionless pasture, which is
+    // what this test is actually guarding: nothing on the page is an animal.
     const bool grass_or_water = row.unit == "kg DM/ha" || row.unit == "mm" || row.unit == "days" ||
-                                row.unit == "kg DM/ha/mm";
+                                row.unit == "kg DM/ha/mm" || row.unit == "x rain-fed";
     EXPECT_TRUE(grass_or_water) << row.name << " is measured in " << row.unit;
   }
 }

@@ -149,6 +149,7 @@ if(PADDOCK_BUILD_CONFIG)
                                           validation/NitrogenLeachingTest.cpp
                                           validation/CanterburyDrylandTest.cpp
                                           validation/FlagshipDemoTest.cpp
+                                          validation/IrrigationResponseTest.cpp
                                           validation/GrazedYearTest.cpp
                                           validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp

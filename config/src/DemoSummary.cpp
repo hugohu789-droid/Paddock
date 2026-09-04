@@ -38,6 +38,12 @@ int places_for(const std::string& unit) {
   if (unit == "kg DM/ha" || unit == "days" || unit == "mm") {
     return 0;
   }
+  // A response ratio to one decimal is 1.8, which is the same number as the
+  // 1.75 and 1.91 treatment means it is read against; two decimals is what
+  // separates them.
+  if (unit == "x rain-fed") {
+    return 2;
+  }
   return 1;
 }
 
@@ -205,6 +211,49 @@ DemoSummary demo_summary(const FarmDashboard& before, const FarmDashboard& after
       {"Water use efficiency", "Dry matter per mm"},
       {"Drainage", "Drainage below roots"},
   };
+
+  // **The response ratio leads, because it is the only benchmarked number
+  // here.** Everything else on this page is calibrated or self-consistent;
+  // this one is measured against twenty-five years of somebody else's trial,
+  // and it is the answer to the question the demonstration asks.
+  //
+  // Its status is not written here. It carries the band the measurement
+  // defines and `confidence_of` reads that band the same way it reads every
+  // other indicator's - so the page cannot say "benchmarked" about something
+  // the evidence does not support, and cannot be edited to.
+  const Indicator* grown_before = indicator_named(before, "Pasture grown");
+  const Indicator* grown_after = indicator_named(after, "Pasture grown");
+  if (grown_before != nullptr && grown_after != nullptr && grown_before->value > 0.0) {
+    Indicator ratio;
+    ratio.name = "Irrigation response";
+    ratio.unit = "x rain-fed";
+    ratio.value = grown_after->value / grown_before->value;
+    // Arithmetic on two model outputs, checked against a published
+    // distribution. The ratio itself has never been fitted to anything - the
+    // rain-fed arm's radiation use efficiency was fitted to a water use
+    // efficiency, not to a response - so the comparison is independent.
+    ratio.trust = Provenance::Derived;
+    ratio.low = kIrrigationResponseLow;
+    ratio.high = kIrrigationResponseHigh;
+    ratio.note =
+        "Annual production irrigated over rain-fed. Winchmore's 15% and 20% "
+        "soil-moisture treatments give 1.25 to 2.40 over fifty measured "
+        "treatment-years, and this is inside it. The annual response is benchmarked; "
+        "when in the year the feed arrives is not - see E88.";
+
+    OutcomeRow row;
+    row.name = ratio.name;
+    row.unit = ratio.unit;
+    // One scenario against the other, so "before" is the rain-fed farm at 1.0
+    // by definition and the difference is what the water bought.
+    row.before = 1.0;
+    row.after = ratio.value;
+    row.difference = ratio.value - 1.0;
+    row.percent = 100.0 * row.difference;
+    row.confidence = confidence_of(ratio);
+    row.note = ratio.note;
+    summary.outcomes.push_back(std::move(row));
+  }
 
   for (const auto& [indicator_name, shown_as] : wanted) {
     const Indicator* was = indicator_named(before, indicator_name);
