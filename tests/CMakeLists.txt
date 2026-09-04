@@ -113,6 +113,7 @@ endif()
 # stops parsing fails the build rather than the first run that needs it.
 if(PADDOCK_BUILD_CONFIG)
   add_executable(paddock_config_tests config/ConfigTest.cpp config/DashboardTest.cpp
+                                      config/DemoSummaryTest.cpp
  config/DataFilesTest.cpp
                                       config/FarmConfigTest.cpp config/PaddockInspectionTest.cpp
                                       config/ScenarioComparisonTest.cpp config/ScenarioInputsTest.cpp

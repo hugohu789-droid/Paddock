@@ -32,6 +32,7 @@
 #include <paddock/core/Weather.hpp>
 
 #ifdef PADDOCK_WITH_CONFIG
+#include <paddock/config/DemoSummary.hpp>
 #include <paddock/config/EconomicsConfig.hpp>
 #include <paddock/config/FarmDashboard.hpp>
 #include <paddock/config/NitrogenReport.hpp>
@@ -382,8 +383,26 @@ int run_dashboard(const std::vector<std::string>& arguments) {
                        paddock::config::compare_inputs(all[i - 1], all[i]))
                 << '\n';
     }
+    std::vector<paddock::config::RunSummary> runs;
     for (const paddock::config::ScenarioBundle& one : all) {
-      boards.push_back(board_for(one, one.name));
+      // The run is kept beside the board because the water that went on is a
+      // decision rather than an indicator, so it has no tile of its own.
+      runs.push_back(economics.has_value() ? paddock::config::run_managed_scenario(
+                                                 one, *one.management, diet, one.name,
+                                                 paddock::config::business_from(one, *economics))
+                                           : paddock::config::run_managed_scenario(
+                                                 one, *one.management, diet, one.name));
+      boards.push_back(paddock::config::build_dashboard(one, runs.back(), one.name, rule));
+    }
+
+    // **Then the few outcomes that answer the question, before the twenty-seven
+    // that answer every question.** A comparison read in five minutes needs to
+    // say what changed, what came of it, and what the second of those is worth;
+    // the full table below is for somebody who has more than five minutes.
+    if (boards.size() == 2) {
+      std::cout << paddock::config::as_text(paddock::config::demo_summary(
+                       boards.front(), boards.back(), runs.front(), runs.back()))
+                << '\n';
     }
   } else if (years.empty()) {
     boards.push_back(board_for(bundle, bundle.range.first.to_iso_string().substr(0, 4)));

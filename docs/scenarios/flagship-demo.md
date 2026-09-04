@@ -26,7 +26,41 @@ result:
     Unchanged: Run, Farm, Ground, Weather, Soil, Pasture, Stock, Grazing policy.
 ```
 
-**The last two lines are the ones that matter.** A reader handed two columns of
+Then the few outcomes that answer the question, before the twenty-seven that
+answer every question:
+
+```
+  What changed in the paddock
+  ===========================
+    demo_irrigation_off  ->  demo_irrigation_on
+
+    Pasture grown         6407 -> 11747 kg DM/ha      +5339    +83%  calibrated
+    Lowest pasture cover   710 ->   847 kg DM/ha       +136    +19%  calibrated
+    Growth-limited days    233 ->    15 days           -218    -94%  conserved
+    Dry matter per mm     12.1 ->  13.9 kg DM/ha/mm    +1.8    +15%  calibrated
+    Drainage below roots   109 ->   152 mm              +43    +39%  conserved
+    Irrigation applied       0 ->   375 mm             +375  from 0  conserved
+
+  What these are worth
+    calibrated   reproduces published observations, having been fitted to them
+    conserved    no external benchmark; read off budgets the tests close to 1e-9
+```
+
+**Nothing on that page is benchmarked, and that is the honest result.** The
+strongest label any outcome here earns is *calibrated*: pasture grown is fitted
+to Winchmore's dryland water use efficiency and then compared against
+Winchmore's own band, which is checking its own arithmetic rather than being
+tested against the world. `Confidence` is a rendering of the `Provenance` each
+indicator already carried, so a number cannot be promoted by editing the page -
+and a fitted value never reaches "benchmarked" whatever band it has.
+
+The page also names what it left off and why: bought feed (the model's
+purchases are unbounded, E71/E77), liveweight and stocking rate (the least
+validated part of the model), money (the water is free in the model), and
+nitrate leached (placeholder coefficients). A summary that quietly dropped the
+feed bill would have chosen its metrics to flatter.
+
+**The last two lines of the "What changed" block are the ones that matter.** A reader handed two columns of
 indicators will attribute the gap between them to whatever they were told the
 comparison was about; this is the model saying what actually differs, read off
 the resolved bundles and never off the results. Point it at two unrelated farms
