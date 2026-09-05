@@ -566,7 +566,11 @@ std::string as_text(const FarmDashboard& dashboard) {
 
 std::string indicators_as_csv(const FarmDashboard& dashboard) {
   std::ostringstream out;
-  out << "farm,year,panel,indicator,value,unit,standing,low,high,trust,note\n";
+  // **`label` rather than `year`.** The column carries `dashboard.label`, which
+  // is a year for a single run and a scenario name for a comparison - so the
+  // flagship export used to show `demo_irrigation_off` under a heading that
+  // said year, beside a `farm` column saying the same thing.
+  out << "farm,label,panel,indicator,value,unit,standing,low,high,trust,note\n";
   for (const DashboardPanel& panel : dashboard.panels) {
     for (const Indicator& indicator : panel.indicators) {
       out << csv(dashboard.farm) << ',' << csv(dashboard.label) << ',' << csv(panel.title) << ','
@@ -665,7 +669,7 @@ std::string compare_dashboards_as_text(const std::vector<FarmDashboard>& boards)
 
 std::string compare_dashboards_as_csv(const std::vector<FarmDashboard>& boards) {
   std::ostringstream out;
-  out << "farm,year,panel,indicator,value,unit,standing,trust\n";
+  out << "farm,label,panel,indicator,value,unit,standing,trust\n";
   for (const FarmDashboard& board : boards) {
     for (const DashboardPanel& panel : board.panels) {
       for (const Indicator& indicator : panel.indicators) {
