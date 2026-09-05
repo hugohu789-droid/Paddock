@@ -152,6 +152,7 @@ if(PADDOCK_BUILD_CONFIG)
                                           validation/FlagshipDemoTest.cpp
                                           validation/IrrigationResponseTest.cpp
                                           validation/FeedMarketTest.cpp
+                                          validation/LambCohortLifecycleTest.cpp
                                           validation/ValidityEnvelopeTest.cpp
                                           validation/GrazedYearTest.cpp
                                           validation/IrrigatedYearTest.cpp
