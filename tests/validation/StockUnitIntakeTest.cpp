@@ -201,9 +201,13 @@ TEST(StockUnitIntakeTest, TheFlockEatsLessThanItsStockUnitRatingImplies) {
   GTEST_LOG_(INFO) << "the flock ate " << eaten << " kg DM/ha against a stock-unit demand of "
                    << target << ", a share of " << share << "; bought " << run.bought_feed_kg_dm()
                    << " kg DM and closed on " << run.closing_head << " head";
-  // Moved with E83: turnover now has its own temperature response, so the
-  // sward carries a little less leaf and the farm a little less feed.
-  EXPECT_GT(share, 0.62) << "the flock eats " << eaten
+  // Moved with E107, which switched on the physiological intake ceiling: a mob
+  // that used to eat its whole requirement now eats what a ewe can hold, and
+  // the distance to the stock-unit rule of thumb widens accordingly. **This
+  // bound records the model rather than validating it** - E95 has not settled how deep the
+  // early-lactation intake deficit should be for this ewe, so this bound records what the model
+  // does and is not a validation of it.
+  EXPECT_GT(share, 0.40) << "the flock eats " << eaten
                          << " kg DM/ha against a stock-unit demand of " << target
                          << ". Much under this would be a real intake fault rather than the "
                             "ordinary distance between a model and a rule of thumb";

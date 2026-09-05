@@ -31,6 +31,26 @@ inline constexpr double kGrossEnergyMjPerKgDm = 18.4;
 /// Ratio of empty body weight to liveweight, TMC Eq. 43.
 inline constexpr double kEmptyBodyFraction = 0.92;
 
+/// **The day a ewe's milk peaks, and it is not a parameter of this model.**
+///
+/// TMC Eq. 35 writes the lactation curve as `1.01 * exp(0.41 * ln(d) - 0.0287 *
+/// d)`, and the day it peaks falls straight out of those two fitted constants:
+/// `d(0.41 * ln d - 0.0287 * d)/dd = 0` at `d = 0.41 / 0.0287`, or about
+/// **14.29 days**.
+///
+/// **It is derived, not chosen, and it is not configurable.** 1.01, 0.41 and
+/// 0.0287 are one published regression; moving this number means re-fitting
+/// OVERSEER's equation rather than setting a value, which is not something this
+/// project does to somebody else's curve. It is named here so that the
+/// distinction can be tested and cited instead of rediscovered.
+///
+/// **Not to be confused with `appetite_lactation_peak_days`**, which is
+/// GrazPlan's C_I8 and dates the appetite response, not the milk. The two are
+/// independent by construction: nothing in `AnimalClassParameters` reaches this
+/// constant, and `daily_milk_yield_kg` reads no appetite parameter. See
+/// verify.md, E109 and E110.
+inline constexpr double kMilkYieldPeakDays = 0.41 / 0.0287;
+
 /// kp, the efficiency with which ME is used for pregnancy. TMC Eq. 4.
 ///
 /// A flat 0.13, and strikingly low beside maintenance's 0.70: growing a lamb is
@@ -168,8 +188,8 @@ struct AnimalClassParameters {
   /// `C_I20 = 1.5` for sheep and cattle alike.
   double condition_intake_limit = 1.5;
 
-  /// **What a milking female does**, GrazPlan Eq. 8, which is the other half of
-  /// why appetite is not a constant:
+  /// **What a milking female does to appetite**, GrazPlan Eq. 8, which is the
+  /// other half of why appetite is not a constant:
   ///
   ///     LF = 1 + C_I19,Y * M^C_I9 * exp(C_I9 * (1 - M)),  M = days / C_I8
   ///
@@ -182,16 +202,27 @@ struct AnimalClassParameters {
   /// is where GrazPlan files the Romney, take `0.524, 0.524, 0.707, 0.891` for
   /// none, one, two and three. Sheep take `C_I8 = 28` days and `C_I9 = 1.4`.
   ///
+  /// **These are appetite parameters and nothing else, which is why they carry
+  /// the prefix** (verify.md, E110). `appetite_lactation_peak_days` is C_I8, the
+  /// day the *appetite* increment peaks - `M^C_I9 * exp(C_I9 * (1 - M))` is at
+  /// its maximum where `M = 1`. It has no bearing on when milk peaks: that
+  /// belongs to TMC Eq. 35, whose own fitted constants put it at
+  /// `kMilkYieldPeakDays`, and no parameter in this struct can move it. The two
+  /// timings are independent, and cattle prove it - `C_I8 = 624` there, which
+  /// would be nonsense as a statement about a cow's milk. Named
+  /// `lactation_peak_days` until E110, where the name had already misled a
+  /// review twice without ever producing a wrong number.
+  ///
   /// **Two of Eq. 8's terms are not here.** LA carries condition at
   /// parturition and LB the weight lost since it, and both need a history this
   /// model does not keep. Both are at most one, so leaving them out makes a ewe
   /// hungrier than GrazPlan would and never less.
-  double lactation_peak_days = 28.0;
-  double lactation_curve_exponent = 1.4;
-  double lactation_peak_no_young = 0.0;
-  double lactation_peak_one_young = 0.0;
-  double lactation_peak_two_young = 0.0;
-  double lactation_peak_three_young = 0.0;
+  double appetite_lactation_peak_days = 28.0;
+  double appetite_lactation_curve_exponent = 1.4;
+  double appetite_lactation_peak_no_young = 0.0;
+  double appetite_lactation_peak_one_young = 0.0;
+  double appetite_lactation_peak_two_young = 0.0;
+  double appetite_lactation_peak_three_young = 0.0;
 
   /// **Appetite**, in GrazPlan's two coefficients: the amount of dry matter this
   /// class eats in a day with unrestricted access to good feed.
@@ -215,10 +246,13 @@ struct AnimalClassParameters {
   /// `1.7 Z - Z^2` is zero at exactly 0.85; and its Fig. 2 draws a 50 kg-SRW
   /// sheep peaking near 1.44 kg DM a day, which the equation reproduces.
   ///
-  /// **Four factors are missing and each would only reduce it**: condition
-  /// (CF), rumen development in unweaned young (YF), heat (TF) and lactation
-  /// (LF) - the last of which would raise it. Zero for `_scalar` turns appetite
-  /// off, which is the default.
+  /// **Two of GrazPlan's factors are implemented and two are not.** Condition
+  /// (CF, Eq. 3) and lactation (LF, Eq. 8) are both applied in
+  /// `potential_intake_kg_dm`; rumen development in unweaned young (YF) and
+  /// heat (TF) are not, and each of those would only reduce intake. Zero for
+  /// `_scalar` turns appetite off entirely. Corrected in E110 - E96 recorded
+  /// that this note still named CF and LF as missing after E75 implemented
+  /// them, so the header understated what the model does.
   double appetite_scalar_per_day = 0.0;
   double appetite_size_coefficient = 1.7;
 
@@ -396,6 +430,51 @@ struct AnimalState {
 /// below one it is light for its frame. GrazPlan's BC.
 [[nodiscard]] double relative_condition(const AnimalClassParameters& animal,
                                         const AnimalState& state) noexcept;
+
+/// **Where the published condition-score scale runs out**, as relative
+/// condition (verify.md, E115 and E116).
+///
+/// This is a **validity boundary, not a mortality threshold.** Nothing in this
+/// model dies at it, is clamped at it, or behaves differently either side of
+/// it. It marks the point past which there is no published animal to compare
+/// the model's animal with.
+///
+/// It is derived, not chosen. The GrazPlan technical paper - `grazplan_animal`
+/// in the source record - says two things, both attributed to SCA (1990):
+///
+///  * SRW is the base weight "when skeletal development is complete and
+///    **condition score is in the middle of the range**", so `BC = 1` is score
+///    2.5 on the 0-5 sheep and beef scale;
+///  * "a gain or loss of 1 unit of condition score is equivalent to a change of
+///    **0.15N**", so one score is 0.15 of normal weight.
+///
+/// Therefore `score = 2.5 + (BC - 1) / 0.15`, and score 0 - the bottom of the
+/// published scale - is `BC = 1 - 2.5 x 0.15 = 0.625`. The scale, its midpoint
+/// and its step are all the source's; the subtraction is the only thing done
+/// here.
+///
+/// **It is a ratio on purpose.** The equivalent liveweight is a property of the
+/// animal, not a constant: for the shipped 66 kg ewe it is about 26.4 kg, and
+/// for any other profile it is whatever `liveweight_at_relative_condition`
+/// returns. No weight is hard-coded anywhere.
+inline constexpr double kConditionScoreAtNormalWeight = 2.5;
+inline constexpr double kNormalWeightPerConditionScore = 0.15;
+inline constexpr double kLowestSupportedRelativeCondition =
+    1.0 - (kConditionScoreAtNormalWeight * kNormalWeightPerConditionScore);
+
+/// Relative condition as a condition score on SCA (1990)'s 0-5 scale.
+[[nodiscard]] double condition_score(double relative_condition) noexcept;
+
+/// The liveweight at which this animal would reach a given relative condition.
+///
+/// Solved against the animal's own `normal_weight_kg`, because normal weight
+/// blends toward liveweight below the growth ceiling and a closed form would
+/// drift from that function the first time it changed. Returns zero when the
+/// animal states no growth coefficients, which is the case where normal weight
+/// is the liveweight and the ratio carries no information.
+[[nodiscard]] double liveweight_at_relative_condition(const AnimalClassParameters& animal,
+                                                      const AnimalState& state,
+                                                      double target_condition) noexcept;
 
 /// What this animal would eat in a day given unrestricted access to good feed,
 /// kg DM per head. GrazPlan Eq. 2; see `appetite_scalar_per_day`.

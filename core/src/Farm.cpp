@@ -352,14 +352,45 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     const double supplement =
         mob_index < supplement_kg_dm.size() ? std::max(0.0, supplement_kg_dm[mob_index]) : 0.0;
 
-    const double appetite = need.intake_kg_dm * static_cast<double>(farm_mob.mob.head);
+    // **What the mob is being fed FOR.** This carries the target gain, and that
+    // is all it is: an intent that sizes the day's demand and tells the farmer
+    // whether to put feed out. It is not a ceiling on anything and it cannot
+    // make an animal eat - the ceiling below is what the animal is.
+    const double demand_kg_dm = need.intake_kg_dm * static_cast<double>(farm_mob.mob.head);
+    mob_day.supplement_offered_kg_dm = supplement;
 
-    // **Bought feed substitutes for pasture; it does not add to it.** A mob fed
-    // out in the morning grazes less, which is the whole point of feeding out -
-    // it spares the sward. Adding the two instead sent a ewe from 55 kg to 101
-    // over a year, which is not a thing sheep do.
-    mob_day.supplement_kg_dm = std::min(supplement, appetite);
-    mob_day.grazing.demand_kg_dm = appetite - mob_day.supplement_kg_dm;
+    // **Step one: what this animal can physiologically eat today**, before
+    // anything about what is in front of it. GrazPlan Eq. 2 through
+    // `potential_intake_kg_dm`, carrying size, condition and lactation.
+    //
+    // **It does not depend on the target gain**, which is the whole point: it
+    // is what the animal is, not what the farmer wants. A species with no
+    // appetite parameters falls back to its own requirement, so an
+    // unparameterised animal still eats rather than starving on a missing
+    // number.
+    const double appetite_per_head =
+        potential_intake_kg_dm(farm_mob.mob.animal, farm_mob.mob.state);
+    const double capacity_kg_dm = appetite_per_head > 0.0
+                                      ? appetite_per_head * static_cast<double>(farm_mob.mob.head)
+                                      : demand_kg_dm;
+    mob_day.intake_capacity_kg_dm = capacity_kg_dm;
+
+    // **Step two: the trough, bounded by that capacity.**
+    //
+    // Feeding out happens in the morning and a mob that has eaten grazes less,
+    // which is why bought feed substitutes for pasture rather than adding to
+    // it - adding the two sent a ewe from 55 kg to 101 over a year. So the
+    // trough is served first, and two things bound it: what the mob is being
+    // fed **for**, and what it can physically hold.
+    //
+    // **The second of those is the fix.** Until it was written, bought feed was
+    // the one intake nothing bounded: capped only at the demand, and the demand
+    // carries the target gain, so a farmer who asked for half a kilogram a day
+    // bought his way there - E77 measured 182.49 kg over a year against a
+    // target of 182.5, to the decimal, which is arithmetic and not an animal.
+    // Whatever is offered beyond this is refused and never reaches a budget.
+    mob_day.supplement_kg_dm = std::min({supplement, demand_kg_dm, capacity_kg_dm});
+    mob_day.grazing.demand_kg_dm = demand_kg_dm - mob_day.supplement_kg_dm;
 
     // What each cell has to give, and what the paddock has in total. The mean
     // standing cover comes with it, because how much of what it wants a mob can
@@ -390,13 +421,20 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     // short. A milking ewe wants half again what a dry one does, which is the
     // headroom this needs to work at all.
     mob_day.grazing.relative_intake = relative_intake(farm_mob.mob.animal, standing_kg_dm_per_ha);
-    const double appetite_per_head =
-        potential_intake_kg_dm(farm_mob.mob.animal, farm_mob.mob.state);
+
+    // **Step three: what is left of the appetite, and step four: pasture into
+    // it.**
+    //
+    // Two different limits, composed rather than conflated. The room left after
+    // the trough is `capacity - supplement`, which is a stomach. The most she
+    // can harvest is `capacity * relative_intake`, which is a mouth: on a short
+    // sward she takes smaller bites and grazes longer to make them up, and past
+    // a point cannot. Grazing is under both, and then under what is actually
+    // growing there.
     mob_day.grazing.capacity_kg_dm =
         appetite_per_head > 0.0
-            ? std::max(0.0, (appetite_per_head * mob_day.grazing.relative_intake *
-                             static_cast<double>(farm_mob.mob.head)) -
-                                mob_day.supplement_kg_dm)
+            ? std::max(0.0, std::min(capacity_kg_dm - mob_day.supplement_kg_dm,
+                                     capacity_kg_dm * mob_day.grazing.relative_intake))
             : mob_day.grazing.demand_kg_dm;
 
     const double to_eat_kg =
@@ -437,8 +475,40 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
         mob_day.grazing.grass_eaten_kg_dm + mob_day.grazing.legume_eaten_kg_dm;
     mob_day.grazing.intake_per_head_kg_dm =
         mob_day.grazing.eaten_kg_dm / static_cast<double>(farm_mob.mob.head);
-    mob_day.grazing.feed_limited =
-        mob_day.grazing.eaten_kg_dm < (mob_day.grazing.demand_kg_dm - 1e-9);
+
+    // **Which of the two constraints bound the day, if either did.**
+    //
+    // The mob fell short when grass and trough together did not reach what it
+    // was being fed for. Why it fell short is the question a management rule
+    // needs answered, and there are two answers: either there was room left in
+    // the animal and nothing to put in it, or the animal was full and it was
+    // not enough.
+    //
+    // Room left is the test. Intake stopping below the physiological ceiling
+    // means something outside the animal ran out - the paddock above its
+    // residual, or the sward being short enough that a mob cannot harvest fast
+    // enough, or an empty trough - and all three are the farm's problem.
+    // Intake reaching the ceiling with the requirement still unmet is the
+    // animal's state, and no amount of feed or selling changes it.
+    // **Two independent questions, and they can both answer yes.**
+    //
+    // Could the animal have met its requirement at all, eating to its ceiling?
+    // If the requirement is above the ceiling the answer is no whatever the
+    // farm does, and that is the animal's state: a ewe at peak lactation whose
+    // appetite has not caught up with her milk. Selling her neighbours does not
+    // change it.
+    //
+    // Did it get what was actually within reach - the lesser of what it needed
+    // and what it could hold? Falling under that is the farm's problem: the
+    // paddock ran out above its residual, or the sward was short enough that a
+    // mob cannot harvest fast enough, or the trough was empty.
+    //
+    // On a short sward through lambing both are true at once, which is why they
+    // are two bools and not an enum.
+    const double total_intake = mob_day.total_intake_kg_dm();
+    const double within_reach = std::min(demand_kg_dm, capacity_kg_dm);
+    mob_day.grazing.constraint.intake_capacity_limited = demand_kg_dm > (capacity_kg_dm + 1e-9);
+    mob_day.grazing.constraint.feed_supply_limited = total_intake < (within_reach - 1e-9);
 
     // Every paddock the mob had the run of has been grazed, which is why set
     // stocking gives no rest: under it this resets all of them, every day.
@@ -515,7 +585,10 @@ FarmDay Farm::step(const DailyWeather& weather, const DietQuality& diet,
     day.total_eaten_kg_dm += mob_day.grazing.eaten_kg_dm;
     day.total_supplement_kg_dm += mob_day.supplement_kg_dm;
     day.total_nitrogen_removed_kg += mob_day.grazing.nitrogen_removed_kg;
-    day.any_mob_short = day.any_mob_short || mob_day.grazing.feed_limited;
+    day.any_mob_feed_supply_limited =
+        day.any_mob_feed_supply_limited || mob_day.grazing.constraint.feed_supply_limited;
+    day.any_mob_intake_capacity_limited =
+        day.any_mob_intake_capacity_limited || mob_day.grazing.constraint.intake_capacity_limited;
 
     day.mobs.push_back(std::move(mob_day));
   }

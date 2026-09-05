@@ -276,8 +276,40 @@ int main(int argc, char** argv) {
         // No render_once here: it resets the camera itself, which would make
         // this check pass whether or not opening a farm moves the view. The run
         // draws its own frame.
+        // Selected before the switch, so that what happens to it can be
+        // checked afterwards. A selection is an index into a list of paddocks,
+        // and the next line replaces that list.
+        //
+        // **On the flat map, because the window opens in three dimensions.**
+        // There the farm sits in the lower part of a frame that also holds the
+        // sky, so a point at the middle of the window lands on nothing and this
+        // check silently had nothing to check - it reported the selection
+        // cleared because there had never been one. The same reason --inspect
+        // gives for doing the same thing.
+        const bool was_terrain_here = window.showing_terrain();
+        window.select_view(false);
+        static_cast<void>(window.inspect_pixel(window.render_width() / 2,
+                                               static_cast<int>(window.render_height() * 0.55)));
+        const bool had_a_selection = window.selected_paddock().has_value();
+        std::cout << "paddock-gui: selection before switching scenarios is "
+                  << (had_a_selection ? "held" : "none") << '\n';
+
         window.open_scenario(std::string(*std::next(then_flag)));
         window.wait_for_run();
+
+        // **A selection either survives onto the same ground or is let go.**
+        // What it must never do is stay as a number and come to mean a
+        // different field: the panel would then describe a paddock nobody
+        // clicked on, with no way to tell from the readings.
+        if (had_a_selection && window.selected_paddock().has_value() &&
+            !window.selected_paddock_still_valid()) {
+          std::cerr << "paddock-gui: the selection outlived the farm it was made on" << '\n';
+          return 1;
+        }
+        window.select_view(was_terrain_here);
+        std::cout << "paddock-gui: selection after switching scenarios is "
+                  << (window.selected_paddock().has_value() ? "the same ground" : "cleared")
+                  << '\n';
 
         const auto farm = window.drawn_farm();
         const auto focus = window.camera_focus();
@@ -509,6 +541,44 @@ int main(int argc, char** argv) {
           std::cout << "paddock-gui: " << spot.first << " -> "
                     << window.inspect_pixel(spot.second.first, spot.second.second) << '\n';
         }
+
+        // **A selection must survive the timeline being dragged.** Walking one
+        // paddock through a season is the only reason to hold a selection at
+        // all, and a panel that quietly let go on the first drag would look
+        // exactly like one that worked - the readings would still change,
+        // because the day changed.
+        //
+        // So: read the same paddock on three days spread across the year and
+        // require the same paddock every time, and require at least one of the
+        // readings to differ, because a selection that survives onto a panel
+        // that never updates is no better.
+        const std::optional<std::size_t> held = window.selected_paddock();
+        if (!held.has_value()) {
+          std::cerr << "paddock-gui: --inspect selected no paddock to hold" << '\n';
+          return 1;
+        }
+        std::string first_reading;
+        std::string last_reading;
+        for (const int day : {30, 205, 330}) {
+          window.show_day_for_check(day);
+          if (window.selected_paddock() != held) {
+            std::cerr << "paddock-gui: the selection was lost on day " << day
+                      << " - dragging the timeline must not clear it" << '\n';
+            return 1;
+          }
+          const std::string reading = window.inspect_selected_line();
+          if (first_reading.empty()) {
+            first_reading = reading;
+          }
+          last_reading = reading;
+        }
+        if (first_reading == last_reading) {
+          std::cerr << "paddock-gui: the panel read the same on day 30 and day 330, so it is "
+                       "not following the timeline"
+                    << '\n';
+          return 1;
+        }
+        std::cout << "paddock-gui: selection held across the year\n";
 
         // The flat map is drawn north up and east right, so a point up and to
         // the left of another must come back further north and further west.

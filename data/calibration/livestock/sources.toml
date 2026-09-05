@@ -192,6 +192,32 @@ inferred from the paper's figures rather than its table - C_I1 0.04, C_I2 1.7,
 C_R4 and C_R6 0.00112, C_R5 0.6 - and supplies C_I20 = 1.5 and the C_N series
 for normal weight. Cited alongside grazplan_animal rather than instead of it:
 the paper carries the equations, this carries the numbers.
+
+**Read again in full for E113, and the breed hierarchy is worth stating
+exactly**, because three groups carry three different `c-imx-` sets:
+
+    sheep
+      wool breeds    c-imx- 0.524, 0.524, 0.707, 0.891
+        merinos      Small/Medium/Large Merino, Polwarth, Delaine-Merino
+        corriedales  Corriedale, **Romney**, Targhee
+      crossbreds     c-imx- 0.59, 0.59, 0.725, 1.0
+                     Border Leicester x Merino, Dorset x Merino, Mongolian x Merino
+      meat breeds    c-imx- 0.655, 0.655, 0.884, 1.114
+                     Dorset, Suffolk, Border Leicester, Texel, Southdown, Cheviot
+
+So **Romney is filed under wool breeds explicitly**, and the shipped 0.524 is
+the number this file gives a Romney rather than a Merino value borrowed for one.
+The paper's footnote says Merinos; its own parameter file, edited by one of the
+paper's authors, extends that set to the Corriedale-type wool breeds.
+
+Two limits on how far that carries. **There is no `nz` locale anywhere in this
+file** - every breed is tagged au, cn, ca or us - and its Romney is
+`locales="au"` with **srw 55.0**, against the 66 kg OVERSEER gives a New Zealand
+ewe. And the wool-breeds group reduces milk as well as appetite: `c-l0-` is
+0.389, 0.622, 0.746 against the paper's 0.4861, 0.7781, 0.7781, which is the
+same 0.8 applied to peak yield. **This project takes the reduced appetite and
+not the reduced milk**, because milk comes from OVERSEER TMC Eq. 35 instead -
+see E113, which records that as a coherence risk rather than a defect.
 """
 
 [source.grazplan_animal]
@@ -344,4 +370,168 @@ stays open.
 Nothing in this project should take 12 MJ as a requirement. It is recorded so
 the next person to reach open item 13 knows the gap is reproducible and knows
 what to test for.
+"""
+
+[source.blnz_lactation_weaning]
+organisation = "Beef + Lamb New Zealand"
+title = "Fact Sheet 94: Lactation, lamb growth and the lamb weaning decision"
+authors = "Beef + Lamb New Zealand, from an AgResearch report (2007)"
+url = "https://beeflambnz.com/sites/default/files/factsheets/pdfs/fact-sheet-94-lactation-lamb-growth-and-the-weaning-decision.pdf"
+retrieved = "2026-09-05"
+sha256 = "90f71a042f8f2e2cde7f2dd7682917f0a65a75df58f52fe389a18d0d941ff674"
+source_type = "practitioner"
+verified = true
+notes = """
+**The New Zealand evidence E95 asked for, in extension form.** Dated August
+2009 and stated on its own first page to rest on the Beef + Lamb New Zealand
+"Weaning Decision" report prepared by AgResearch scientists in 2007. New
+Zealand, pasture-grazed, dual-purpose ewes - it names Romney and crossbred
+animals and gives 65 kg as a target mating weight, which is the animal the
+shipped ewe is meant to be.
+
+Two statements are why this file exists.
+
+**Timing.** "Ewe intake increases two to three weeks into lactation and builds
+to a peak at eight weeks. However milk production peaks at between two and four
+weeks. The ewe simply can't eat enough to meet her lactation and energy
+requirements." That is the phenomenon `FeedingConstraint::intake_capacity_limited`
+represents, asserted for New Zealand ewes by a New Zealand source, and it also
+dates both curves: milk at weeks 2-4, appetite at week 8.
+
+**Magnitude.** "At peak lactation, single ewes consume around 2.5 kg DM/day and
+twinning ewes 3 kg DM/day." Also, pre-weaning intake 2.07 kg DM/ewe falling to
+0.92 kg at maintenance after weaning, and a 20% drop in intake at weaning.
+
+**Recorded as practitioner, not primary, and the distinction is load-bearing.**
+The 2007 AgResearch report behind it has not been read; these are round numbers
+in a farmer fact sheet, not a measurement with a variance. They are strong
+enough to bound a parameter and to say the model is high, and not strong enough
+to set one. Same class as `geenty_countrywide_feeding`.
+
+Verified: read from the PDF above, whose hash is recorded, not from a summary
+of it.
+"""
+
+[source.vulich_litter_size_intake]
+organisation = "Teagasc (Agriculture and Food Development Authority), Ireland"
+title = "Effect of litter size on herbage intake at pasture by ewes and their progeny"
+authors = "Vulich, S.A.; O'Riordan, E.G.; Hanrahan, J.P."
+url = "https://www.cambridge.org/core/journals/animal-science/article/abs/effect-of-litter-size-on-herbage-intake-at-pasture-by-ewes-and-their-progeny/8B622CE10F1B5F30FE77FFE3B94A24F7"
+retrieved = "2026-09-05"
+source_type = "primary"
+verified = false
+notes = """
+**Not New Zealand, and kept separate from the New Zealand figures for that
+reason.** Animal Science 53(2):191. Ireland, perennial ryegrass pasture, 34
+mature ewes - 17 rearing twins, 17 rearing singles.
+
+It is here for one thing only: an independent, measured, temperate-pasture
+confirmation that ewe intake peaks **late** in lactation. Intake reached its
+maximum in weeks 6 to 7, with organic matter intake 2.50 kg/day for
+twin-rearing ewes against 2.26 for single-rearing.
+
+**Its numbers are not merged with the Beef + Lamb figures and must not be.**
+Different country, different breed, different sward management, and organic
+matter intake is not dry matter intake. It corroborates the *shape* of the
+curve - a peak at weeks 6-7 rather than week 4 - and nothing else.
+
+Not verified: only the abstract and indexing record were reachable; the full
+paper is paywalled. Breed and ewe liveweight are therefore unrecorded, which is
+a further reason not to use its magnitudes.
+"""
+
+[source.nzjar_1968_ewe_lactation]
+organisation = "New Zealand Journal of Agricultural Research"
+title = "Lactation performances of Romney, Corriedale and Merino ewes"
+url = "https://www.tandfonline.com/doi/pdf/10.1080/00288233.1968.10431643"
+retrieved = "2026-09-05"
+source_type = "primary"
+verified = false
+notes = """
+**New Zealand, the right breeds, and unreadable.** Indexed as reporting that
+the lactation curves rise to a peak in the **second week** and then fall at a
+constant rate to the twelfth, for ewes rearing single lambs.
+
+Week 2 is inside the Beef + Lamb fact sheet's "two to four weeks" and at its
+early edge, so the two New Zealand sources agree on the milk peak from
+different decades.
+
+Not verified: the publisher returned HTTP 403 to every route tried, and no open
+mirror was found. **This entry records a lead, not a reading**, and nothing in
+the model may be justified by it until somebody opens the paper. It is listed
+against open item 13, which has the same problem for Geenty and Rattray (1987).
+"""
+
+[source.morris_sward_height_lactation]
+organisation = "Massey University, Palmerston North"
+title = "Effect of sward surface height on herbage intake and performance of lactating ewes lambed in winter and continuously stocked on pasture"
+authors = "Morris, S.T.; McCutcheon, S.N.; Parker, W.J.; Blair, H.T."
+url = "https://www.cambridge.org/core/journals/journal-of-agricultural-science/article/abs/effect-of-sward-surface-height-on-herbage-intake-and-performance-of-lactating-ewes-lambed-in-winter-and-continuously-stocked-on-pasture/81149DA4BE4714751B472CEB3889A8FF"
+retrieved = "2026-09-05"
+source_type = "primary"
+verified = false
+notes = """
+**The New Zealand measurement of ewe intake by week of lactation that E95 asked
+for, and it does not say what the fact sheet says.** Journal of Agricultural
+Science 122(3):471 (1994). New Zealand, Massey University.
+
+Thirty-six four-year-old ewes - Border Leicester x Romney and its Poll Dorset
+and Suffolk crosses - balanced for litter size, on ryegrass pasture,
+continuously stocked at three sward surface heights (2.6, 4.4 and 7.8 cm) for
+54 days from six days after the mid-point of lambing. Herbage organic matter
+intake measured with **intraruminal chromium controlled-release capsules** in
+weeks 3, 4, 7 and 8 of lactation.
+
+**"A maximum OMI of 2.6 +/- 0.1 and 3.0 +/- 0.1 kg OM/ewe per day (P < 0.05) was
+reached in week 4 of lactation on the 4.4 and 7.8 cm SSH treatments,
+respectively."**
+
+Week 4 is day 28, which is what `appetite_lactation_peak_days` already carries.
+The study **sampled week 8 directly** and did not find the maximum there, which
+is what makes it decisive against Beef + Lamb Fact Sheet 94's "builds to a peak
+at eight weeks" (E112).
+
+**What it cannot do**: four sampling weeks - 3, 4, 7 and 8 - locate a maximum no
+more finely than "week 4 of those four", and cannot exclude a peak between weeks
+4 and 7. Its figures are **organic matter, not dry matter**, so they are not
+comparable with Beef + Lamb's kg DM without an ash fraction the abstract does
+not give, and no such conversion is made anywhere in this project. The abstract
+does not state ewe liveweights.
+
+Not verified: the abstract was read in full and quoted from; the paper is
+paywalled and the weekly intake table has not been seen. That is enough to
+record what week the maximum fell in, because the abstract states it, and not
+enough to fit anything to the curve.
+"""
+
+[source.geenty_sykes_herbage_allowance]
+organisation = "Ministry of Agriculture and Fisheries, Templeton; Lincoln College, Canterbury"
+title = "Effect of herbage allowance during pregnancy and lactation on feed intake, milk production, body composition and energy utilization of ewes at pasture"
+authors = "Geenty, K.G.; Sykes, A.R."
+url = "https://www.cambridge.org/core/journals/journal-of-agricultural-science/article/abs/effect-of-herbage-allowance-during-pregnancy-and-lactation-on-feed-intake-milk-production-body-composition-and-energy-utilization-of-ewes-at-pasture/2080D2B86781B72C8B788FF6596A41D9"
+retrieved = "2026-09-05"
+source_type = "primary"
+verified = false
+notes = """
+**New Zealand, the right liveweight, intake and milk in the same animals - and
+no weekly timing.** Journal of Agricultural Science 106(2):351-367 (1986).
+Canterbury: Templeton Agricultural Research Station and Lincoln College.
+
+Dorset ewes carried to light (45-50 kg) or heavy (**60-65 kg**) post-partum
+weights, then given 2, 5 or 8 kg DM/ewe per day of pasture through the first six
+weeks of lactation; lambs removed and ewes machine-milked in one experiment,
+suckling twins in the other. Mean intakes over the six weeks were 58, 69 and 73
+g DOM/kg W^0.75 per day when machine-milked and 51, 75 and 83 when rearing two
+lambs.
+
+It is here for two reasons and neither of them is timing. First, it is the
+closest New Zealand match to the shipped ewe's weight yet found. Second, it is
+the same Geenty as `geenty_countrywide_feeding` and as the 1987 paper open item
+13 still cannot obtain.
+
+**It cannot answer E95's timing question**: the intakes are means across the
+whole six weeks, and six weeks does not reach the week-8 claim at all. Recorded
+so that the next reader does not spend the search twice.
+
+Not verified: abstract only, paywalled.
 """

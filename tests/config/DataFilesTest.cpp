@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -23,6 +24,7 @@
 #include <paddock/config/SoilConfig.hpp>
 #include <paddock/config/SpeciesConfig.hpp>
 #include <paddock/config/WeatherConfig.hpp>
+#include <paddock/core/AnimalEnergy.hpp>
 
 namespace paddock::config {
 namespace {
@@ -481,6 +483,124 @@ TEST(DataFilesTest, AFarmIsMeasuredAgainstTheRuleItNamesAndNoOther) {
          "which is Canterbury's";
   EXPECT_TRUE(waikato.economics_path.empty())
       << "and must not be priced from a South Island survey for the same reason";
+}
+
+// **Characterisation, and now also supported** (verify.md, E109, E110, E112).
+//
+// This records what the shipped ewe does, so that a change to either curve is
+// deliberate. Both numbers below are sourced, and they come from different
+// places: day 14 falls out of OVERSEER TMC Eq. 35's own fitted constants, and
+// day 28 is GrazPlan's CI8, which that model's parameter table names
+// "Lactation: peak intake time" for sheep.
+//
+// **E112 corrected an earlier reading of this gap.** E109 took Beef + Lamb Fact
+// Sheet 94's "peak at eight weeks" for ewe intake and called the model's
+// appetite peak four weeks early. It is not: Morris et al. (1994) measured
+// herbage intake in Border Leicester x Romney ewes at Massey in weeks 3, 4, 7
+// and 8 of lactation and found the maximum in **week 4** - day 28 - having
+// sampled week 8 and found it lower. The fact sheet's sentence carries no
+// method and does not stand against that.
+//
+// What stays open is magnitude, not timing: the lactation peaks this ewe uses
+// are GrazPlan's Merino-adjusted column (E95), which is why animal production
+// is still reported as exploratory.
+TEST(DataFilesTest, TheShippedEwesTwoPeaksAreFourteenDaysApart) {
+  const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
+  const auto ewe = std::find_if(
+      species.begin(), species.end(),
+      [](const SpeciesDefinition& definition) { return definition.name == "sheep_ewe"; });
+  ASSERT_NE(ewe, species.end()) << "data/species/ no longer has the ewe this test is about";
+
+  core::GrazingConditions ground;
+  ground.pasture_mass_t_dm_per_ha = 2.5;
+
+  const auto state_on = [](int day) {
+    core::AnimalState state;
+    state.liveweight_kg = 55.0;
+    state.age_days = 1500.0;
+    state.days_lactating = day;
+    state.young = 1.0;
+    return state;
+  };
+
+  int milk_peak = 1;
+  int appetite_peak = 1;
+  double best_milk = 0.0;
+  double best_appetite = 0.0;
+  for (int day = 1; day <= 200; ++day) {
+    const double milk = core::daily_milk_yield_kg(ewe->energy, state_on(day), ground);
+    if (milk > best_milk) {
+      best_milk = milk;
+      milk_peak = day;
+    }
+    const double appetite = core::potential_intake_kg_dm(ewe->energy, state_on(day));
+    if (appetite > best_appetite) {
+      best_appetite = appetite;
+      appetite_peak = day;
+    }
+  }
+
+  EXPECT_EQ(milk_peak, 14) << "TMC Eq. 35, which no file configures";
+  EXPECT_EQ(appetite_peak, 28) << "GrazPlan C_I8, which appetite_lactation_peak_days sets";
+  EXPECT_EQ(appetite_peak - milk_peak, 14)
+      << "the model's lag between milk and appetite: OVERSEER's milk curve against "
+         "GrazPlan's peak intake time. GrazPlan's own internal lag is six days - CL2 is "
+         "22 and CI8 is 28 - so pairing the two source families widens it rather than "
+         "flattening it, which E112 measured and left alone";
+}
+
+// **What each shipped profile actually rests on, now that the whole file
+// counts** (verify.md, E111).
+//
+// Before this, `sourced_values()` reported five values per species and these
+// three answered against their `[energy]` table alone. The measured effect of
+// widening it to every declared value is that **no shipped status moved**: the
+// intake tables are direct throughout, and the one table that would have moved
+// a status - the dry cow's absent `[reproduction]` - is excluded because she
+// never claimed it. So the defect was real and its exposure was not. Recorded
+// here rather than asserted in prose, because "no shipped claim was overstated"
+// is the kind of statement that should have a test under it.
+TEST(DataFilesTest, EachShippedSpeciesReportsTheEvidenceItActuallyDeclares) {
+  const std::vector<SpeciesDefinition> species = load_species_directory(data_path("species"));
+  ASSERT_EQ(species.size(), 3U) << "a species was added or removed; say what it rests on here";
+
+  struct Expected {
+    const char* name;
+    std::size_t values;
+    bool intake;
+    bool reproduction;
+    Provenance weakest;
+    const char* why;
+  };
+
+  // Five from [energy], fifteen from [intake], five from [reproduction] when
+  // the file states them all.
+  const std::vector<Expected> expected{
+      {"cattle_dairy_dry", 20, true, false, Provenance::Verify,
+       "no [reproduction] table at all, so nothing there counts either way; the reference weight "
+       "of 500 kg is the verify"},
+      {"sheep_ewe", 24, true, true, Provenance::Placeholder,
+       "[reproduction] without suckling_weeks, and the grazing coefficient is the placeholder"},
+      {"sheep_lamb", 25, true, true, Provenance::Placeholder,
+       "everything declared, and the grazing coefficient is the placeholder"},
+  };
+
+  for (const Expected& want : expected) {
+    const auto found = std::find_if(
+        species.begin(), species.end(),
+        [&](const SpeciesDefinition& definition) { return definition.name == want.name; });
+    ASSERT_NE(found, species.end()) << want.name << " is no longer shipped";
+
+    EXPECT_EQ(found->declares_intake, want.intake) << want.name;
+    EXPECT_EQ(found->declares_reproduction, want.reproduction) << want.name;
+    EXPECT_EQ(found->sourced_values().size(), want.values) << want.name << ": " << want.why;
+    EXPECT_EQ(found->weakest_status(), want.weakest) << want.name << ": " << want.why;
+
+    // And none of the three is fully evidenced, which was already true when the
+    // aggregate saw only [energy] - so no page ever showed one of these as
+    // resting on published numbers throughout.
+    EXPECT_FALSE(found->fully_evidenced()) << want.name;
+  }
 }
 
 }  // namespace paddock::config

@@ -207,8 +207,8 @@ void write_stock(std::ostringstream& out, const RunSummary& run, const std::vect
   }
   out << ".\n\n";
 
-  if (run.days_short > 0) {
-    out << "The stock could not get what they needed on **" << run.days_short
+  if (run.feed_supply_short_days > 0) {
+    out << "The stock could not get what they needed on **" << run.feed_supply_short_days
         << " days**. That is the number to look at before any other: a farm that runs short is "
            "not carrying its stock, whatever the closing weight says.\n\n";
   } else {
@@ -411,7 +411,7 @@ std::string render_comparison_report(const ScenarioBundle& bundle, const RunSumm
   out << "| | " << left.label << " | " << right.label << " |\n|---|---|---|\n";
   out << "| Liveweight change | " << fixed(left.liveweight_change_kg(), 2) << " kg | "
       << fixed(right.liveweight_change_kg(), 2) << " kg |\n";
-  out << "| Days the stock went short | " << left.days_short << " | " << right.days_short << " |\n";
+  out << "| Days the stock went short | " << left.feed_supply_short_days << " | " << right.feed_supply_short_days << " |\n";
   out << "| Mean cover | " << fixed(left.mean_cover_kg_dm_per_ha(), 0) << " | "
       << fixed(right.mean_cover_kg_dm_per_ha(), 0) << " kg DM/ha |\n";
   out << "| Lowest cover | " << fixed(left.lowest_cover_kg_dm_per_ha(), 0) << " | "

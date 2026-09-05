@@ -91,37 +91,50 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   // demanded it would be asking somebody to invent three coefficients rather
   // than leave the old behaviour alone.
   if (const toml::table* intake = root["intake"].as_table()) {
+    definition.declares_intake = true;
     detail::reject_unknown_keys(
         *intake,
         {"normal_weight_rate", "normal_weight_exponent", "normal_weight_blend",
-         "condition_intake_limit", "lactation_peak_days", "lactation_curve_exponent",
-         "lactation_peak_no_young", "lactation_peak_one_young", "lactation_peak_two_young",
-         "lactation_peak_three_young", "appetite_scalar_per_day", "appetite_size_coefficient",
-         "availability_rate_per_kg_dm", "grazing_time_increase", "grazing_time_rate_per_kg_dm"},
+         "condition_intake_limit", "appetite_lactation_peak_days",
+         "appetite_lactation_curve_exponent", "appetite_lactation_peak_no_young",
+         "appetite_lactation_peak_one_young", "appetite_lactation_peak_two_young",
+         "appetite_lactation_peak_three_young", "appetite_scalar_per_day",
+         "appetite_size_coefficient", "availability_rate_per_kg_dm", "grazing_time_increase",
+         "grazing_time_rate_per_kg_dm"},
         path, "[intake]");
 
     definition.normal_weight_rate = read_sourced(*intake, "normal_weight_rate", path);
     definition.normal_weight_exponent = read_sourced(*intake, "normal_weight_exponent", path);
     definition.normal_weight_blend = read_sourced(*intake, "normal_weight_blend", path);
     definition.condition_intake_limit = read_sourced(*intake, "condition_intake_limit", path);
-    definition.lactation_peak_days = read_sourced(*intake, "lactation_peak_days", path);
-    definition.lactation_curve_exponent = read_sourced(*intake, "lactation_curve_exponent", path);
-    definition.lactation_peak_no_young = read_sourced(*intake, "lactation_peak_no_young", path);
-    definition.lactation_peak_one_young = read_sourced(*intake, "lactation_peak_one_young", path);
-    definition.lactation_peak_two_young = read_sourced(*intake, "lactation_peak_two_young", path);
-    definition.lactation_peak_three_young =
-        read_sourced(*intake, "lactation_peak_three_young", path);
+    definition.appetite_lactation_peak_days =
+        read_sourced(*intake, "appetite_lactation_peak_days", path);
+    definition.appetite_lactation_curve_exponent =
+        read_sourced(*intake, "appetite_lactation_curve_exponent", path);
+    definition.appetite_lactation_peak_no_young =
+        read_sourced(*intake, "appetite_lactation_peak_no_young", path);
+    definition.appetite_lactation_peak_one_young =
+        read_sourced(*intake, "appetite_lactation_peak_one_young", path);
+    definition.appetite_lactation_peak_two_young =
+        read_sourced(*intake, "appetite_lactation_peak_two_young", path);
+    definition.appetite_lactation_peak_three_young =
+        read_sourced(*intake, "appetite_lactation_peak_three_young", path);
 
     definition.energy.normal_weight_rate = definition.normal_weight_rate.value;
     definition.energy.normal_weight_exponent = definition.normal_weight_exponent.value;
     definition.energy.normal_weight_blend = definition.normal_weight_blend.value;
     definition.energy.condition_intake_limit = definition.condition_intake_limit.value;
-    definition.energy.lactation_peak_days = definition.lactation_peak_days.value;
-    definition.energy.lactation_curve_exponent = definition.lactation_curve_exponent.value;
-    definition.energy.lactation_peak_no_young = definition.lactation_peak_no_young.value;
-    definition.energy.lactation_peak_one_young = definition.lactation_peak_one_young.value;
-    definition.energy.lactation_peak_two_young = definition.lactation_peak_two_young.value;
-    definition.energy.lactation_peak_three_young = definition.lactation_peak_three_young.value;
+    definition.energy.appetite_lactation_peak_days = definition.appetite_lactation_peak_days.value;
+    definition.energy.appetite_lactation_curve_exponent =
+        definition.appetite_lactation_curve_exponent.value;
+    definition.energy.appetite_lactation_peak_no_young =
+        definition.appetite_lactation_peak_no_young.value;
+    definition.energy.appetite_lactation_peak_one_young =
+        definition.appetite_lactation_peak_one_young.value;
+    definition.energy.appetite_lactation_peak_two_young =
+        definition.appetite_lactation_peak_two_young.value;
+    definition.energy.appetite_lactation_peak_three_young =
+        definition.appetite_lactation_peak_three_young.value;
 
     definition.appetite_scalar = read_sourced(*intake, "appetite_scalar_per_day", path);
     definition.appetite_size_coefficient = read_sourced(*intake, "appetite_size_coefficient", path);
@@ -145,6 +158,7 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
   // A wether has no gestation, and a file that had to state that would be
   // inviting somebody to state it wrongly.
   if (const toml::table* reproduction = root["reproduction"].as_table()) {
+    definition.declares_reproduction = true;
     detail::reject_unknown_keys(*reproduction,
                                 {"gestation_length_days", "milk_fat_percent",
                                  "milk_protein_percent", "breed_effect", "suckling_weeks"},
@@ -163,6 +177,7 @@ SpeciesDefinition read(const toml::table& root, const std::string& path) {
     // Optional inside an optional table: a class whose young never suckle - a
     // hogget, a wether - says nothing and gets zero.
     if (reproduction->contains("suckling_weeks")) {
+      definition.declares_suckling_weeks = true;
       definition.suckling_weeks = read_sourced(*reproduction, "suckling_weeks", path);
       definition.energy.suckling_weeks = definition.suckling_weeks.value;
     }
@@ -218,8 +233,39 @@ std::string SpeciesDefinition::validation_error() const {
 }
 
 std::vector<const SourcedValue*> SpeciesDefinition::sourced_values() const {
-  return {&species_factor, &sex_factor, &standard_reference_weight, &grazing_coefficient,
-          &gain_energy_ceiling};
+  // **[energy] is required, so it is always part of the account.**
+  std::vector<const SourcedValue*> values{&species_factor, &sex_factor, &standard_reference_weight,
+                                          &grazing_coefficient, &gain_energy_ceiling};
+
+  // **And the optional tables count when, and only when, the file declared
+  // them** (verify.md, E111). Until then these twenty were parsed, checked
+  // against sources.toml one at a time, and then left out of every aggregate -
+  // so a species could carry a placeholder appetite coefficient and still
+  // answer `fully_evidenced()`. Declared-only is what keeps the fix from
+  // over-correcting: an undeclared table's fields sit at their default
+  // Placeholder, and reporting the dry cow as resting on invented reproduction
+  // numbers would be as wrong in the other direction.
+  if (declares_intake) {
+    values.insert(
+        values.end(),
+        {&normal_weight_rate, &normal_weight_exponent, &normal_weight_blend,
+         &condition_intake_limit, &appetite_lactation_peak_days, &appetite_lactation_curve_exponent,
+         &appetite_lactation_peak_no_young, &appetite_lactation_peak_one_young,
+         &appetite_lactation_peak_two_young, &appetite_lactation_peak_three_young, &appetite_scalar,
+         &appetite_size_coefficient, &intake_availability_rate, &intake_grazing_time_increase,
+         &intake_grazing_time_rate});
+  }
+
+  if (declares_reproduction) {
+    values.insert(values.end(), {&gestation_length_days, &milk_fat_percent, &milk_protein_percent,
+                                 &breed_effect});
+    // Optional inside an optional table, and unstated is not unsupported.
+    if (declares_suckling_weeks) {
+      values.push_back(&suckling_weeks);
+    }
+  }
+
+  return values;
 }
 
 Provenance SpeciesDefinition::weakest_status() const {

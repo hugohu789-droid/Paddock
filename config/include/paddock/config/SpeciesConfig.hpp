@@ -64,19 +64,19 @@ struct SpeciesDefinition {
   SourcedValue standard_reference_weight;
   SourcedValue grazing_coefficient;
 
-  /// GrazPlan's three availability coefficients, from an optional [intake]
-  /// table. Absent means this class eats its requirement whatever is standing,
-  /// which is what every animal in this model did before they existed.
+  /// GrazPlan's intake coefficients, from an optional [intake] table. Absent
+  /// means this class eats its requirement whatever is standing, which is what
+  /// every animal in this model did before they existed.
   SourcedValue normal_weight_rate;
   SourcedValue normal_weight_exponent;
   SourcedValue normal_weight_blend;
   SourcedValue condition_intake_limit;
-  SourcedValue lactation_peak_days;
-  SourcedValue lactation_curve_exponent;
-  SourcedValue lactation_peak_no_young;
-  SourcedValue lactation_peak_one_young;
-  SourcedValue lactation_peak_two_young;
-  SourcedValue lactation_peak_three_young;
+  SourcedValue appetite_lactation_peak_days;
+  SourcedValue appetite_lactation_curve_exponent;
+  SourcedValue appetite_lactation_peak_no_young;
+  SourcedValue appetite_lactation_peak_one_young;
+  SourcedValue appetite_lactation_peak_two_young;
+  SourcedValue appetite_lactation_peak_three_young;
   SourcedValue appetite_scalar;
   SourcedValue appetite_size_coefficient;
   SourcedValue intake_availability_rate;
@@ -93,8 +93,30 @@ struct SpeciesDefinition {
   SourcedValue breed_effect;
   SourcedValue suckling_weeks;
 
-  /// Every sourced value in this definition, for a caller that wants to report
-  /// on the lot rather than name them one at a time.
+  /// **Which optional claims this file actually made.**
+  ///
+  /// A table a file does not declare is not a weak claim - it is no claim, and
+  /// the difference matters to every aggregate below. `SourcedValue` defaults
+  /// its status to `Placeholder`, so an undeclared `[reproduction]` leaves five
+  /// fields sitting at placeholder that nobody ever asserted: counting them
+  /// would report the dry cow as resting on invented reproduction numbers when
+  /// what she actually does is not breed. These flags are how the aggregates
+  /// tell "unsupported" from "unstated" (verify.md, E111).
+  ///
+  /// They are read from the file's own structure, not inferred from values - a
+  /// declared `[intake]` with an appetite scalar of zero is still a declaration,
+  /// and inferring from the number is exactly how E93 hid for months.
+  bool declares_intake = false;
+  bool declares_reproduction = false;
+  bool declares_suckling_weeks = false;
+
+  /// Every sourced value this definition actually declares, for a caller that
+  /// wants to report on the lot rather than name them one at a time.
+  ///
+  /// **This is the only evidence aggregation there is for a species**, and it
+  /// returned five of twenty-five until E111 - the whole `[intake]` table and
+  /// the whole `[reproduction]` table were parsed, validated one by one, and
+  /// then read by no aggregate at all.
   [[nodiscard]] std::vector<const SourcedValue*> sourced_values() const;
 
   /// The weakest status any of these numbers carries. A species is only as

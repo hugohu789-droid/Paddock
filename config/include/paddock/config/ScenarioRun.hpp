@@ -96,8 +96,32 @@ struct RunSummary {
 
   double eaten_kg_dm = 0.0;
 
-  /// Days on which any mob could not get what it needed.
-  int days_short = 0;
+  /// Days on which the farm could not put enough feed in front of the stock,
+  /// over the whole run.
+  ///
+  /// **Cumulative, and for reporting.** The farmer's destocking rule reads a
+  /// consecutive count instead - see `FarmOutlook::consecutive_days_short` -
+  /// and the two are deliberately separate fields now that feeding one to the
+  /// other has been found to fire the rule permanently (E98).
+  int feed_supply_short_days = 0;
+
+  /// The longest run of short days in a row.
+  ///
+  /// Kept because it is the figure that says whether a year's short days were
+  /// a drought or a scatter, which the total cannot: twenty-one in a row and
+  /// twenty-one spread over a season are the same total and different farms.
+  int longest_feed_supply_short_run_days = 0;
+
+  /// Days on which a mob could not eat what it needed although the feed was
+  /// there, and the longest such run.
+  ///
+  /// **Counted separately and read by nothing that decides.** This is the
+  /// animal's state, not the farm's: it is what a ewe at peak lactation does,
+  /// and a farm cannot buy or sell its way out of it. Kept because it is worth
+  /// reporting and because the day it is folded back into the feed count is the
+  /// day E103 comes back.
+  int intake_capacity_limited_days = 0;
+  int longest_intake_capacity_limited_run_days = 0;
 
   int moves = 0;
   int short_spells = 0;
@@ -136,6 +160,61 @@ struct RunSummary {
   /// Separate from `bought_feed_kg_dm` because one is a cost and the other is
   /// a harvest.
   double conserved_fed_kg_dm = 0.0;
+
+  /// **What the farmer asked the market for, and what the market had** (E114).
+  ///
+  /// Four quantities that used to be one. `supplement_requested_kg_dm` is the
+  /// shortfall management wanted covered; `supplement_purchased_kg_dm` is what
+  /// the market could actually supply; the gap between them is
+  /// `supplement_unfilled_kg_dm`, and it is deliberately reported rather than
+  /// dropped, because a shortage that disappears from the accounts is how a
+  /// farm comes to look as though it could be stocked without limit.
+  ///
+  /// What the stock then *ate* is neither of these: bought feed is still capped
+  /// by the animal's own appetite in `Farm::step`, and that cap is physiology
+  /// rather than economics. Requested, purchased, offered and consumed are four
+  /// different numbers and this model now keeps them four.
+  double supplement_requested_kg_dm = 0.0;
+  double supplement_purchased_kg_dm = 0.0;
+  double supplement_unfilled_kg_dm = 0.0;
+
+  /// Days the market could not fill the day's request in full.
+  int supplement_market_short_days = 0;
+
+  /// Whether this run was given a market that can run out at all. False is the
+  /// old unlimited assumption, and it is reported rather than assumed.
+  bool supplement_market_is_finite = false;
+
+  /// **Whether the animals stayed inside the published condition-score scale**
+  /// (verify.md, E116).
+  ///
+  /// A measurement, not an event: nothing in the simulation reads this, nothing
+  /// is clamped or killed, and the trajectory is identical whether it is
+  /// consulted or not. What it changes is what a *report* is allowed to say,
+  /// and it does that through the provenance path that already exists - below
+  /// the boundary the animal and money indicators become `Placeholder`, which
+  /// `confidence_of` renders `DoNotQuote`.
+  struct AnimalDomain {
+    /// Lowest relative condition any mob reached. Starts above any real value
+    /// so that a run carrying no stock reports no crossing.
+    double lowest_relative_condition = 1e9;
+
+    /// The day it first went below `core::kLowestSupportedRelativeCondition`,
+    /// absent if it never did.
+    std::optional<core::Date> first_crossing;
+
+    /// Which mob was lowest, and what liveweight the boundary is for *that*
+    /// animal - a property of its own normal weight, never a fixed number.
+    std::string cohort;
+    double cohort_liveweight_kg = 0.0;
+    double boundary_liveweight_kg = 0.0;
+
+    /// True while the run has stayed inside the published scale. A run with no
+    /// stock at all is inside: it makes no animal claim to be wrong about.
+    [[nodiscard]] bool inside() const { return !first_crossing.has_value(); }
+  };
+
+  AnimalDomain animal_domain;
 
   /// Head at the close, when a flock was run.
   int closing_head = 0;

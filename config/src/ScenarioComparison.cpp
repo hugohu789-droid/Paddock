@@ -211,7 +211,7 @@ ComparisonTable compare(const std::vector<ComparedScenario>& scenarios) {
           [](const ComparedScenario& scenario) { return scenario.summary.liveweight_change_kg(); });
   add_row(table, "Stock", "Days feed was short", "days", 0, scenarios,
           [](const ComparedScenario& scenario) {
-            return static_cast<double>(scenario.summary.days_short);
+            return static_cast<double>(scenario.summary.feed_supply_short_days);
           });
   add_row(table, "Stock", "Bought feed", "kg DM/ha", 0, scenarios,
           [](const ComparedScenario& scenario) {

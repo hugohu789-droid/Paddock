@@ -155,20 +155,39 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
   // long enough that rain will not fix it, or the money running out.
   rules.emplace_back([policy](const FarmOutlook& outlook,
                               const Prices& prices) -> std::optional<Proposal> {
-    const bool feed_has_run_out = outlook.days_short >= policy.destock_after_days_short;
+    // **Consecutive days of a feed shortage, which is what the policy has
+    // always said it meant, and a feed shortage rather than a hungry animal.**
+    // A farm that cannot feed its stock for three weeks running is carrying
+    // more than it can feed; one that went short twenty-one times since July
+    // has had a hard year and may be standing in grass today; and a ewe who
+    // cannot eat her requirement at peak lactation is neither.
+    const bool feed_has_run_out =
+        outlook.consecutive_feed_supply_short_days >= policy.destock_after_days_short;
     const bool money_has_run_out = short_of_cash(outlook, policy) &&
                                    outlook.cover_kg_dm_per_ha <= outlook.minimum_cover_kg_dm_per_ha;
     if (!feed_has_run_out && !money_has_run_out) {
       return std::nullopt;
     }
-    if (outlook.head <= policy.minimum_head) {
+    // **Everything below counts breeding stock, because that is what the sale
+    // takes.** `outlook.head` includes the lamb crop, which leaves at weaning
+    // and is not what a destocking decision is about; measuring either the
+    // floor or the fifth against it made the floor unreachable through lambing
+    // and made "a fifth" a fifth of the wrong flock.
+    const int sellable = std::max(0, outlook.breeding_head - policy.minimum_head);
+    if (sellable <= 0) {
       return std::nullopt;
     }
 
-    const int sellable = outlook.head - policy.minimum_head;
-    const int sold = std::max(
-        1, std::min(sellable, static_cast<int>(std::floor(static_cast<double>(outlook.head) *
-                                                          policy.destock_fraction))));
+    // A fifth of the breeding flock, clamped to what the floor leaves. Clamped
+    // rather than refused: a farm two ewes above the line and three weeks short
+    // of feed sells the two, which is what the policy says and is better than
+    // either selling ten or standing still.
+    const int wanted = static_cast<int>(
+        std::floor(static_cast<double>(outlook.breeding_head) * policy.destock_fraction));
+    const int sold = std::min(wanted, sellable);
+    if (sold <= 0) {
+      return std::nullopt;
+    }
 
     Proposal destock;
     destock.kind = ActionKind::Destock;
@@ -176,7 +195,8 @@ std::vector<DecisionRule> standard_rules(const DecisionPolicy& policy) {
     destock.dollars_in = static_cast<double>(sold) * prices.cull_ewe_dollars_per_head;
     destock.because = feed_has_run_out
                           ? "sold " + std::to_string(sold) + " head after " +
-                                std::to_string(outlook.days_short) + " days short of feed"
+                                std::to_string(outlook.consecutive_feed_supply_short_days) +
+                                " days short of feed in a row"
                           : "sold " + std::to_string(sold) + " head to stay solvent";
     return destock;
   });

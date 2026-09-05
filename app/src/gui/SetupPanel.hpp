@@ -120,10 +120,14 @@ class SetupPanel : public QWidget {
   /// The window does this rather than the panel loading bundles itself: a
   /// scenario that fails to load is a thing the window has to report anyway,
   /// and having two places that can fail at it would mean two ways of saying so.
+  /// `irrigation` is the rule the bundle names, or null for a rain-fed one -
+  /// and null switches the box off rather than leaving whatever was there.
   void adopt_bundle(const std::string& directory, int head, double liveweight_kg,
                     const core::DietQuality& diet, const QString& measured_against,
                     const core::ManagementPolicy* policy = nullptr,
-                    const core::AnimalClassParameters* animal = nullptr);
+                    const core::AnimalClassParameters* animal = nullptr,
+                    const core::IrrigationPolicy* irrigation = nullptr,
+                    const core::IrrigationSystem* irrigation_system = nullptr);
 
   /// Say whether the farm on screen brought its own measured ground.
   ///

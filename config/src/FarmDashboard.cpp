@@ -161,6 +161,26 @@ int FarmDashboard::indicators_on_evidence() const {
   }));
 }
 
+/// Which of "The year" panel's figures are what the stock did rather than what
+/// the ground did. Pasture grown, and everything in Water and Environment, are
+/// not on this list on purpose: an animal outside its domain does not make the
+/// water balance wrong (E116).
+[[nodiscard]] bool depends_on_the_animals(const std::string& name) {
+  return name == "Utilisation" || name == "Eaten" || name == "Lowest cover" ||
+         name == "Days short of feed" || name == "Stocking rate" || name == "Closing stock" ||
+         name == "Lamb at weaning";
+}
+
+/// Two decimal places, without pulling in a stream for one number.
+[[nodiscard]] std::string two_places(double value) {
+  std::string text = std::to_string(value);
+  const std::size_t point = text.find('.');
+  if (point != std::string::npos && text.size() > point + 3) {
+    text.erase(point + 3);
+  }
+  return text;
+}
+
 FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& run,
                               std::string label, const std::optional<NitrogenRegulation>& rule) {
   FarmDashboard board;
@@ -189,8 +209,12 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
            "mean, so a drier year should sit under it.",
            4'000.0, 9'800.0));
   year.indicators.push_back(make(
-      "Utilisation", grown > 0.0 ? 100.0 * eaten_per_ha / grown : 0.0, "%", Provenance::Derived,
-      "What the stock took off as a share of what grew. Derived, not asserted: this farm's own "
+      "Utilisation", grown > 0.0 ? 100.0 * eaten_per_ha / grown : 0.0, "%", Provenance::Verify,
+      "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, and "
+      "the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+      "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+      "ordinary physiology; its depth for this animal is not settled, and this figure moves with "
+      "it. What the stock took off as a share of what grew. Derived, not asserted: this farm's own "
       "stocking rate at Parker's (1998) 550 kg DM a stock unit, over Winchmore's measured "
       "dryland production. Most of the distance to a Class 6 farm is stock this one does not "
       "carry, not feed its animals refuse - see data/calibration/stock-unit-intake.csv.",
@@ -203,23 +227,45 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
   // Parker (1998) defines the stock unit as 550 kg DM of 10.5 MJ ME/kg DM a
   // year, which is the diet quality this model already assumes, so the two are
   // comparable without an adjustment.
+  year.indicators.push_back(make(
+      "Eaten", eaten_per_ha, "kg DM/ha", Provenance::Verify,
+      "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, and "
+      "the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+      "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+      "ordinary physiology; its depth for this animal is not settled, and this figure moves with "
+      "it. What the stock actually removed. The band is this farm's own stocking rate and Beef + "
+      "Lamb's Class 6 rate, each at 550 kg DM a stock unit - so a figure under it is animals "
+      "eating less than their stock-unit rating implies, whatever the pasture did.",
+      3850.0, 4257.0));
   year.indicators.push_back(
-      make("Eaten", eaten_per_ha, "kg DM/ha", Provenance::Derived,
-           "What the stock actually removed. The band is this farm's own stocking rate and Beef + "
-           "Lamb's Class 6 rate, each at 550 kg DM a stock unit - so a figure under it is animals "
-           "eating less than their stock-unit rating implies, whatever the pasture did.",
-           3850.0, 4257.0));
-  year.indicators.push_back(
-      make("Lowest cover", run.lowest_cover_kg_dm_per_ha(), "kg DM/ha", Provenance::Fitted,
-           "The bottom of the year. Cover includes dead standing material, "
-           "which on this farm is a third to a half of it - see E26.",
+      // **Verify, not Fitted, and the difference is not pedantry.** Fitted means
+      // calibrated so that published observations reproduce, and this is fitted
+      // to nothing: no measured minimum-cover series has been found, and the
+      // band below is the farm's own management floor rather than an
+      // observation - so "outside" here means the farmer's floor was breached,
+      // which is a statement about the run and not about the world. A third to
+      // a half of what it counts is dead material whose disappearance rate has
+      // no New Zealand measurement behind it either (E26). Reported as Fitted,
+      // a customer-facing summary renders it "reproduces published
+      // observations", which is false.
+      make("Lowest cover", run.lowest_cover_kg_dm_per_ha(), "kg DM/ha", Provenance::Verify,
+           "The bottom of the year, against the cover this farm holds itself to - so outside "
+           "means the floor was breached, not that the model disagrees with a measurement. "
+           "Cover includes dead standing material, which on this farm is a third to a half of "
+           "it - see E26.",
            bundle.management.has_value()
                ? std::optional<double>(bundle.management->minimum_cover_kg_dm_per_ha)
                : std::nullopt,
            std::nullopt));
   year.indicators.push_back(
-      make("Days short of feed", static_cast<double>(run.days_short), "days", Provenance::Derived,
-           "Days a mob was offered less than it asked for.", std::nullopt, 0.0));
+      make("Days short of feed", static_cast<double>(run.feed_supply_short_days), "days",
+           Provenance::Verify,
+           "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, "
+           "and the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+           "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+           "ordinary physiology; its depth for this animal is not settled, and this figure moves "
+           "with it. Days a mob was offered less than it asked for.",
+           std::nullopt, 0.0));
   // **The number this model could not state, and the one that turned out to be
   // the answer.** Its utilisation looked bad and three explanations were tried
   // before the obvious one: the farm carries a third fewer stock units than the
@@ -239,16 +285,24 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
         "that is settled the band says which order of magnitude, not which side of a line.",
         7.0, 8.5));
   }
-  year.indicators.push_back(make("Closing stock", static_cast<double>(run.closing_head), "head",
-                                 Provenance::Derived,
-                                 "The flock at the end of the farm year, after the culls and the "
-                                 "weaning draft have gone."));
+  year.indicators.push_back(
+      make("Closing stock", static_cast<double>(run.closing_head), "head", Provenance::Verify,
+           "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, "
+           "and the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+           "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+           "ordinary physiology; its depth for this animal is not settled, and this figure moves "
+           "with it. The flock at the end of the farm year, after the culls and the "
+           "weaning draft have gone."));
   if (run.lamb_weaning_weight_kg > 0.0) {
-    year.indicators.push_back(
-        make("Lamb at weaning", run.lamb_weaning_weight_kg, "kg", Provenance::Derived,
-             "An outcome of the grass, not a target. OVERSEER assumes 20 kg for a sheep when "
-             "none is supplied, which is what this can be checked against.",
-             13.0, 27.0));
+    year.indicators.push_back(make(
+        "Lamb at weaning", run.lamb_weaning_weight_kg, "kg", Provenance::Verify,
+        "**Exploratory while E95 is open**: this rests on the ewe's intake at peak lactation, and "
+        "the shipped ewe carries OVERSEER's New Zealand reference weight beside GrazPlan's "
+        "Australian wool-breed lactation peaks. The direction of the early-lactation deficit is "
+        "ordinary physiology; its depth for this animal is not settled, and this figure moves with "
+        "it. An outcome of the grass, not a target. OVERSEER assumes 20 kg for a sheep when "
+        "none is supplied, which is what this can be checked against.",
+        13.0, 27.0));
   }
   board.panels.push_back(std::move(year));
 
@@ -370,6 +424,53 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
     board.panels.push_back(std::move(flock));
   }
 
+  // ---- Whether any of the above may be read as a prediction ---------------
+  //
+  // **The trajectory is untouched.** Every figure on this page is what the
+  // model produced; what changes below the boundary is only what the page is
+  // allowed to claim about them, and it changes through the provenance path
+  // that already existed rather than a second one (E116).
+  if (!run.animal_domain.inside()) {
+    const core::Date& crossed = *run.animal_domain.first_crossing;
+    board.animal_domain_warning =
+        "Animal condition moved outside the model's currently supported range on " +
+        crossed.to_iso_string() + ". " + run.animal_domain.cohort +
+        " reached a relative condition of " +
+        two_places(run.animal_domain.lowest_relative_condition) + " at " +
+        two_places(run.animal_domain.cohort_liveweight_kg) +
+        " kg, below the 0.625 that is condition score 0 on SCA (1990)'s 0-5 scale - for this "
+        "animal, " +
+        two_places(run.animal_domain.boundary_liveweight_kg) +
+        " kg. This model carries no starvation mortality, so the run continues; "
+        "animal-production and economic results at or after this point must not be read as "
+        "credible farm predictions.";
+
+    // Pasture, water and environment keep their standing. They are not being
+    // vouched for by the animals, and downgrading them would say something this
+    // finding does not support.
+    for (DashboardPanel& panel : board.panels) {
+      const bool animal_panel = panel.title == "The flock" || panel.title == "Money";
+      for (Indicator& indicator : panel.indicators) {
+        if (!animal_panel && !depends_on_the_animals(indicator.name)) {
+          continue;
+        }
+        indicator.trust = Provenance::Placeholder;
+        indicator.note = "**Outside the supported animal-production domain.** " + indicator.note;
+      }
+    }
+  }
+
+  if (run.supplement_market_is_finite) {
+    board.supplement_market_warning =
+        "Supplement available to buy was capped at " +
+        two_places(run.supplement_purchased_kg_dm + run.supplement_unfilled_kg_dm > 0.0
+                       ? run.supplement_purchased_kg_dm
+                       : 0.0) +
+        " kg DM bought against " + two_places(run.supplement_requested_kg_dm) +
+        " kg DM asked for. Sensitivity assumption, not a New Zealand market figure: no source in "
+        "this project states how much supplement a farm can buy, or when.";
+  }
+
   // ---- The trends ---------------------------------------------------------
   const auto add_series = [&board](std::string name, std::string unit,
                                    const std::vector<double>& values,
@@ -398,11 +499,33 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
   return board;
 }
 
+bool may_report_stocking_optimum(const std::vector<const RunSummary*>& candidates) {
+  for (const RunSummary* candidate : candidates) {
+    if (candidate != nullptr && !candidate->animal_domain.inside()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::string as_text(const FarmDashboard& dashboard) {
   std::ostringstream out;
   out << dashboard.farm << " - " << dashboard.label << "\n"
       << "  " << dashboard.range.first.to_iso_string() << " to "
       << dashboard.range.last.to_iso_string() << "\n";
+
+  // **First on the page, before any number.** A caveat printed under the
+  // figures is a caveat most readers meet after they have already read them.
+  if (!dashboard.animal_domain_warning.empty()) {
+    out << "\n  !! Outside the supported animal-production domain\n"
+        << "  " << std::string(46, '=') << "\n"
+        << "  " << dashboard.animal_domain_warning << "\n";
+  }
+  if (!dashboard.supplement_market_warning.empty()) {
+    out << "\n  !! Supplement market is an assumption\n"
+        << "  " << std::string(38, '=') << "\n"
+        << "  " << dashboard.supplement_market_warning << "\n";
+  }
 
   for (const DashboardPanel& panel : dashboard.panels) {
     out << "\n  " << panel.title << "\n"
@@ -443,7 +566,11 @@ std::string as_text(const FarmDashboard& dashboard) {
 
 std::string indicators_as_csv(const FarmDashboard& dashboard) {
   std::ostringstream out;
-  out << "farm,year,panel,indicator,value,unit,standing,low,high,trust,note\n";
+  // **`label` rather than `year`.** The column carries `dashboard.label`, which
+  // is a year for a single run and a scenario name for a comparison - so the
+  // flagship export used to show `demo_irrigation_off` under a heading that
+  // said year, beside a `farm` column saying the same thing.
+  out << "farm,label,panel,indicator,value,unit,standing,low,high,trust,note\n";
   for (const DashboardPanel& panel : dashboard.panels) {
     for (const Indicator& indicator : panel.indicators) {
       out << csv(dashboard.farm) << ',' << csv(dashboard.label) << ',' << csv(panel.title) << ','
@@ -492,13 +619,24 @@ std::string compare_dashboards_as_text(const std::vector<FarmDashboard>& boards)
     return "no runs to compare\n";
   }
 
+  // **The column is as wide as the widest thing going in it.** `right` pads to
+  // a width and returns the text untouched when it is already that wide, so a
+  // fixed 14 put two nineteen-character scenario names hard against each other
+  // and the header read `demo_irrigation_offdemo_irrigation_on`. That only ever
+  // showed up once bundles could be compared by name rather than by year, and a
+  // year is four characters.
+  std::size_t column = 14;
+  for (const FarmDashboard& board : boards) {
+    column = std::max(column, board.label.size() + 2);
+  }
+
   std::ostringstream out;
   out << "Indicator, year by year\n\n";
   out << "  " << left("indicator", 24) << left("unit", 12);
   for (const FarmDashboard& board : boards) {
-    out << right(board.label, 14);
+    out << right(board.label, column);
   }
-  out << "\n  " << std::string(24 + 12 + (14 * boards.size()), '-') << "\n";
+  out << "\n  " << std::string(24 + 12 + (column * boards.size()), '-') << "\n";
 
   // Driven off the first board's shape, and any indicator the others do not
   // carry is left blank rather than dropped - a run without books has no money
@@ -520,7 +658,7 @@ std::string compare_dashboards_as_text(const std::vector<FarmDashboard>& boards)
             break;
           }
         }
-        out << right(cell, 14);
+        out << right(cell, column);
       }
       out << "\n";
     }
@@ -531,7 +669,7 @@ std::string compare_dashboards_as_text(const std::vector<FarmDashboard>& boards)
 
 std::string compare_dashboards_as_csv(const std::vector<FarmDashboard>& boards) {
   std::ostringstream out;
-  out << "farm,year,panel,indicator,value,unit,standing,trust\n";
+  out << "farm,label,panel,indicator,value,unit,standing,trust\n";
   for (const FarmDashboard& board : boards) {
     for (const DashboardPanel& panel : board.panels) {
       for (const Indicator& indicator : panel.indicators) {

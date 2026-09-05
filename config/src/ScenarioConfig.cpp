@@ -65,8 +65,10 @@ core::Date read_date(const toml::table& table, std::string_view key,
 
 /// Reads a `[section]` that names a file and the hash it was built against.
 BundleInput read_input_table(const toml::table& table, const std::string& directory,
-                             const std::string& manifest_path, std::string& contents) {
+                             const std::string& manifest_path, std::string& contents,
+                             std::string_view section) {
   BundleInput input;
+  input.section = std::string(section);
   input.relative_path = detail::require_string(table, "path", manifest_path);
   input.recorded_sha256 = detail::optional_string(table, "sha256", "");
   contents = read_file(join(directory, input.relative_path), table, manifest_path);
@@ -78,7 +80,7 @@ BundleInput read_input(const toml::table& root, std::string_view section,
                        const std::string& directory, const std::string& manifest_path,
                        std::string& contents) {
   return read_input_table(detail::require_table(root, section, manifest_path), directory,
-                          manifest_path, contents);
+                          manifest_path, contents, section);
 }
 
 core::GrazingPreference grazing_preference_of(const std::string& text, const toml::table& where,
@@ -152,7 +154,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
   detail::reject_unknown_keys(
       root,
       {"scenario", "run", "weather", "soil", "sward", "initial_state", "grid", "terrain",
-       "management", "mob", "grazing_period", "economics", "regulation"},
+       "management", "irrigation", "mob", "grazing_period", "economics", "regulation"},
       manifest_path, "the manifest");
 
   const toml::table& scenario = detail::require_table(root, "scenario", manifest_path);
@@ -308,13 +310,15 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
   // guessed the same rule file.
   if (const toml::table* economics = root["economics"].as_table(); economics != nullptr) {
     std::string contents;
-    const BundleInput input = read_input_table(*economics, directory, manifest_path, contents);
+    const BundleInput input =
+        read_input_table(*economics, directory, manifest_path, contents, "economics");
     bundle.economics_path = join(directory, input.relative_path);
     bundle.inputs.push_back(input);
   }
   if (const toml::table* regulation = root["regulation"].as_table(); regulation != nullptr) {
     std::string contents;
-    const BundleInput input = read_input_table(*regulation, directory, manifest_path, contents);
+    const BundleInput input =
+        read_input_table(*regulation, directory, manifest_path, contents, "regulation");
     bundle.regulation_path = join(directory, input.relative_path);
     bundle.inputs.push_back(input);
   }
@@ -389,6 +393,85 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
     }
   }
 
+  // **Whether this farm irrigates, and on what rule.** Optional, and absent
+  // means rain-fed - which is what a New Zealand farm is unless somebody says
+  // otherwise, and what every bundle written before this section existed is.
+  //
+  // The same argument as [management] below: until this existed the only place
+  // a run could be told to irrigate was the desktop panel, so an irrigated
+  // result could be reproduced only by somebody who also had the window open
+  // and remembered which boxes were ticked. Two bundles identical but for this
+  // section are a controlled comparison of irrigation, and a test can prove
+  // they differ in nothing else.
+  if (const toml::table* watering = root["irrigation"].as_table(); watering != nullptr) {
+    detail::reject_unknown_keys(
+        *watering,
+        {"enabled", "trigger_depletion_fraction", "target_depletion_fraction",
+         "maximum_application_mm", "minimum_return_days", "application_efficiency",
+         "system_maximum_application_mm"},
+        manifest_path, "[irrigation]");
+
+    core::IrrigationPolicy policy;
+    policy.enabled = detail::optional_bool(*watering, "enabled", true, manifest_path);
+    policy.trigger_depletion_fraction = detail::optional_double(
+        *watering, "trigger_depletion_fraction", policy.trigger_depletion_fraction, manifest_path);
+    policy.target_depletion_fraction = detail::optional_double(
+        *watering, "target_depletion_fraction", policy.target_depletion_fraction, manifest_path);
+    policy.maximum_application_mm = detail::optional_double(
+        *watering, "maximum_application_mm", policy.maximum_application_mm, manifest_path);
+    policy.minimum_return_days = static_cast<int>(detail::optional_double(
+        *watering, "minimum_return_days", policy.minimum_return_days, manifest_path));
+
+    core::IrrigationSystem system;
+    system.application_efficiency = detail::optional_double(
+        *watering, "application_efficiency", system.application_efficiency, manifest_path);
+    system.maximum_application_mm = detail::optional_double(
+        *watering, "system_maximum_application_mm", system.maximum_application_mm, manifest_path);
+
+    // Refusing here rather than at the first day of the run, so a manifest that
+    // cannot be irrigated says so with a line number.
+    //
+    // **The bounds are checked here because nothing else checks them.**
+    // `IrrigationSystem` carries its own `validation_error`; `IrrigationPolicy`
+    // does not, and a depletion fraction outside nought to one is not a rule the
+    // model can act on - it is a soil that holds a negative amount of water or
+    // more than it can hold. Left unchecked it would run and produce numbers.
+    if (const std::string trouble = system.validation_error(); !trouble.empty()) {
+      detail::throw_in(*watering, manifest_path, trouble);
+    }
+    for (const auto& [name, fraction] :
+         {std::pair{"trigger_depletion_fraction", policy.trigger_depletion_fraction},
+          std::pair{"target_depletion_fraction", policy.target_depletion_fraction}}) {
+      // `isfinite` first and spelt out: TOML has a literal `nan`, and every
+      // comparison against one is false - so a range check written as a pair of
+      // comparisons lets `nan` through as though it were in range.
+      if (!std::isfinite(fraction) || fraction < 0.0 || fraction > 1.0) {
+        detail::throw_in(*watering, manifest_path,
+                         std::string("'") + name +
+                             "' is a share of the water the soil can hold, so it must be between "
+                             "0 and 1");
+      }
+    }
+    if (!std::isfinite(policy.maximum_application_mm) || policy.maximum_application_mm <= 0.0) {
+      detail::throw_in(*watering, manifest_path,
+                       "'maximum_application_mm' must be above zero: a rule that may apply no "
+                       "water is irrigation switched off, which is what leaving this section out "
+                       "says");
+    }
+    if (policy.minimum_return_days < 0) {
+      detail::throw_in(*watering, manifest_path, "'minimum_return_days' cannot be negative");
+    }
+    if (policy.target_depletion_fraction > policy.trigger_depletion_fraction) {
+      detail::throw_in(*watering, manifest_path,
+                       "'target_depletion_fraction' refills to a drier soil than "
+                       "'trigger_depletion_fraction' starts at, so this rule would irrigate "
+                       "for ever");
+    }
+
+    bundle.irrigation = policy;
+    bundle.irrigation_system = system;
+  }
+
   // What the farmer will not allow, when the bundle says. Optional: a run given
   // a policy by its caller is still a valid run, and every bundle written
   // before this section existed is one.
@@ -397,7 +480,8 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
         *management,
         {"minimum_cover_kg_dm_per_ha", "rotation_cover_threshold_kg_dm_per_ha",
          "target_liveweight_gain_kg_per_day", "maximum_graze_days", "minimum_spell_days",
-         "supplement_me_mj_per_kg_dm", "may_buy_feed", "prefer", "at_the_floor"},
+         "supplement_me_mj_per_kg_dm", "may_buy_feed", "prefer", "at_the_floor",
+         "supplement_available_kg_dm", "supplement_available_from", "supplement_available_until"},
         manifest_path, "[management]");
 
     core::ManagementPolicy policy;
@@ -419,6 +503,35 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                                 policy.supplement_me_mj_per_kg_dm, manifest_path);
     policy.may_buy_feed =
         detail::optional_bool(*management, "may_buy_feed", policy.may_buy_feed, manifest_path);
+
+    // **How much there is to buy, and when** (E114).
+    //
+    // Absent means unlimited, which is what every scenario written before this
+    // did. That default is kept deliberately: no source in this repository says
+    // how much baleage a Canterbury farm can get in a dry February, and a
+    // tonnage invented here would be worse than the old assumption named. A
+    // scenario that wants the constraint states the number itself and marks it
+    // in its own comments for what it is.
+    if (management->contains("supplement_available_kg_dm")) {
+      policy.supplement_market.available_kg_dm =
+          detail::require_double(*management, "supplement_available_kg_dm", manifest_path);
+    }
+    const bool has_from = management->contains("supplement_available_from");
+    const bool has_until = management->contains("supplement_available_until");
+    if (has_from != has_until) {
+      detail::throw_in(*management, manifest_path,
+                       "a supplement window needs both 'supplement_available_from' and "
+                       "'supplement_available_until', or neither");
+    }
+    if (has_from) {
+      core::DateRange window;
+      window.first = read_date(*management, "supplement_available_from", manifest_path);
+      window.last = read_date(*management, "supplement_available_until", manifest_path);
+      policy.supplement_market.window = window;
+    }
+    if (const std::string error = policy.supplement_market.validation_error(); !error.empty()) {
+      detail::throw_in(*management, manifest_path, error);
+    }
     policy.preference = grazing_preference_of(
         detail::optional_string(*management, "prefer", "by_cover"), *management, manifest_path);
     policy.floor_purchase =
@@ -471,7 +584,7 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
 
       std::string species_text;
       const BundleInput species_input =
-          read_input_table(*entry, directory, manifest_path, species_text);
+          read_input_table(*entry, directory, manifest_path, species_text, "mob");
       const SpeciesDefinition species =
           parse_species(species_text, join(directory, species_input.relative_path));
       mob.animal = species.energy;

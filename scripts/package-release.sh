@@ -209,9 +209,9 @@ notice="${stage}/NOTICE.txt"
   echo "under its own terms and is redistributed here with the attribution its"
   echo "licence requires."
   echo
-  # **One entry per distinct credit, not one per file.** The same Open-Meteo
-  # series is named by four scenarios, and a notice that repeated its
-  # attribution four times read as a machine's output rather than as a credit
+  # **One entry per distinct credit, not one per file.** Every scenario here
+  # names the same Open-Meteo series, and a notice that repeated its attribution
+  # once per scenario read as a machine's output rather than as a credit
   # somebody is owed. Sorted so the order does not depend on directory walk
   # order, which would make two builds of the same tree differ.
   found=0
@@ -283,6 +283,24 @@ echo "package-release: checking a scenario with no snapshot still runs"
   cd "${stage}"
   ./bin/paddock${exe_suffix} dashboard data/scenarios/lincoln-lurdf 2015 > /dev/null
 ) || { echo "package-release: a scenario whose LiDAR is absent does not run flat" >&2; exit 1; }
+
+# **And that the flagship demo runs, both halves of it.**
+#
+# This is the pair a stranger is pointed at first, and it is the one comparison
+# in the archive where a half that fails to start is worse than useless: two
+# dashboards where one is missing invites the reader to draw the difference
+# against nothing. Neither half has its LiDAR, like everything else here, so
+# this also covers them running flat.
+echo "package-release: checking the flagship demo runs, both halves"
+for half in off on; do
+  (
+    cd "${stage}"
+    ./bin/paddock${exe_suffix} dashboard "data/scenarios/demo-irrigation-${half}" > /dev/null
+  ) || {
+    echo "package-release: demo-irrigation-${half} does not run from the archive" >&2
+    exit 1
+  }
+done
 
 # ---------------------------------------------------------------- archive
 

@@ -161,6 +161,18 @@ struct FlockCalendar {
 
 /// What happened to the flock today.
 struct FlockDay {
+  /// What was on the place at the end of the day, and how much of it was
+  /// breeding stock. **Two counts because a destocking decision reads one of
+  /// them and a feed decision reads the other**, and a record that carried only
+  /// the total could not show a flock whose ewes were being sold under a lamb
+  /// crop that kept the total high (E100).
+  int head = 0;
+  int breeding_head = 0;
+
+  /// Head sold to a destocking decision today, as opposed to culled for age or
+  /// drafted at weight. Reporting only.
+  int destocked = 0;
+
   int born = 0;
   int died = 0;
   int culled = 0;

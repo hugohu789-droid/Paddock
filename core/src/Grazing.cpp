@@ -59,7 +59,7 @@ GrazingDay graze(PastureSward& sward, double paddock_hectares, const Mob& mob,
     GrazingDay empty;
     empty.demand_kg_dm = 0.0;
     empty.offered_kg_dm = 0.0;
-    empty.feed_limited = false;
+    empty.constraint = {};
     return empty;
   }
 
@@ -89,7 +89,11 @@ GrazingDay graze(PastureSward& sward, double paddock_hectares, const Mob& mob,
   day.nitrogen_removed_kg = taken.nitrogen_kg * paddock_hectares;
   day.intake_per_head_kg_dm = day.eaten_kg_dm / static_cast<double>(mob.head);
 
-  day.feed_limited = day.eaten_kg_dm < (day.demand_kg_dm - 1e-9);
+  // **This path has no appetite ceiling to be limited by**, so a shortfall here
+  // can only be the feed: `graze_one_day` takes a paddock and a demand and
+  // knows nothing about what the animal could hold. `Farm::step` is where the
+  // two constraints can be told apart, because that is where the capacity is.
+  day.constraint.feed_supply_limited = day.eaten_kg_dm < (day.demand_kg_dm - 1e-9);
 
   if (ledger != nullptr) {
     // Outflows rather than transfers: both leave the pools this model tracks.

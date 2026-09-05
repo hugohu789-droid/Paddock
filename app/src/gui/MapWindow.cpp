@@ -1051,7 +1051,9 @@ MapWindow::MapWindow(const config::ScenarioBundle& bundle, const std::string& bu
   const double liveweight = bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg;
   setup_->adopt_bundle(bundle_directory, head, liveweight, bundle.diet, measured_against(bundle),
                        bundle.management.has_value() ? &*bundle.management : nullptr,
-                       bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
+                       bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal,
+                       bundle.irrigation.has_value() ? &*bundle.irrigation : nullptr,
+                       &bundle.irrigation_system);
 
   // The dock opens wider than its own minimum, so the form has room before
   // anything has to scroll. Qt sizes a dock from its widget's hint otherwise,
@@ -1247,6 +1249,13 @@ void MapWindow::adopt_run(RunProducts products) {
     return;
   }
 
+  // **Taken before clear_series, which wipes both.** The selection is judged
+  // against the ground it was made on, and clearing runs first so that a failed
+  // run cannot leave half a year on screen - so the only place to hold on to
+  // either of these is here.
+  const std::vector<core::Paddock> paddocks_before = paddocks_;
+  const std::optional<std::size_t> selection_before = selected_paddock_;
+
   clear_series();
   cover_ = std::move(products.cover);
   soil_water_ = std::move(products.soil_water);
@@ -1295,7 +1304,22 @@ void MapWindow::adopt_run(RunProducts products) {
   if (!paddocks_.empty() && !cover_.empty()) {
     mask_.emplace(cover_.front(), paddocks_);
   }
-  selected_paddock_.reset();
+
+  // **A re-run keeps the selection when it still means the same field.** This
+  // used to drop it every time, which is safe and is the wrong behaviour for
+  // the comparison this window exists to show: click a paddock, run the farm
+  // rain-fed, run it irrigated, and watch the same ground answer differently.
+  // Losing the selection between the two runs makes that three actions instead
+  // of one, and puts the burden of finding the paddock again on somebody who is
+  // mid-sentence.
+  //
+  // Whether it still means the same field is `config::selection_survives`, not
+  // a bounds check: an index that is in range on a different farm points at
+  // ground nobody clicked on, which is worse than clearing.
+  if (selection_before.has_value() &&
+      config::selection_survives(paddocks_before, paddocks_, *selection_before)) {
+    selected_paddock_ = selection_before;
+  }
 
   adopt_series();
   refresh_chart();
@@ -1933,11 +1957,12 @@ void MapWindow::open_scenario(const std::string& bundle_directory) {
   const std::string resolved =
       QDir(QString::fromStdString(bundle_directory)).absolutePath().toStdString();
   const config::ScenarioBundle bundle = config::load_scenario(resolved);
-  setup_->adopt_bundle(resolved, bundle.mobs.empty() ? 0 : bundle.mobs.front().head,
-                       bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg, bundle.diet,
-                       measured_against(bundle),
-                       bundle.management.has_value() ? &*bundle.management : nullptr,
-                       bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal);
+  setup_->adopt_bundle(
+      resolved, bundle.mobs.empty() ? 0 : bundle.mobs.front().head,
+      bundle.mobs.empty() ? 0.0 : bundle.mobs.front().liveweight_kg, bundle.diet,
+      measured_against(bundle), bundle.management.has_value() ? &*bundle.management : nullptr,
+      bundle.mobs.empty() ? nullptr : &bundle.mobs.front().animal,
+      bundle.irrigation.has_value() ? &*bundle.irrigation : nullptr, &bundle.irrigation_system);
   if (setup_->choices().scenario_directory != resolved) {
     throw std::runtime_error("the panel does not offer " + resolved +
                              ", so nothing was opened. The panel lists the bundles under the data "

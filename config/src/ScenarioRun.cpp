@@ -73,6 +73,33 @@ double RunSummary::highest_cover_kg_dm_per_ha() const {
   return *std::max_element(cover_kg_dm_per_ha.begin(), cover_kg_dm_per_ha.end());
 }
 
+namespace {
+
+/// Records how far the stock are from the middle of the published
+/// condition-score scale. **Reads state and writes only the summary** - nothing
+/// downstream of this call behaves differently for having been measured.
+void record_animal_domain(RunSummary& summary, const core::Farm& farm, const core::Date& date) {
+  for (const core::FarmMob& farm_mob : farm.mobs()) {
+    if (farm_mob.mob.head <= 0) {
+      continue;
+    }
+    const double condition = core::relative_condition(farm_mob.mob.animal, farm_mob.mob.state);
+    if (condition < summary.animal_domain.lowest_relative_condition) {
+      summary.animal_domain.lowest_relative_condition = condition;
+      summary.animal_domain.cohort = farm_mob.mob.name;
+      summary.animal_domain.cohort_liveweight_kg = farm_mob.mob.state.liveweight_kg;
+      summary.animal_domain.boundary_liveweight_kg = core::liveweight_at_relative_condition(
+          farm_mob.mob.animal, farm_mob.mob.state, core::kLowestSupportedRelativeCondition);
+    }
+    if (condition < core::kLowestSupportedRelativeCondition &&
+        !summary.animal_domain.first_crossing.has_value()) {
+      summary.animal_domain.first_crossing = date;
+    }
+  }
+}
+
+}  // namespace
+
 double RunSummary::bought_feed_kg_dm() const {
   double total = 0.0;
   for (const core::FeedPurchase& purchase : purchases) {
@@ -101,12 +128,20 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::DietQu
         "' names no [management], so there is nothing to say what its farmer would not allow. "
         "Add the section, or run it with a policy of your own.");
   }
-  return run_managed_scenario(bundle, *bundle.management, diet, std::move(label));
+  // **A bundle that names an irrigation rule is run under it.** This overload is
+  // the one that means "run this scenario as it describes itself", so leaving
+  // the rule behind here would make an irrigated bundle quietly rain-fed - the
+  // exact failure [management] was added to stop.
+  return run_managed_scenario(bundle, *bundle.management, diet, std::move(label), DayObserver{},
+                              bundle.irrigation.value_or(core::IrrigationPolicy{}),
+                              bundle.irrigation_system);
 }
 
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label) {
-  return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{});
+  return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{},
+                              bundle.irrigation.value_or(core::IrrigationPolicy{}),
+                              bundle.irrigation_system);
 }
 
 namespace {
@@ -119,7 +154,8 @@ namespace {
 /// argument safe, and is asserted by a test rather than assumed.
 void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::FarmManager& manager,
                     core::Farm& farm, double hectares, const core::ManagementPolicy& policy,
-                    const core::Date& today, RunSummary& summary) {
+                    const core::Date& today, RunSummary& summary,
+                    int consecutive_feed_supply_short_days) {
   account.charge_day(today);
 
   // **What the lambs did on the paddock yesterday comes back first.** The farm
@@ -182,6 +218,9 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   core::FarmOutlook outlook;
   outlook.today = today;
   outlook.head = business.flock.head();
+  // What the destocking sale would actually take. Total head is still reported
+  // and still drives the feed rules; only the sale reads this one.
+  outlook.breeding_head = business.flock.breeding_head();
   // **Whether there is a finishing class, and if so what it weighs.**
   //
   // This read a flat `false` because nothing drove a lamb's liveweight: a lamb
@@ -212,7 +251,12 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // cover so the gap is visible rather than implied.
   outlook.cover_kg_dm_per_ha = farm.grid().mean_cover_kg_dm();
   outlook.minimum_cover_kg_dm_per_ha = policy.minimum_cover_kg_dm_per_ha;
-  outlook.days_short = summary.days_short;
+  // **Two counts, and the rule reads the one it was written for.** This line
+  // used to hand the year-to-date total to a field documented as consecutive,
+  // which fired the destocking rule on the twenty-first short day of the year
+  // and - since a total cannot fall - kept it fired every day afterwards.
+  outlook.consecutive_feed_supply_short_days = consecutive_feed_supply_short_days;
+  outlook.total_feed_supply_short_days = summary.feed_supply_short_days;
   outlook.hectares = hectares;
   outlook.balance_dollars = account.balance();
   outlook.daily_operating_cost_dollars = business.costs.annual_per_hectare() * hectares / 365.0;
@@ -230,6 +274,7 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
   // account and not to the flock is how the same lambs came to be sold three
   // hundred times: the money arrived and the stock never left. Anything that
   // sells head, sells them.
+  int destocked_today = 0;
   for (const core::Proposal& done : manager.decide(outlook, account)) {
     if (done.head <= 0) {
       continue;
@@ -245,12 +290,24 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
         break;
       case core::ActionKind::Destock:
       case core::ActionKind::SellCullStock:
-        business.flock.sell_oldest(done.head);
+        // Written back onto today's record below, so a report can say when the
+        // farm sold and how much - which a running total cannot.
+        destocked_today += business.flock.sell_oldest(done.head);
         break;
       case core::ActionKind::SellWool:
       case core::ActionKind::BuyFeed:
         break;
     }
+  }
+
+  // **The record is taken before the decisions and the decisions change the
+  // flock**, so today's counts are corrected here rather than being read a
+  // second time somewhere that could disagree with them.
+  if (!summary.flock_days.empty()) {
+    core::FlockDay& today_record = summary.flock_days.back();
+    today_record.destocked = destocked_today;
+    today_record.head = business.flock.head();
+    today_record.breeding_head = business.flock.breeding_head();
   }
 
   // **What the farmer sells stops eating.** The flock and the mob on the
@@ -343,9 +400,12 @@ void keep_the_books(FarmBusiness& business, core::FarmAccount& account, core::Fa
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
                                 const core::DietQuality& diet, std::string label,
                                 FarmBusiness business) {
-  RunSummary summary = run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{},
-                                            {}, {}, &business);
-  return summary;
+  // The bundle's own irrigation rule, for the reason the overload above gives:
+  // a priced run of an irrigated bundle that came back rain-fed would be the
+  // same silent failure, and this is the path the dashboard takes.
+  return run_managed_scenario(bundle, policy, diet, std::move(label), DayObserver{},
+                              bundle.irrigation.value_or(core::IrrigationPolicy{}),
+                              bundle.irrigation_system, &business);
 }
 
 RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::ManagementPolicy& policy,
@@ -391,6 +451,14 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   std::vector<bool> went_short(farm.mobs().size(), false);
   std::vector<double> supplement;
 
+  // **The merchant, who may not have it.** Between what the farmer asks for and
+  // what the mobs are handed (E114). Bought once a day for the whole farm and
+  // then shared out in proportion, so that nothing depends on the order the
+  // mobs happen to sit in - which is the same reason no random draw in this
+  // project is keyed by iteration order.
+  core::SupplementMarket market(policy.supplement_market);
+  summary.supplement_market_is_finite = market.is_finite();
+
   // The schedule reads how dry the ground is and decides; the farm applies
   // what it is handed. Neither knows about the other's job.
   core::IrrigationSchedule schedule(irrigation, system, farm.grid().cell_count());
@@ -412,15 +480,28 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     summary.flock_days.reserve(weather.records.size());
   }
 
+  // Days of feed shortage in a row, reset by the first day the farm feeds its
+  // stock. Run state rather than summary state: the report wants the total and
+  // the longest run, and the farmer wants today's. A hungry ewe on a full
+  // paddock is counted in the capacity run beside it and never here.
+  int consecutive_feed_supply_short_days = 0;
+  int consecutive_capacity_limited_days = 0;
+
   for (const core::DailyWeather& day : weather.records) {
-    const core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
+    core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
+
+    // Today's draw off the stack, so that only the remainder is put to the
+    // merchant. Reset each day rather than accumulated.
+    double day_conserved_kg_dm = 0.0;
 
     summary.moves += static_cast<int>(decisions.moves.size());
     summary.short_spells += decisions.short_spells;
     summary.grazings_extended += decisions.grazings_extended;
     summary.system_each_day.push_back(decisions.chosen_system);
-    summary.purchases.insert(summary.purchases.end(), decisions.purchases.begin(),
-                             decisions.purchases.end());
+    // **The purchases are recorded further down, after the market has answered.**
+    // A `FeedPurchase` is what the farm actually got, not what it asked for;
+    // recording the request here would charge the account for feed the
+    // merchant never delivered (E114).
 
     const core::Raster<double> dryness = farm.grid().depletion_mm();
     const std::vector<double>& water =
@@ -467,24 +548,83 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
           wanted += each;
         }
         if (wanted > 0.0) {
-          summary.conserved_fed_kg_dm +=
-              summary.feed_store.take(wanted, business->conservation_losses);
+          day_conserved_kg_dm = summary.feed_store.take(wanted, business->conservation_losses);
+          summary.conserved_fed_kg_dm += day_conserved_kg_dm;
         }
       }
     }
 
+    // **What management asked for, against what there was to buy.**
+    //
+    // The stack is already spent by here, and it is not bought - a farm feeding
+    // its own silage is not in the market - so only the remainder is put to the
+    // merchant. What comes back is shared across the mobs in proportion to what
+    // each asked for, which leaves the physiology downstream untouched: the
+    // animal is still capped by its own appetite in `Farm::step`, and a mob
+    // handed less than it wanted still reports a feed-supply shortfall.
+    {
+      double requested = 0.0;
+      for (const double each : supplement) {
+        requested += each;
+      }
+      if (requested > 0.0) {
+        const double already_from_the_stack = std::min(requested, day_conserved_kg_dm);
+        const double to_buy = requested - already_from_the_stack;
+        const double bought = market.buy(day.date, to_buy);
+        const double supplied = already_from_the_stack + bought;
+        if (supplied < requested - 1e-9) {
+          const double share = supplied / requested;
+          for (double& each : supplement) {
+            each *= share;
+          }
+          // The day's purchase records shrink with it, so that what the report
+          // shows bought and what the account is charged are both what arrived.
+          for (core::FeedPurchase& purchase : decisions.purchases) {
+            purchase.kg_dm *= share;
+          }
+        }
+      }
+    }
+
+    // Recorded now, with the quantity the market actually supplied.
+    summary.purchases.insert(summary.purchases.end(), decisions.purchases.begin(),
+                             decisions.purchases.end());
+
     const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger, water);
-    if (farm_day.any_mob_short) {
-      ++summary.days_short;
+    // **Four counters, two facts.** Cumulative for the report and consecutive
+    // for the decision - one field carrying both is what E98 found - and a feed
+    // shortage kept apart from an animal that could not eat, which is what E103
+    // found. Nothing that decides reads the capacity pair.
+    if (farm_day.any_mob_feed_supply_limited) {
+      ++summary.feed_supply_short_days;
+      ++consecutive_feed_supply_short_days;
+      summary.longest_feed_supply_short_run_days =
+          std::max(summary.longest_feed_supply_short_run_days, consecutive_feed_supply_short_days);
+    } else {
+      consecutive_feed_supply_short_days = 0;
+    }
+    if (farm_day.any_mob_intake_capacity_limited) {
+      ++summary.intake_capacity_limited_days;
+      ++consecutive_capacity_limited_days;
+      summary.longest_intake_capacity_limited_run_days = std::max(
+          summary.longest_intake_capacity_limited_run_days, consecutive_capacity_limited_days);
+    } else {
+      consecutive_capacity_limited_days = 0;
     }
     for (std::size_t i = 0; i < farm_day.mobs.size() && i < went_short.size(); ++i) {
-      went_short[i] = farm_day.mobs[i].grazing.feed_limited;
+      went_short[i] = farm_day.mobs[i].grazing.constraint.feed_supply_limited;
     }
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
+    // **Where the animals sit on the published condition-score scale.**
+    // Measured and recorded; never acted on. The mob keeps whatever weight the
+    // energy model gave it, and this only decides what a report may claim
+    // afterwards (E116).
+    record_animal_domain(summary, farm, day.date);
+
     if (business != nullptr && manager.has_value() && summary.account.has_value()) {
       keep_the_books(*business, *summary.account, *manager, farm, farm_hectares, policy, day.date,
-                     summary);
+                     summary, consecutive_feed_supply_short_days);
     }
 
     summary.dates.push_back(day.date);
@@ -522,6 +662,14 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   if (!summary.dates.empty()) {
     summary.mean_stock_units = stock_unit_days / static_cast<double>(summary.dates.size());
   }
+
+  // **What the market was asked for and what it had.** Reported whether or not
+  // it was finite: an unlimited market filling every request is a fact about
+  // the assumption the run was given, not the absence of one (E114).
+  summary.supplement_requested_kg_dm = market.total_requested_kg_dm();
+  summary.supplement_purchased_kg_dm = market.total_purchased_kg_dm();
+  summary.supplement_unfilled_kg_dm = market.total_unfilled_kg_dm();
+  summary.supplement_market_short_days = market.short_days();
 
   if (business != nullptr) {
     summary.closing_head = business->flock.head();
@@ -565,6 +713,13 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
   summary.paddock_of_first_mob.reserve(weather.records.size());
 
   std::vector<bool> went_short(farm.mobs().size(), false);
+  // Days of feed shortage in a row, reset by the first day the farm feeds its
+  // stock. Run state rather than summary state: the report wants the total and
+  // the longest run, and the farmer wants today's. A hungry ewe on a full
+  // paddock is counted in the capacity run beside it and never here.
+  int consecutive_feed_supply_short_days = 0;
+  int consecutive_capacity_limited_days = 0;
+
   for (const core::DailyWeather& day : weather.records) {
     const core::Farmer::Day decisions = farmer.decide(farm, day.date, went_short);
     summary.moves += static_cast<int>(decisions.moves.size());
@@ -572,13 +727,36 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
     summary.grazings_extended += decisions.grazings_extended;
 
     const core::FarmDay farm_day = farm.step(day, diet, &summary.ledger);
-    if (farm_day.any_mob_short) {
-      ++summary.days_short;
+    // **Four counters, two facts.** Cumulative for the report and consecutive
+    // for the decision - one field carrying both is what E98 found - and a feed
+    // shortage kept apart from an animal that could not eat, which is what E103
+    // found. Nothing that decides reads the capacity pair.
+    if (farm_day.any_mob_feed_supply_limited) {
+      ++summary.feed_supply_short_days;
+      ++consecutive_feed_supply_short_days;
+      summary.longest_feed_supply_short_run_days =
+          std::max(summary.longest_feed_supply_short_run_days, consecutive_feed_supply_short_days);
+    } else {
+      consecutive_feed_supply_short_days = 0;
+    }
+    if (farm_day.any_mob_intake_capacity_limited) {
+      ++summary.intake_capacity_limited_days;
+      ++consecutive_capacity_limited_days;
+      summary.longest_intake_capacity_limited_run_days = std::max(
+          summary.longest_intake_capacity_limited_run_days, consecutive_capacity_limited_days);
+    } else {
+      consecutive_capacity_limited_days = 0;
     }
     for (std::size_t i = 0; i < farm_day.mobs.size() && i < went_short.size(); ++i) {
-      went_short[i] = farm_day.mobs[i].grazing.feed_limited;
+      went_short[i] = farm_day.mobs[i].grazing.constraint.feed_supply_limited;
     }
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
+
+    // **Where the animals sit on the published condition-score scale.**
+    // Measured and recorded; never acted on. The mob keeps whatever weight the
+    // energy model gave it, and this only decides what a report may claim
+    // afterwards (E116).
+    record_animal_domain(summary, farm, day.date);
 
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);

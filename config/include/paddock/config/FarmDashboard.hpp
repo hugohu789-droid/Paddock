@@ -98,6 +98,21 @@ struct FarmDashboard {
   std::vector<core::Date> dates;
   std::vector<DashboardSeries> series;
 
+  /// **Why this page's animal and money figures may not be read** - empty when
+  /// they may (verify.md, E116).
+  ///
+  /// Set when the run went below the bottom of the published condition-score
+  /// scale. It changes no number on the page: the indicators are what the model
+  /// produced, and what this does is take their `trust` down to `Placeholder`,
+  /// which the demo layer already renders as *do not quote*. A reader who wants
+  /// the trajectory still has every figure; a reader who wants a prediction is
+  /// told there is not one here.
+  std::string animal_domain_warning;
+
+  /// **Why an unsourced feed quantity is not a market figure** - empty when the
+  /// run had no finite market.
+  std::string supplement_market_warning;
+
   /// Every indicator across every panel, flattened.
   [[nodiscard]] std::vector<Indicator> all_indicators() const;
 
@@ -120,6 +135,18 @@ struct FarmDashboard {
 
 /// The dashboard as a terminal page.
 [[nodiscard]] std::string as_text(const FarmDashboard& dashboard);
+
+/// **Whether a stocking comparison may name a best rung at all.**
+///
+/// False as soon as any candidate has left the published condition-score scale
+/// (verify.md, E116). A turning point whose descending side is an animal this
+/// model cannot describe is an artefact of a failure nobody modelled, and
+/// annotating it is not enough - the ranking itself has to be withheld.
+///
+/// Deliberately a free function rather than a flag on a comparison type: no
+/// surface in this project ranks stocking rates today, and this is the gate
+/// the first one to try will have to pass.
+[[nodiscard]] bool may_report_stocking_optimum(const std::vector<const RunSummary*>& candidates);
 
 /// The indicators as CSV - one row per indicator, with its standing, its trust
 /// and its band. **The trust column is not optional in the export either**: a

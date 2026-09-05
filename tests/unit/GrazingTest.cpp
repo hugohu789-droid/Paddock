@@ -114,7 +114,7 @@ TEST(GrazingTest, AHungryMobCannotEatBelowTheResidual) {
   // Far more stock than the paddock can feed.
   const GrazingDay day = graze(sward, 1.0, ewes(3000), pasture_diet(), flat_paddock());
 
-  EXPECT_TRUE(day.feed_limited);
+  EXPECT_TRUE(day.constraint.feed_supply_limited);
   EXPECT_GE(sward.grass_kg_dm(), parameters.grass.residual_kg_dm_per_ha - 1e-9);
   EXPECT_GE(sward.legume_kg_dm(), parameters.legume.residual_kg_dm_per_ha - 1e-9);
   EXPECT_LT(day.satisfaction(), 1.0);
@@ -128,7 +128,7 @@ TEST(GrazingTest, OfferedIsWhatStoodAboveTheResidualNotWhatWasEaten) {
 
   const GrazingDay day = graze(sward, 10.0, ewes(50), pasture_diet(), flat_paddock());
 
-  EXPECT_FALSE(day.feed_limited);
+  EXPECT_FALSE(day.constraint.feed_supply_limited);
   EXPECT_NEAR(day.eaten_kg_dm, day.demand_kg_dm, 1e-9) << "a mob with feed to spare eats its fill";
   EXPECT_GT(day.offered_kg_dm, day.eaten_kg_dm)
       << "offered " << day.offered_kg_dm << ", eaten " << day.eaten_kg_dm;
@@ -157,8 +157,8 @@ TEST(GrazingTest, ARestedPaddockFeedsAMobThatABareOneCannot) {
 
   EXPECT_NEAR(on_rested.demand_kg_dm, on_bare.demand_kg_dm, 1e-9) << "same mob, same demand";
   EXPECT_GT(on_rested.eaten_kg_dm, on_bare.eaten_kg_dm);
-  EXPECT_FALSE(on_rested.feed_limited);
-  EXPECT_TRUE(on_bare.feed_limited);
+  EXPECT_FALSE(on_rested.constraint.feed_supply_limited);
+  EXPECT_TRUE(on_bare.constraint.feed_supply_limited);
   EXPECT_GT(on_rested.satisfaction(), on_bare.satisfaction());
 }
 
@@ -236,7 +236,7 @@ TEST(GrazingTest, AMobWithFeedToSpareHoldsItsWeight) {
   Mob mob = ewes(20);
 
   const GrazingDay day = graze(sward, 5.0, mob, diet, ground);
-  ASSERT_FALSE(day.feed_limited);
+  ASSERT_FALSE(day.constraint.feed_supply_limited);
 
   const LiveweightResponse response = advance_one_day(mob, day, diet, ground);
   EXPECT_NEAR(response.liveweight_change_kg, 0.0, 1e-6)
@@ -258,7 +258,7 @@ TEST(GrazingTest, AnEmptyMobEatsNothingAndIsNotStarving) {
 
   EXPECT_DOUBLE_EQ(day.eaten_kg_dm, 0.0);
   EXPECT_DOUBLE_EQ(day.demand_kg_dm, 0.0);
-  EXPECT_FALSE(day.feed_limited) << "nothing went hungry, because nothing was there";
+  EXPECT_FALSE(day.constraint.feed_supply_limited) << "nothing went hungry, because nothing was there";
   EXPECT_DOUBLE_EQ(sward.grass_kg_dm() + sward.legume_kg_dm(), before)
       << "and the grass is untouched";
 

@@ -342,9 +342,9 @@ quoted from memory would be the one thing this table is built not to do.
 supplies a weaning weight, so it is something to be above rather than close to;
 the model's own dashboard still flags 30.5 kg as outside the band it draws.
 
-### The four scenarios
+### The scenarios
 
-All four run on real ERA5 weather through the same sourced sward — the growth
+All of them run on real ERA5 weather through the same sourced sward — the growth
 parameters are properties of the plants and live in one file, while weather,
 soil, latitude and stock are what each scenario states for itself.
 
@@ -352,12 +352,68 @@ soil, latitude and stock are what each scenario states for itself.
 |---|---|---:|---:|---|
 | `canterbury-baseline` | Selwyn, 25 years | 8,042 | — | pasture and water with no stock |
 | `canterbury-grazed` | the same file | 7,679 | 13.2 | the grazed comparison, and the golden regression baseline |
-| `lincoln-lurdf` | Lincoln, 10 years | 6,407 | 12.1 | the farm the validation above is measured on |
+| `lincoln-lurdf` | Lincoln, 10 years | 6,613 | 12.5 | the farm the validation above is measured on |
 | `ruakura-fe` | Waikato | 12,120 | 13.5 | a facial eczema climate, not a stocking policy |
+| `demo-irrigation-off` | Lincoln, 2023-24 | 6,613 | 12.5 | the rain-fed half of the flagship comparison |
+| `demo-irrigation-on` | the same file | 11,846 | 14.0 | the same farm, watered at FAO-56's trigger |
 
 `canterbury-baseline` and `canterbury-grazed` read the same weather file on
 purpose, so ungrazed against grazed is a comparison rather than two unrelated
-runs.
+runs. The two `demo-irrigation-` halves go further: they share every input file
+with `lincoln-lurdf` by reference and differ from each other in one four-line
+section, which
+[a test checks two ways](tests/validation/FlagshipDemoTest.cpp) rather than
+asking a reader to take on trust.
+
+### The flagship comparison: does this farm want irrigation?
+
+```bash
+paddock dashboard data/scenarios/demo-irrigation-off data/scenarios/demo-irrigation-on
+```
+
+It opens by saying what the two scenarios were set up to do differently - read
+off the resolved configurations, not inferred from the results - so nobody has
+to take the claim on trust:
+
+```
+  What changed
+  ============
+    demo_irrigation_off  ->  demo_irrigation_on
+
+    Irrigation
+      irrigation           off  ->  on
+      trigger              -  ->  40% available water
+      refill target        -  ->  85% available water
+      most at once         -  ->  25 mm
+
+    One category differs, so what the results do is attributable to it.
+    Unchanged: Run, Farm, Ground, Weather, Soil, Pasture, Stock, Grazing policy.
+```
+
+One 80 ha Lincoln sheep block, the recorded 2023-24 year, run twice. Same soil,
+same sward, same 417 ewes, same grazing calendar, same seed. The only difference
+is an `[irrigation]` section set to FAO-56 Table 22's depletion trigger for
+grazed pasture.
+
+| | Rain-fed | Irrigated |
+|---|---|---|
+| Pasture grown | 6,613 kg DM/ha | 11,846 kg DM/ha |
+| Days growth was held back by dry soil | 233 | 15 |
+| Water applied | none | 375 mm in 18 events |
+| Bought feed | 4,798 kg DM | 0 kg DM |
+| Nitrate leached | 2.1 kg N/ha | 14.7 kg N/ha |
+
+The clearest single view is **22 January 2024**, when farm cover reads 918
+kg DM/ha rain-fed against 2,214 irrigated — and **Paddock 29**, on the shallow
+western fence, which reads 891 against 2,332 on that day.
+
+The trade-off in the last row is the point: the same water that nearly doubles
+production takes the farm from 2.1 to 14.7 kg N/ha against Environment
+Canterbury's Selwyn Waihora limit of 15. Both halves of that are model output
+rather than measurement, and
+[docs/scenarios/flagship-demo.md](docs/scenarios/flagship-demo.md) says exactly
+how far each may be pushed — including that the irrigated arm is calibrated
+against nothing, because this project has only validated the dryland series.
 
 This should be treated as a simulation and research platform, not as a certified
 farm advisory model. [docs/validation/verify.md](docs/validation/verify.md) records, output by output,
@@ -610,6 +666,7 @@ Dependency direction is one way: `gis → core`, `viz → core`, `config → cor
 | [Irrigation model](docs/model/irrigation-model.md) | Trigger, target, limits, efficiency, and the recorded decision |
 | [Nitrogen model](docs/model/nitrogen-model.md) | What is modelled, and the pathways that are not |
 | [Scenario design](docs/scenarios/scenario-design.md) | What a bundle is, and what makes a comparison honest |
+| [The flagship demo](docs/scenarios/flagship-demo.md) | Irrigation off against on: what it shows, and what it does not |
 | [Data and provenance](docs/data.md) | Sources, snapshots, hashes and coordinates |
 | [Setup](docs/setup.md) | Build and dependency instructions, all three editors |
 | [ADRs](docs/adr/) · [devlog](docs/devlog/) · [backlog](docs/backlog.md) | Decisions, milestone notes, and what is queued |

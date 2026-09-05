@@ -108,15 +108,24 @@ condition_intake_limit = { value = 1.5, status = "direct", source = "grazplan_an
 # 0.8 its footnote applies to this group - 0.6553, 0.8843 and 1.1143 scale to
 # 0.5242, 0.7074 and 0.8914, which is how the table was checked.
 #
+# **These name appetite, and only appetite** (verify.md, E110).
+# `appetite_lactation_peak_days` is C_I8: the day the *appetite* increment
+# peaks, because `M^exponent * exp(exponent * (1 - M))` is at its maximum where
+# `M = 1`. **Milk timing is independent of every parameter in this file.** The
+# yield curve is OVERSEER TMC Eq. 35, whose own fitted constants put its peak at
+# `kMilkYieldPeakDays` - 0.41/0.0287, about 14.29 days - and nothing here can
+# move it. These carried the prefix-free name until E110; it had misread as a
+# statement about milk twice without ever producing a wrong number.
+#
 # **Eq. 8's LA and LB are not here**: condition at parturition and weight lost
 # since it, both needing a history this model does not keep. Both are at most
 # one, so leaving them out makes her hungrier than GrazPlan would, never less.
-lactation_peak_days = { value = 28.0, status = "direct", source = "grazplan_animal" }
-lactation_curve_exponent = { value = 1.4, status = "direct", source = "grazplan_animal" }
-lactation_peak_no_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
-lactation_peak_one_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
-lactation_peak_two_young = { value = 0.707, status = "direct", source = "grazplan_animal" }
-lactation_peak_three_young = { value = 0.891, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_days = { value = 28.0, status = "direct", source = "grazplan_animal" }
+appetite_lactation_curve_exponent = { value = 1.4, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_no_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_one_young = { value = 0.524, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_two_young = { value = 0.707, status = "direct", source = "grazplan_animal" }
+appetite_lactation_peak_three_young = { value = 0.891, status = "direct", source = "grazplan_animal" }
 
 # **Appetite: what she would eat if nothing stopped her.** Everything in
 # [energy] says what a ewe needs; this says what she wants, and the gap between
@@ -134,7 +143,31 @@ lactation_peak_three_young = { value = 0.891, status = "direct", source = "grazp
 # peaks at a relative size of 0.85, and 1.7 is the only value for which it does.
 # Fig. 2 then draws a 50 kg sheep peaking near 1.44 kg DM a day, which the same
 # two numbers reproduce.
-appetite_scalar_per_day = { value = 0.0, status = "direct", source = "grazplan_animal" }
+# **Enabled, and the value is GrazPlan's own.** Three sources agree on 0.04:
+# the paragraph above, Fig. 2's 50 kg sheep peaking near 1.44 kg DM a day, and
+# APSIM's `ruminant.prm`, whose C_I1 this project's source record notes as
+# confirming "every coefficient this project had already inferred from the
+# paper's figures rather than its table". That confirmation is the file's
+# generic one - the breed grouping `c-imx-` is named only for the lactation
+# peaks - so this is a sheep coefficient and not a Romney one, and it can be
+# enabled without waiting on the breed question.
+#
+# **It was written here as 0.0 for as long as the parameter existed**, which
+# switched the whole intake ceiling off for every sheep in the project: callers
+# fall back to the animal's energy requirement when this is not positive, so it
+# failed silently and exactly as designed to. E93 found it; E103 to E106
+# cleared the three management defects that made switching it on look like a
+# biological problem - a cumulative counter read as consecutive, a floor
+# counting lambs, and one field meaning both "no feed" and "no appetite".
+#
+# **What is still open is magnitude, not direction.** This ewe carries
+# OVERSEER's 66 kg New Zealand dual-purpose reference weight beside GrazPlan's
+# Australian wool-breed lactation peaks, and the milk-demand curve peaks a
+# fortnight before the appetite curve. The lag is ordinary early-lactation
+# physiology; how deep it should be for this animal is not settled, so every
+# animal-production figure that turns on it is reported as exploratory until
+# E95 closes. See E107.
+appetite_scalar_per_day = { value = 0.04, status = "direct", source = "grazplan_animal" }
 appetite_size_coefficient = { value = 1.7, status = "direct", source = "grazplan_animal" }
 
 # **How much of what it needs a sheep can actually get off a short paddock.**

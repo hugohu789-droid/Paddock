@@ -19,7 +19,8 @@ add_executable(
                                     unit/FlockTest.cpp
   unit/GeometryTest.cpp
   unit/GrazingCalendarTest.cpp
-  unit/GrazingTest.cpp unit/IrrigationTest.cpp
+  unit/GrazingTest.cpp unit/IntakeCausalityTest.cpp unit/IrrigationTest.cpp
+  unit/SupplementMarketTest.cpp
   unit/LiveweightResponseTest.cpp
   unit/MycotoxinTest.cpp
   unit/PaddockMaskTest.cpp
@@ -113,9 +114,11 @@ endif()
 # stops parsing fails the build rather than the first run that needs it.
 if(PADDOCK_BUILD_CONFIG)
   add_executable(paddock_config_tests config/ConfigTest.cpp config/DashboardTest.cpp
+                                      config/DemoSummaryTest.cpp
  config/DataFilesTest.cpp
                                       config/FarmConfigTest.cpp config/PaddockInspectionTest.cpp
-                                      config/ScenarioComparisonTest.cpp config/ScenarioTest.cpp
+                                      config/ScenarioComparisonTest.cpp config/ScenarioInputsTest.cpp
+                                      config/ScenarioTest.cpp
                                       config/SpeciesConfigTest.cpp)
 
   target_link_libraries(paddock_config_tests PRIVATE Paddock::config GTest::gtest_main
@@ -146,6 +149,11 @@ if(PADDOCK_BUILD_CONFIG)
                                           validation/WinchmoreSeasonalTest.cpp
                                           validation/NitrogenLeachingTest.cpp
                                           validation/CanterburyDrylandTest.cpp
+                                          validation/FlagshipDemoTest.cpp
+                                          validation/IrrigationResponseTest.cpp
+                                          validation/FeedMarketTest.cpp
+                                          validation/LambCohortLifecycleTest.cpp
+                                          validation/ValidityEnvelopeTest.cpp
                                           validation/GrazedYearTest.cpp
                                           validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp

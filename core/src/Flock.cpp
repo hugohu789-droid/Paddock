@@ -3,9 +3,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <numeric>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <paddock/core/Flock.hpp>
 
@@ -342,6 +344,19 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
     // Splitting it two ways made this a store farm, which is not what its own
     // cost survey describes: Beef + Lamb's Class 6 is "S.I. Finishing
     // Breeding", and the whole crop was leaving at weaning at 17 kg.
+    // **The new cohorts are held aside until the loop is over** (verify.md,
+    // E118). This used to `push_back` into `cohorts_` from inside a range-for
+    // over `cohorts_`: when the vector reallocated, the loop's reference
+    // dangled and the two writes below were lost, so the lamb cohort kept its
+    // whole head and stayed finishing stock beside the new one and the flock
+    // carried the finished draft twice. Whether that happened depended on the
+    // vector's capacity, which is to say on nothing this model describes.
+    //
+    // The semantics are unchanged. A range-for reads `end()` once, so the loop
+    // never visited what it appended even when it got away with it; holding the
+    // finishers in a local and appending them afterwards is what the code
+    // always meant.
+    std::vector<AgeCohort> drafted_to_finish;
     for (AgeCohort& cohort : cohorts_) {
       if (!cohort.is_finishing || cohort.mob.head <= 0) {
         continue;
@@ -363,7 +378,7 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
         finishing.mob.name = "finishing " + std::to_string(today.year);
         finishing.mob.head = finished;
         finishing.is_finishing = true;
-        cohorts_.push_back(std::move(finishing));
+        drafted_to_finish.push_back(std::move(finishing));
       }
 
       cohort.mob.head = kept;
@@ -371,6 +386,12 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
       // year's flock.
       cohort.is_finishing = false;
     }
+
+    // Appended in the order they were drafted, which is the order they would
+    // have been appended in before, so the stable sort below sees the same
+    // sequence.
+    cohorts_.insert(cohorts_.end(), std::make_move_iterator(drafted_to_finish.begin()),
+                    std::make_move_iterator(drafted_to_finish.end()));
 
     // Sorted again, because the finishers were appended rather than added.
     std::stable_sort(
@@ -404,6 +425,11 @@ FlockDay Flock::step(const Date& today, const FlockCalendar& calendar, const Flo
   // Last, so that a cohort born or weaned today is already in the flock when it
   // is asked whether it is carrying anything.
   set_reproductive_state(today, calendar, rates);
+
+  // What the day left on the place. Taken here rather than by the caller so a
+  // record and the flock it describes cannot disagree.
+  day.head = head();
+  day.breeding_head = breeding_head();
 
   return day;
 }

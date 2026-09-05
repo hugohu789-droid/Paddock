@@ -12,6 +12,7 @@
 #include <paddock/core/Farmer.hpp>
 #include <paddock/core/FarmletGrid.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
+#include <paddock/core/Irrigation.hpp>
 #include <paddock/core/Pasture.hpp>
 #include <paddock/core/Raster.hpp>
 #include <paddock/core/Simulation.hpp>
@@ -24,6 +25,18 @@ namespace paddock::config {
 
 /// One file a bundle depends on, and the hash it was built against.
 struct BundleInput {
+  /// Which manifest section named it: "weather", "soil", "sward", "economics",
+  /// "regulation", or "mob".
+  ///
+  /// **Recorded because the list is otherwise unreadable to anything but a hash
+  /// check.** A caller that wants to say "the weather is the same and the sward
+  /// is not" has only the path to go on, and a path is where a file sits rather
+  /// than what it is for - `../lincoln-lurdf/soil.toml` and `soil.toml` are the
+  /// same soil, and two bundles can reach one file by different routes. The
+  /// loader knows the section it is reading; this is it writing that down
+  /// instead of leaving the next reader to guess from a filename.
+  std::string section;
+
   std::string relative_path;
   std::string recorded_sha256;
   std::string actual_sha256;
@@ -237,6 +250,24 @@ struct ScenarioBundle {
   /// running it - the cover the sward is not taken below, and whether feed may
   /// be bought to hold both that and the stock.
   std::optional<core::ManagementPolicy> management;
+
+  /// The irrigation rule this farm is run under, when the bundle names one.
+  ///
+  /// **Empty means rain-fed, and that is the default.** The same argument as
+  /// `management` above, for the same reason: until this existed the only place
+  /// a run could be told to irrigate was the desktop panel, so an irrigated
+  /// result could be reproduced only by somebody who also had the window open
+  /// and remembered which boxes were ticked. A bundle is supposed to be the
+  /// whole of a run.
+  ///
+  /// It is what makes a controlled comparison of irrigation possible at all:
+  /// two bundles identical but for this section differ in the one thing being
+  /// compared, and a test can prove it rather than a reader having to trust it.
+  std::optional<core::IrrigationPolicy> irrigation;
+
+  /// What the plant can deliver. Only meaningful with `irrigation` set; its own
+  /// defaults model no losses, which `core::IrrigationSystem` explains.
+  core::IrrigationSystem irrigation_system;
 
   /// Which grazing system runs when. Empty when the bundle has no stock; a
   /// bundle with stock must say how they are managed, because leaving it to a

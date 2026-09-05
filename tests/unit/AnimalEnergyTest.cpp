@@ -15,7 +15,10 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstddef>
+#include <functional>
 #include <stdexcept>
+#include <vector>
 
 #include <paddock/core/AnimalEnergy.hpp>
 
@@ -90,12 +93,12 @@ AnimalClassParameters an_ewe_with_appetite() {
   ewe.normal_weight_exponent = 0.27;
   ewe.normal_weight_blend = 0.4;
   ewe.condition_intake_limit = 1.5;
-  ewe.lactation_peak_days = 28.0;
-  ewe.lactation_curve_exponent = 1.4;
-  ewe.lactation_peak_no_young = 0.524;
-  ewe.lactation_peak_one_young = 0.524;
-  ewe.lactation_peak_two_young = 0.707;
-  ewe.lactation_peak_three_young = 0.891;
+  ewe.appetite_lactation_peak_days = 28.0;
+  ewe.appetite_lactation_curve_exponent = 1.4;
+  ewe.appetite_lactation_peak_no_young = 0.524;
+  ewe.appetite_lactation_peak_one_young = 0.524;
+  ewe.appetite_lactation_peak_two_young = 0.707;
+  ewe.appetite_lactation_peak_three_young = 0.891;
   return ewe;
 }
 
@@ -640,6 +643,144 @@ TEST(WalkingDistanceTest, ActivityReachesTheRequirementOnSlopingGround) {
       << "a steep paddock costs more walking than a terrace";
   EXPECT_GT(on_the_hill.total_me_mj, on_the_flat.total_me_mj)
       << "and that reaches what the animal has to eat";
+}
+
+// **The two lactation timings are independent, and these four tests are the
+// proof that keeps them so** (verify.md, E110).
+//
+// The model carries two curves that both have the word lactation in them and
+// answer different questions. Milk yield is OVERSEER TMC Eq. 35, whose peak is
+// welded into its own fitted constants. Appetite is GrazPlan Eq. 8, whose peak
+// is `appetite_lactation_peak_days`. Before E110 one of them was called
+// `lactation_peak_days`, which read as a claim about the other; it never
+// produced a wrong number and it did mislead two reviews. These assert the
+// separation the rename describes, so it cannot quietly stop being true.
+
+/// A ewe far enough into lactation for both curves to be live.
+AnimalState a_lactating_ewe(int days_lactating, double young = 1.0) {
+  AnimalState state;
+  state.liveweight_kg = 55.0;
+  state.age_days = 1500.0;
+  state.days_lactating = days_lactating;
+  state.young = young;
+  return state;
+}
+
+GrazingConditions an_ordinary_paddock() {
+  GrazingConditions ground;
+  ground.pasture_mass_t_dm_per_ha = 2.5;
+  return ground;
+}
+
+/// The day a series of daily values is largest.
+int day_of_peak(const std::function<double(int)>& value, int last_day) {
+  int best_day = 1;
+  double best = value(1);
+  for (int day = 2; day <= last_day; ++day) {
+    if (value(day) > best) {
+      best = value(day);
+      best_day = day;
+    }
+  }
+  return best_day;
+}
+
+// **Verification.** Move the appetite parameter across four values spanning
+// sheep, a doubled sheep and GrazPlan's cattle, and the milk series must not
+// move by a single bit. This is the assertion that would have caught the
+// misreading directly.
+TEST(LactationTimingTest, MilkYieldTimingIgnoresTheAppetiteParameter) {
+  const GrazingConditions ground = an_ordinary_paddock();
+
+  std::vector<double> reference;
+  for (int day = 1; day <= 100; ++day) {
+    AnimalClassParameters ewe = an_ewe_with_appetite();
+    ewe.milk_fat_percent = 7.0;
+    ewe.milk_protein_percent = 5.5;
+    ewe.gestation_length_days = 147.0;
+    reference.push_back(daily_milk_yield_kg(ewe, a_lactating_ewe(day), ground));
+  }
+  ASSERT_GT(reference[13], 0.0) << "the curve has to be live for this to mean anything";
+
+  for (const double peak_days : {14.0, 28.0, 56.0, 624.0}) {
+    for (int day = 1; day <= 100; ++day) {
+      AnimalClassParameters ewe = an_ewe_with_appetite();
+      ewe.milk_fat_percent = 7.0;
+      ewe.milk_protein_percent = 5.5;
+      ewe.gestation_length_days = 147.0;
+      ewe.appetite_lactation_peak_days = peak_days;
+      // Bit-identical, not merely close: no appetite parameter is an input to
+      // Eq. 35, so the two series come from the same arithmetic.
+      EXPECT_EQ(daily_milk_yield_kg(ewe, a_lactating_ewe(day), ground),
+                reference[static_cast<std::size_t>(day - 1)])
+          << "milk yield moved on day " << day << " when the appetite peak was set to "
+          << peak_days;
+    }
+  }
+}
+
+// **Verification.** `kMilkYieldPeakDays` is 0.41/0.0287 by derivation; this
+// checks the curve the constant describes actually peaks there.
+TEST(LactationTimingTest, MilkYieldPeaksWhereTmcEq35PutsIt) {
+  AnimalClassParameters ewe = an_ewe_with_appetite();
+  ewe.milk_fat_percent = 7.0;
+  ewe.milk_protein_percent = 5.5;
+  ewe.gestation_length_days = 147.0;
+  const GrazingConditions ground = an_ordinary_paddock();
+
+  EXPECT_NEAR(kMilkYieldPeakDays, 14.29, 0.01) << "0.41/0.0287";
+
+  const int peak = day_of_peak(
+      [&](int day) { return daily_milk_yield_kg(ewe, a_lactating_ewe(day), ground); }, 120);
+
+  // The constant is 14.29, so the largest whole day is 14.
+  EXPECT_EQ(peak, static_cast<int>(kMilkYieldPeakDays))
+      << "TMC Eq. 35 peaks at 0.41/0.0287 days and nothing in this model configures it";
+}
+
+// **Verification.** The appetite peak is wherever its own parameter says, and
+// the assertion sweeps three values so it cannot pass by coincidence at 28.
+TEST(LactationTimingTest, AppetitePeaksOnItsOwnParameter) {
+  for (const double peak_days : {14.0, 28.0, 56.0}) {
+    AnimalClassParameters ewe = an_ewe_with_appetite();
+    ewe.appetite_lactation_peak_days = peak_days;
+
+    const int peak = day_of_peak(
+        [&](int day) {
+          AnimalState state = a_lactating_ewe(day);
+          // Hold the frame still: this is a statement about the lactation term,
+          // not about a ewe growing across four months.
+          state.age_days = 1500.0;
+          return potential_intake_kg_dm(ewe, state);
+        },
+        200);
+
+    EXPECT_EQ(peak, static_cast<int>(peak_days))
+        << "GrazPlan Eq. 8 peaks where M = 1, so appetite peaks on C_I8 itself";
+  }
+}
+
+// **Verification, and the clearest statement of why the old name was wrong.**
+// GrazPlan gives cattle C_I8 = 624. A cow's milk peaks near day 60, so read as
+// a lactation peak the number is absurd; read as the appetite time constant it
+// is simply the published cattle value. The milk constant is unmoved by it.
+TEST(LactationTimingTest, TheCattleConstantIsNotAMilkPeak) {
+  AnimalClassParameters cow = an_ewe_with_appetite();
+  cow.appetite_lactation_peak_days = 624.0;
+  cow.appetite_lactation_curve_exponent = 1.72;
+  cow.appetite_lactation_peak_no_young = 0.4162;
+  cow.appetite_lactation_peak_one_young = 0.4162;
+
+  EXPECT_GT(cow.appetite_lactation_peak_days, 365.0)
+      << "longer than a whole lactation, which only makes sense as an appetite constant";
+  EXPECT_LT(kMilkYieldPeakDays, 15.0) << "and the milk peak is unaffected by any of it";
+
+  // The appetite curve is still rising at a year, which is what a 624-day time
+  // constant means and what no milk curve does.
+  const AnimalState at_six_months = a_lactating_ewe(180);
+  const AnimalState at_a_year = a_lactating_ewe(365);
+  EXPECT_GT(potential_intake_kg_dm(cow, at_a_year), potential_intake_kg_dm(cow, at_six_months))
+      << "C_I8 = 624 is a time constant, not the day anything peaks in the field";
 }
 
 }  // namespace

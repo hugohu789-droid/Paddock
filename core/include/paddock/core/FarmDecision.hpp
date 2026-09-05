@@ -112,9 +112,44 @@ struct FarmOutlook {
   double cover_kg_dm_per_ha = 0.0;
   double minimum_cover_kg_dm_per_ha = 0.0;
 
-  /// Consecutive days the mob has not been able to eat what it needed. The
-  /// signal a drought shows up in before anything else does.
-  int days_short = 0;
+  /// Breeding stock: the head the destocking sale actually takes.
+  ///
+  /// **Separate from `head` because they are different populations and one of
+  /// them is not for sale.** `head` counts every cohort, lambs included;
+  /// `sell_oldest` takes the breeding cohorts. Testing a floor meant to protect
+  /// breeding ewes against a total that includes the lamb crop is how the floor
+  /// came to be unreachable: during lambing a flock of 417 ewes and 439 lambs
+  /// reads 856 head, so a floor of 50 stayed open while the ewes went to zero.
+  /// See E100.
+  ///
+  /// A caller that leaves this at zero gets no destocking, which is the safe
+  /// direction: a rule that cannot see what it would be selling should not sell.
+  int breeding_head = 0;
+
+  /// **Consecutive** days the farm has not been able to put enough feed in
+  /// front of the stock, up to and including today.
+  ///
+  /// **Feed supply, not appetite.** A ewe at peak lactation who cannot eat her
+  /// requirement off a full paddock is not a farm short of feed, and counting
+  /// her here sold four fifths of a flock off an irrigated farm (E103). The
+  /// distinction is `FeedingConstraint`'s. The signal a drought shows up in before anything
+  /// else does, and the one the destocking rule reads.
+  ///
+  /// **Zero on the first day the stock get what they asked for.** A run of
+  /// short days is a drought; the same number of short days scattered over a
+  /// year is a farm that had some hard weeks, and the two ask for different
+  /// decisions. This field used to be fed the year-to-date total, which meant
+  /// the twenty-first short day of the year fired the rule whenever it fell -
+  /// and, because that total cannot fall, kept it fired for the rest of the
+  /// run. See E98 and E99.
+  int consecutive_feed_supply_short_days = 0;
+
+  /// Short days so far this run, whether or not they were in a row.
+  ///
+  /// **Reporting only.** Nothing decides on this. It is here so that a rule
+  /// which wanted the seasonal total could have it without reaching for the
+  /// field above, which is how the two came to be confused in the first place.
+  int total_feed_supply_short_days = 0;
 
   double hectares = 0.0;
 
@@ -149,8 +184,15 @@ struct DecisionPolicy {
   /// is past what this model is describing.
   double destock_fraction = 0.20;
 
-  /// The farm keeps at least this many head, so a destocking cascade cannot
-  /// empty it one fifth at a time.
+  /// The farm keeps at least this many **breeding** head, so a destocking
+  /// cascade cannot empty it one fifth at a time.
+  ///
+  /// **Breeding, not total, and the distinction is the whole of the floor.**
+  /// What a destocking sale removes is breeding ewes; what a farm has left
+  /// afterwards that matters is breeding ewes, because they are next year's
+  /// lamb crop. Counting the lambs towards it would let a farm sell every ewe
+  /// it had and still be above the line on the strength of stock that leaves at
+  /// weaning. That is not a hypothetical: it is what this floor did until E101.
   int minimum_head = 50;
 
   /// Cash below which the farmer stops buying feed and starts selling stock,

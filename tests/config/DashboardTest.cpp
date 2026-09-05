@@ -191,7 +191,7 @@ TEST(DashboardTest, TheIndicatorExportCarriesTheTrustAndTheBand) {
   const FarmDashboard board = a_dashboard(true);
   const std::string csv = indicators_as_csv(board);
 
-  EXPECT_NE(csv.find("farm,year,panel,indicator,value,unit,standing,low,high,trust,note"),
+  EXPECT_NE(csv.find("farm,label,panel,indicator,value,unit,standing,low,high,trust,note"),
             std::string::npos);
   EXPECT_NE(csv.find("placeholder"), std::string::npos);
   EXPECT_NE(csv.find("fitted"), std::string::npos);
@@ -295,6 +295,19 @@ TEST(DashboardTest, YearsCompareIndicatorByIndicator) {
   const std::string csv = compare_dashboards_as_csv(boards);
   EXPECT_EQ(static_cast<int>(std::count(csv.begin(), csv.end(), '\n')),
             boards.front().indicators_total() + boards.back().indicators_total() + 1);
+
+  // **The second column is `label`, not `year`** (verify.md, E119). It carries
+  // `dashboard.label`, which is a year here and a scenario name when two
+  // bundles are compared - so a heading that said year put
+  // `demo_irrigation_off` under it in the flagship export, beside a `farm`
+  // column saying the same thing. A customer opening that CSV should not have
+  // to work out which column means what.
+  EXPECT_EQ(csv.find("farm,label,panel,indicator,value,unit,standing,trust"), 0U);
+  EXPECT_EQ(csv.find("farm,year"), std::string::npos);
+
+  // And both arms are in it, each under its own label.
+  EXPECT_NE(csv.find(",2015,"), std::string::npos);
+  EXPECT_NE(csv.find(",2024,"), std::string::npos);
 }
 
 }  // namespace

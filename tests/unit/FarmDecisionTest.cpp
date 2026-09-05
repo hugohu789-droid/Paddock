@@ -11,6 +11,10 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include <paddock/core/FarmAccount.hpp>
 #include <paddock/core/FarmDecision.hpp>
@@ -45,10 +49,13 @@ FarmOutlook comfortable_farm() {
   FarmOutlook outlook;
   outlook.today = Date{2024, 1, 15};
   outlook.head = 417;
+  // No lambs on the place in the helper, so the two agree. The tests that care
+  // about the difference set them apart deliberately.
+  outlook.breeding_head = 417;
   outlook.liveweight_kg = 55.0;
   outlook.cover_kg_dm_per_ha = 2400.0;
   outlook.minimum_cover_kg_dm_per_ha = 1600.0;
-  outlook.days_short = 0;
+  outlook.consecutive_feed_supply_short_days = 0;
   outlook.hectares = 80.0;
   outlook.balance_dollars = 40'000.0;
   outlook.daily_operating_cost_dollars = 203.0;
@@ -81,7 +88,7 @@ TEST(FarmDecisionTest, ThreeWeeksShortOfFeedSellsStock) {
   FarmManager manager = a_manager();
 
   FarmOutlook drought = comfortable_farm();
-  drought.days_short = 21;
+  drought.consecutive_feed_supply_short_days = 21;
   drought.cover_kg_dm_per_ha = 1200.0;
 
   const std::vector<Proposal> done = manager.decide(drought, account);
@@ -146,7 +153,10 @@ TEST(FarmDecisionTest, NoDecisionCanTakeTheFarmBelowZero) {
   FarmOutlook nearly_broke = comfortable_farm();
   nearly_broke.cover_kg_dm_per_ha = 1000.0;
   nearly_broke.balance_dollars = 5.0;
-  nearly_broke.head = 40;  // below minimum_head, so it cannot destock its way out
+  // Below minimum_head, so it cannot destock its way out. Both counts, because
+  // it is the breeding one the floor is written against.
+  nearly_broke.head = 40;
+  nearly_broke.breeding_head = 40;
 
   const std::vector<Proposal> refused = manager.decide(nearly_broke, account);
   EXPECT_TRUE(refused.empty()) << "nothing it could afford, so nothing it did";
@@ -161,8 +171,9 @@ TEST(FarmDecisionTest, DestockingStopsAtTheFloor) {
   policy.minimum_head = 50;
 
   FarmOutlook drought = comfortable_farm();
-  drought.days_short = 60;
+  drought.consecutive_feed_supply_short_days = 60;
   drought.head = 55;
+  drought.breeding_head = 55;
 
   FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
   FarmManager manager = a_manager(policy);
@@ -174,6 +185,7 @@ TEST(FarmDecisionTest, DestockingStopsAtTheFloor) {
   EXPECT_LE(sold->head, 5) << "it may sell down to the floor and no further";
 
   drought.head = 50;
+  drought.breeding_head = 50;
   const std::vector<Proposal> at_floor = manager.decide(drought, account);
   EXPECT_FALSE(std::any_of(at_floor.begin(), at_floor.end(), [](const Proposal& p) {
     return p.kind == ActionKind::Destock;
@@ -204,4 +216,293 @@ TEST(FarmDecisionTest, ARuleCanBeAskedInIsolation) {
 }
 
 }  // namespace
+
+// ---------------------------------------------------------------------------
+// Consecutive, not cumulative.
+//
+// **A farm that goes short for three weeks running is in a drought; one that
+// went short twenty-one times since July has had a hard year and may be
+// standing in grass today.** The rule has always said it meant the first of
+// those and was being handed the second, which fired it on the twenty-first
+// short day of the run and - because a year-to-date total cannot fall - kept
+// it fired every day afterwards. E98.
+
+namespace {
+
+/// Runs a sequence of short and good days past the rule and reports when it
+/// asked to sell.
+///
+/// `pattern` is one character a day: 's' short, '.' fed. The counter is kept
+/// the way the run loop keeps it, so this exercises the rule against the state
+/// machine rather than against a number somebody set.
+std::vector<int> destocking_days(const std::string& pattern, const DecisionPolicy& policy = {}) {
+  FarmManager manager = a_manager(policy);
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+
+  std::vector<int> sold_on;
+  int consecutive = 0;
+  int total = 0;
+  for (std::size_t day = 0; day < pattern.size(); ++day) {
+    if (pattern[day] == 's') {
+      ++total;
+      ++consecutive;
+    } else {
+      consecutive = 0;
+    }
+
+    FarmOutlook outlook = comfortable_farm();
+    outlook.consecutive_feed_supply_short_days = consecutive;
+    outlook.total_feed_supply_short_days = total;
+    outlook.breeding_head = outlook.head;
+
+    for (const Proposal& done : manager.decide(outlook, account)) {
+      if (done.kind == ActionKind::Destock) {
+        sold_on.push_back(static_cast<int>(day));
+      }
+    }
+  }
+  return sold_on;
+}
+
+}  // namespace
+
+// Twenty short days in a row is not yet the farmer's threshold.
+TEST(FarmDecisionTest, TwentyConsecutiveShortDaysDoNotSell) {
+  EXPECT_TRUE(destocking_days(std::string(20, 's')).empty());
+}
+
+// Twenty-one is.
+TEST(FarmDecisionTest, TwentyOneConsecutiveShortDaysDoSell) {
+  const std::vector<int> sold = destocking_days(std::string(21, 's'));
+  ASSERT_FALSE(sold.empty()) << "three weeks with the stock short and nothing was sold";
+  EXPECT_EQ(sold.front(), 20) << "sold on a different day than the twenty-first";
+}
+
+// **One good day resets it**, which is the whole of the fix: ten short, a day
+// of feed, eleven short is twenty-one short days and no drought.
+TEST(FarmDecisionTest, AGoodDayInTheMiddleResetsTheCount) {
+  const std::string pattern = std::string(10, 's') + "." + std::string(11, 's');
+  EXPECT_TRUE(destocking_days(pattern).empty())
+      << "twenty-one short days with a fed day among them was read as three weeks running";
+}
+
+// Scattered short days totalling well past the threshold never fire it.
+TEST(FarmDecisionTest, ScatteredShortDaysNeverSellHoweverManyThereAre) {
+  // Two short, one fed, over a hundred days: about seventy short days and never
+  // more than two in a row.
+  std::string pattern;
+  for (int week = 0; week < 35; ++week) {
+    pattern += "ss.";
+  }
+  const int short_days = static_cast<int>(std::count(pattern.begin(), pattern.end(), 's'));
+  ASSERT_GT(short_days, 21) << "the pattern does not exceed the threshold in total";
+
+  EXPECT_TRUE(destocking_days(pattern).empty())
+      << short_days << " short days scattered over a season sold stock";
+}
+
+// **And the sale does not repeat every day afterwards.** Once the run is
+// broken the count is zero, so a farm that got rain the day after selling is
+// not asked to sell again on the strength of a total it can never work off.
+TEST(FarmDecisionTest, TheSaleDoesNotRepeatOnceTheRunIsBroken) {
+  const std::string pattern = std::string(21, 's') + std::string(30, '.');
+  const std::vector<int> sold = destocking_days(pattern);
+
+  ASSERT_EQ(sold.size(), 1U) << "sold " << sold.size()
+                             << " times: the trigger stayed on after the drought broke";
+  EXPECT_EQ(sold.front(), 20);
+}
+
+// A drought that goes on does keep selling, which is right - that is a farm
+// still carrying more stock than it can feed - and it is a different statement
+// from selling because of a total that cannot fall.
+TEST(FarmDecisionTest, ADroughtThatContinuesKeepsSelling) {
+  const std::vector<int> sold = destocking_days(std::string(25, 's'));
+  EXPECT_GT(sold.size(), 1U);
+  EXPECT_EQ(sold.front(), 20);
+}
+
+// The two counts are separate fields and the rule reads only one of them. A
+// year-to-date total past the threshold, with nobody short today, sells
+// nothing.
+TEST(FarmDecisionTest, TheCumulativeTotalDoesNotDecideAnything) {
+  FarmManager manager = a_manager();
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+
+  FarmOutlook outlook = comfortable_farm();
+  outlook.consecutive_feed_supply_short_days = 0;
+  outlook.total_feed_supply_short_days = 300;
+
+  for (const Proposal& done : manager.decide(outlook, account)) {
+    EXPECT_NE(done.kind, ActionKind::Destock)
+        << "a season's worth of short days sold stock on a day the farm was fed";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The floor protects breeding ewes, and counts them.
+//
+// **A destocking sale takes breeding stock; the lamb crop leaves at weaning
+// whatever happens.** So the floor that stops the sale has to be measured
+// against breeding head, and until E101 it was measured against the total -
+// which through lambing is roughly twice as large, so a flock of 417 ewes and
+// 439 lambs read 856 against a floor of 50 and the ewes went to nothing. E100.
+
+namespace {
+
+/// A farm three weeks short of feed, with the two populations set apart.
+FarmOutlook drought_with(int breeding, int lambs) {
+  FarmOutlook outlook = comfortable_farm();
+  outlook.consecutive_feed_supply_short_days = 60;
+  outlook.breeding_head = breeding;
+  outlook.head = breeding + lambs;
+  return outlook;
+}
+
+/// The destocking proposal, or nothing.
+std::optional<Proposal> destocking_for(const FarmOutlook& outlook,
+                                       const DecisionPolicy& policy = {}) {
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+  FarmManager manager = a_manager(policy);
+  for (const Proposal& done : manager.decide(outlook, account)) {
+    if (done.kind == ActionKind::Destock) {
+      return done;
+    }
+  }
+  return std::nullopt;
+}
+
+}  // namespace
+
+// **The case the defect was made of.** A big lamb crop keeps total head high
+// while the ewes sit on the floor; nothing may be sold.
+TEST(FarmDecisionTest, ALargeLambCropDoesNotOpenTheFloor) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const FarmOutlook lambing = drought_with(50, 439);
+  ASSERT_GT(lambing.head, 400) << "the point of this case is a high total head";
+
+  EXPECT_FALSE(destocking_for(lambing, policy).has_value())
+      << "the lamb crop was counted towards a floor written for breeding ewes";
+}
+
+// The same thing said the other way: a total far above the floor is not a
+// licence to sell when the ewes are at it.
+TEST(FarmDecisionTest, ATotalWellAboveTheFloorDoesNotAllowASaleAtIt) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+  EXPECT_FALSE(destocking_for(drought_with(50, 1'000), policy).has_value());
+}
+
+// Ewes above the floor: the sale goes ahead.
+TEST(FarmDecisionTest, BreedingEwesAboveTheFloorAllowASale) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const std::optional<Proposal> sold = destocking_for(drought_with(400, 0), policy);
+  ASSERT_TRUE(sold.has_value());
+  // A fifth of the breeding flock, which is what the policy says - and a fifth
+  // of the ewes rather than a fifth of the ewes and their lambs together.
+  EXPECT_EQ(sold.value_or(Proposal{}).head, 80);
+}
+
+// **Clamped to the floor, not over it and not refused.** A farm two ewes above
+// the line sells the two.
+TEST(FarmDecisionTest, ASaleThatWouldCrossTheFloorIsClampedToIt) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const std::optional<Proposal> sold = destocking_for(drought_with(52, 300), policy);
+  ASSERT_TRUE(sold.has_value()) << "two ewes above the floor and it refused to sell either";
+  EXPECT_EQ(sold.value_or(Proposal{}).head, 2)
+      << "a fifth of 52 is 10, and only 2 of them are above the floor";
+}
+
+// **A shortage that goes on cannot grind the ewes below the floor.** Day after
+// day of selling a fifth, and it stops on the line rather than through it.
+TEST(FarmDecisionTest, RepeatedShortageCannotTakeTheEwesBelowTheFloor) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  int breeding = 417;
+  const int lambs = 439;
+  for (int day = 0; day < 60; ++day) {
+    const std::optional<Proposal> sold = destocking_for(drought_with(breeding, lambs), policy);
+    if (!sold.has_value()) {
+      break;
+    }
+    breeding -= sold.value_or(Proposal{}).head;
+    ASSERT_GE(breeding, policy.minimum_head)
+        << "sold through the floor on day " << day << ", leaving " << breeding;
+  }
+  EXPECT_EQ(breeding, policy.minimum_head) << "it should come to rest exactly on the line";
+}
+
+// A farm with no lambs on it behaves as it always did, which is the case the
+// old code happened to get right.
+TEST(FarmDecisionTest, AFlockWithNoLambsStillDestocksNormally) {
+  DecisionPolicy policy;
+  policy.minimum_head = 50;
+
+  const std::optional<Proposal> sold = destocking_for(drought_with(100, 0), policy);
+  ASSERT_TRUE(sold.has_value());
+  EXPECT_EQ(sold.value_or(Proposal{}).head, 20);
+
+  EXPECT_FALSE(destocking_for(drought_with(50, 0), policy).has_value());
+  EXPECT_FALSE(destocking_for(drought_with(20, 0), policy).has_value());
+}
+
+// **Total head is still total head.** The feed rules read it and it is what a
+// report says the farm carries; only the sale reads the breeding count.
+TEST(FarmDecisionTest, TheTotalHeadIsUnchangedAndStillDrivesTheFeedRules) {
+  FarmOutlook lambing = drought_with(400, 439);
+  lambing.cover_kg_dm_per_ha = 900.0;
+  lambing.minimum_cover_kg_dm_per_ha = 1'600.0;
+
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+  FarmManager manager = a_manager();
+
+  bool fed = false;
+  for (const Proposal& done : manager.decide(lambing, account)) {
+    if (done.kind == ActionKind::BuyFeed) {
+      fed = true;
+      EXPECT_EQ(done.head, lambing.head)
+          << "feed was bought for the breeding flock rather than for the stock on the place";
+    }
+  }
+  EXPECT_TRUE(fed) << "below the cover floor and nothing was bought";
+  EXPECT_EQ(lambing.head, 839);
+}
+
+// **Appetite alone must never sell stock.** A farm whose ewes cannot eat their
+// requirement off a full paddock has an animal problem; selling a fifth of them
+// does not put feed into the rest. The rule reads feed supply and nothing else,
+// and the counter it reads is fed only by feed-supply days.
+TEST(FarmDecisionTest, AppetiteLimitationAloneNeverSellsStock) {
+  FarmManager manager = a_manager();
+  FarmAccount account(40'000.0, modest_costs(), canterbury_prices(), 80.0);
+
+  // Sixty days on the trot where the ewes could not eat enough, and not one of
+  // them a day the farm was short of feed - so the counter the rule reads stays
+  // at zero however long it goes on.
+  FarmOutlook outlook = comfortable_farm();
+  outlook.consecutive_feed_supply_short_days = 0;
+  outlook.total_feed_supply_short_days = 0;
+
+  for (int day = 0; day < 60; ++day) {
+    for (const Proposal& done : manager.decide(outlook, account)) {
+      EXPECT_NE(done.kind, ActionKind::Destock)
+          << "sold stock on day " << day << " because the ewes were in milk";
+    }
+  }
+}
+
+// And a real three-week feed shortage still sells, so the fix has not simply
+// switched destocking off.
+TEST(FarmDecisionTest, ARealFeedShortageStillSells) {
+  const std::vector<int> sold = destocking_days(std::string(21, 's'));
+  EXPECT_FALSE(sold.empty()) << "three weeks with no feed and nothing was sold";
+}
+
 }  // namespace paddock::core
