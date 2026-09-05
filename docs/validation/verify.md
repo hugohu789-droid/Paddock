@@ -539,6 +539,203 @@ Work that compares scenarios is unaffected. Work that answers "how many ewes
 will this farm carry" is closer than it was and still should not be published
 from this model until item 12 closes.
 
+## Biological acceptance and validity envelope
+
+Audit, not a change: nothing below alters a parameter, an equation or a
+trajectory. It answers one question - **where is this model credible enough to
+interpret, and where has it left the evidence behind** - and it answers it in
+the vocabulary the repository already has rather than a new one.
+
+### The vocabulary, and the one thing added to it
+
+`Provenance` (Direct, Derived, Verify, Fitted, Placeholder) marks a *number*.
+`Confidence` (Benchmarked, Calibrated, Conserved, Exploratory, DoNotQuote) is
+what a demo page renders it as, through `confidence_of`. Both already exist and
+neither is replaced here.
+
+Two of the classes this audit was asked for have no separate home and are folded
+rather than invented. **PLAUSIBLE** has no equivalent: a figure that is stated or
+derived with nothing published to check it against is already `Conserved`, and a
+sixth level between Conserved and Exploratory would be a competing framework for
+no gain. **OUTSIDE VALIDATED DOMAIN is not a level at all** - it is a *predicate
+on a run*, and when it holds the affected indicators take an existing level,
+`DoNotQuote`. That distinction matters: a level describes a number's evidence
+for all time, and this describes a particular run having wandered somewhere its
+evidence does not reach.
+
+### Is there a sourced physiological boundary? Yes, and it was already here
+
+**No sourced minimum ewe liveweight exists in this repository, and none is
+invented here.** `body_condition_score` is declared in `Components.hpp` and read
+by nothing. But a boundary does not require a minimum weight, and the one that
+does exist is in a source already cited and hashed - the GrazPlan technical
+paper, `grazplan_animal`:
+
+> SRW "is defined in SCA (1990) as the base weight ... when skeletal development
+> is complete and **condition score is in the middle of the range**"
+>
+> "relative condition, BC, is defined as the ratio of current base weight, W, to
+> normal weight ... a gain or loss of **1 unit of condition score is equivalent
+> to a change of 0.15N** for the 0-5 scale (sheep and beef cattle)"
+
+That is a complete mapping and every part of it is the source's: the scale, its
+endpoints, its midpoint and its step. `BC = 1.0` is condition score 2.5, and one
+score is 0.15 of normal weight, so
+
+    condition score = 2.5 + (BC - 1) / 0.15
+
+**Condition score 0 is the bottom of the published scale and falls at BC =
+0.625.** Below it the animal is not thin, it is off a scale that does not go any
+lower - there is no published state to compare it with, in this source or any
+other this project holds. Nothing was chosen to make that come out anywhere in
+particular; it is arithmetic on two sentences.
+
+Measured against the shipped ewe's own `normal_weight_kg`, which blends toward
+liveweight as the animal falls below the Brody ceiling:
+
+| Liveweight | Normal weight | BC | Condition score | Reading |
+|---|---|---|---|---|
+| 66.0 kg | 66.0 | 1.000 | 2.50 | the reference animal |
+| 55.0 kg | 59.4 | 0.926 | 2.01 | target |
+| 53.7 kg | 58.6 | 0.916 | 1.94 | thin, on the scale - **the flagship's trough** |
+| 49.5 kg | 56.1 | 0.883 | 1.72 | thin, on the scale |
+| 48.2 kg | 55.3 | 0.871 | 1.64 | thin, on the scale |
+| **26.4 kg** | 42.2 | **0.625** | **0.00** | **the bottom of the scale** |
+| 24.5 kg | 41.1 | 0.596 | -0.19 | off the scale |
+| 16.8 kg | 36.5 | 0.461 | -1.10 | off the scale |
+
+**The envelope boundary for the shipped ewe is 26.4 kg liveweight**, and it is a
+consequence of her parameters rather than a number written down anywhere. A
+different SRW moves it; the rule - `BC < 0.625` - does not.
+
+### The Biological Acceptance Matrix
+
+Status uses the repository's own `Confidence` names. "Headline" means safe to
+put on a customer-facing page; "exploratory" means safe only for comparing two
+runs of this model with each other.
+
+| Quantity | Software verification | External benchmark | Applicability | Known limitation | Headline | Exploratory only | Invalid when |
+|---|---|---|---|---|---|---|---|
+| **Pasture: annual production** | Budget closes to 1e-9; golden regression pinned | Winchmore 25-year trial; Canterbury dryland decade test | Canterbury, ryegrass-clover | Fitted to the same trials it is compared against | **Yes** (Calibrated) | - | Weather outside the replayed range; sward other than ryegrass-clover |
+| **Pasture: seasonal allocation** | Same budget | DairyNZ/AgResearch seasonal shape | Canterbury | **Spring/summer shape error is open (E84)**; no phenology | No | Yes (Exploratory) | Any claim about a particular month rather than a year |
+| **Pasture: irrigation response ratio** | Two arms differ in irrigation alone; input hashes verified | **50 Winchmore treatment-years, acceptance 1.25-2.40 (E90)**; model 1.791, 48th percentile | Canterbury border-dyke and spray | Ratio only; says nothing about which arm is right absolutely | **Yes** (Benchmarked) | - | Comparing arms that differ in anything but irrigation |
+| **Pasture: response per mm** | Conserved water budget | Martin et al. 12.3 dryland / ~20 irrigated kg DM/ha/mm | Canterbury | Fitted growth underneath it | **Yes** (Calibrated) | - | Outside the applied-depth range of the trial |
+| **Pasture: minimum cover** | Software-verified series | None | - | `Verify`; sensitive to the intake ceiling (E108) | No | Yes (Exploratory) | Quoting it as a management floor |
+| **Water: rainfall** | Replayed input, hashed | Is the observation | Lincoln 2023-24 | None as an input | **Yes** (Conserved) | - | Presenting a replayed year as a forecast |
+| **Water: irrigation applied** | Budget closes | - | - | Schedule is a policy, not a measurement | **Yes** (Conserved) | - | Reading the schedule as what a farm does |
+| **Water: ET** | Budget closes | FAO-56 | Temperate pasture | Reference ET, single crop factor | **Yes** (Conserved) | - | Non-pasture cover |
+| **Water: drainage** | Budget closes to 1e-9 | - | - | Bucket model, no lateral flow | **Yes** (Conserved) | - | Sloping ground with run-on |
+| **Water: soil-water balance** | **Closes to 1e-9, every run** | - | - | Software property, not evidence | **Yes** (Conserved) | - | Never - it is bookkeeping |
+| **Water: growth-limited days** | Derived from the balance | - | - | Threshold is a model definition | **Yes** (Conserved) | - | Comparing with another model's definition |
+| **Livestock: physiological intake capacity** | `potential_intake_kg_dm` tested; ceiling live (E107) | C_I1 0.04 and C_I8 28 direct-sourced; **magnitude unconfirmed for a NZ ewe (E95, E113)** | GrazPlan sheep, Merino-adjusted wool group | Model peak 2.91/3.26 vs B+LNZ 2.5/3.0 kg DM | No | Yes (Exploratory) | Quoting an absolute intake |
+| **Livestock: feed-supply-short days** | Counter tested; separate from capacity (E105) | None | - | `Verify`; moves with the intake ceiling | No | Yes (Exploratory) | Quoting as a real farm's shortage count |
+| **Livestock: intake-capacity-limited days** | Counter tested | Mechanism attested by B+LNZ FS94 for NZ ewes | NZ ewes, direction only | **Magnitude turns on E95** | No | Yes (Exploratory) | Quoting the count rather than the direction |
+| **Livestock: pasture eaten** | Budget closes | Stock-unit band | - | `Verify` under E108 | No | Yes (Exploratory) | - |
+| **Feed: requested / purchased / offered / consumed** | **Four quantities, invariants tested (E114)**; purchased <= market, consumed <= offered | Price only | - | The accounting is sound; the market quantity is not evidence | Identity: **Yes** (Conserved) | Quantities: Yes | Market quantity presented as a NZ fact |
+| **Livestock: ewe liveweight trajectory** | Deterministic, replays exactly | SRW 66 kg direct; **no minimum weight in any source** | NZ dual-purpose | Off-scale below BC 0.625 | No | Yes, **while BC >= 0.625** | **BC < 0.625 - outside validated domain** |
+| **Livestock: lamb weaning weight** | Deterministic | None | - | `Verify`; downstream of the ewe | No | Yes (Exploratory) | Ewe off-scale at any point in the run |
+| **Livestock: destocking** | Rule tested; consecutive-shortage semantics fixed (E99, E103) | None | - | Floors at `minimum_head` and cannot prevent collapse | No | Yes (Exploratory) | Ewe off-scale - the rule is then failing to do a job it was never given |
+| **Livestock: closing breeding head** | Cohort semantics fixed (E101) | None | - | `Verify` | No | Yes (Exploratory) | Ewe off-scale |
+| **Economics: feed price** | Read from economics file, provenance-marked | **B+LNZ Fact Sheet 260, $0.541/kg DM** | NZ baleage | One year's figure, no volatility | **Yes** (Benchmarked as a price) | - | Treating it as a forward price |
+| **Economics: finite market availability** | Mechanism tested | **None - no source states a tonnage** | - | **Placeholder** (open item 20) | **No** | Sensitivity only | Presented as a NZ market fact rather than an assumption |
+| **Economics: profit / balance** | Ledger closes | Costs from B+LNZ Class 6 | Canterbury Class 6 | Downstream of every exploratory animal figure | No | Yes (Exploratory) | Ewe off-scale, or market quantity quoted as fact |
+| **Economics: stocking optimum** | - | **None** | - | **No starvation mortality, no liveweight floor** | **No** | **No - must not be reported** | Always, while any candidate rung is off-scale |
+
+### Demo-safe claims
+
+These carry external evidence and do not depend on the animal model:
+
+1. Irrigation lifts pasture production on this Canterbury farm by **1.79x**,
+   inside the 1.25-2.40 range measured across 50 Winchmore treatment-years, at
+   the 48th percentile of them.
+2. Pasture grown moves **6,613 to 11,846 kg DM/ha**, calibrated against
+   Canterbury dryland and irrigated trials.
+3. **14.0 kg DM/ha per mm** applied, against Martin et al.'s ~20 ceiling.
+4. Growth-limited days fall **233 to 15**; drainage and irrigation applied are
+   read off budgets that close to 1e-9.
+5. The two scenarios differ in irrigation and nothing else, and the comparison
+   page proves it from input hashes.
+6. Same bundle, same seed, bit-identical replay.
+
+### Exploratory-only claims
+
+Safe for comparing two runs of this model; **not** safe as farm predictions:
+pasture eaten and utilisation, minimum cover, feed-supply-short and
+intake-capacity-limited day counts, ewe liveweight, lamb weaning weight,
+closing stock, destocking counts, any balance or margin, and every supplement
+quantity.
+
+### Conditions that invalidate interpretation
+
+1. **`BC < 0.625` at any point in the run** - condition score below the bottom
+   of the published scale. Every animal and economic output for that run becomes
+   `DoNotQuote`. For the shipped ewe this is **26.4 kg liveweight**.
+2. **A stocking comparison in which any candidate rung meets condition 1.** The
+   optimum must not be reported at all, not merely annotated - a turning point
+   whose descending side is off-scale is an artefact of an unmodelled failure.
+3. **A finite market quantity presented as anything but a sensitivity
+   assumption.** No source states one.
+4. Any monthly or seasonal pasture claim, while E84 is open.
+5. Any absolute animal-production magnitude, while E95 is open.
+6. Weather, sward or region outside the replayed year and the Canterbury
+   ryegrass-clover calibration.
+
+### The minimum warning needed before an external demonstration
+
+The trajectory does not change and the run does not stop; only the *status* of
+what it produced does. Four things, all reusing what exists:
+
+1. A run-level predicate - minimum relative condition over the run - recorded in
+   `RunSummary` beside the counters already there.
+2. When it is below 0.625, the animal and economic indicators take
+   `Provenance::Placeholder`, which `confidence_of` already renders as
+   **`DoNotQuote`**. No new enum, no second confidence system.
+3. One sentence on the page naming the reason: the ewe fell below condition
+   score 0 on the SCA (1990) scale, this model has no starvation mortality, and
+   what happens past that point is not a prediction.
+4. Any run whose market quantity is set says so, in the words "sensitivity
+   assumption, not a New Zealand market figure".
+
+**None of this is implemented in this task**, which changes documentation only.
+
+### The current scenarios, measured against the envelope
+
+| Scenario | Lowest ewe liveweight | Condition score | Verdict |
+|---|---|---|---|
+| **Flagship, irrigation off** (417 head, unlimited market) | 53.7 kg | 1.94 | **Inside** |
+| **Flagship, irrigation on** (417 head) | 53.7 kg | 1.94 | **Inside** |
+| Ladder A, unlimited, every rung to 1,300 head | 53.7-54.5 kg | >= 1.94 | Inside biologically; rests on an unlimited market |
+| Ladder B, 20 t, 417-950 head | 53.7-48.2 kg | 1.94-1.64 | Inside |
+| Ladder B, 1,100 and 1,300 head | 24.5, 19.7 kg | -0.19, -0.73 | **Outside** |
+| Ladder C, 5 t, 417-800 head | 53.7 kg | 1.94 | Inside |
+| Ladder C, 950 head | 28.0 kg | 0.16 | Inside, barely - the last rung on the scale |
+| Ladder C, 1,100 and 1,300 head | 24.4, 16.8 kg | -0.20, -1.10 | **Outside** |
+| Ladder D, no market, 417-950 head | 53.7-49.5 kg | 1.94-1.72 | Inside |
+| Ladder D, 1,100 and 1,300 head | 24.5, 18.3 kg | -0.19, -0.90 | **Outside** |
+
+**The flagship demo is entirely inside the envelope**, with a trough two thirds
+of a condition score above the target and four and a half above the boundary.
+
+**One result survives the audit and one does not.** E114 asked whether high
+stocking now meets a real constraint, and reported three turning points. Two of
+them lean on rungs that are off the scale: ladder B peaks at 950 and falls only
+at 1,100, which is outside. **Ladder D turns entirely inside the envelope** -
+$98,501 at 800 head with the ewe at 53.7 kg, falling to $93,414 at 950 with her
+at 49.5 kg, both comfortably on the scale - and it needs no placeholder tonnage
+at all, because its market holds nothing. So the acceptance question is answered
+**within** the validity envelope, by the one case that assumes least.
+
+### Does any current report overstate this?
+
+No page does. The flagship comparison carries no animal production at all and
+lists it under "Not on this page"; the dashboard marks Eaten, Utilisation, Days
+short of feed, Closing stock and Lamb at weaning as `Verify`, which renders as
+*exploratory*; and Bought feed and Sold wool are already `Placeholder`.
+
+**One document did**: E114's ladder tables printed a balance for every rung
+without saying which rungs were off the scale. Corrected in that entry rather
+than left for a reader to notice.
+
 ## Open items
 
 These are gaps in *evidence*. What is scheduled to be *built*, and in what
@@ -692,7 +889,8 @@ they are parameters.
 | E111 | **Twenty of a species' twenty-five sourced values were parsed, validated, and then counted by nothing.** Open item 18 closed. **The audit**: `SpeciesDefinition` carries 25 `SourcedValue` fields in three groups - `[energy]` 5, `[intake]` 15, `[reproduction]` 5 - and `sourced_values()` returned the first five. The omission was **wider than the item alleged**: `[reproduction]` was missing as well, which matters for the ewe, whose milk fat and protein are `verify` and were being counted by no aggregate. **Callers**: `weakest_status()` has exactly one production consumer, `SetupPanel::caveat()`, which warns that a run's absolute figures are not quotable when the weakest status is neither direct nor derived; `fully_evidenced()` has **no production consumer at all**, only a test; and no demo, summary or dashboard path reads either - the customer page's confidence labels come from per-indicator provenance assigned in `FarmDashboard`, which is a different mechanism and was not touched. That is why this went unnoticed: the aggregate was nearly unused. **The trap in the obvious fix**: `SourcedValue::status` defaults to `Placeholder`, and both optional tables leave their fields default-constructed, so counting all 25 would have taken the dry cow from `verify` to `placeholder` on five reproduction numbers **nobody ever asserted**. An undeclared table is no claim, not a weak one. So the parser now records `declares_intake`, `declares_reproduction` and `declares_suckling_weeks` from the file's own structure - never inferred from values, because a declared `[intake]` with an appetite scalar of zero is still a declaration and inferring from the number is precisely how E93 hid for months. **Measured, before and after**: cattle 5 to 20 values, weakest `verify` **unchanged**; ewe 5 to 24, weakest `placeholder` **unchanged**; lamb 5 to 25, weakest `placeholder` **unchanged**. **Was any claim overstated? No.** All three shipped species already answered `fully_evidenced() == false` on their `[energy]` table alone - the ewe and lamb on a placeholder grazing coefficient, the cow on a `verify` reference weight - so no page ever showed one of them as published throughout. **The defect was real and its exposure was nil**, and that is worth saying plainly rather than dressing a near miss as a save. What changed is that it can no longer happen: a placeholder appetite coefficient now reaches the aggregate, which it would not have before E107 enabled one. **No second mechanism was created**, the Direct-Derived-Verify-Fitted-Placeholder ordering is untouched, and seven tests hold both edges - everything declared counts, nothing undeclared does. No parameter value, equation, source id or scenario output moved; the flagship is identical at 1.79, 6,613 and 11,846 kg DM/ha, 44 and 34 short days, 14 and 13 capacity-limited days | M5 |
 | E112 | **The appetite peak was never four weeks early, and the correction comes from the model's own technical paper.** Search-only task; no parameter or equation changed. **E109 is wrong on this point and this entry supersedes it.** E109 read Beef + Lamb Fact Sheet 94's "builds to a peak at eight weeks" against the shipped 28 days and called the appetite peak four weeks early. It rested on a secondary source, and two primary readings now overturn it. **First, what CI8 is.** The GrazPlan technical paper - the file already hashed in `sources.toml` as `grazplan_animal`, read again at 47 pages - names its parameters in a table: **CI8, "Lactation: peak intake time", sheep 28 d, cattle 624 d**, and separately **CL2, "Lactation curve: Peak time", sheep 22 d**. Two constants, two quantities, and the text says Eq. 8 is Wood's (1969) milk curve *"but lagging behind it (Davies, 1963; Corbett, 1968; Monteiro, 1972)"*. **So 28 days is a directly sourced appetite peak with a lag already in it**, not a milk number pressed into intake duty - and this model's effective lag, OVERSEER's day 14.29 to GrazPlan's day 28, is **fourteen days, already more than double GrazPlan's own six**. Pairing the two source families widens the lag rather than flattening it. **Second, the New Zealand measurement.** Morris, McCutcheon, Parker and Blair (1994), *J. Agric. Sci.* 122(3):471, Massey: 36 four-year-old Border Leicester x Romney and its Poll Dorset and Suffolk crosses, ryegrass pasture, continuously stocked at three sward heights, herbage organic matter intake by **intraruminal chromium controlled-release capsule** in weeks 3, 4, 7 and 8. *"A maximum OMI of 2.6 and 3.0 kg OM/ewe per day was reached in **week 4** of lactation."* Week 4 is day 28. **The study measured week 8 and found intake lower there**, which is what makes it decisive rather than merely different. **What "week 8" turned out to be**: a summary statement in extension material - no method, no variance, no citation, one sentence - and the underlying AgResearch report of 2007 remains unobtainable. It is not an observed maximum and not a fitted peak, so it was never a candidate for a biological constant. **Nothing was merged**: Vulich's Irish weeks 6 to 7 still disagree with Morris's week 4 and are left disagreeing rather than averaged; Morris's organic matter is not converted to Beef + Lamb's dry matter; and Geenty and Sykes (1986), New Zealand and at the right 60-65 kg, reports six-week means with no weekly timing and so answers a different question. **Conclusion C**: the 28-day value remains defensible, and is better supported now than when it was merely inherited. **Still exploratory, and untouched here**: the lactation-peak magnitudes and the peak-intake magnitude, where the model's 2.91 and 3.26 kg DM sit above Beef + Lamb's 2.5 and 3.0. Animal-production indicators stay `Verify`. **CORRECTED by E113 on one point**: this entry called the shipped lactation peaks "Merino-adjusted" on the strength of the paper's footnote 3. The arithmetic is right and the attribution was not - GrazPlan's own parameter file files **Romney** under the same wool-breeds group, so 0.524 is the number the model gives a Romney, not a Merino value borrowed for one | M5 |
 | E113 | **The shipped lactation peak is the number GrazPlan gives a Romney, and no New Zealand source can yet confirm or refute its magnitude.** Search-only; no parameter or equation changed. **The breed question is settled, against my own last entry.** APSIM's `ruminant.prm`, read in full, is a three-group hierarchy: **wool breeds** `c-imx-` 0.524 / 0.524 / 0.707 / 0.891, containing merinos *and* corriedales - and **Romney sits in the corriedales**; **crossbreds** 0.59, containing only Merino crosses; **meat breeds** 0.655, containing Dorset, Suffolk, Border Leicester and Texel. So E112's "Merino-adjusted" was the right arithmetic and the wrong attribution, and the repository's original note - "the group GrazPlan files the Romney under" - was right all along. **E77's lever stays withdrawn for a second, better reason**: the meat column is not a Romney column. **What is left of E95, reduced.** C_I19 is dimensionless and multiplies an Imax that already scales by SRW and Z, so taking a scale-free increment from APSIM's Romney - `locales="au"`, `srw 55.0` - and applying it at 66 kg is not the arithmetic error "two halves multiply" implied. Two real limits remain. **There is no `nz` locale anywhere in `ruminant.prm`**, so no group in it was parameterised on a New Zealand animal; and New Zealand dual-purpose ewes are largely Romney *crosses* - Coopworth is Border Leicester x Romney, Perendale is Cheviot x Romney - which sit between the wool and meat groups and have no group of their own, APSIM's "crossbreds" being Merino crosses. **A coherence risk found in passing, and named rather than fixed**: the wool-breeds group reduces milk alongside appetite - `c-l0-` 0.389, 0.622, 0.746 is the same 0.8 on peak yield - and this model takes **the reduced appetite without the reduced milk**, because milk comes from OVERSEER TMC Eq. 35. Half of a paired breed adjustment. If OVERSEER's New Zealand curve sits nearer GrazPlan's unreduced level, the model pairs full milk demand with a wool-breed appetite and **deepens the early-lactation deficit beyond what either source intends**. That is a structural risk, not a contradiction by evidence, and settling it means comparing two milk curves rather than reading a third source. **Magnitude, measured across the three classes** at the flagship ewe's 55 kg: shipped wool 2.906 single and 3.255 twin; crossbred 3.032 and 3.289; meat 3.156 and 3.592. Beef + Lamb's kg DM figures are 2.5 and 3.0, so **the shipped class is already the lowest of the three and still above the only New Zealand dry-matter benchmark there is** - every alternative moves further away. Biology and arithmetic point the same way here, which is convenience rather than proof, and is said as such. **Why no New Zealand value can be derived**: Morris et al. (1994) reports **organic matter** and gives no ash fraction, Geenty and Sykes (1986) reports six-week means in g DOM/kg W^0.75 and the abstract gives no digestibility, and Beef + Lamb's 3 to 4 kg DM/day for multiples is an **allowance, not an intake**. Converting any of them would be fitting a coefficient to a number this project chose how to convert. **Conclusion B**: the magnitude is plausible, sourced to a named breed group, and not confirmed for a New Zealand animal. 0.524 is retained and animal production stays exploratory | M5 |
-| E114 | **A farm that could pay could farm without grass, and now it cannot.** E55 measured the defect: six stocking rates, profit rising monotonically from $34,056 at 417 ewes to $83,142 at 950, and `days short of feed` reading zero at every rung, because bought feed was unlimited and always arrived. **What was actually missing was the quantity, not the price** - the price has carried Beef + Lamb Fact Sheet 260's $0.541/kg DM with a provenance mark for some time, and the hardcoded constant E55 names is long gone. **`SupplementMarket`, and deliberately not a commodity market**: one feed, one price, one finite tonnage, one optional window, partial fulfilment. No suppliers, no substitution, no price response to demand. It is bought **once a day for the whole farm** and shared out in proportion, so nothing depends on the order mobs sit in. **The chain it produces**: management requests, the market supplies all or part or none, the farmer offers what arrived, the animal eats what its appetite allows, and the residue stays visible as a feed-supply shortfall the destocking policy may act on. **Requested, purchased, offered and consumed are now four numbers**, which caught a defect on the way through: `FeedPurchase` recorded the *request*, so a shortened delivery would have been billed in full. Purchases now shrink with the fulfilment. **The default is unlimited, and that is the honest choice rather than the easy one.** Nothing in this repository states how much baleage a Canterbury farm can buy in a dry February, so a tonnage invented here would be worse than the old assumption named and reported: every run now says which of the two it had. Every shipped bundle is therefore **bit-identical**, and the flagship is untouched. **The ladder, one farm and one weather year, varying only breeding ewes** (`demo-irrigation-off`, 417 to 1,300 head). Unlimited: profit rises all the way, $35,799 to $104,580, utilisation reaches only 57.6%, and the ewe holds 55.0 to 53.7 to 55.1 kg at **every** rung including 5.21 SU/ha. At a finite 20 t: unchanged to 800 head, then at 950 the short days go 40 to **132**, the longest run 21 to **77**, the ewe falls to 48.2 kg and does not recover, and **the balance turns - $88,294 at 950, $81,432 at 1,100, $79,909 at 1,300**. At 5 t it turns at 800; with no market at all, at 800. **Three finite markets, three turning points, none of them tuned for** - the sizes were chosen as round placeholders before the runs, and the answer to the acceptance question is yes: high stocking now meets a real constraint instead of being rescued. **And a limitation the constraint exposes, which must not be quoted as a result**: past the binding point the ewe goes to 24.5 and then 16.8 kg, which is not a thin ewe but a dead one. There is no starvation mortality and no liveweight floor in this model, so the *existence* of the brake is now demonstrated while the farm state beyond it is not credible. No optimum from these tables is a recommendation. Animal-production magnitudes remain exploratory under E95 regardless | M5 |
+| E114 | **A farm that could pay could farm without grass, and now it cannot.** E55 measured the defect: six stocking rates, profit rising monotonically from $34,056 at 417 ewes to $83,142 at 950, and `days short of feed` reading zero at every rung, because bought feed was unlimited and always arrived. **What was actually missing was the quantity, not the price** - the price has carried Beef + Lamb Fact Sheet 260's $0.541/kg DM with a provenance mark for some time, and the hardcoded constant E55 names is long gone. **`SupplementMarket`, and deliberately not a commodity market**: one feed, one price, one finite tonnage, one optional window, partial fulfilment. No suppliers, no substitution, no price response to demand. It is bought **once a day for the whole farm** and shared out in proportion, so nothing depends on the order mobs sit in. **The chain it produces**: management requests, the market supplies all or part or none, the farmer offers what arrived, the animal eats what its appetite allows, and the residue stays visible as a feed-supply shortfall the destocking policy may act on. **Requested, purchased, offered and consumed are now four numbers**, which caught a defect on the way through: `FeedPurchase` recorded the *request*, so a shortened delivery would have been billed in full. Purchases now shrink with the fulfilment. **The default is unlimited, and that is the honest choice rather than the easy one.** Nothing in this repository states how much baleage a Canterbury farm can buy in a dry February, so a tonnage invented here would be worse than the old assumption named and reported: every run now says which of the two it had. Every shipped bundle is therefore **bit-identical**, and the flagship is untouched. **The ladder, one farm and one weather year, varying only breeding ewes** (`demo-irrigation-off`, 417 to 1,300 head). Unlimited: profit rises all the way, $35,799 to $104,580, utilisation reaches only 57.6%, and the ewe holds 55.0 to 53.7 to 55.1 kg at **every** rung including 5.21 SU/ha. At a finite 20 t: unchanged to 800 head, then at 950 the short days go 40 to **132**, the longest run 21 to **77**, the ewe falls to 48.2 kg and does not recover, and **the balance turns - $88,294 at 950, $81,432 at 1,100, $79,909 at 1,300**. At 5 t it turns at 800; with no market at all, at 800. **Three finite markets, three turning points, none of them tuned for** - the sizes were chosen as round placeholders before the runs, and the answer to the acceptance question is yes: high stocking now meets a real constraint instead of being rescued. **NARROWED by E115, which is the honest version**: two of those three turns lean on rungs where the ewe is below condition score 0 and therefore outside the validated domain. **Only the no-market ladder turns entirely inside the envelope** - $98,501 at 800 head with the ewe at 53.7 kg, falling to $93,414 at 950 with her at 49.5 kg - and it is also the one case needing no placeholder tonnage. The answer stands; it rests on that ladder rather than on all three. **And a limitation the constraint exposes, which must not be quoted as a result**: past the binding point the ewe goes to 24.5 and then 16.8 kg, which is not a thin ewe but a dead one. There is no starvation mortality and no liveweight floor in this model, so the *existence* of the brake is now demonstrated while the farm state beyond it is not credible. No optimum from these tables is a recommendation. Animal-production magnitudes remain exploratory under E95 regardless | M5 |
+| E115 | **Where this model may be interpreted, and the boundary was already in a source it cites.** Audit only; no parameter, equation or trajectory changed. **The question**: E114 left a ewe running to 16.8 kg with no starvation mortality to stop her, and no way to say that the run had left the evidence behind. **What the repository had**: no minimum liveweight, no body-condition range - `body_condition_score` is declared in `Components.hpp` and read by nothing - and none was invented here. **What it turned out to have**: the GrazPlan technical paper, already cited and hashed, states that SRW is the weight at which *"condition score is in the middle of the range"* and that one condition score is *"a change of 0.15N"* on the 0-5 sheep scale, both attributed to SCA (1990). That is a complete mapping - `score = 2.5 + (BC - 1)/0.15` - whose scale, midpoint and step are all the source's. **Score 0 is the bottom of the published scale and falls at BC = 0.625**; below it there is no published state to compare against, in this source or any other held here. Measured through the shipped ewe's own `normal_weight_kg`, that is **26.4 kg liveweight** - a consequence of her parameters, not a threshold written down. **It is not a sixth confidence level**: OUTSIDE VALIDATED DOMAIN is a predicate on a run, and when it holds the affected indicators take `Placeholder`, which `confidence_of` already renders `DoNotQuote`. PLAUSIBLE was likewise folded into the existing `Conserved` rather than added. **The flagship is entirely inside**: its trough of 53.7 kg is condition score 1.94, four and a half scores above the boundary, and no demo page carries animal production anyway. **What the audit costs E114**: two of its three turning points lean on off-scale rungs; the no-market ladder turns inside the envelope, and it is also the one needing no placeholder tonnage, so the acceptance answer stands on that one. **Recommendation: P0 biological validation is complete enough for the customer demo as scoped**, because every headline claim is pasture, water or irrigation response and none of them touches the ewe - and it is **not** complete enough for any stocking-rate advice, which needs starvation mortality (open item 20) and E95 first. The matrix, the demo-safe list, the invalidating conditions and the minimum warning are in the section above | M5 |
 | E14 | **Facial eczema's season is a month or two early, because there is no litter term.** The model fires December to February and is finished by March; DairyNZ gives January to May, with autumn typically the worst of it. The cause is structural rather than a mis-set rate: sporulation here depends on temperature and rain alone, and *Pseudopithomyces chartarum* grows on the dead matter at the base of the sward, which is why the disease is an autumn one - the litter has to accumulate first. Adding a substrate term needs a litter accumulation rate nobody located, and guessing one would move the season by construction rather than by mechanism. `high_risk_months` sits in the data file unread for the same reason: clamping the season to the published months would hide this rather than fix it | M4 |
 | E15 | **Rain is monotonically favourable, and it should not be.** The sporulation test asks for 4 mm over 48 hours and treats anything wetter as at least as good. Marbrook and Matthews (1962), *New Zealand Journal of Agricultural Research* 5:223-236, found sporidesmin is rapidly eluted from spores by water, so heavy rain washes toxin off pasture that a drizzle would have left on it - the model reads a downpour as worse than a drizzle where the literature says the opposite. **No longer blocked**: since E19 closed, the dose axis is toxin-days and elution has something to act on. What is still missing is a rate against rainfall | M4 |
 | E16 | **Sunlight destroys the toxin and the model does not know.** The same paper: on an overcast day there was no detectable loss of sporidesmin from either the exposed sample or the darkened control, and on the following bright clear day "all the sporidesmin was altered". With E15 that is a coherent mechanism for why the dangerous weather is warm humid drizzle under cloud - the drizzle elutes toxin without washing it away, and the cloud spares it. **One reason left.** E19 closing gave it a toxin state to act on, but the measurement is of an aqueous extract in a tube, not of toxin on pasture where much of it is still inside spores: applying "one bright day destroys all of it" to a paddock would mean facial eczema could never build through a sunny Waikato summer, which is the opposite of what happens. The direction is published, the magnitude is published for a tube, and the transfer to a sward is not | M4 |
