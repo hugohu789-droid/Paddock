@@ -161,6 +161,26 @@ int FarmDashboard::indicators_on_evidence() const {
   }));
 }
 
+/// Which of "The year" panel's figures are what the stock did rather than what
+/// the ground did. Pasture grown, and everything in Water and Environment, are
+/// not on this list on purpose: an animal outside its domain does not make the
+/// water balance wrong (E116).
+[[nodiscard]] bool depends_on_the_animals(const std::string& name) {
+  return name == "Utilisation" || name == "Eaten" || name == "Lowest cover" ||
+         name == "Days short of feed" || name == "Stocking rate" || name == "Closing stock" ||
+         name == "Lamb at weaning";
+}
+
+/// Two decimal places, without pulling in a stream for one number.
+[[nodiscard]] std::string two_places(double value) {
+  std::string text = std::to_string(value);
+  const std::size_t point = text.find('.');
+  if (point != std::string::npos && text.size() > point + 3) {
+    text.erase(point + 3);
+  }
+  return text;
+}
+
 FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& run,
                               std::string label, const std::optional<NitrogenRegulation>& rule) {
   FarmDashboard board;
@@ -404,6 +424,53 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
     board.panels.push_back(std::move(flock));
   }
 
+  // ---- Whether any of the above may be read as a prediction ---------------
+  //
+  // **The trajectory is untouched.** Every figure on this page is what the
+  // model produced; what changes below the boundary is only what the page is
+  // allowed to claim about them, and it changes through the provenance path
+  // that already existed rather than a second one (E116).
+  if (!run.animal_domain.inside()) {
+    const core::Date& crossed = *run.animal_domain.first_crossing;
+    board.animal_domain_warning =
+        "Animal condition moved outside the model's currently supported range on " +
+        crossed.to_iso_string() + ". " + run.animal_domain.cohort +
+        " reached a relative condition of " +
+        two_places(run.animal_domain.lowest_relative_condition) + " at " +
+        two_places(run.animal_domain.cohort_liveweight_kg) +
+        " kg, below the 0.625 that is condition score 0 on SCA (1990)'s 0-5 scale - for this "
+        "animal, " +
+        two_places(run.animal_domain.boundary_liveweight_kg) +
+        " kg. This model carries no starvation mortality, so the run continues; "
+        "animal-production and economic results at or after this point must not be read as "
+        "credible farm predictions.";
+
+    // Pasture, water and environment keep their standing. They are not being
+    // vouched for by the animals, and downgrading them would say something this
+    // finding does not support.
+    for (DashboardPanel& panel : board.panels) {
+      const bool animal_panel = panel.title == "The flock" || panel.title == "Money";
+      for (Indicator& indicator : panel.indicators) {
+        if (!animal_panel && !depends_on_the_animals(indicator.name)) {
+          continue;
+        }
+        indicator.trust = Provenance::Placeholder;
+        indicator.note = "**Outside the supported animal-production domain.** " + indicator.note;
+      }
+    }
+  }
+
+  if (run.supplement_market_is_finite) {
+    board.supplement_market_warning =
+        "Supplement available to buy was capped at " +
+        two_places(run.supplement_purchased_kg_dm + run.supplement_unfilled_kg_dm > 0.0
+                       ? run.supplement_purchased_kg_dm
+                       : 0.0) +
+        " kg DM bought against " + two_places(run.supplement_requested_kg_dm) +
+        " kg DM asked for. Sensitivity assumption, not a New Zealand market figure: no source in "
+        "this project states how much supplement a farm can buy, or when.";
+  }
+
   // ---- The trends ---------------------------------------------------------
   const auto add_series = [&board](std::string name, std::string unit,
                                    const std::vector<double>& values,
@@ -432,11 +499,33 @@ FarmDashboard build_dashboard(const ScenarioBundle& bundle, const RunSummary& ru
   return board;
 }
 
+bool may_report_stocking_optimum(const std::vector<const RunSummary*>& candidates) {
+  for (const RunSummary* candidate : candidates) {
+    if (candidate != nullptr && !candidate->animal_domain.inside()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::string as_text(const FarmDashboard& dashboard) {
   std::ostringstream out;
   out << dashboard.farm << " - " << dashboard.label << "\n"
       << "  " << dashboard.range.first.to_iso_string() << " to "
       << dashboard.range.last.to_iso_string() << "\n";
+
+  // **First on the page, before any number.** A caveat printed under the
+  // figures is a caveat most readers meet after they have already read them.
+  if (!dashboard.animal_domain_warning.empty()) {
+    out << "\n  !! Outside the supported animal-production domain\n"
+        << "  " << std::string(46, '=') << "\n"
+        << "  " << dashboard.animal_domain_warning << "\n";
+  }
+  if (!dashboard.supplement_market_warning.empty()) {
+    out << "\n  !! Supplement market is an assumption\n"
+        << "  " << std::string(38, '=') << "\n"
+        << "  " << dashboard.supplement_market_warning << "\n";
+  }
 
   for (const DashboardPanel& panel : dashboard.panels) {
     out << "\n  " << panel.title << "\n"

@@ -431,6 +431,51 @@ struct AnimalState {
 [[nodiscard]] double relative_condition(const AnimalClassParameters& animal,
                                         const AnimalState& state) noexcept;
 
+/// **Where the published condition-score scale runs out**, as relative
+/// condition (verify.md, E115 and E116).
+///
+/// This is a **validity boundary, not a mortality threshold.** Nothing in this
+/// model dies at it, is clamped at it, or behaves differently either side of
+/// it. It marks the point past which there is no published animal to compare
+/// the model's animal with.
+///
+/// It is derived, not chosen. The GrazPlan technical paper - `grazplan_animal`
+/// in the source record - says two things, both attributed to SCA (1990):
+///
+///  * SRW is the base weight "when skeletal development is complete and
+///    **condition score is in the middle of the range**", so `BC = 1` is score
+///    2.5 on the 0-5 sheep and beef scale;
+///  * "a gain or loss of 1 unit of condition score is equivalent to a change of
+///    **0.15N**", so one score is 0.15 of normal weight.
+///
+/// Therefore `score = 2.5 + (BC - 1) / 0.15`, and score 0 - the bottom of the
+/// published scale - is `BC = 1 - 2.5 x 0.15 = 0.625`. The scale, its midpoint
+/// and its step are all the source's; the subtraction is the only thing done
+/// here.
+///
+/// **It is a ratio on purpose.** The equivalent liveweight is a property of the
+/// animal, not a constant: for the shipped 66 kg ewe it is about 26.4 kg, and
+/// for any other profile it is whatever `liveweight_at_relative_condition`
+/// returns. No weight is hard-coded anywhere.
+inline constexpr double kConditionScoreAtNormalWeight = 2.5;
+inline constexpr double kNormalWeightPerConditionScore = 0.15;
+inline constexpr double kLowestSupportedRelativeCondition =
+    1.0 - (kConditionScoreAtNormalWeight * kNormalWeightPerConditionScore);
+
+/// Relative condition as a condition score on SCA (1990)'s 0-5 scale.
+[[nodiscard]] double condition_score(double relative_condition) noexcept;
+
+/// The liveweight at which this animal would reach a given relative condition.
+///
+/// Solved against the animal's own `normal_weight_kg`, because normal weight
+/// blends toward liveweight below the growth ceiling and a closed form would
+/// drift from that function the first time it changed. Returns zero when the
+/// animal states no growth coefficients, which is the case where normal weight
+/// is the liveweight and the ratio carries no information.
+[[nodiscard]] double liveweight_at_relative_condition(const AnimalClassParameters& animal,
+                                                      const AnimalState& state,
+                                                      double target_condition) noexcept;
+
 /// What this animal would eat in a day given unrestricted access to good feed,
 /// kg DM per head. GrazPlan Eq. 2; see `appetite_scalar_per_day`.
 ///

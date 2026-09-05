@@ -198,6 +198,40 @@ double potential_intake_kg_dm(const AnimalClassParameters& animal,
                   appetite * condition_factor(animal, state) * lactation_factor(animal, state));
 }
 
+double condition_score(double relative_condition) noexcept {
+  return kConditionScoreAtNormalWeight +
+         ((relative_condition - 1.0) / kNormalWeightPerConditionScore);
+}
+
+double liveweight_at_relative_condition(const AnimalClassParameters& animal,
+                                        const AnimalState& state,
+                                        double target_condition) noexcept {
+  if (target_condition <= 0.0 || animal.standard_reference_weight_kg <= 0.0) {
+    return 0.0;
+  }
+
+  // Bisection on the animal's own normal weight rather than algebra on today's
+  // form of it. `normal_weight_kg` blends toward liveweight below the Brody
+  // ceiling, and a closed form would silently stop agreeing with it.
+  AnimalState probe = state;
+  double light = 0.0;
+  double heavy = std::max(animal.standard_reference_weight_kg, state.liveweight_kg);
+  probe.liveweight_kg = heavy;
+  if (relative_condition(animal, probe) < target_condition) {
+    return 0.0;  // unreachable for this animal
+  }
+  for (int step = 0; step < 100; ++step) {
+    const double middle = 0.5 * (light + heavy);
+    probe.liveweight_kg = middle;
+    if (relative_condition(animal, probe) < target_condition) {
+      light = middle;
+    } else {
+      heavy = middle;
+    }
+  }
+  return heavy;
+}
+
 double relative_intake(const AnimalClassParameters& animal, double herbage_kg_dm_per_ha) noexcept {
   if (animal.intake_availability_rate_per_kg_dm <= 0.0) {
     return 1.0;

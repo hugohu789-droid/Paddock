@@ -185,6 +185,37 @@ struct RunSummary {
   /// old unlimited assumption, and it is reported rather than assumed.
   bool supplement_market_is_finite = false;
 
+  /// **Whether the animals stayed inside the published condition-score scale**
+  /// (verify.md, E116).
+  ///
+  /// A measurement, not an event: nothing in the simulation reads this, nothing
+  /// is clamped or killed, and the trajectory is identical whether it is
+  /// consulted or not. What it changes is what a *report* is allowed to say,
+  /// and it does that through the provenance path that already exists - below
+  /// the boundary the animal and money indicators become `Placeholder`, which
+  /// `confidence_of` renders `DoNotQuote`.
+  struct AnimalDomain {
+    /// Lowest relative condition any mob reached. Starts above any real value
+    /// so that a run carrying no stock reports no crossing.
+    double lowest_relative_condition = 1e9;
+
+    /// The day it first went below `core::kLowestSupportedRelativeCondition`,
+    /// absent if it never did.
+    std::optional<core::Date> first_crossing;
+
+    /// Which mob was lowest, and what liveweight the boundary is for *that*
+    /// animal - a property of its own normal weight, never a fixed number.
+    std::string cohort;
+    double cohort_liveweight_kg = 0.0;
+    double boundary_liveweight_kg = 0.0;
+
+    /// True while the run has stayed inside the published scale. A run with no
+    /// stock at all is inside: it makes no animal claim to be wrong about.
+    [[nodiscard]] bool inside() const { return !first_crossing.has_value(); }
+  };
+
+  AnimalDomain animal_domain;
+
   /// Head at the close, when a flock was run.
   int closing_head = 0;
 

@@ -73,6 +73,33 @@ double RunSummary::highest_cover_kg_dm_per_ha() const {
   return *std::max_element(cover_kg_dm_per_ha.begin(), cover_kg_dm_per_ha.end());
 }
 
+namespace {
+
+/// Records how far the stock are from the middle of the published
+/// condition-score scale. **Reads state and writes only the summary** - nothing
+/// downstream of this call behaves differently for having been measured.
+void record_animal_domain(RunSummary& summary, const core::Farm& farm, const core::Date& date) {
+  for (const core::FarmMob& farm_mob : farm.mobs()) {
+    if (farm_mob.mob.head <= 0) {
+      continue;
+    }
+    const double condition = core::relative_condition(farm_mob.mob.animal, farm_mob.mob.state);
+    if (condition < summary.animal_domain.lowest_relative_condition) {
+      summary.animal_domain.lowest_relative_condition = condition;
+      summary.animal_domain.cohort = farm_mob.mob.name;
+      summary.animal_domain.cohort_liveweight_kg = farm_mob.mob.state.liveweight_kg;
+      summary.animal_domain.boundary_liveweight_kg = core::liveweight_at_relative_condition(
+          farm_mob.mob.animal, farm_mob.mob.state, core::kLowestSupportedRelativeCondition);
+    }
+    if (condition < core::kLowestSupportedRelativeCondition &&
+        !summary.animal_domain.first_crossing.has_value()) {
+      summary.animal_domain.first_crossing = date;
+    }
+  }
+}
+
+}  // namespace
+
 double RunSummary::bought_feed_kg_dm() const {
   double total = 0.0;
   for (const core::FeedPurchase& purchase : purchases) {
@@ -589,6 +616,12 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
     }
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
 
+    // **Where the animals sit on the published condition-score scale.**
+    // Measured and recorded; never acted on. The mob keeps whatever weight the
+    // energy model gave it, and this only decides what a report may claim
+    // afterwards (E116).
+    record_animal_domain(summary, farm, day.date);
+
     if (business != nullptr && manager.has_value() && summary.account.has_value()) {
       keep_the_books(*business, *summary.account, *manager, farm, farm_hectares, policy, day.date,
                      summary, consecutive_feed_supply_short_days);
@@ -718,6 +751,12 @@ RunSummary run_scenario(const ScenarioBundle& bundle, const core::GrazingCalenda
       went_short[i] = farm_day.mobs[i].grazing.constraint.feed_supply_limited;
     }
     summary.eaten_kg_dm += farm_day.total_eaten_kg_dm;
+
+    // **Where the animals sit on the published condition-score scale.**
+    // Measured and recorded; never acted on. The mob keeps whatever weight the
+    // energy model gave it, and this only decides what a report may claim
+    // afterwards (E116).
+    record_animal_domain(summary, farm, day.date);
 
     summary.dates.push_back(day.date);
     summary.weather.push_back(day);
