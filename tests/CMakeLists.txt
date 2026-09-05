@@ -20,6 +20,7 @@ add_executable(
   unit/GeometryTest.cpp
   unit/GrazingCalendarTest.cpp
   unit/GrazingTest.cpp unit/IntakeCausalityTest.cpp unit/IrrigationTest.cpp
+  unit/SupplementMarketTest.cpp
   unit/LiveweightResponseTest.cpp
   unit/MycotoxinTest.cpp
   unit/PaddockMaskTest.cpp
@@ -150,6 +151,7 @@ if(PADDOCK_BUILD_CONFIG)
                                           validation/CanterburyDrylandTest.cpp
                                           validation/FlagshipDemoTest.cpp
                                           validation/IrrigationResponseTest.cpp
+                                          validation/FeedMarketTest.cpp
                                           validation/GrazedYearTest.cpp
                                           validation/IrrigatedYearTest.cpp
                                           validation/GrazingSystemComparisonTest.cpp

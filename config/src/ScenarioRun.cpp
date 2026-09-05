@@ -424,6 +424,14 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   std::vector<bool> went_short(farm.mobs().size(), false);
   std::vector<double> supplement;
 
+  // **The merchant, who may not have it.** Between what the farmer asks for and
+  // what the mobs are handed (E114). Bought once a day for the whole farm and
+  // then shared out in proportion, so that nothing depends on the order the
+  // mobs happen to sit in - which is the same reason no random draw in this
+  // project is keyed by iteration order.
+  core::SupplementMarket market(policy.supplement_market);
+  summary.supplement_market_is_finite = market.is_finite();
+
   // The schedule reads how dry the ground is and decides; the farm applies
   // what it is handed. Neither knows about the other's job.
   core::IrrigationSchedule schedule(irrigation, system, farm.grid().cell_count());
@@ -453,14 +461,20 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   int consecutive_capacity_limited_days = 0;
 
   for (const core::DailyWeather& day : weather.records) {
-    const core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
+    core::Farmer::Day decisions = farmer.manage(farm, day.date, diet, went_short, supplement);
+
+    // Today's draw off the stack, so that only the remainder is put to the
+    // merchant. Reset each day rather than accumulated.
+    double day_conserved_kg_dm = 0.0;
 
     summary.moves += static_cast<int>(decisions.moves.size());
     summary.short_spells += decisions.short_spells;
     summary.grazings_extended += decisions.grazings_extended;
     summary.system_each_day.push_back(decisions.chosen_system);
-    summary.purchases.insert(summary.purchases.end(), decisions.purchases.begin(),
-                             decisions.purchases.end());
+    // **The purchases are recorded further down, after the market has answered.**
+    // A `FeedPurchase` is what the farm actually got, not what it asked for;
+    // recording the request here would charge the account for feed the
+    // merchant never delivered (E114).
 
     const core::Raster<double> dryness = farm.grid().depletion_mm();
     const std::vector<double>& water =
@@ -507,11 +521,47 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
           wanted += each;
         }
         if (wanted > 0.0) {
-          summary.conserved_fed_kg_dm +=
-              summary.feed_store.take(wanted, business->conservation_losses);
+          day_conserved_kg_dm = summary.feed_store.take(wanted, business->conservation_losses);
+          summary.conserved_fed_kg_dm += day_conserved_kg_dm;
         }
       }
     }
+
+    // **What management asked for, against what there was to buy.**
+    //
+    // The stack is already spent by here, and it is not bought - a farm feeding
+    // its own silage is not in the market - so only the remainder is put to the
+    // merchant. What comes back is shared across the mobs in proportion to what
+    // each asked for, which leaves the physiology downstream untouched: the
+    // animal is still capped by its own appetite in `Farm::step`, and a mob
+    // handed less than it wanted still reports a feed-supply shortfall.
+    {
+      double requested = 0.0;
+      for (const double each : supplement) {
+        requested += each;
+      }
+      if (requested > 0.0) {
+        const double already_from_the_stack = std::min(requested, day_conserved_kg_dm);
+        const double to_buy = requested - already_from_the_stack;
+        const double bought = market.buy(day.date, to_buy);
+        const double supplied = already_from_the_stack + bought;
+        if (supplied < requested - 1e-9) {
+          const double share = supplied / requested;
+          for (double& each : supplement) {
+            each *= share;
+          }
+          // The day's purchase records shrink with it, so that what the report
+          // shows bought and what the account is charged are both what arrived.
+          for (core::FeedPurchase& purchase : decisions.purchases) {
+            purchase.kg_dm *= share;
+          }
+        }
+      }
+    }
+
+    // Recorded now, with the quantity the market actually supplied.
+    summary.purchases.insert(summary.purchases.end(), decisions.purchases.begin(),
+                             decisions.purchases.end());
 
     const core::FarmDay farm_day = farm.step(day, diet, supplement, &summary.ledger, water);
     // **Four counters, two facts.** Cumulative for the report and consecutive
@@ -579,6 +629,14 @@ RunSummary run_managed_scenario(const ScenarioBundle& bundle, const core::Manage
   if (!summary.dates.empty()) {
     summary.mean_stock_units = stock_unit_days / static_cast<double>(summary.dates.size());
   }
+
+  // **What the market was asked for and what it had.** Reported whether or not
+  // it was finite: an unlimited market filling every request is a fact about
+  // the assumption the run was given, not the absence of one (E114).
+  summary.supplement_requested_kg_dm = market.total_requested_kg_dm();
+  summary.supplement_purchased_kg_dm = market.total_purchased_kg_dm();
+  summary.supplement_unfilled_kg_dm = market.total_unfilled_kg_dm();
+  summary.supplement_market_short_days = market.short_days();
 
   if (business != nullptr) {
     summary.closing_head = business->flock.head();

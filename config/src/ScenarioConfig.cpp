@@ -480,7 +480,8 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
         *management,
         {"minimum_cover_kg_dm_per_ha", "rotation_cover_threshold_kg_dm_per_ha",
          "target_liveweight_gain_kg_per_day", "maximum_graze_days", "minimum_spell_days",
-         "supplement_me_mj_per_kg_dm", "may_buy_feed", "prefer", "at_the_floor"},
+         "supplement_me_mj_per_kg_dm", "may_buy_feed", "prefer", "at_the_floor",
+         "supplement_available_kg_dm", "supplement_available_from", "supplement_available_until"},
         manifest_path, "[management]");
 
     core::ManagementPolicy policy;
@@ -502,6 +503,35 @@ ScenarioBundle read(const std::string& directory, bool enforce) {
                                 policy.supplement_me_mj_per_kg_dm, manifest_path);
     policy.may_buy_feed =
         detail::optional_bool(*management, "may_buy_feed", policy.may_buy_feed, manifest_path);
+
+    // **How much there is to buy, and when** (E114).
+    //
+    // Absent means unlimited, which is what every scenario written before this
+    // did. That default is kept deliberately: no source in this repository says
+    // how much baleage a Canterbury farm can get in a dry February, and a
+    // tonnage invented here would be worse than the old assumption named. A
+    // scenario that wants the constraint states the number itself and marks it
+    // in its own comments for what it is.
+    if (management->contains("supplement_available_kg_dm")) {
+      policy.supplement_market.available_kg_dm =
+          detail::require_double(*management, "supplement_available_kg_dm", manifest_path);
+    }
+    const bool has_from = management->contains("supplement_available_from");
+    const bool has_until = management->contains("supplement_available_until");
+    if (has_from != has_until) {
+      detail::throw_in(*management, manifest_path,
+                       "a supplement window needs both 'supplement_available_from' and "
+                       "'supplement_available_until', or neither");
+    }
+    if (has_from) {
+      core::DateRange window;
+      window.first = read_date(*management, "supplement_available_from", manifest_path);
+      window.last = read_date(*management, "supplement_available_until", manifest_path);
+      policy.supplement_market.window = window;
+    }
+    if (const std::string error = policy.supplement_market.validation_error(); !error.empty()) {
+      detail::throw_in(*management, manifest_path, error);
+    }
     policy.preference = grazing_preference_of(
         detail::optional_string(*management, "prefer", "by_cover"), *management, manifest_path);
     policy.floor_purchase =

@@ -10,6 +10,7 @@
 
 #include <paddock/core/Farm.hpp>
 #include <paddock/core/GrazingCalendar.hpp>
+#include <paddock/core/SupplementMarket.hpp>
 
 /// Who decides where the stock go.
 ///
@@ -174,6 +175,12 @@ struct ManagementPolicy {
   /// stock lose condition, which is a legitimate thing to model and to compare
   /// against.
   bool may_buy_feed = true;
+
+  /// **And whether there is any to buy.** `may_buy_feed` says the farmer is
+  /// willing; this says the merchant has it. Empty quantity means unlimited,
+  /// which is what every run did before this existed and is an assumption
+  /// rather than a finding - see `SupplementMarket` and verify.md, E114.
+  SupplementMarketPolicy supplement_market;
 
   /// Which system to run, and how much to buy at the floor.
   GrazingPreference preference = GrazingPreference::ByCover;

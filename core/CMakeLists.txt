@@ -27,6 +27,7 @@ add_library(
   src/SoilWater.cpp
   src/Solar.cpp
   src/Rng.cpp
+  src/SupplementMarket.cpp
   src/Sha256.cpp
   src/Simulation.cpp
   src/SnapshotWeather.cpp

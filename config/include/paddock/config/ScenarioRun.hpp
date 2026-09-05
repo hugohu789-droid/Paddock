@@ -161,6 +161,30 @@ struct RunSummary {
   /// a harvest.
   double conserved_fed_kg_dm = 0.0;
 
+  /// **What the farmer asked the market for, and what the market had** (E114).
+  ///
+  /// Four quantities that used to be one. `supplement_requested_kg_dm` is the
+  /// shortfall management wanted covered; `supplement_purchased_kg_dm` is what
+  /// the market could actually supply; the gap between them is
+  /// `supplement_unfilled_kg_dm`, and it is deliberately reported rather than
+  /// dropped, because a shortage that disappears from the accounts is how a
+  /// farm comes to look as though it could be stocked without limit.
+  ///
+  /// What the stock then *ate* is neither of these: bought feed is still capped
+  /// by the animal's own appetite in `Farm::step`, and that cap is physiology
+  /// rather than economics. Requested, purchased, offered and consumed are four
+  /// different numbers and this model now keeps them four.
+  double supplement_requested_kg_dm = 0.0;
+  double supplement_purchased_kg_dm = 0.0;
+  double supplement_unfilled_kg_dm = 0.0;
+
+  /// Days the market could not fill the day's request in full.
+  int supplement_market_short_days = 0;
+
+  /// Whether this run was given a market that can run out at all. False is the
+  /// old unlimited assumption, and it is reported rather than assumed.
+  bool supplement_market_is_finite = false;
+
   /// Head at the close, when a flock was run.
   int closing_head = 0;
 
