@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <paddock/config/EconomicsConfig.hpp>
@@ -38,14 +39,17 @@ FlockRates the_rates() {
   return FlockRates{};
 }
 
-/// A ewe cohort old enough to breed, and a lamb template distinct from it, so
-/// that a lamb built from the wrong one would be visible.
-Flock a_flock_with_ewes_and_a_lamb_template(int ewes) {
+/// A flock of `classes` breeding cohorts and a lamb template distinct from
+/// them, so that a lamb built from the wrong one would be visible.
+///
+/// **The class count is the capacity knob.** `cohorts_` is a vector, and how
+/// many cohorts a flock opens with decides whether the weaning append
+/// reallocates. One class is the tight case that used to break.
+Flock a_flock_of(int classes, int ewes) {
   Flock flock;
 
   Mob ewe_mob;
   ewe_mob.name = "ewes";
-  ewe_mob.head = ewes;
   ewe_mob.animal.standard_reference_weight_kg = 66.0;
   ewe_mob.animal.normal_weight_rate = 0.0157;
   ewe_mob.animal.normal_weight_exponent = 0.27;
@@ -53,11 +57,15 @@ Flock a_flock_with_ewes_and_a_lamb_template(int ewes) {
   ewe_mob.state.liveweight_kg = 55.0;
   ewe_mob.state.age_days = 1500.0;
 
-  AgeCohort ewes_cohort;
-  ewes_cohort.birth_year = 2019;
-  ewes_cohort.age_years = 4;
-  ewes_cohort.mob = ewe_mob;
-  flock.add(ewes_cohort);
+  for (int i = 0; i < classes; ++i) {
+    AgeCohort cohort;
+    cohort.birth_year = 2019 - i;
+    cohort.age_years = 4;
+    cohort.mob = ewe_mob;
+    cohort.mob.head = ewes / classes;
+    cohort.mob.name = "ewes " + std::to_string(cohort.birth_year);
+    flock.add(std::move(cohort));
+  }
 
   Mob lamb_mob = ewe_mob;
   lamb_mob.name = "lamb template";
@@ -66,6 +74,11 @@ Flock a_flock_with_ewes_and_a_lamb_template(int ewes) {
   lamb_mob.state.age_days = 0.0;
   flock.set_lamb_template(lamb_mob);
   return flock;
+}
+
+/// The single-class flock the earlier tests were written against.
+Flock a_flock_with_ewes_and_a_lamb_template(int ewes) {
+  return a_flock_of(1, ewes);
 }
 
 /// The finishing cohort the run would put on the paddock: the first one marked
@@ -166,43 +179,144 @@ TEST(LambCohortLifecycleTest, WeaningCarriesTheLiveweightAcrossTheSplit) {
       << "weaning splits a cohort and must carry its liveweight across, not restart it";
 }
 
-/// **The defect this investigation found, characterised rather than fixed**
-/// (verify.md, E117, open item 22).
+/// **The weaning split is correct at every flock size** (verify.md, E118).
 ///
-/// `Flock::step`'s weaning block does `cohorts_.push_back(...)` from inside a
-/// range-for over `cohorts_`. When that reallocates, the loop variable dangles
-/// and the two writes after it - `cohort.mob.head = kept` and
-/// `cohort.is_finishing = false` - are lost. The lamb cohort then keeps its
-/// whole head *and* stays finishing stock beside the new finishing cohort, so
-/// the flock carries the finished draft twice.
+/// This was the characterisation of a defect and is now the contract. The
+/// weaning block used to `push_back` into `cohorts_` from inside a range-for
+/// over `cohorts_`; when the vector reallocated, the loop's reference dangled
+/// and `cohort.mob.head = kept` and `cohort.is_finishing = false` were lost, so
+/// the lamb cohort kept its whole head *and* stayed finishing stock beside the
+/// new one. Whether that happened depended on `std::vector` capacity - which is
+/// to say on allocator history rather than on anything this model describes,
+/// and is why it is a determinism defect before it is a flock-accounting one.
 ///
-/// **Whether it fires depends on `std::vector` capacity**, which is why it has
-/// never been seen: the shipped flock opens with five ewe cohorts and has room
-/// to spare, and the test below shows that. A two-cohort flock does not.
-///
-/// This asserts the **wrong** behaviour on purpose, so that the repository
-/// records what it currently does. Fixing it will fail this test, which is the
-/// point: whoever fixes it should come here and say so.
-TEST(LambCohortLifecycleTest, ASmallFlockLosesTheWeaningSplitWrites) {
-  Flock flock = a_flock_with_ewes_and_a_lamb_template(400);
+/// **A two-cohort flock is the capacity-tight case**: the vector holds exactly
+/// its two cohorts, so the append during the loop had to reallocate. It is
+/// swept here alongside larger flocks, because a fix that only worked where the
+/// bug never fired would prove nothing.
+TEST(LambCohortLifecycleTest, TheWeaningSplitIsCorrectAtEveryFlockSize) {
+  for (const int classes : {1, 2, 3, 4, 5, 8}) {
+    Flock flock = a_flock_of(classes, 400);
 
-  int finishing_cohorts_after_weaning = 0;
+    int born = 0;
+    bool weaned = false;
+    for (Date day{2023, 7, 1}; day.days_since_epoch() <= Date{2023, 12, 5}.days_since_epoch();
+         day = Date::from_days_since_epoch(day.days_since_epoch() + 1)) {
+      const FlockDay record = flock.step(day, a_calendar(), the_rates());
+      born += record.born;
+      if (record.kept_to_finish <= 0) {
+        continue;
+      }
+      weaned = true;
+
+      // **The finishing draft appears exactly once.**
+      int finishing_cohorts = 0;
+      int finishing_head = 0;
+      int lamb_head_left_breeding = 0;
+      for (const AgeCohort& cohort : flock.cohorts()) {
+        if (cohort.mob.head <= 0) {
+          continue;
+        }
+        if (cohort.is_finishing) {
+          ++finishing_cohorts;
+          finishing_head += cohort.mob.head;
+        } else if (cohort.birth_year == day.year) {
+          // **The replacements stayed put**, in the cohort they were born into,
+          // and are no longer finishing stock.
+          lamb_head_left_breeding += cohort.mob.head;
+        }
+      }
+
+      EXPECT_EQ(finishing_cohorts, 1) << "at " << classes << " opening classes";
+      EXPECT_EQ(finishing_head, record.kept_to_finish) << "at " << classes << " opening classes";
+      EXPECT_EQ(lamb_head_left_breeding, record.kept_as_replacements)
+          << "at " << classes << " opening classes: the replacements are next year's flock";
+
+      // **Head is conserved across the split**, but for what was explicitly
+      // sold: every lamb born is now a replacement, a finisher or a store sale.
+      EXPECT_EQ(record.kept_as_replacements + record.kept_to_finish + record.sold_store, born)
+          << "at " << classes << " opening classes: the split neither invents nor loses a lamb";
+      break;
+    }
+    EXPECT_TRUE(weaned) << "at " << classes << " opening classes the flock never reached weaning";
+  }
+}
+
+/// **Age and liveweight survive the split, at the capacity-tight size too.**
+///
+/// Compared between the two halves rather than across the day: `step` ages the
+/// flock before it weans it, so a before-and-after reading would differ by the
+/// day's ageing and prove nothing. What must hold is that the finishers and the
+/// replacements come out of the split describing the same animals.
+TEST(LambCohortLifecycleTest, TheSplitCarriesAgeAndLiveweightAtTheCapacityTightSize) {
+  Flock flock = a_flock_of(1, 400);
+
   for (Date day{2023, 7, 1}; day.days_since_epoch() <= Date{2023, 12, 5}.days_since_epoch();
        day = Date::from_days_since_epoch(day.days_since_epoch() + 1)) {
     const FlockDay record = flock.step(day, a_calendar(), the_rates());
-    if (record.kept_to_finish > 0) {
-      for (const AgeCohort& cohort : flock.cohorts()) {
-        if (cohort.is_finishing && cohort.mob.head > 0) {
-          ++finishing_cohorts_after_weaning;
-        }
-      }
-      break;
+    if (record.kept_to_finish <= 0) {
+      continue;
     }
+
+    const AgeCohort* finishers = nullptr;
+    const AgeCohort* replacements = nullptr;
+    for (const AgeCohort& cohort : flock.cohorts()) {
+      if (cohort.birth_year != day.year || cohort.mob.head <= 0) {
+        continue;
+      }
+      if (cohort.is_finishing) {
+        finishers = &cohort;
+      } else {
+        replacements = &cohort;
+      }
+    }
+
+    ASSERT_NE(finishers, nullptr) << "a finishing cohort has to come out of the split";
+    ASSERT_NE(replacements, nullptr) << "and so do the replacements";
+    EXPECT_DOUBLE_EQ(finishers->mob.state.age_days, replacements->mob.state.age_days)
+        << "the split makes two cohorts of one crop, not two crops";
+    EXPECT_DOUBLE_EQ(finishers->mob.state.liveweight_kg, replacements->mob.state.liveweight_kg);
+    EXPECT_EQ(finishers->age_years, replacements->age_years);
+    EXPECT_GT(finishers->mob.state.age_days, 0.0) << "and they are the season's lambs, aged";
+    return;
+  }
+  FAIL() << "the flock never reached weaning";
+}
+
+/// **The same flock gives the same answer whatever its capacity history.**
+///
+/// Cohort counts differ, so the totals cannot be compared; what must not differ
+/// is the shape of the split. Before the fix, one of these read two finishing
+/// cohorts and the others read one.
+TEST(LambCohortLifecycleTest, TheSplitShapeDoesNotDependOnCapacityHistory) {
+  const auto shape_of = [](int classes) {
+    Flock flock = a_flock_of(classes, 400);
+    for (Date day{2023, 7, 1}; day.days_since_epoch() <= Date{2023, 12, 5}.days_since_epoch();
+         day = Date::from_days_since_epoch(day.days_since_epoch() + 1)) {
+      const FlockDay record = flock.step(day, a_calendar(), the_rates());
+      if (record.kept_to_finish > 0) {
+        int finishing = 0;
+        for (const AgeCohort& cohort : flock.cohorts()) {
+          if (cohort.is_finishing && cohort.mob.head > 0) {
+            ++finishing;
+          }
+        }
+        return finishing;
+      }
+    }
+    return -1;
+  };
+
+  const int reference = shape_of(1);
+  EXPECT_EQ(reference, 1);
+  for (const int classes : {2, 3, 4, 5, 8, 13}) {
+    EXPECT_EQ(shape_of(classes), reference) << "at " << classes << " opening classes";
   }
 
-  EXPECT_EQ(finishing_cohorts_after_weaning, 2)
-      << "if this now reads 1 the defect has been fixed - delete this test and turn "
-         "TheShippedFlockSplitsItsLambsCorrectlyAtWeaning into the general invariant";
+  // And twice through the same size is the same answer, which is the ordinary
+  // determinism claim standing where it could not before.
+  EXPECT_EQ(shape_of(1), shape_of(1));
+  EXPECT_EQ(shape_of(5), shape_of(5));
 }
 
 /// **Invariant: a cohort's age and liveweight come from the same animal.** A
